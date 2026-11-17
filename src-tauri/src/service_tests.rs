@@ -405,6 +405,51 @@ async fn remove_recent_resource_preserves_distinct_routes_and_rejects_stale_auth
 }
 
 #[tokio::test]
+async fn recent_searches_are_scoped_by_book() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let book = load_book(fixture().to_str().unwrap(), true, false).unwrap();
+    let one = book.metadata.id.clone();
+    service.register_books(&[book], None).unwrap();
+    let generation = service.launch_generation();
+    for (book, query) in [(one.as_str(), "alpha"), ("two", "alpha"), (one.as_str(), "beta")] {
+        service.clone().dispatch("record_search", json!({
+            "privacyGeneration":generation, "bookId":book, "query":query,
+        })).await.unwrap();
+    }
+    assert_eq!(
+        service.store.read().unwrap().recent_searches,
+        [format!("{one}\u{1f}beta"), "two\u{1f}alpha".into(), format!("{one}\u{1f}alpha")],
+    );
+    service.clone().dispatch("remove_search", json!({
+        "privacyGeneration":generation, "bookId":&one, "query":"alpha",
+    })).await.unwrap();
+    assert_eq!(
+        service.store.read().unwrap().recent_searches,
+        [format!("{one}\u{1f}beta"), "two\u{1f}alpha".into()],
+    );
+    service.clone().dispatch("record_search", json!({
+        "privacyGeneration":generation, "query":"library-wide",
+    })).await.unwrap();
+    assert!(service.store.read().unwrap().recent_searches.contains(&"library-wide".into()));
+    assert!(service.clone().dispatch("record_search", json!({
+        "privacyGeneration":generation, "bookId":1, "query":"invalid-book",
+    })).await.is_err());
+    service.clone().dispatch("remove_search", json!({
+        "privacyGeneration":generation, "query":"library-wide",
+    })).await.unwrap();
+    assert!(!service.store.read().unwrap().recent_searches.contains(&"library-wide".into()));
+    service.shutdown().await.unwrap();
+    drop(service);
+    let restored = Service::new(profile.0.clone(), false, false).unwrap();
+    assert_eq!(
+        restored.store.read().unwrap().recent_searches,
+        [format!("{one}\u{1f}beta")],
+    );
+    restored.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn deleted_history_stays_deleted_until_explicit_navigation() {
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();

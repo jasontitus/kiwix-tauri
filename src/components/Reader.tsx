@@ -1259,6 +1259,15 @@ export default function Reader(props: ReaderProps) {
   const overrides = preferencesMatch ? preferences.bookZoom : settings.bookZoom;
   const pendingZoom = preferencesMatch ? preferences.pendingBookZoom : {};
   const bookId = tab.bookId;
+  const recentSearches = useMemo(() => {
+    if (!bookId) {
+      return props.recentSearches.filter((entry) => !entry.includes("\u001f"));
+    }
+    const prefix = `${bookId}\u001f`;
+    return props.recentSearches
+      .filter((entry) => entry.startsWith(prefix))
+      .map((entry) => entry.slice(prefix.length));
+  }, [props.recentSearches, bookId]);
   const zoomOverride = bookId
     ? settings.readOnly && Object.hasOwn(workspace.bookZoom, bookId)
       ? workspace.bookZoom[bookId]
@@ -4057,6 +4066,7 @@ export default function Reader(props: ReaderProps) {
     ) {
       void api("record_search", {
         query: latest.current.workspace.searchedQuery,
+        bookId: bookId ?? undefined,
       })
         .then(() => latest.current.onRefresh())
         .catch((value) => report(value, ERROR_SITES["reader.record-search"]));
@@ -5004,14 +5014,14 @@ export default function Reader(props: ReaderProps) {
           )}
         </section>
       )}
-      {!settings.privateMode && props.recentSearches.length > 0 && (
+      {!settings.privateMode && recentSearches.length > 0 && (
         <section
           className="rw-recent-searches"
           aria-label={t("Recent searches")}
         >
           <h3>{t("Recent searches")}</h3>
           <ul>
-            {props.recentSearches.slice(0, 6).map((recent) => (
+            {recentSearches.slice(0, 6).map((recent) => (
               <li key={recent}>
                 <button
                   type="button"
@@ -5026,7 +5036,7 @@ export default function Reader(props: ReaderProps) {
                   label={t("Remove recent search: {query}", { query: recent })}
                   disabled={settings.readOnly}
                   onClick={() => {
-                    void api("remove_search", { query: recent })
+                    void api("remove_search", { query: recent, bookId: bookId ?? undefined })
                       .then(() => latest.current.onRefresh())
                       .catch((value) =>
                         report(value, ERROR_SITES["reader.remove-search"]),

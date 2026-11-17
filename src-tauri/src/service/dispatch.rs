@@ -372,14 +372,27 @@ impl Service {
                     self.writable()?;
                 }
                 let query = text(&args, "query")?.trim();
-                if query.is_empty() || query.len() > 65536 || query.contains('\0') {
+                if query.is_empty() || query.len() > 65536 || query.contains('\0') || query.contains('\u{1f}') {
                     return Err("Search history query is invalid or too large".into());
                 }
+                let book_id = match args.get("bookId") {
+                    None | Some(Value::Null) => None,
+                    Some(Value::String(id)) if id.is_empty() => None,
+                    Some(Value::String(id)) => Some(id.as_str()),
+                    Some(_) => return Err("Search history book identity is invalid".into()),
+                };
+                if book_id.is_some_and(|id| id.len() > 256 || id.contains('\0') || id.contains('\u{1f}')) {
+                    return Err("Search history book identity is invalid".into());
+                }
+                if book_id.is_some_and(|id| id.len() + 1 + query.len() > 65536) {
+                    return Err("Search history query is invalid or too large".into());
+                }
+                let key = book_id.map_or_else(|| query.to_string(), |id| format!("{id}\u{1f}{query}"));
                 let _window = self.active_window_guard(&label)?;
                 self.store.update(|state| {
-                    state.recent_searches.retain(|old| old != query);
+                    state.recent_searches.retain(|old| old != &key);
                     if command == "record_search" && state.settings.history_enabled {
-                        state.recent_searches.insert(0, query.into());
+                        state.recent_searches.insert(0, key);
                         state.recent_searches.truncate(100);
                     }
                     Ok(())
@@ -731,6 +744,8 @@ impl Service {
                     }
                     state.reader_storage.remove(&installation_id);
                     state.settings.pinned_book_ids.retain(|value| value != &id);
+                    let prefix = format!("{id}\u{1f}");
+                    state.recent_searches.retain(|entry| !entry.starts_with(&prefix));
                     Ok(())
                 })?;
                 retire_readers(&mut readers, Some(&installation_id)).await?;

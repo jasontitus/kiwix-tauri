@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
+  ArrowUp,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -691,6 +692,17 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
               >
                 {t("Next")}
                 <ChevronRight size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById("main-content")
+                    ?.scrollTo({ top: 0, behavior: "smooth" })
+                }
+              >
+                <ArrowUp size={16} />
+                {t("Back to top")}
               </button>
             </nav>
           </>

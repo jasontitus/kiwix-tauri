@@ -10,6 +10,7 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.text.format.Formatter
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONArray
@@ -46,6 +47,13 @@ internal object DownloadNotifications {
         "checking", "downloading", "verifying", "publishing" -> "active"
         "error" -> "failed"
         else -> status
+    }
+    private fun statusText(context: Context, job: JSONObject, status: String): String {
+        val label = labels.optString(status, status)
+        val total = job.optLong("total", -1)
+        if (total <= 0) return label
+        val downloaded = job.optLong("downloaded", 0)
+        return "$label · ${Formatter.formatFileSize(context, downloaded)} / ${Formatter.formatFileSize(context, total)}"
     }
     private fun actions(phase: String): List<String> = when (phase) {
         "active" -> listOf("pause", "cancel")
@@ -175,7 +183,7 @@ internal object DownloadNotifications {
         val builder = Notification.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(job.getString("fileName"))
-            .setContentText(labels.optString(job.getString("status"), job.getString("status")))
+            .setContentText(statusText(context, job, job.getString("status")))
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
@@ -211,7 +219,7 @@ internal object DownloadNotifications {
         val builder = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(job.getString("fileName"))
-            .setContentText(labels.optString(status, status))
+            .setContentText(statusText(context, job, status))
             .setOnlyAlertOnce(true).setOngoing(active(job))
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)

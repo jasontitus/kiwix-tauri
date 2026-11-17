@@ -1077,7 +1077,13 @@ pub(crate) fn state_from_value(value: serde_json::Value) -> Result<(State, Vec<S
                     Some(query)
                         if !query.is_empty()
                             && query.len() <= 65536
-                            && !query.contains('\0') =>
+                            && !query.contains('\0')
+                            && (!query.contains('\u{1f}')
+                                || query.split_once('\u{1f}').is_some_and(|(id, text)| {
+                                    !text.is_empty()
+                                        && !text.contains('\u{1f}')
+                                        && book_ids.contains(id)
+                                })) =>
                     {
                         state.recent_searches.push(query.to_string());
                     }
@@ -2871,6 +2877,8 @@ fn remove_provider_activity(state: &mut State, book: &Book) {
     state.settings.book_zoom.remove(id);
     state.settings.sharing_book_ids.retain(|value| value != id);
     state.settings.pinned_book_ids.retain(|value| value != id);
+    let prefix = format!("{id}\u{1f}");
+    state.recent_searches.retain(|entry| !entry.starts_with(&prefix));
     let retain_tabs = |tabs: &mut Vec<Tab>, active: &mut Option<String>| {
         tabs.retain(|tab| tab.book_id.as_ref() != Some(id) &&
             !tab.back.iter().chain(&tab.forward).any(|location| &location.book_id == id));
