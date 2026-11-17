@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Solmente iste archivo active pote demandar accesso al camera. Tu systema pote equalmente demandar permission. Tu pote revocar le accesso sub le articulo a omne momento.";
+"NSLocationUsageDescription" = "Tu systema fornira tu localisation solmente a iste archivo active. Tu pote revocar le accesso sub le articulo a omne momento.";
+"NSLocationWhenInUseUsageDescription" = "Tu systema fornira tu localisation solmente a iste archivo active. Tu pote revocar le accesso sub le articulo a omne momento.";
+"NSLocalNetworkUsageDescription" = "Discoperi dispositivos LocalSwarm vicin e comparti archivos offline sur tu rete local. Activa le discoperta o le compartimento solmente sur un rete digne de confidentia.";

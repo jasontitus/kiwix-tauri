@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">Kiwix search</string>
+    <string name="widget_search_hint">Search your offline library</string>
+    <string name="widget_no_archives">Your library is empty</string>
+    <string name="widget_library">Library</string>
+    <string name="widget_get_content">Get content</string>
+    <string name="widget_microphone">Voice search</string>
+    <string name="widget_bookmarks">Bookmarks</string>
+</resources>

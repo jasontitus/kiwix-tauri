@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Upstream's manifest also declares INTERNET and an application-wide
+     networkSecurityConfig. The app declares INTERNET itself, and its own
+     network_security_config.xml (which would override a library resource of
+     the same name anyway) carries upstream's CA revocation-list hosts; see
+     ../upstream/network_security_config.xml. -->
+<manifest />

@@ -1,0 +1,49 @@
+{
+  "name": "kiwix-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test:error-visibility": "node --test scripts/test-error-visibility.mjs",
+    "test:suspended-retry": "node --test scripts/test-suspended-retry.mjs",
+    "test:tab-stack": "node --test scripts/test-tab-stack.mjs",
+    "test:download-state": "node --test scripts/test-download-state.mjs",
+    "test:library-pins": "node --test scripts/test-library-pins.mjs",
+    "test:catalog-languages": "node --test scripts/test-catalog-languages.mjs",
+    "test:edition-update-queue": "node --test scripts/test-edition-update-queue.mjs",
+    "test:update-manifest": "node --test scripts/test-update-manifest.mjs",
+    "test:reader-theme-boot": "node --test scripts/test-reader-theme-boot.mjs",
+    "test:reader-video-capability": "node --test scripts/test-reader-video-capability.mjs",
+    "test:reader-search-status": "node --test scripts/test-reader-search-status.mjs",
+    "test:reader-read-aloud": "node --test scripts/test-reader-read-aloud.mjs",
+    "test:speech-preferences": "node --test scripts/test-speech-preferences.mjs",
+    "update:manifest": "node scripts/make-update-manifest.mjs",
+    "docs:errors": "node scripts/generate-error-docs.mjs",
+    "tauri": "tauri",
+    "iphone": "python3 scripts/iphone.py",
+    "desktop": "tauri dev",
+    "bundle": "tauri build",
+    "build:mcp": "node scripts/build-mcp.mjs",
+    "bundle:macos": "npm run build:mcp && tauri build --bundles app && node scripts/bundle-macos.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.0",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "lucide-react": "^1.72.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "puppeteer-core": "^25.17.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  }
+}

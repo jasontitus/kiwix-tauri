@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "sourceBridgeSha256": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+  "sourceReview": "ReviewMobileSpeechBootstrap approved production258F / regression E1C5 before controlled runtime",
+  "regressionChecks": {
+    "runner": "parent",
+    "command": "node --test scripts/test-reader-theme-boot.mjs",
+    "passed": 14,
+    "failed": 0,
+    "limits": "VM provides CSS Highlights and does not execute animation-frame callbacks; fallback/BFCache evidence below is separate actual-browser coverage."
+  },
+  "androidRealStoredHighlight": {
+    "device": "Owned API33 ARM64 WebView109.0.5414.123",
+    "creation": "Actual real Animal paragraph selected; trusted reader-navigation Bookmark and notes / Highlight selected passage UI created the owned stored bookmark. Root producer remained authoritative.",
+    "success": true,
+    "checks": [
+      {
+        "transition": "normal-ui-stored-highlight",
+        "state": {
+          "highlightCount": 1,
+          "quoteLength": 951
+        }
+      },
+      {
+        "transition": "real-quote-mutated",
+        "status": "unavailable",
+        "stalePaintCleared": true
+      },
+      {
+        "transition": "real-quote-restored",
+        "status": "found",
+        "paint": true
+      },
+      {
+        "transition": "actual-fallback-render",
+        "visibleRangeRectangles": 82,
+        "compatibilityMode": "Highlight constructor shadowed temporarily after PSS, not an older-engine performance claim"
+      },
+      {
+        "transition": "native-constructor-restored",
+        "paint": true
+      }
+    ],
+    "removal": "Trusted normal Remove bookmark UI; no direct store/API deletion",
+    "removedState": {
+      "paint": false,
+      "ownedNodes": 0,
+      "highlightConstructor": "function"
+    },
+    "rawResultFile": "annotation-genuine-stored-transitions.json",
+    "rawResultSha256": "6d7f07d8a1c4fc7abd687a4446732c1e7de76173ac501c3f62077af3786e3508",
+    "fallbackScreenshot": "annotation-genuine-stored-transitions-fallback-highlight.png"
+  },
+  "genuineBFCache": {
+    "browserVersion": "Chrome/156.0.8078.80",
+    "scope": "Genuine isolated desktop Chrome BFCache with real archived Animal DOM/assets and production candidate bridge; not Android109 BFCache certification or mobile memory benchmark.",
+    "actualNavigationBack": true,
+    "pageshowPersisted": true,
+    "readyHandshakeCount": 2,
+    "highlightSeededOnlyOnce": true,
+    "retainedPaintCount": 1,
+    "afterRestoreMutationStatus": "unavailable",
+    "afterRestoreRecoveryStatus": "found",
+    "recoveredPaintCount": 1,
+    "rawResultFile": "annotation-genuine-bfcache-proof.json",
+    "rawResultSha256": "69c7bb1ba3f62caaa817cffe06049af88d301425ce65278a0a9a5134f4f69033",
+    "cleanup": "Owned isolated Chrome process, HTTP fixture, and forwarding port stopped; profile and raw evidence retained."
+  },
+  "exclusions": [
+    "Two synthetic-stream attempts failed because the genuine empty-profile root producer resent its authoritative empty annotations; not treated as product regressions or feature proof.",
+    "One browser frame-observer lookup failed after genuine BFCache restore; direct owned-iframe CDP target showed retained paint and verified mutation recovery."
+  ],
+  "releaseBoundary": "Controlled frozen-APK bridge override and desktop functional evidence only. Final rebuilt Android APK and matched physical-app repeat remain required before physical gain claims."
+}

@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "status": "Measured paired simulator main-process memory; whole-reader attribution unavailable",
+  "platform": "Apple Silicon macOS host metrics for iOS Simulator 26.5; NOT physical iPhone memory",
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "workload": "Wiki to Animal to Hawaii archive Home at50mi, zoom30mi, diagonal pan showing Oahu/Maui, previously visually admitted by parent in simulator-comparison-b93d7052a1464336a67429b70f0fcc53. No map navigation/reset in memory measurements.",
+  "metric": "libproc proc_pid_rusage RUSAGE_INFO_V0 ri_phys_footprint bytes; resident size kept separate, not added to footprint or called PSS",
+  "protocol": {
+    "order": [
+      "ours",
+      "upstream"
+    ],
+    "activation": "Explicit owned simctl launch resumed existing main PID; no termination",
+    "settle_sleep_seconds_each": 30,
+    "sample_count_each": 3,
+    "sleep_between_completed_captures_seconds": 2,
+    "independent_sessions_each": 1,
+    "note": "Nominal settling sleep identical. Command/review overhead made actual activation-to-first-capture delays different; actual timestamps retained. These are idle-state diagnostics, not synchronized timing benchmarks or memory peaks."
+  },
+  "results": [
+    {
+      "label": "ours",
+      "pid": 60339,
+      "startAbsTime": 34072236800222,
+      "coalition_ids_resource_then_jetsam": [
+        261344,
+        261345
+      ],
+      "stable_main_generation": true,
+      "main_physical_footprint_bytes_samples": [
+        64359040,
+        64359040,
+        64359040
+      ],
+      "median_main_physical_footprint_bytes": 64359040,
+      "median_main_physical_footprint_MiB": 61.3775634765625,
+      "main_resident_size_bytes_samples": [
+        414089216,
+        414089216,
+        414089216
+      ],
+      "median_main_resident_size_bytes": 414089216,
+      "median_main_resident_size_MiB": 394.90625,
+      "capture_start_times_utc": [
+        "2026-11-05T23:01:51.663052Z",
+        "2026-11-05T23:01:53.680440Z",
+        "2026-11-05T23:01:55.710200Z"
+      ],
+      "activation_returned_utc_second_precision": "2026-11-05T23:01:14Z",
+      "first_capture_delay_approx_seconds": 37.663052,
+      "raw": "ours-map-post-pan.json",
+      "source_git_blob_sha1": "00905a66e23bd0567abfb40431d3653c1a2682a3"
+    },
+    {
+      "label": "upstream",
+      "pid": 60533,
+      "startAbsTime": 34072989865614,
+      "coalition_ids_resource_then_jetsam": [
+        261344,
+        261345
+      ],
+      "stable_main_generation": true,
+      "main_physical_footprint_bytes_samples": [
+        94980928,
+        94980928,
+        94980928
+      ],
+      "median_main_physical_footprint_bytes": 94980928,
+      "median_main_physical_footprint_MiB": 90.58087158203125,
+      "main_resident_size_bytes_samples": [
+        552435712,
+        552435712,
+        552435712
+      ],
+      "median_main_resident_size_bytes": 552435712,
+      "median_main_resident_size_MiB": 526.84375,
+      "capture_start_times_utc": [
+        "2026-11-05T23:03:15.775695Z",
+        "2026-11-05T23:03:17.797796Z",
+        "2026-11-05T23:03:19.826266Z"
+      ],
+      "activation_returned_utc_second_precision": "2026-11-05T23:02:20Z",
+      "first_capture_delay_approx_seconds": 55.775695,
+      "raw": "upstream-map-post-pan.json",
+      "source_git_blob_sha1": "6d30fb0a66cb4d85417f56c110532525e24e217d"
+    }
+  ],
+  "mainOnlyDifference": {
+    "ours_minus_upstream_physical_footprint_bytes": -30621888,
+    "ours_minus_upstream_physical_footprint_MiB": -29.20330810546875,
+    "ours_main_footprint_percent_below_upstream_main": 32.24003875809679,
+    "restriction": "This difference is solely between host main-process footprint ledgers, not app/reader totals or physical phone memory savings"
+  },
+  "ownership": {
+    "whole_reader_memory": "unavailable",
+    "reason": "Both exact installed main executables occupy the same nonzero host resource coalition261344 and jetsam coalition261345. Corrected upstream capture validates competing ours PID60339/start34072236800222 in all three captures. Shared simulator coalition therefore does not establish reader-exclusive WebKit ownership.",
+    "validated_resource_coalition_member_counts": [
+      273,
+      272,
+      272
+    ],
+    "diagnostic_named_service_counts_each": {
+      "web_content": 3,
+      "gpu": 2,
+      "networking": 2
+    },
+    "service_memory_attributed_to_either_app": false,
+    "cohort_total_bytes": null,
+    "kernel_task_roles": "Not provided by proc_pidcoalitioninfo API used. Executable-name diagnostic roles are not kernel task roles or ownership evidence.",
+    "first_capture_census_caveat": "Initial source had independently guarded main metrics but did not generation-bind non-main census rows. Those non-main rows are not used as affirmative ownership proof. Corrected source was reviewed before upstream execution; main metric collection unchanged.",
+    "cross_sample_cohort_stability": "Not claimed; observed member count changed. No aggregation performed."
+  },
+  "standardToolCrossCheck": {
+    "file": "upstream-standard-footprint.json",
+    "command": "footprint -p60533 -jFILE --noCategories -fbytes",
+    "footprint_tool_region_accounting_bytes": 94948160,
+    "auxiliary_phys_footprint_bytes": 94980928,
+    "interpretation": "Auxiliary phys_footprint matches libproc. Region-accounting footprint is a different field and is not substituted for ri_phys_footprint."
+  },
+  "physicalDeviceContact": false,
+  "publicRawDataLimit": "Raw process censuses contain host paths/process information and remain private. First capture non-main census is excluded from affirmative ownership proof.",
+  "privateEvidenceSHA256": {
+    "paired-memory-summary.json": "4e7727cd5ea2c8005b70308b00c0bb9d3a1fb481fa6516a1d31ac1232613bfe4",
+    "ours-map-post-pan.json": "d948e6793021d77478fb991ca0e37af4a0b92aaed3df4a17d34c25f7b858cd8b",
+    "upstream-map-post-pan.json": "a4859410e934ae584d78872315da8d28a7e732126b73cf6aee285e57be722ca6",
+    "upstream-standard-footprint.json": "96a07cecbe481429611ad263df90ce247150bd5f8f45177ff8913d33be2936de"
+  },
+  "currentCollectorSHA256": "023de20c5ff9126561d500a8aa564c2adc5c041b9aedc9a06e3da9f2412e2f44"
+}

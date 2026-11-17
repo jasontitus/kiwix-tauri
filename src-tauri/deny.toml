@@ -1,0 +1,76 @@
+# cargo-deny policy for the native application crate.
+# CI runs `cargo deny --all-features --target <triple> check` from src-tauri/
+# once per shipping target (.github/workflows/checks.yml); run it that way
+# locally too. A run without --target checks crates that no build ships.
+
+[graph]
+all-features = true
+
+[advisories]
+# Every RustSec vulnerability and unsound notice fails the check, for direct
+# and transitive crates. `unsound` must be set explicitly: cargo-deny's default
+# reports unsound notices for direct dependencies only. Unmaintained notices are
+# checked for direct dependencies only; see docs/DEPENDENCIES.md for the
+# transitive list (`unmaintained = "all"` shows them). CI runs the check once
+# per shipping target (`cargo deny --target <triple> check`, checks.yml), so
+# an exception for a platform-specific crate warns "advisory-not-detected" on
+# the targets that do not build it.
+unmaintained = "workspace"
+unsound = "all"
+yanked = "deny"
+# Add an exception only with the advisory ID, the reason it does not apply
+# here, and the condition for removing it.
+ignore = [
+    # ringbuf 0.4 Consumer::skip/clear double-drop when an element's Drop
+    # panics. Only librqbit-utp uses it, with `u8` elements whose drop cannot
+    # panic. Remove when librqbit-utp moves to ringbuf >= 0.5.2.
+    { id = "RUSTSEC-2026-0293", reason = "u8 elements cannot panic on drop" },
+    # glib 0.18 VariantStrIter unsoundness. glib 0.18 is pinned by Tauri's
+    # GTK3 stack (Linux only); neither this crate nor its UI stack iterates
+    # GVariant string arrays. Remove when Tauri moves to gtk-rs >= 0.20.
+    # Before `unsound = "all"` this entry never matched, because the notice is
+    # on a transitive crate; it is now evaluated on the Linux targets.
+    { id = "RUSTSEC-2024-0429", reason = "pinned by Tauri GTK3; VariantStrIter unused" },
+]
+
+[licenses]
+# Some allowed licenses (BSD-1-Clause, LGPL-2.1-or-later) only appear on
+# targets that do not ship, so a per-target run would warn about each one.
+unused-allowed-license = "allow"
+# The application is GPL-3.0-or-later. Every dependency license below is
+# GPL-3.0 compatible. Adding a license requires checking that compatibility.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-or-later",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Duplicate major versions are common in the Tauri graph; report them only.
+multiple-versions = "warn"
+# Path dependencies (vendored forks, the mobile plugin) are local; registry
+# dependencies must not use wildcard requirements.
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

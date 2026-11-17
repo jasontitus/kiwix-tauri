@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Solo questo archivio attivo può richiedere l'accesso alla fotocamera. Anche il sistema potrebbe chiederti l'autorizzazione. Puoi revocare l'accesso sotto l'articolo in qualsiasi momento.";
+"NSLocationUsageDescription" = "Il sistema fornirà la tua posizione solo a questo archivio attivo. Puoi revocare l'accesso sotto l'articolo in qualsiasi momento.";
+"NSLocationWhenInUseUsageDescription" = "Il sistema fornirà la tua posizione solo a questo archivio attivo. Puoi revocare l'accesso sotto l'articolo in qualsiasi momento.";
+"NSLocalNetworkUsageDescription" = "Scopri i dispositivi LocalSwarm nelle vicinanze e condividi archivi offline sulla tua rete locale. Abilita il rilevamento o la condivisione solo su una rete attendibile.";

@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Vetëm ky arkiv aktiv mund të kërkojë kamerën. Edhe sistemi juaj mund të kërkojë leje. Mund ta hiqni lejen poshtë artikullit në çdo kohë.";
+"NSLocationUsageDescription" = "Sistemi juaj do t'ia japë vendndodhjen tuaj vetëm këtij arkivi aktiv. Mund ta hiqni lejen poshtë artikullit në çdo kohë.";
+"NSLocationWhenInUseUsageDescription" = "Sistemi juaj do t'ia japë vendndodhjen tuaj vetëm këtij arkivi aktiv. Mund ta hiqni lejen poshtë artikullit në çdo kohë.";
+"NSLocalNetworkUsageDescription" = "Zbuloni pajisjet LocalSwarm aty pranë dhe ndani arkivat jashtë linje në rrjetin tuaj lokal. Aktivizo zbulimin ose ndarjen vetëm në një rrjet të besuar.";

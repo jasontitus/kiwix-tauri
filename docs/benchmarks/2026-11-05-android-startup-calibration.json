@@ -1,0 +1,2252 @@
+{
+  "schema": 1,
+  "scope": "One physical process-cold prepared-article startup calibration plus a separate PSS cohort; no performance winner or causal optimization claim",
+  "toolSha256": "8217a32ad87aaaf20c9ced8643d8033fa895302887b219e6316251ffa57235d5",
+  "productApkSha256": "0f04390127c81e9d8ce23965fa595876298fbb2ac722daa3f88a154485932a33",
+  "officialApkSha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+  "device": {
+    "model": "SM-A356U",
+    "api": 36,
+    "webview": "156.0.8078.49"
+  },
+  "actualWallSeconds": 208.113370125,
+  "order": [
+    "A",
+    "B",
+    "B",
+    "A"
+  ],
+  "samplesPerBlock": 4,
+  "totalSamples": 16,
+  "totalProcessMeasurements": 32,
+  "totalOwnershipObservations": 36,
+  "settleSeconds": 30,
+  "summary": {
+    "cohorts": {
+      "ours": {
+        "pssKiB": {
+          "medianKiB": 241580.5,
+          "minimumKiB": 229688,
+          "maximumKiB": 253232,
+          "sampleCount": 8
+        },
+        "mainPssKiB": {
+          "medianKiB": 135696.5,
+          "minimumKiB": 130748,
+          "maximumKiB": 140451,
+          "sampleCount": 8
+        },
+        "rendererPssKiB": {
+          "medianKiB": 105884.0,
+          "minimumKiB": 98940,
+          "maximumKiB": 112781,
+          "sampleCount": 8
+        },
+        "otherPssKiB": {
+          "medianKiB": 0.0,
+          "minimumKiB": 0,
+          "maximumKiB": 0,
+          "sampleCount": 8
+        },
+        "nativeHeapPssKiB": {
+          "medianKiB": 35380.0,
+          "minimumKiB": 35344,
+          "maximumKiB": 35439,
+          "sampleCount": 8
+        },
+        "apkPssKiB": {
+          "medianKiB": 75549.5,
+          "minimumKiB": 70939,
+          "maximumKiB": 80160,
+          "sampleCount": 8
+        },
+        "soPssKiB": {
+          "medianKiB": 14126.0,
+          "minimumKiB": 13759,
+          "maximumKiB": 14338,
+          "sampleCount": 8
+        },
+        "mappedCodePssKiB": {
+          "medianKiB": 89675.5,
+          "minimumKiB": 84698,
+          "maximumKiB": 94498,
+          "sampleCount": 8
+        },
+        "unknownPssKiB": {
+          "medianKiB": 55197.5,
+          "minimumKiB": 54992,
+          "maximumKiB": 55355,
+          "sampleCount": 8
+        },
+        "graphicsPssKiB": {
+          "medianKiB": 32448.0,
+          "minimumKiB": 32438,
+          "maximumKiB": 32458,
+          "sampleCount": 8
+        },
+        "nativeHeapAllocKiB": {
+          "medianKiB": 60551.0,
+          "minimumKiB": 60485,
+          "maximumKiB": 60620,
+          "sampleCount": 8
+        },
+        "nativeHeapSizeKiB": {
+          "medianKiB": 76432.0,
+          "minimumKiB": 76168,
+          "maximumKiB": 76696,
+          "sampleCount": 8
+        }
+      },
+      "official": {
+        "pssKiB": {
+          "medianKiB": 244157.0,
+          "minimumKiB": 237648,
+          "maximumKiB": 245349,
+          "sampleCount": 8
+        },
+        "mainPssKiB": {
+          "medianKiB": 155714.0,
+          "minimumKiB": 153011,
+          "maximumKiB": 156664,
+          "sampleCount": 8
+        },
+        "rendererPssKiB": {
+          "medianKiB": 88445.0,
+          "minimumKiB": 84637,
+          "maximumKiB": 88689,
+          "sampleCount": 8
+        },
+        "otherPssKiB": {
+          "medianKiB": 0.0,
+          "minimumKiB": 0,
+          "maximumKiB": 0,
+          "sampleCount": 8
+        },
+        "nativeHeapPssKiB": {
+          "medianKiB": 46118.5,
+          "minimumKiB": 45810,
+          "maximumKiB": 46396,
+          "sampleCount": 8
+        },
+        "apkPssKiB": {
+          "medianKiB": 67355.0,
+          "minimumKiB": 66307,
+          "maximumKiB": 68403,
+          "sampleCount": 8
+        },
+        "soPssKiB": {
+          "medianKiB": 11502.5,
+          "minimumKiB": 11473,
+          "maximumKiB": 11531,
+          "sampleCount": 8
+        },
+        "mappedCodePssKiB": {
+          "medianKiB": 78857.5,
+          "minimumKiB": 77780,
+          "maximumKiB": 79934,
+          "sampleCount": 8
+        },
+        "unknownPssKiB": {
+          "medianKiB": 45186.5,
+          "minimumKiB": 44604,
+          "maximumKiB": 45761,
+          "sampleCount": 8
+        },
+        "graphicsPssKiB": {
+          "medianKiB": 32672.0,
+          "minimumKiB": 32670,
+          "maximumKiB": 32674,
+          "sampleCount": 8
+        },
+        "nativeHeapAllocKiB": {
+          "medianKiB": 87042.0,
+          "minimumKiB": 86972,
+          "maximumKiB": 87418,
+          "sampleCount": 8
+        },
+        "nativeHeapSizeKiB": {
+          "medianKiB": 103376.0,
+          "minimumKiB": 103252,
+          "maximumKiB": 103500,
+          "sampleCount": 8
+        }
+      }
+    },
+    "adjacentBlockPairs": [
+      {
+        "blockIndices": [
+          0,
+          1
+        ],
+        "oursMinusOfficialKiB": {
+          "pssKiB": -7331.0,
+          "mainPssKiB": -21656.0,
+          "rendererPssKiB": 14327.0,
+          "otherPssKiB": 0.0,
+          "nativeHeapPssKiB": -10854.0,
+          "apkPssKiB": 4632.0,
+          "soPssKiB": 2435.5,
+          "mappedCodePssKiB": 7067.5,
+          "unknownPssKiB": 9299.0,
+          "graphicsPssKiB": -216.0,
+          "nativeHeapAllocKiB": -26467.0,
+          "nativeHeapSizeKiB": -26804.0
+        }
+      },
+      {
+        "blockIndices": [
+          2,
+          3
+        ],
+        "oursMinusOfficialKiB": {
+          "pssKiB": 7877.5,
+          "mainPssKiB": -16216.5,
+          "rendererPssKiB": 24096.0,
+          "otherPssKiB": 0.0,
+          "nativeHeapPssKiB": -10438.0,
+          "apkPssKiB": 11757.0,
+          "soPssKiB": 2807.5,
+          "mappedCodePssKiB": 14564.5,
+          "unknownPssKiB": 10727.0,
+          "graphicsPssKiB": -232.0,
+          "nativeHeapAllocKiB": -26486.5,
+          "nativeHeapSizeKiB": -27084.0
+        }
+      }
+    ],
+    "startup": {
+      "ours": {
+        "launchCount": 2,
+        "medianLowerSeconds": 1.311328187500008,
+        "medianUpperSeconds": 2.6257498125000054
+      },
+      "official": {
+        "launchCount": 2,
+        "medianLowerSeconds": 0.010127332999996241,
+        "medianUpperSeconds": 2.132787458500001
+      }
+    }
+  },
+  "limitations": [
+    "Reference-crop agreement is not independent semantic proof of article identity.",
+    "PSS shared mapping attribution depends on other processes; cold means process-cold, not cold page cache.",
+    "Separate category medians are not additive; graphics summary and detailed PSS categories can overlap.",
+    "Adjacent AB/BA block-median differences are descriptive, not causal or significance estimates.",
+    "Only two launches per app; startup endpoint intervals overlap.",
+    "PSS paired signs disagree: no reliable lower-memory winner.",
+    "Capture latency makes readiness brackets coarse; no midpoint estimate, frame accuracy, or interaction guarantee.",
+    "Temporary official broad file grant remains on for the next controlled measurement."
+  ],
+  "blocks": [
+    {
+      "index": 0,
+      "alias": "ours",
+      "status": "complete",
+      "startup": {
+        "boundsSeconds": {
+          "lower": 1.5151761659999998,
+          "upper": 2.782241999999999
+        },
+        "t0": {
+          "monotonic": 5.768941875
+        },
+        "prelaunchFrames": [
+          {
+            "path": "block-1-ours-startup-prelaunch.png",
+            "acquisitionStart": {
+              "monotonic": 3.659162083
+            },
+            "acquisitionEnd": {
+              "monotonic": 5.265773666
+            },
+            "sha256": "7186b35e129968a76cdae9f1f87fe57efb84a5f4d89d7a17c59ad1593cdc8033",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 96.09097765983869,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          }
+        ],
+        "frames": [
+          {
+            "path": "block-1-ours-startup-001.png",
+            "acquisitionStart": {
+              "monotonic": 5.772697375
+            },
+            "acquisitionEnd": {
+              "monotonic": 7.141637
+            },
+            "sha256": "7186b35e129968a76cdae9f1f87fe57efb84a5f4d89d7a17c59ad1593cdc8033",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 96.09097765983869,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          },
+          {
+            "path": "block-1-ours-startup-002.png",
+            "acquisitionStart": {
+              "monotonic": 7.284118041
+            },
+            "acquisitionEnd": {
+              "monotonic": 7.67706075
+            },
+            "sha256": "f8f12143786817d669d4284dcf7181f6b58eebad8d150dc0a50737bbb938e6f4",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 82.6403926848717,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          },
+          {
+            "path": "block-1-ours-startup-003.png",
+            "acquisitionStart": {
+              "monotonic": 7.819075791
+            },
+            "acquisitionEnd": {
+              "monotonic": 8.551183875
+            },
+            "sha256": "bb14c789e257e8d2ef6fddfc5824ab8e5699dca1e298ec4e0dd38427507ae2c6",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 0.0,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": true,
+            "foreground": {
+              "checked": {
+                "monotonic": 8.933304416
+              },
+              "resumed": [
+                "    topResumedActivity=ActivityRecord{115274431 u0 org.kiwix.workbench/.MainActivity t808}"
+              ],
+              "currentUser": "0",
+              "unlocked": true
+            }
+          }
+        ],
+        "pixelReadyAdmitted": {
+          "monotonic": 8.933317541
+        },
+        "settleStarted": {
+          "monotonic": 8.934693125
+        },
+        "launchProcessExit": 0,
+        "launchProcessCleanup": {
+          "killAttempted": false,
+          "terminationConfirmed": true,
+          "errors": []
+        }
+      },
+      "samples": [
+        {
+          "index": 0,
+          "started": {
+            "monotonic": 40.544945458
+          },
+          "ended": {
+            "monotonic": 42.05849575
+          },
+          "metrics": {
+            "pssKiB": 229688,
+            "rssKiB": 416226,
+            "swapPssKiB": 617,
+            "nativeHeapPssKiB": 35356,
+            "apkPssKiB": 70939,
+            "soPssKiB": 13759,
+            "mappedCodePssKiB": 84698,
+            "unknownPssKiB": 54992,
+            "graphicsPssKiB": 32458,
+            "nativeHeapAllocKiB": 60620,
+            "nativeHeapSizeKiB": 76696,
+            "mainPssKiB": 130748,
+            "rendererPssKiB": 98940,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "10989": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54590924"
+              },
+              "metrics": {
+                "pssKiB": 130748,
+                "rssKiB": 244758,
+                "swapPssKiB": 237,
+                "nativeHeapPssKiB": 33798,
+                "nativeHeapSizeKiB": 63796,
+                "nativeHeapAllocKiB": 54584,
+                "apkPssKiB": 27598,
+                "soPssKiB": 13405,
+                "unknownPssKiB": 9304,
+                "graphicsPssKiB": 32458,
+                "mappedCodePssKiB": 41003
+              },
+              "rawPath": "block-1-sample-1-pid-10989-meminfo.txt",
+              "rawSha256": "419b49b596ac588d7db2617b43c0b5558fbe63ed3eccfb11453b5692aa9eb1b3"
+            },
+            "11071": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54590967"
+              },
+              "metrics": {
+                "pssKiB": 98940,
+                "rssKiB": 171468,
+                "swapPssKiB": 380,
+                "nativeHeapPssKiB": 1558,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6036,
+                "apkPssKiB": 43341,
+                "soPssKiB": 354,
+                "unknownPssKiB": 45688,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 43695
+              },
+              "rawPath": "block-1-sample-1-pid-11071-meminfo.txt",
+              "rawSha256": "3bc3a167a90e902cebd37bc381def329f44a86f7e0ba6fa535e1e4d77d8a5c21"
+            }
+          }
+        },
+        {
+          "index": 1,
+          "started": {
+            "monotonic": 44.060499541
+          },
+          "ended": {
+            "monotonic": 45.692946625
+          },
+          "metrics": {
+            "pssKiB": 236820,
+            "rssKiB": 433538,
+            "swapPssKiB": 412,
+            "nativeHeapPssKiB": 35383,
+            "apkPssKiB": 70939,
+            "soPssKiB": 13924,
+            "mappedCodePssKiB": 84863,
+            "unknownPssKiB": 55056,
+            "graphicsPssKiB": 32458,
+            "nativeHeapAllocKiB": 60575,
+            "nativeHeapSizeKiB": 76696,
+            "mainPssKiB": 134054,
+            "rendererPssKiB": 102766,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "10989": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54590924"
+              },
+              "metrics": {
+                "pssKiB": 134054,
+                "rssKiB": 252650,
+                "swapPssKiB": 143,
+                "nativeHeapPssKiB": 33798,
+                "nativeHeapSizeKiB": 63796,
+                "nativeHeapAllocKiB": 54538,
+                "apkPssKiB": 27598,
+                "soPssKiB": 13540,
+                "unknownPssKiB": 9340,
+                "graphicsPssKiB": 32458,
+                "mappedCodePssKiB": 41138
+              },
+              "rawPath": "block-1-sample-2-pid-10989-meminfo.txt",
+              "rawSha256": "5f45efbbad6a639f66614a06f21701aff009a8154fb0cfd2b5dbb77af644c13e"
+            },
+            "11071": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54590967"
+              },
+              "metrics": {
+                "pssKiB": 102766,
+                "rssKiB": 180888,
+                "swapPssKiB": 269,
+                "nativeHeapPssKiB": 1585,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 43341,
+                "soPssKiB": 384,
+                "unknownPssKiB": 45716,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 43725
+              },
+              "rawPath": "block-1-sample-2-pid-11071-meminfo.txt",
+              "rawSha256": "d194ed8d76c203e43198807445893f7ef7214de4300c420f35cba530b0d671ce"
+            }
+          }
+        },
+        {
+          "index": 2,
+          "started": {
+            "monotonic": 47.703670041
+          },
+          "ended": {
+            "monotonic": 49.420228916
+          },
+          "metrics": {
+            "pssKiB": 236827,
+            "rssKiB": 433550,
+            "swapPssKiB": 412,
+            "nativeHeapPssKiB": 35411,
+            "apkPssKiB": 70939,
+            "soPssKiB": 13919,
+            "mappedCodePssKiB": 84858,
+            "unknownPssKiB": 55064,
+            "graphicsPssKiB": 32458,
+            "nativeHeapAllocKiB": 60575,
+            "nativeHeapSizeKiB": 76696,
+            "mainPssKiB": 134053,
+            "rendererPssKiB": 102774,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "10989": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54590924"
+              },
+              "metrics": {
+                "pssKiB": 134053,
+                "rssKiB": 252654,
+                "swapPssKiB": 143,
+                "nativeHeapPssKiB": 33826,
+                "nativeHeapSizeKiB": 63796,
+                "nativeHeapAllocKiB": 54538,
+                "apkPssKiB": 27598,
+                "soPssKiB": 13535,
+                "unknownPssKiB": 9340,
+                "graphicsPssKiB": 32458,
+                "mappedCodePssKiB": 41133
+              },
+              "rawPath": "block-1-sample-3-pid-10989-meminfo.txt",
+              "rawSha256": "aea5c19d99f318362d502879615034c2ff4ee08dcc031c1981d9762b1a016cef"
+            },
+            "11071": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54590967"
+              },
+              "metrics": {
+                "pssKiB": 102774,
+                "rssKiB": 180896,
+                "swapPssKiB": 269,
+                "nativeHeapPssKiB": 1585,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 43341,
+                "soPssKiB": 384,
+                "unknownPssKiB": 45724,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 43725
+              },
+              "rawPath": "block-1-sample-3-pid-11071-meminfo.txt",
+              "rawSha256": "234c9b1156d2b80419e1f36daa2fa1eab6b9f1053866dadd9245c6db37029c12"
+            }
+          }
+        },
+        {
+          "index": 3,
+          "started": {
+            "monotonic": 51.430412666
+          },
+          "ended": {
+            "monotonic": 52.935791416
+          },
+          "metrics": {
+            "pssKiB": 236855,
+            "rssKiB": 433578,
+            "swapPssKiB": 412,
+            "nativeHeapPssKiB": 35439,
+            "apkPssKiB": 70939,
+            "soPssKiB": 13919,
+            "mappedCodePssKiB": 84858,
+            "unknownPssKiB": 55068,
+            "graphicsPssKiB": 32458,
+            "nativeHeapAllocKiB": 60576,
+            "nativeHeapSizeKiB": 76696,
+            "mainPssKiB": 134081,
+            "rendererPssKiB": 102774,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "10989": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54590924"
+              },
+              "metrics": {
+                "pssKiB": 134081,
+                "rssKiB": 252682,
+                "swapPssKiB": 143,
+                "nativeHeapPssKiB": 33854,
+                "nativeHeapSizeKiB": 63796,
+                "nativeHeapAllocKiB": 54539,
+                "apkPssKiB": 27598,
+                "soPssKiB": 13535,
+                "unknownPssKiB": 9340,
+                "graphicsPssKiB": 32458,
+                "mappedCodePssKiB": 41133
+              },
+              "rawPath": "block-1-sample-4-pid-10989-meminfo.txt",
+              "rawSha256": "afa6b44b3992b1c214697809044d4987a050098bffdda0c913463b25d88e004c"
+            },
+            "11071": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54590967"
+              },
+              "metrics": {
+                "pssKiB": 102774,
+                "rssKiB": 180896,
+                "swapPssKiB": 269,
+                "nativeHeapPssKiB": 1585,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 43341,
+                "soPssKiB": 384,
+                "unknownPssKiB": 45728,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 43725
+              },
+              "rawPath": "block-1-sample-4-pid-11071-meminfo.txt",
+              "rawSha256": "aa52cee05e8d0335575e2b384be8584692f68fa09881bdd4e90e919db78c402a"
+            }
+          }
+        }
+      ],
+      "ownership": [
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        },
+        {
+          "10989": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54590924"
+          },
+          "11071": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54590967"
+          }
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "alias": "official",
+      "status": "complete",
+      "startup": {
+        "boundsSeconds": {
+          "lower": 0.007139875000000018,
+          "upper": 2.2041949170000024
+        },
+        "t0": {
+          "monotonic": 56.910756166
+        },
+        "prelaunchFrames": [
+          {
+            "path": "block-2-official-startup-prelaunch.png",
+            "acquisitionStart": {
+              "monotonic": 55.184841375
+            },
+            "acquisitionEnd": {
+              "monotonic": 56.404181333
+            },
+            "sha256": "9d6095ed50b722498fd6a4a7c8998c076751e2f972a3b5712eb037c305df763d",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 98.14963463574688,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": false
+          }
+        ],
+        "frames": [
+          {
+            "path": "block-2-official-startup-001.png",
+            "acquisitionStart": {
+              "monotonic": 56.917896041
+            },
+            "acquisitionEnd": {
+              "monotonic": 58.175926458
+            },
+            "sha256": "50cadf711b74ff66b57f84b55c01a7bdab5a7cb2b065a03c05b22dbeec499a66",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 101.89723525797723,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": false
+          },
+          {
+            "path": "block-2-official-startup-002.png",
+            "acquisitionStart": {
+              "monotonic": 58.3492805
+            },
+            "acquisitionEnd": {
+              "monotonic": 59.114951083
+            },
+            "sha256": "e5f5338b0dc2d436b5095761e3ff48dd13d164dd9cbf8040e761a74cf6658ce7",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 0.0,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": true,
+            "foreground": {
+              "checked": {
+                "monotonic": 59.541908541
+              },
+              "resumed": [
+                "    topResumedActivity=ActivityRecord{21863470 u0 org.kiwix.kiwixmobile.standalone/org.kiwix.kiwixmobile.main.KiwixMainActivity t809}"
+              ],
+              "currentUser": "0",
+              "unlocked": true
+            }
+          }
+        ],
+        "pixelReadyAdmitted": {
+          "monotonic": 59.541925875
+        },
+        "settleStarted": {
+          "monotonic": 59.545181166
+        },
+        "launchProcessExit": 0,
+        "launchProcessCleanup": {
+          "killAttempted": false,
+          "terminationConfirmed": true,
+          "errors": []
+        }
+      },
+      "samples": [
+        {
+          "index": 0,
+          "started": {
+            "monotonic": 91.1401655
+          },
+          "ended": {
+            "monotonic": 92.819271958
+          },
+          "metrics": {
+            "pssKiB": 237648,
+            "rssKiB": 426978,
+            "swapPssKiB": 637,
+            "nativeHeapPssKiB": 46396,
+            "apkPssKiB": 66307,
+            "soPssKiB": 11473,
+            "mappedCodePssKiB": 77780,
+            "unknownPssKiB": 45749,
+            "graphicsPssKiB": 32674,
+            "nativeHeapAllocKiB": 87418,
+            "nativeHeapSizeKiB": 103500,
+            "mainPssKiB": 153011,
+            "rendererPssKiB": 84637,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "11575": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54596039"
+              },
+              "metrics": {
+                "pssKiB": 153011,
+                "rssKiB": 270530,
+                "swapPssKiB": 243,
+                "nativeHeapPssKiB": 44817,
+                "nativeHeapSizeKiB": 90600,
+                "nativeHeapAllocKiB": 81356,
+                "apkPssKiB": 33063,
+                "soPssKiB": 11039,
+                "unknownPssKiB": 9649,
+                "graphicsPssKiB": 32674,
+                "mappedCodePssKiB": 44102
+              },
+              "rawPath": "block-2-sample-1-pid-11575-meminfo.txt",
+              "rawSha256": "e9461f24710f913cc68555cede889e3b8373c6bf858ad6a6d98511b4eb2a1aa4"
+            },
+            "11598": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54596060"
+              },
+              "metrics": {
+                "pssKiB": 84637,
+                "rssKiB": 156448,
+                "swapPssKiB": 394,
+                "nativeHeapPssKiB": 1579,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6062,
+                "apkPssKiB": 33244,
+                "soPssKiB": 434,
+                "unknownPssKiB": 36100,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 33678
+              },
+              "rawPath": "block-2-sample-1-pid-11598-meminfo.txt",
+              "rawSha256": "f4b17e7c304013c48964095f241ba34d40188662971d7bd8befa27cfea75991b"
+            }
+          }
+        },
+        {
+          "index": 1,
+          "started": {
+            "monotonic": 94.823249583
+          },
+          "ended": {
+            "monotonic": 96.513337333
+          },
+          "metrics": {
+            "pssKiB": 244159,
+            "rssKiB": 443674,
+            "swapPssKiB": 426,
+            "nativeHeapPssKiB": 46251,
+            "apkPssKiB": 66307,
+            "soPssKiB": 11484,
+            "mappedCodePssKiB": 77791,
+            "unknownPssKiB": 45761,
+            "graphicsPssKiB": 32674,
+            "nativeHeapAllocKiB": 87043,
+            "nativeHeapSizeKiB": 103500,
+            "mainPssKiB": 155716,
+            "rendererPssKiB": 88443,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "11575": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54596039"
+              },
+              "metrics": {
+                "pssKiB": 155716,
+                "rssKiB": 277814,
+                "swapPssKiB": 145,
+                "nativeHeapPssKiB": 44637,
+                "nativeHeapSizeKiB": 90600,
+                "nativeHeapAllocKiB": 80980,
+                "apkPssKiB": 33063,
+                "soPssKiB": 11041,
+                "unknownPssKiB": 9649,
+                "graphicsPssKiB": 32674,
+                "mappedCodePssKiB": 44104
+              },
+              "rawPath": "block-2-sample-2-pid-11575-meminfo.txt",
+              "rawSha256": "2bc9be293853d832229b6e423f02d0479b5cefa0cb1d0f391d742cd7841d517d"
+            },
+            "11598": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54596060"
+              },
+              "metrics": {
+                "pssKiB": 88443,
+                "rssKiB": 165860,
+                "swapPssKiB": 281,
+                "nativeHeapPssKiB": 1614,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6063,
+                "apkPssKiB": 33244,
+                "soPssKiB": 443,
+                "unknownPssKiB": 36112,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 33687
+              },
+              "rawPath": "block-2-sample-2-pid-11598-meminfo.txt",
+              "rawSha256": "3b6c9452c826796bbbae2e6567c5e0aa3bce3b24fe82a30651e3e24bd2386b13"
+            }
+          }
+        },
+        {
+          "index": 2,
+          "started": {
+            "monotonic": 98.523316666
+          },
+          "ended": {
+            "monotonic": 100.305984875
+          },
+          "metrics": {
+            "pssKiB": 244154,
+            "rssKiB": 443670,
+            "swapPssKiB": 426,
+            "nativeHeapPssKiB": 46251,
+            "apkPssKiB": 66307,
+            "soPssKiB": 11483,
+            "mappedCodePssKiB": 77790,
+            "unknownPssKiB": 45761,
+            "graphicsPssKiB": 32674,
+            "nativeHeapAllocKiB": 87042,
+            "nativeHeapSizeKiB": 103500,
+            "mainPssKiB": 155707,
+            "rendererPssKiB": 88447,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "11575": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54596039"
+              },
+              "metrics": {
+                "pssKiB": 155707,
+                "rssKiB": 277806,
+                "swapPssKiB": 145,
+                "nativeHeapPssKiB": 44637,
+                "nativeHeapSizeKiB": 90600,
+                "nativeHeapAllocKiB": 80979,
+                "apkPssKiB": 33063,
+                "soPssKiB": 11040,
+                "unknownPssKiB": 9649,
+                "graphicsPssKiB": 32674,
+                "mappedCodePssKiB": 44103
+              },
+              "rawPath": "block-2-sample-3-pid-11575-meminfo.txt",
+              "rawSha256": "616338c8bf24687d13b293707086a2797b0225abab1286f502c4b3f8a3442702"
+            },
+            "11598": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54596060"
+              },
+              "metrics": {
+                "pssKiB": 88447,
+                "rssKiB": 165864,
+                "swapPssKiB": 281,
+                "nativeHeapPssKiB": 1614,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6063,
+                "apkPssKiB": 33244,
+                "soPssKiB": 443,
+                "unknownPssKiB": 36112,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 33687
+              },
+              "rawPath": "block-2-sample-3-pid-11598-meminfo.txt",
+              "rawSha256": "cb792a6961a8645e712fd4eb62db7fd22d57c28d0fabca3e201f032c376ed438"
+            }
+          }
+        },
+        {
+          "index": 3,
+          "started": {
+            "monotonic": 102.309877583
+          },
+          "ended": {
+            "monotonic": 104.130984291
+          },
+          "metrics": {
+            "pssKiB": 244155,
+            "rssKiB": 443670,
+            "swapPssKiB": 426,
+            "nativeHeapPssKiB": 46251,
+            "apkPssKiB": 66307,
+            "soPssKiB": 11484,
+            "mappedCodePssKiB": 77791,
+            "unknownPssKiB": 45761,
+            "graphicsPssKiB": 32674,
+            "nativeHeapAllocKiB": 87042,
+            "nativeHeapSizeKiB": 103500,
+            "mainPssKiB": 155712,
+            "rendererPssKiB": 88443,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "11575": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54596039"
+              },
+              "metrics": {
+                "pssKiB": 155712,
+                "rssKiB": 277810,
+                "swapPssKiB": 145,
+                "nativeHeapPssKiB": 44637,
+                "nativeHeapSizeKiB": 90600,
+                "nativeHeapAllocKiB": 80979,
+                "apkPssKiB": 33063,
+                "soPssKiB": 11041,
+                "unknownPssKiB": 9649,
+                "graphicsPssKiB": 32674,
+                "mappedCodePssKiB": 44104
+              },
+              "rawPath": "block-2-sample-4-pid-11575-meminfo.txt",
+              "rawSha256": "6465e38e357768d5ca2a8208fd26c5adc1eeee84428544d2f7434667013a1215"
+            },
+            "11598": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54596060"
+              },
+              "metrics": {
+                "pssKiB": 88443,
+                "rssKiB": 165860,
+                "swapPssKiB": 281,
+                "nativeHeapPssKiB": 1614,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6063,
+                "apkPssKiB": 33244,
+                "soPssKiB": 443,
+                "unknownPssKiB": 36112,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 33687
+              },
+              "rawPath": "block-2-sample-4-pid-11598-meminfo.txt",
+              "rawSha256": "c021aa99d84dc9905281040034f67d609444a4f3f14873e9bcaa950d3b04b260"
+            }
+          }
+        }
+      ],
+      "ownership": [
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        },
+        {
+          "11575": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54596039"
+          },
+          "11598": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54596060"
+          }
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "alias": "official",
+      "status": "complete",
+      "startup": {
+        "boundsSeconds": {
+          "lower": 0.013114790999992465,
+          "upper": 2.0613799999999998
+        },
+        "t0": {
+          "monotonic": 107.971231625
+        },
+        "prelaunchFrames": [
+          {
+            "path": "block-3-official-startup-prelaunch.png",
+            "acquisitionStart": {
+              "monotonic": 106.2642635
+            },
+            "acquisitionEnd": {
+              "monotonic": 107.4720085
+            },
+            "sha256": "9d6095ed50b722498fd6a4a7c8998c076751e2f972a3b5712eb037c305df763d",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 98.14963463574688,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": false
+          }
+        ],
+        "frames": [
+          {
+            "path": "block-3-official-startup-001.png",
+            "acquisitionStart": {
+              "monotonic": 107.984346416
+            },
+            "acquisitionEnd": {
+              "monotonic": 109.095131083
+            },
+            "sha256": "c3874e03839196b12e3efa14b83f66d78b41cd66b0953e70bfd2514e963cf89b",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 110.4811385334013,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": false
+          },
+          {
+            "path": "block-3-official-startup-002.png",
+            "acquisitionStart": {
+              "monotonic": 109.259081083
+            },
+            "acquisitionEnd": {
+              "monotonic": 110.032611625
+            },
+            "sha256": "e5f5338b0dc2d436b5095761e3ff48dd13d164dd9cbf8040e761a74cf6658ce7",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 0.0,
+            "threshold": 5.0,
+            "referenceSha256": "46ea76e02d324b08832f97bf253872f105f891c6bb6c524a20618ea36d358bb2",
+            "matchesReference": true,
+            "foreground": {
+              "checked": {
+                "monotonic": 110.416990208
+              },
+              "resumed": [
+                "    topResumedActivity=ActivityRecord{109572748 u0 org.kiwix.kiwixmobile.standalone/org.kiwix.kiwixmobile.main.KiwixMainActivity t810}"
+              ],
+              "currentUser": "0",
+              "unlocked": true
+            }
+          }
+        ],
+        "pixelReadyAdmitted": {
+          "monotonic": 110.417004875
+        },
+        "settleStarted": {
+          "monotonic": 110.421754625
+        },
+        "launchProcessExit": 0,
+        "launchProcessCleanup": {
+          "killAttempted": false,
+          "terminationConfirmed": true,
+          "errors": []
+        }
+      },
+      "samples": [
+        {
+          "index": 0,
+          "started": {
+            "monotonic": 142.053390541
+          },
+          "ended": {
+            "monotonic": 143.847900875
+          },
+          "metrics": {
+            "pssKiB": 238813,
+            "rssKiB": 429102,
+            "swapPssKiB": 628,
+            "nativeHeapPssKiB": 45986,
+            "apkPssKiB": 68403,
+            "soPssKiB": 11521,
+            "mappedCodePssKiB": 79924,
+            "unknownPssKiB": 44604,
+            "graphicsPssKiB": 32670,
+            "nativeHeapAllocKiB": 87346,
+            "nativeHeapSizeKiB": 103252,
+            "mainPssKiB": 153928,
+            "rendererPssKiB": 84885,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12196": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54601143"
+              },
+              "metrics": {
+                "pssKiB": 153928,
+                "rssKiB": 272058,
+                "swapPssKiB": 241,
+                "nativeHeapPssKiB": 44432,
+                "nativeHeapSizeKiB": 90352,
+                "nativeHeapAllocKiB": 81310,
+                "apkPssKiB": 33785,
+                "soPssKiB": 11115,
+                "unknownPssKiB": 9416,
+                "graphicsPssKiB": 32670,
+                "mappedCodePssKiB": 44900
+              },
+              "rawPath": "block-3-sample-1-pid-12196-meminfo.txt",
+              "rawSha256": "36742ec10c16999687a4bcdfbbcd0002df686798498e095fb5b9ca6e65596e87"
+            },
+            "12221": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54601158"
+              },
+              "metrics": {
+                "pssKiB": 84885,
+                "rssKiB": 157044,
+                "swapPssKiB": 387,
+                "nativeHeapPssKiB": 1554,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6036,
+                "apkPssKiB": 34618,
+                "soPssKiB": 406,
+                "unknownPssKiB": 35188,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 35024
+              },
+              "rawPath": "block-3-sample-1-pid-12221-meminfo.txt",
+              "rawSha256": "24c0558de438784d811fecfb4ccbbbfc451adcf3b625d31f8acedf42918e0d8b"
+            }
+          }
+        },
+        {
+          "index": 1,
+          "started": {
+            "monotonic": 145.854243416
+          },
+          "ended": {
+            "monotonic": 147.469336625
+          },
+          "metrics": {
+            "pssKiB": 245345,
+            "rssKiB": 445802,
+            "swapPssKiB": 420,
+            "nativeHeapPssKiB": 45810,
+            "apkPssKiB": 68403,
+            "soPssKiB": 11531,
+            "mappedCodePssKiB": 79934,
+            "unknownPssKiB": 44624,
+            "graphicsPssKiB": 32670,
+            "nativeHeapAllocKiB": 86972,
+            "nativeHeapSizeKiB": 103252,
+            "mainPssKiB": 156660,
+            "rendererPssKiB": 88685,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12196": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54601143"
+              },
+              "metrics": {
+                "pssKiB": 156660,
+                "rssKiB": 279358,
+                "swapPssKiB": 144,
+                "nativeHeapPssKiB": 44228,
+                "nativeHeapSizeKiB": 90352,
+                "nativeHeapAllocKiB": 80935,
+                "apkPssKiB": 33785,
+                "soPssKiB": 11115,
+                "unknownPssKiB": 9424,
+                "graphicsPssKiB": 32670,
+                "mappedCodePssKiB": 44900
+              },
+              "rawPath": "block-3-sample-2-pid-12196-meminfo.txt",
+              "rawSha256": "1174cd819c7b3fe374afaaa14bdfd6e702669e569eb95e58d14806f3363e62f7"
+            },
+            "12221": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54601158"
+              },
+              "metrics": {
+                "pssKiB": 88685,
+                "rssKiB": 166444,
+                "swapPssKiB": 276,
+                "nativeHeapPssKiB": 1582,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 34618,
+                "soPssKiB": 416,
+                "unknownPssKiB": 35200,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 35034
+              },
+              "rawPath": "block-3-sample-2-pid-12221-meminfo.txt",
+              "rawSha256": "a2ddb280f683733066dde9616b85e0961470d1c8870b393f70b99e99ca0ab79f"
+            }
+          }
+        },
+        {
+          "index": 2,
+          "started": {
+            "monotonic": 149.473205166
+          },
+          "ended": {
+            "monotonic": 151.281651125
+          },
+          "metrics": {
+            "pssKiB": 245344,
+            "rssKiB": 445802,
+            "swapPssKiB": 420,
+            "nativeHeapPssKiB": 45810,
+            "apkPssKiB": 68403,
+            "soPssKiB": 11530,
+            "mappedCodePssKiB": 79933,
+            "unknownPssKiB": 44624,
+            "graphicsPssKiB": 32670,
+            "nativeHeapAllocKiB": 86972,
+            "nativeHeapSizeKiB": 103252,
+            "mainPssKiB": 156655,
+            "rendererPssKiB": 88689,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12196": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54601143"
+              },
+              "metrics": {
+                "pssKiB": 156655,
+                "rssKiB": 279354,
+                "swapPssKiB": 144,
+                "nativeHeapPssKiB": 44228,
+                "nativeHeapSizeKiB": 90352,
+                "nativeHeapAllocKiB": 80935,
+                "apkPssKiB": 33785,
+                "soPssKiB": 11114,
+                "unknownPssKiB": 9424,
+                "graphicsPssKiB": 32670,
+                "mappedCodePssKiB": 44899
+              },
+              "rawPath": "block-3-sample-3-pid-12196-meminfo.txt",
+              "rawSha256": "c32662c4ff909f9fee719069d89371521b5072fd66a73da80bdf071eeb703708"
+            },
+            "12221": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54601158"
+              },
+              "metrics": {
+                "pssKiB": 88689,
+                "rssKiB": 166448,
+                "swapPssKiB": 276,
+                "nativeHeapPssKiB": 1582,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 34618,
+                "soPssKiB": 416,
+                "unknownPssKiB": 35200,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 35034
+              },
+              "rawPath": "block-3-sample-3-pid-12221-meminfo.txt",
+              "rawSha256": "829bdb8d5915e22fee6cb0fdd0b0b354ec79afc66fc33552a11d27ebdfa1a073"
+            }
+          }
+        },
+        {
+          "index": 3,
+          "started": {
+            "monotonic": 153.291696
+          },
+          "ended": {
+            "monotonic": 155.062433666
+          },
+          "metrics": {
+            "pssKiB": 245349,
+            "rssKiB": 445806,
+            "swapPssKiB": 420,
+            "nativeHeapPssKiB": 45818,
+            "apkPssKiB": 68403,
+            "soPssKiB": 11531,
+            "mappedCodePssKiB": 79934,
+            "unknownPssKiB": 44624,
+            "graphicsPssKiB": 32670,
+            "nativeHeapAllocKiB": 86972,
+            "nativeHeapSizeKiB": 103252,
+            "mainPssKiB": 156664,
+            "rendererPssKiB": 88685,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12196": {
+              "identity": {
+                "name": "org.kiwix.kiwixmobile.standalone",
+                "startTicks": "54601143"
+              },
+              "metrics": {
+                "pssKiB": 156664,
+                "rssKiB": 279362,
+                "swapPssKiB": 144,
+                "nativeHeapPssKiB": 44236,
+                "nativeHeapSizeKiB": 90352,
+                "nativeHeapAllocKiB": 80935,
+                "apkPssKiB": 33785,
+                "soPssKiB": 11115,
+                "unknownPssKiB": 9424,
+                "graphicsPssKiB": 32670,
+                "mappedCodePssKiB": 44900
+              },
+              "rawPath": "block-3-sample-4-pid-12196-meminfo.txt",
+              "rawSha256": "a211f050803fd23d6f83f46965b664a1b5ddcf74f5bed34faf32d9d83dfc5c9c"
+            },
+            "12221": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54601158"
+              },
+              "metrics": {
+                "pssKiB": 88685,
+                "rssKiB": 166444,
+                "swapPssKiB": 276,
+                "nativeHeapPssKiB": 1582,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 34618,
+                "soPssKiB": 416,
+                "unknownPssKiB": 35200,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 35034
+              },
+              "rawPath": "block-3-sample-4-pid-12221-meminfo.txt",
+              "rawSha256": "4b1430d863fc8ef8b67f97537587a9be4bdf5adca9e799aa645ca0f9b2a36b01"
+            }
+          }
+        }
+      ],
+      "ownership": [
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        },
+        {
+          "12196": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "54601143"
+          },
+          "12221": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54601158"
+          }
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "alias": "ours",
+      "status": "complete",
+      "startup": {
+        "boundsSeconds": {
+          "lower": 1.1074802090000162,
+          "upper": 2.4692576250000116
+        },
+        "t0": {
+          "monotonic": 158.935919416
+        },
+        "prelaunchFrames": [
+          {
+            "path": "block-4-ours-startup-prelaunch.png",
+            "acquisitionStart": {
+              "monotonic": 157.28164875
+            },
+            "acquisitionEnd": {
+              "monotonic": 158.445142625
+            },
+            "sha256": "383aaaee1f76633e5c796b70e85709e26262f5a2e0c1fd0d1cd31698900612c0",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 96.09097765983869,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          }
+        ],
+        "frames": [
+          {
+            "path": "block-4-ours-startup-001.png",
+            "acquisitionStart": {
+              "monotonic": 158.946054083
+            },
+            "acquisitionEnd": {
+              "monotonic": 159.878987958
+            },
+            "sha256": "892d67256365fe111edcfbbfc0186a8dd58f70d76c3666399107472795aa0a36",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 125.07361577711255,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          },
+          {
+            "path": "block-4-ours-startup-002.png",
+            "acquisitionStart": {
+              "monotonic": 160.043399625
+            },
+            "acquisitionEnd": {
+              "monotonic": 160.469699916
+            },
+            "sha256": "3ddec2ae3d79b9492786776059a4de41c4089943c3b4e13c1273d64282e7cb46",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 82.6403926848717,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": false
+          },
+          {
+            "path": "block-4-ours-startup-003.png",
+            "acquisitionStart": {
+              "monotonic": 160.605082166
+            },
+            "acquisitionEnd": {
+              "monotonic": 161.405177041
+            },
+            "sha256": "183935c8febee27d7f0d8cb889b2d717ec8bc60a68027fefffa0470b14c1bbfe",
+            "pixelCrop": [
+              86,
+              187,
+              994,
+              1872
+            ],
+            "normalizedCrop": [
+              0.08,
+              0.08,
+              0.92,
+              0.8
+            ],
+            "meanAbsoluteRGBDifference": 0.0,
+            "threshold": 5.0,
+            "referenceSha256": "703bb00136376f02adeb5e565e94925dd86fc5f5b285e25df852fdfd2c4e4b30",
+            "matchesReference": true,
+            "foreground": {
+              "checked": {
+                "monotonic": 161.789037458
+              },
+              "resumed": [
+                "    topResumedActivity=ActivityRecord{125236988 u0 org.kiwix.workbench/.MainActivity t811}"
+              ],
+              "currentUser": "0",
+              "unlocked": true
+            }
+          }
+        ],
+        "pixelReadyAdmitted": {
+          "monotonic": 161.789056375
+        },
+        "settleStarted": {
+          "monotonic": 161.792955291
+        },
+        "launchProcessExit": 0,
+        "launchProcessCleanup": {
+          "killAttempted": false,
+          "terminationConfirmed": true,
+          "errors": []
+        }
+      },
+      "samples": [
+        {
+          "index": 0,
+          "started": {
+            "monotonic": 193.377356083
+          },
+          "ended": {
+            "monotonic": 194.953844583
+          },
+          "metrics": {
+            "pssKiB": 246306,
+            "rssKiB": 433158,
+            "swapPssKiB": 640,
+            "nativeHeapPssKiB": 35344,
+            "apkPssKiB": 80160,
+            "soPssKiB": 14328,
+            "mappedCodePssKiB": 94488,
+            "unknownPssKiB": 55327,
+            "graphicsPssKiB": 32438,
+            "nativeHeapAllocKiB": 60527,
+            "nativeHeapSizeKiB": 76168,
+            "mainPssKiB": 137312,
+            "rendererPssKiB": 108994,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12797": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54606240"
+              },
+              "metrics": {
+                "pssKiB": 137312,
+                "rssKiB": 251174,
+                "swapPssKiB": 246,
+                "nativeHeapPssKiB": 33778,
+                "nativeHeapSizeKiB": 63268,
+                "nativeHeapAllocKiB": 54491,
+                "apkPssKiB": 32829,
+                "soPssKiB": 13868,
+                "unknownPssKiB": 9389,
+                "graphicsPssKiB": 32438,
+                "mappedCodePssKiB": 46697
+              },
+              "rawPath": "block-4-sample-1-pid-12797-meminfo.txt",
+              "rawSha256": "7c3375bda3a6238c12ea8b771e8922685e719d272340472ed4afcba2cbd794fb"
+            },
+            "12860": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54606269"
+              },
+              "metrics": {
+                "pssKiB": 108994,
+                "rssKiB": 181984,
+                "swapPssKiB": 394,
+                "nativeHeapPssKiB": 1566,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6036,
+                "apkPssKiB": 47331,
+                "soPssKiB": 460,
+                "unknownPssKiB": 45938,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 47791
+              },
+              "rawPath": "block-4-sample-1-pid-12860-meminfo.txt",
+              "rawSha256": "3cad85d79d839a173d8c91b5b5eb5f283cfd112100dbcd3902d06e44e6c0e4fe"
+            }
+          }
+        },
+        {
+          "index": 1,
+          "started": {
+            "monotonic": 196.958255166
+          },
+          "ended": {
+            "monotonic": 198.491048625
+          },
+          "metrics": {
+            "pssKiB": 253232,
+            "rssKiB": 450306,
+            "swapPssKiB": 430,
+            "nativeHeapPssKiB": 35372,
+            "apkPssKiB": 80160,
+            "soPssKiB": 14338,
+            "mappedCodePssKiB": 94498,
+            "unknownPssKiB": 55351,
+            "graphicsPssKiB": 32438,
+            "nativeHeapAllocKiB": 60485,
+            "nativeHeapSizeKiB": 76168,
+            "mainPssKiB": 140451,
+            "rendererPssKiB": 112781,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12797": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54606240"
+              },
+              "metrics": {
+                "pssKiB": 140451,
+                "rssKiB": 258982,
+                "swapPssKiB": 148,
+                "nativeHeapPssKiB": 33786,
+                "nativeHeapSizeKiB": 63268,
+                "nativeHeapAllocKiB": 54448,
+                "apkPssKiB": 32829,
+                "soPssKiB": 13871,
+                "unknownPssKiB": 9401,
+                "graphicsPssKiB": 32438,
+                "mappedCodePssKiB": 46700
+              },
+              "rawPath": "block-4-sample-2-pid-12797-meminfo.txt",
+              "rawSha256": "3cfe82c2a93c171e823691c090015f7beb7e49d18ce442bb62cbda2da1b62f30"
+            },
+            "12860": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54606269"
+              },
+              "metrics": {
+                "pssKiB": 112781,
+                "rssKiB": 191324,
+                "swapPssKiB": 282,
+                "nativeHeapPssKiB": 1586,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 47331,
+                "soPssKiB": 467,
+                "unknownPssKiB": 45950,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 47798
+              },
+              "rawPath": "block-4-sample-2-pid-12860-meminfo.txt",
+              "rawSha256": "6fcdeaa2fce3ef7b8ac48bea5d596a0298833fce346c39d1863fd2941509b4ae"
+            }
+          }
+        },
+        {
+          "index": 2,
+          "started": {
+            "monotonic": 200.50488
+          },
+          "ended": {
+            "monotonic": 201.985103791
+          },
+          "metrics": {
+            "pssKiB": 253224,
+            "rssKiB": 450298,
+            "swapPssKiB": 430,
+            "nativeHeapPssKiB": 35380,
+            "apkPssKiB": 80160,
+            "soPssKiB": 14338,
+            "mappedCodePssKiB": 94498,
+            "unknownPssKiB": 55351,
+            "graphicsPssKiB": 32438,
+            "nativeHeapAllocKiB": 60485,
+            "nativeHeapSizeKiB": 76168,
+            "mainPssKiB": 140443,
+            "rendererPssKiB": 112781,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12797": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54606240"
+              },
+              "metrics": {
+                "pssKiB": 140443,
+                "rssKiB": 258974,
+                "swapPssKiB": 148,
+                "nativeHeapPssKiB": 33794,
+                "nativeHeapSizeKiB": 63268,
+                "nativeHeapAllocKiB": 54448,
+                "apkPssKiB": 32829,
+                "soPssKiB": 13871,
+                "unknownPssKiB": 9401,
+                "graphicsPssKiB": 32438,
+                "mappedCodePssKiB": 46700
+              },
+              "rawPath": "block-4-sample-3-pid-12797-meminfo.txt",
+              "rawSha256": "d5c477bf496f8713c381413d547e5a4209b5f12ee944098ab077965b67058cda"
+            },
+            "12860": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54606269"
+              },
+              "metrics": {
+                "pssKiB": 112781,
+                "rssKiB": 191324,
+                "swapPssKiB": 282,
+                "nativeHeapPssKiB": 1586,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 47331,
+                "soPssKiB": 467,
+                "unknownPssKiB": 45950,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 47798
+              },
+              "rawPath": "block-4-sample-3-pid-12860-meminfo.txt",
+              "rawSha256": "59402b18df0c66cda3fff8356355e3cd0698f0409dd6d91cc872739b0dbb9339"
+            }
+          }
+        },
+        {
+          "index": 3,
+          "started": {
+            "monotonic": 203.995641041
+          },
+          "ended": {
+            "monotonic": 205.536474625
+          },
+          "metrics": {
+            "pssKiB": 253220,
+            "rssKiB": 450294,
+            "swapPssKiB": 430,
+            "nativeHeapPssKiB": 35380,
+            "apkPssKiB": 80160,
+            "soPssKiB": 14338,
+            "mappedCodePssKiB": 94498,
+            "unknownPssKiB": 55355,
+            "graphicsPssKiB": 32438,
+            "nativeHeapAllocKiB": 60486,
+            "nativeHeapSizeKiB": 76168,
+            "mainPssKiB": 140439,
+            "rendererPssKiB": 112781,
+            "otherPssKiB": 0
+          },
+          "processes": {
+            "12797": {
+              "identity": {
+                "name": "org.kiwix.workbench",
+                "startTicks": "54606240"
+              },
+              "metrics": {
+                "pssKiB": 140439,
+                "rssKiB": 258970,
+                "swapPssKiB": 148,
+                "nativeHeapPssKiB": 33794,
+                "nativeHeapSizeKiB": 63268,
+                "nativeHeapAllocKiB": 54449,
+                "apkPssKiB": 32829,
+                "soPssKiB": 13871,
+                "unknownPssKiB": 9401,
+                "graphicsPssKiB": 32438,
+                "mappedCodePssKiB": 46700
+              },
+              "rawPath": "block-4-sample-4-pid-12797-meminfo.txt",
+              "rawSha256": "36eae047f34b3b436625c08d80627d15abb8e4e17e41bb01c550e5fcc2935350"
+            },
+            "12860": {
+              "identity": {
+                "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+                "startTicks": "54606269"
+              },
+              "metrics": {
+                "pssKiB": 112781,
+                "rssKiB": 191324,
+                "swapPssKiB": 282,
+                "nativeHeapPssKiB": 1586,
+                "nativeHeapSizeKiB": 12900,
+                "nativeHeapAllocKiB": 6037,
+                "apkPssKiB": 47331,
+                "soPssKiB": 467,
+                "unknownPssKiB": 45954,
+                "graphicsPssKiB": 0,
+                "mappedCodePssKiB": 47798
+              },
+              "rawPath": "block-4-sample-4-pid-12860-meminfo.txt",
+              "rawSha256": "d13a9c96cb3eff83e3c9ef101d48feb800a2f7daedefa380acdc91427afcfd30"
+            }
+          }
+        }
+      ],
+      "ownership": [
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        },
+        {
+          "12797": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "54606240"
+          },
+          "12860": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "54606269"
+          }
+        }
+      ]
+    }
+  ],
+  "evidence": {
+    "reportSha256": "a66629e6e63d9ba1441025467f15254d1a963b56be74c08c3669156628318032",
+    "commandsSha256": "1441e65454a615103c094830b04a416ae2ac48513e7d64d68cf53bf319855125",
+    "privateDirectoryBasename": "kiwix-memory-auto-20261105-03-startup-8217a32a",
+    "parentObservedTransitions": "All four Home / last-mismatch / first-match image triplets inspected: Home or loading/splash mismatch; actual Animal heading, montage and classification on first match."
+  }
+}

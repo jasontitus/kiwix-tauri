@@ -1,0 +1,29 @@
+{
+  "crate": "rustls-platform-verifier-android",
+  "version": "0.2.0",
+  "rustCrate": "rustls-platform-verifier 0.7.1",
+  "repository": "https://github.com/rustls/rustls-platform-verifier",
+  "commit": "252e25161a91af476cbea620e29d277592d27ec7",
+  "tag": "v/0.7.1",
+  "source": "android/rustls-platform-verifier",
+  "commitEvidence": "Both crates.io packages' .cargo_vcs_info.json name this commit",
+  "upstreamModuleSha256": {
+    "build.gradle": "d8fe3785881e55a9e4774dfd724d322ea1ed5261c2892df515952b94c23da181",
+    "proguard-rules.pro": "f9f8d6e1f96b951607e3a153419276a29f6607862f92cd382e2633ea3ae100b8",
+    "src/main/AndroidManifest.xml": "a5c52c41bc88c56b64219e557c289b960dd6cf5e69ac8bc0a21abaefe95b6124",
+    "src/main/res/xml/network_security_config.xml": "a81434f9139f3780412c358d1cc782fe25339182d3dc141b35413f23d2b29f6a",
+    "src/main/java/org/rustls/platformverifier/CertificateVerifier.kt": "251031aec27214398328c4755744cd3274c54e9d51e10952712bcd5ba64bc4ed"
+  },
+  "vendoredUnchanged": {
+    "src/main/java/org/rustls/platformverifier/CertificateVerifier.kt": "251031aec27214398328c4755744cd3274c54e9d51e10952712bcd5ba64bc4ed",
+    "LICENSE-MIT": "1c7cf76689c837a68ed8d704994e52a0f2940c087958f860d17f3186afbdcc0c",
+    "LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "upstream/network_security_config.xml": "a81434f9139f3780412c358d1cc782fe25339182d3dc141b35413f23d2b29f6a"
+  },
+  "localChanges": [
+    "build.gradle.kts replaces upstream build.gradle: app SDK levels, BuildConfig.TEST fixed false, no ktlint or test-library tasks",
+    "consumer-rules.pro exports upstream README's consumer keep rule instead of upstream's module-only -dontobfuscate rules",
+    "AndroidManifest.xml omits upstream's INTERNET permission and application networkSecurityConfig",
+    "upstream/network_security_config.xml is kept unchanged outside res/; its CA revocation-list hosts are merged into the app's own network_security_config.xml, which overrides a library resource of the same name"
+  ]
+}

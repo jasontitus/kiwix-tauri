@@ -1,0 +1,6 @@
+xcuserdata/
+build/
+Externals/
+.tauri/
+assets/*
+!assets/.gitkeep

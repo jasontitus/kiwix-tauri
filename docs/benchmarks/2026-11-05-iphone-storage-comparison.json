@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "status": "Measured release app bundles, developer IPA compression and simulator data containers; no physical phone contacted",
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "deviceBuilds": {
+    "ours": {
+      "regular_file_logical_bytes": 51280691,
+      "allocated_bytes": 51568640,
+      "main_executable_bytes": 50710848,
+      "source_commit": "3cce5af5677350996301b6cc335b30a5a00d4938"
+    },
+    "upstream": {
+      "regular_file_logical_bytes": 27897680,
+      "allocated_bytes": 28102656,
+      "main_executable_bytes": 26525040,
+      "source_commit": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149"
+    }
+  },
+  "simulatorBuilds": {
+    "ours": {
+      "bundle_id": "com.tiltastech.zimreader",
+      "regular_file_logical_bytes": 51045136,
+      "allocated_bytes": 51322880,
+      "regular_file_count": 93,
+      "main_executable_bytes": 50543952,
+      "source_commit": "3cce5af5677350996301b6cc335b30a5a00d4938"
+    },
+    "upstream": {
+      "bundle_id": "com.tiltastech.zimreader.comparison.upstream",
+      "regular_file_logical_bytes": 27845286,
+      "allocated_bytes": 28049408,
+      "regular_file_count": 98,
+      "main_executable_bytes": 26489792,
+      "source_commit": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149"
+    }
+  },
+  "developerIPA": {
+    "ours": {
+      "compressed_bytes": 22990877,
+      "uncompressed_bytes": 51280691,
+      "sha256": "1827e459a7597c6b1f3f6918def54af87ab051be2f08485b32b775d038ed7aec",
+      "method": "Developer IPA Payload/Kiwix.app, unencrypted source-built signed bundle, ZIP DEFLATE level 6; not App Store export/download"
+    },
+    "upstream": {
+      "compressed_bytes": 8564229,
+      "uncompressed_bytes": 27897680,
+      "sha256": "03f11082606837c26315f70ca895169f46c738179e6ae68957a861192325b24d",
+      "method": "Developer IPA Payload/Kiwix.app, unencrypted source-built signed bundle, ZIP DEFLATE level 6; not App Store export/download"
+    }
+  },
+  "simulatorDataContainers": {
+    "ours": {
+      "managed_zim_bytes": 484034937,
+      "documents_zim_bytes": 817464859,
+      "other_zim_bytes": 0,
+      "non_zim_logical_bytes": 11503671,
+      "allocated_bytes": 1313050624,
+      "regular_file_count": 30,
+      "total_logical_bytes": 1313003467
+    },
+    "upstream": {
+      "managed_zim_bytes": 0,
+      "documents_zim_bytes": 484034937,
+      "other_zim_bytes": 0,
+      "non_zim_logical_bytes": 17158071,
+      "allocated_bytes": 503267328,
+      "regular_file_count": 47,
+      "total_logical_bytes": 501193008
+    }
+  },
+  "fixturePayloadBytesForOneCopyEach": 484034937,
+  "limits": [
+    "Developer IPAs are newly packaged Payload/Kiwix.app ZIP DEFLATE level 6 containers from the signed device bundles, unencrypted; not App Store exports, encrypted/thinned downloads or physical installed storage. ZIP CRC and uncompressed byte totals verified.",
+    "Logical sizes exclude symlinks; allocated st_blocks sizes are not exclusive APFS disk consumption.",
+    "Simulator data includes retained test-owned incoming ZIM files. Ours has extra abandoned Wikipedia staging plus managed copies; native opens staged originals. Raw total container sizes are not a fair intrinsic app-storage winner.",
+    "Non-ZIM profile bytes are observed current cache/database/settings contents, not a clean identical-history installed-storage experiment.",
+    "No IPA-size or app-size improvement inferred from tool changes."
+  ],
+  "ratios": {
+    "deviceBundleOursLargerPercent": 83.82,
+    "simulatorBundleOursLargerPercent": 83.32,
+    "developerIPAOursLargerPercent": 168.45
+  },
+  "manifestSHA256": {
+    "device": {
+      "ours": "cf417df26496c7c4e91311fde669ff202cac1cdbf81371a806ab999848bdb9ae",
+      "upstream": "0ef3846d291339a4676c8c1e241917d0b1b360ed72f67023894253adc59c278c"
+    },
+    "simulator": {
+      "ours": "8c688296b024ad254ef9289821860b3d1f1e5c1bb8576b92c73239e145eb6392",
+      "upstream": "09d42f403afa3aa3c8c5551791ea9b94a88fc671786085008820c3c36993116c"
+    }
+  }
+}

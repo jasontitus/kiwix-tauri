@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Nur dieses aktive Archiv kann auf die Kamera zugreifen. Dein System fragt möglicherweise ebenfalls nach einer Erlaubnis. Du kannst den Zugriff jederzeit unterhalb des Artikels widerrufen.";
+"NSLocationUsageDescription" = "Dein System gibt deinen Standort nur an dieses aktive Archiv weiter. Du kannst den Zugriff jederzeit unterhalb des Artikels widerrufen.";
+"NSLocationWhenInUseUsageDescription" = "Dein System gibt deinen Standort nur an dieses aktive Archiv weiter. Du kannst den Zugriff jederzeit unterhalb des Artikels widerrufen.";
+"NSLocalNetworkUsageDescription" = "Entdecken Sie LocalSwarm-Geräte in der Nähe und teilen Sie Offline-Archive in Ihrem lokalen Netzwerk. Aktivieren Sie die Erkennung oder Freigabe nur in einem vertrauenswürdigen Netzwerk.";

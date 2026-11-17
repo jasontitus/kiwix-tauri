@@ -1,0 +1,80 @@
+--- a/src/cluster.cpp
++++ b/src/cluster.cpp
+@@ -161,7 +161,10 @@
+     std::lock_guard<std::mutex> lock(m_readerAccessMutex);
+     for(blob_index_type current(m_blobReaders.size()); current<=n.v; ++current) {
+       auto blobSize = getBlobSize(blob_index_t(current));
+-      if (blobSize.v > SIZE_MAX) {
++      // Raw stream sub-readers are logical file ranges, not in-memory blobs.
++      // Keep their 64-bit extent so bounded reads work on LP32 and the stream
++      // advances past oversized blobs before constructing following readers.
++      if (blobSize.v > SIZE_MAX && compression != Compression::None) {
+         m_blobReaders.push_back(std::unique_ptr<Reader>(new BufferReader(Buffer::makeBuffer(zsize_t(0)))));
+       } else {
+         m_blobReaders.push_back(m_reader->sub_reader(blobSize));
+--- a/test/rawstreamreader.cpp
++++ b/test/rawstreamreader.cpp
+@@ -21,6 +21,10 @@
+ #include "buffer.h"
+ #include "buffer_reader.h"
++#include "cluster.h"
++#include "file_reader.h"
++#include "file_compound.h"
++#include "tools.h"
+ 
+ #include "gtest/gtest.h"
+ 
+ namespace
+@@ -52,3 +56,52 @@
+ }
+ 
++#ifndef _WIN32
++TEST(ReaderDataStreamWrapper, bounded_reads_of_oversized_raw_blob)
++{
++  // A sparse file exercises LP32 without allocating or writing a giant blob.
++  ASSERT_GE(sizeof(off_t), sizeof(uint64_t));
++  zim::unittests::TempFile tmpfile("bounded_oversized_raw_blob");
++  const int fd = tmpfile.fd();
++  const uint64_t blobSize = (uint64_t(1) << 32) + 1024;
++  const uint64_t headerSize = 3 * sizeof(uint64_t);
++  const uint64_t dataStart = 1 + headerSize;
++  const uint64_t highOffset = (uint64_t(1) << 32) + 17;
++  const char clusterInfo = 0x11; // Uncompressed cluster, 64-bit offsets.
++  ASSERT_EQ(pwrite(fd, &clusterInfo, 1, 0), 1);
++  const uint64_t offsets[] = {headerSize, headerSize + blobSize,
++                              headerSize + blobSize + 4};
++  for (size_t i = 0; i < 3; ++i) {
++    char encoded[sizeof(uint64_t)];
++    zim::toLittleEndian(offsets[i], encoded);
++    ASSERT_EQ(pwrite(fd, encoded, sizeof(encoded),
++                     static_cast<off_t>(1 + i * sizeof(uint64_t))),
++              static_cast<ssize_t>(sizeof(encoded)));
++  }
++  ASSERT_EQ(pwrite(fd, "head", 4, static_cast<off_t>(dataStart)), 4);
++  ASSERT_EQ(pwrite(fd, "high", 4, static_cast<off_t>(dataStart + highOffset)), 4);
++  ASSERT_EQ(pwrite(fd, "tail", 4, static_cast<off_t>(dataStart + blobSize - 4)), 4);
++  ASSERT_EQ(pwrite(fd, "next", 4, static_cast<off_t>(dataStart + blobSize)), 4);
++  tmpfile.close();
++
++  auto compound = std::make_shared<zim::FileCompound>(tmpfile.path());
++  auto cluster = zim::Cluster::read(zim::MultiPartFileReader(compound), zim::offset_t(0));
++  ASSERT_EQ(cluster->count().v, 2U);
++  ASSERT_EQ(cluster->getBlobSize(zim::blob_index_t(0)).v, blobSize);
++  if (SIZE_MAX == UINT32_MAX) {
++    // Full-blob retrieval must still refuse an unrepresentable allocation.
++    EXPECT_EQ(cluster->getBlob(zim::blob_index_t(0)).size(), 0U);
++  }
++  EXPECT_NO_THROW({
++    EXPECT_EQ("head", std::string(cluster->getBlob(zim::blob_index_t(0),
++                    zim::offset_t(0), zim::zsize_t(4))));
++    EXPECT_EQ("high", std::string(cluster->getBlob(zim::blob_index_t(0),
++                    zim::offset_t(highOffset), zim::zsize_t(4))));
++    EXPECT_EQ("tail", std::string(cluster->getBlob(zim::blob_index_t(0),
++                    zim::offset_t(blobSize - 4), zim::zsize_t(4))));
++  });
++  // Creating the giant logical reader must also advance the raw stream.
++  EXPECT_EQ("next", std::string(cluster->getBlob(zim::blob_index_t(1))));
++}
++#endif
++
+ } // unnamed namespace

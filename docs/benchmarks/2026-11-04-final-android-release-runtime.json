@@ -1,0 +1,405 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "kind": "final-physical-android-frozen-release-and-bounded-runtime",
+  "artifactReview": "ReviewAndroidComparison independently approved exact final artifact before collection.",
+  "identityFrozenBeforeCollection": true,
+  "identity": {
+    "schemaVersion": 1,
+    "protocol": "final-memory-protocol.json#74CD",
+    "frozenBeforeCollection": true,
+    "sourceBase": "3a20fecbbc80557f9cdd35c2d01009c1cf5e43b8",
+    "overlays": {
+      "src-tauri/native/libzim-zstd-cache-accounting.patch": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+      "src-tauri/native/libzim-decoded-cluster-retirement.patch": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+      "src-tauri/native/mobile_sdk.rs": "4ce9ca374810ffb5e2c42b3b4a9f97b1b54fd158352dd441776da3bc391674b5",
+      "scripts/build-android-sdk.py": "221263525617ae1e1b0881287633a691db6a079cc7a121929f6d9b6f59393a74",
+      "src/platform.css": "000286a92964c953ab9c6c7298f09d6365ca497dadfca5adf1eff7b526a781ae",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/src/android.rs": "d1034d0fa60abb831e4801c87d04583acd8f31828b7262f46332e4f5f398d050",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/ApplicationResources.kt": "e262e0cdd6e8566e0db5659e3f5d16847cd6da9242bbca899bdd81d0ebf8154a",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/KiwixMobilePlugin.kt": "59d1edfd5eb0656906b29b89ec602072c1d436a2660f9929344691dd9353e7df",
+      "src/reader-bridge.js": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+      "scripts/test-reader-theme-boot.mjs": "93cf07f860f4b225a53e8e7bb3ba4b80008bc02c50fb4b81d9cd6dc302bc81fa",
+      "scripts/test-reader-history.mjs": "26116a9931c5e04e20e86c3520c98080cbf06efe7147ba63ef914e3d89f3adb9"
+    },
+    "sdkManifestSha256": "093f4dd40c09edf7ad61be3190d47eba09a4036baefdbc53a0b7ddc9525a1851",
+    "ours": {
+      "apkBytes": 66986027,
+      "sha256": "089c7d4906162e69ff9c757e9be104af197f94c25902d7d679ee2687c72d2500",
+      "installedBaseApkHashVerified": true,
+      "nondebugNoInstrumentation": "independently reviewed exact installed artifact"
+    },
+    "official": {
+      "version": "3.14.1 standalone ARM64",
+      "apkBytes": 70366062,
+      "sha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+      "installedBaseApkHashVerified": true
+    },
+    "archives": [
+      {
+        "file": "wikipedia_en_100_2026-08.zim",
+        "bytes": 333429922,
+        "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b"
+      },
+      {
+        "file": "osm_en_hawaii_2026-10-26.zim",
+        "bytes": 150605015,
+        "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d"
+      }
+    ],
+    "profileState": "prepared two shared real archives/one fresh index-to-Animal tab each, no additional reset",
+    "appearance": "ours Light/ArchiveOriginal/16px/100percent; official DarkOff/TextZoom100; not identical computed typography or viewport",
+    "diagnosticHelperPackage": "observed absent after final install",
+    "ownedDiagnosticForwards": "all removed before final install; unrelated emulator forward retained",
+    "lifecycleAcceptance": "independently admitted empty-jobs root Back; same PID across 35.003sec activity-free wait and relaunch; actual Animal no visible crash report",
+    "functionalAcceptance": [
+      "actual Wikipedia Animal heading/montage/classification",
+      "actual Hawaii Home overview",
+      "actual Hilo search rows and selected detailed map/buildings/roads/300m scale"
+    ]
+  },
+  "release": {
+    "baseCommit": "3a20fecbbc80557f9cdd35c2d01009c1cf5e43b8",
+    "patches": {
+      "src-tauri/native/libzim-zstd-cache-accounting.patch": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+      "src-tauri/native/libzim-decoded-cluster-retirement.patch": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+      "src-tauri/native/mobile_sdk.rs": "4ce9ca374810ffb5e2c42b3b4a9f97b1b54fd158352dd441776da3bc391674b5",
+      "scripts/build-android-sdk.py": "221263525617ae1e1b0881287633a691db6a079cc7a121929f6d9b6f59393a74",
+      "src/platform.css": "000286a92964c953ab9c6c7298f09d6365ca497dadfca5adf1eff7b526a781ae",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/src/android.rs": "d1034d0fa60abb831e4801c87d04583acd8f31828b7262f46332e4f5f398d050",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/ApplicationResources.kt": "e262e0cdd6e8566e0db5659e3f5d16847cd6da9242bbca899bdd81d0ebf8154a",
+      "src-tauri/plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/KiwixMobilePlugin.kt": "59d1edfd5eb0656906b29b89ec602072c1d436a2660f9929344691dd9353e7df",
+      "src/reader-bridge.js": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+      "scripts/test-reader-theme-boot.mjs": "93cf07f860f4b225a53e8e7bb3ba4b80008bc02c50fb4b81d9cd6dc302bc81fa",
+      "scripts/test-reader-history.mjs": "26116a9931c5e04e20e86c3520c98080cbf06efe7147ba63ef914e3d89f3adb9"
+    },
+    "excluded": [
+      "unpublished src/components/Library.tsx changes",
+      "unreviewed scripts/test-library-suggestion-focus.mjs"
+    ],
+    "rustVersion": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "jdk": "21.0.10 bundled Android Studio",
+    "ndk": "28.2.13676358",
+    "sdkManifestSha256": "093f4dd40c09edf7ad61be3190d47eba09a4036baefdbc53a0b7ddc9525a1851",
+    "frontendPlatform": "android",
+    "frontendFileCount": 93,
+    "apk": {
+      "fileName": "memory-android-arm64.apk",
+      "bytes": 66986027,
+      "sha256": "089c7d4906162e69ff9c757e9be104af197f94c25902d7d679ee2687c72d2500",
+      "signerCertificateSha256": "b2a7c3e842f1afe0483890e6cf0360440c5eae08ce378175765615cf4598f4f3"
+    },
+    "nativeLibrary": {
+      "bytes": 65028280,
+      "sha256": "8d265a46b9ada54ad0e034672cc66bf34c170f34e4fe34632cf6a8573a658c94",
+      "exports": [
+        "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+        "Java_app_tauri_plugin_PluginManager_sendChannelData",
+        "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+        "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+        "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+        "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+        "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+        "Java_org_kiwix_workbench_Rust_handleRequest",
+        "Java_org_kiwix_workbench_Rust_ipc",
+        "Java_org_kiwix_workbench_Rust_onCreate",
+        "Java_org_kiwix_workbench_Rust_onDestroy",
+        "Java_org_kiwix_workbench_Rust_onEval",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+        "Java_org_kiwix_workbench_Rust_onLowMemory",
+        "Java_org_kiwix_workbench_Rust_onNewIntent",
+        "Java_org_kiwix_workbench_Rust_onPageLoaded",
+        "Java_org_kiwix_workbench_Rust_onPageLoading",
+        "Java_org_kiwix_workbench_Rust_onPause",
+        "Java_org_kiwix_workbench_Rust_onResume",
+        "Java_org_kiwix_workbench_Rust_onStart",
+        "Java_org_kiwix_workbench_Rust_onStop",
+        "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+        "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+        "Java_org_kiwix_workbench_Rust_shouldOverride"
+      ],
+      "loadAlignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    "exportedComponents": [
+      {
+        "type": "activity",
+        "name": "org.kiwix.workbench.MainActivity",
+        "permission": null
+      },
+      {
+        "type": "receiver",
+        "name": "androidx.profileinstaller.ProfileInstallReceiver",
+        "permission": "android.permission.DUMP"
+      }
+    ],
+    "scope": "One optimized private Android release. Build/sign/alignment/export/manifest gates only; runtime installed-app acceptance and matched physical memory proof remain required. No device operations performed."
+  },
+  "runtimeAcceptance": {
+    "article": "Parent observed actual Animal heading, montage and classification in exact installed APK.",
+    "maps": [
+      "Actual Hawaii Home overview",
+      "Actual Hilo search rows",
+      "Selected detailed Hilo tiles/buildings/roads with300m scale"
+    ],
+    "mapBoundary": "Functionality only; no matched-camera map PSS, tile/FPS or rendering-latency ranking.",
+    "rootBack": {
+      "artifactSha256": "089c7d4906162e69ff9c757e9be104af197f94c25902d7d679ee2687c72d2500",
+      "startedMonotonic": 292764.787645791,
+      "endedMonotonic": 292806.336849875,
+      "pidBefore": "21671",
+      "pidAfterWait": "21671",
+      "pidAfterRelaunch": "21671",
+      "backgroundWaitStarted": 292767.524550833,
+      "backgroundWaitEnded": 292802.527693,
+      "activityAfterBackContainsHistory": false,
+      "activityAfterWaitContainsHistory": false,
+      "observedWaitSeconds": 35.00314216699917,
+      "scope": "Independently admitted empty-jobs root Back case only. Same observed PID before and after approximately35-second Activity-free wait and relaunch; actual Animal and no visible crash report. Not active, paused or completed-download notification acceptance. PID alone is not a general process-generation certificate."
+    },
+    "diagnosticHelper": "Observed absent before final install/collection; owned diagnostic forwards removed.",
+    "cssNavigation": {
+      "actualHeadlessApp": true,
+      "reviewedCompletePlatformCssInjected": true,
+      "sourceSha256": "000286a92964c953ab9c6c7298f09d6365ca497dadfca5adf1eff7b526a781ae",
+      "rejectedEarlierAttempt": "matrix1 injected a shortened tool read; overflow auto proved candidate not applied; no postfix claim from it",
+      "nativePhoneBehaviorNotInferred": true,
+      "baseline": {
+        "platform": "android",
+        "sidebar": {
+          "overflowY": "auto",
+          "clientHeight": 63,
+          "scrollHeight": 64
+        }
+      },
+      "observations": [
+        {
+          "width": 320,
+          "direction": "ltr",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 320,
+          "direction": "ltr",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 320,
+          "direction": "rtl",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 320,
+          "direction": "rtl",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 384,
+          "direction": "ltr",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 384,
+          "direction": "ltr",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 384,
+          "direction": "rtl",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 384,
+          "direction": "rtl",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 540,
+          "direction": "ltr",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 540,
+          "direction": "ltr",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 540,
+          "direction": "rtl",
+          "scale": 1,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 540,
+          "direction": "rtl",
+          "scale": 2,
+          "overflowY": "visible",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 541,
+          "direction": "ltr",
+          "scale": 1,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 541,
+          "direction": "ltr",
+          "scale": 2,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 541,
+          "direction": "rtl",
+          "scale": 1,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 541,
+          "direction": "rtl",
+          "scale": 2,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 760,
+          "direction": "ltr",
+          "scale": 1,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 760,
+          "direction": "ltr",
+          "scale": 2,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 760,
+          "direction": "rtl",
+          "scale": 1,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        },
+        {
+          "width": 760,
+          "direction": "rtl",
+          "scale": 2,
+          "overflowY": "auto",
+          "buttonCount": 7,
+          "allSevenCentersHit": true
+        }
+      ],
+      "scope": "Actual headless browser app with complete reviewed platform CSS injected. Twelve compact observations at320/384/540 CSS pixels, LTR/RTL and1x/2x CSS scaling; seven center hit targets. Eight541/760 observations retain auto rail scrolling. Not maximum Android OS font/display settings or physical-phone accessibility certification."
+    }
+  },
+  "sourceEvidence": {
+    "cacheAccounting": "2026-11-04-android-zstd-cache-accounting.json",
+    "decodedClusterRetirement": "2026-11-04-android-decoded-cluster-retirement.json",
+    "rendererDiagnostic": "2026-11-04-android-renderer-memory-diagnostic.json",
+    "boundary": "Existing independently approved summaries remain unchanged; host allocation/decoder regressions, diagnostics and source mechanisms do not establish individual physical savings."
+  },
+  "privacy": "Only allowlisted selected-app identity, numeric elapsed/monotonic observations, CSS target results and evidence basenames/digests exported. No raw activity dumps, private paths, device identifiers, Unix clocks or screenshots.",
+  "privateEvidence": [
+    {
+      "fileName": "final-run-identity.json",
+      "sha256": "2277dd0f3728524307e7758ceab3ff1ca802e48379b73445ed589545afe6399e"
+    },
+    {
+      "fileName": "final-memory-protocol.json",
+      "sha256": "2cfd87ab55131b6b3c1a5e7cebcb556e1f552e184266cc3026745308263476c1"
+    },
+    {
+      "fileName": "final-back-relaunch.json",
+      "sha256": "4882a331a6205d11bc79b8963fe1ee64efa66157ccf5b661454a8319347b4cfb"
+    },
+    {
+      "fileName": "final-back-relaunch.png",
+      "sha256": "2466997be209e9e3b203796482b46c7ab38d9add2d6c3839d0bdd384e772043c"
+    },
+    {
+      "fileName": "final-installed-animal.png",
+      "sha256": "ba3bb6088a3db2ebdfa77382cd6844bc9159f0ec2760d99292b2b65f38267e37"
+    },
+    {
+      "fileName": "final-hawaii-home.png",
+      "sha256": "eb9c797ec6518beaa141499df8105ad3b2510fdad3965ab9830fb06a12fedb01"
+    },
+    {
+      "fileName": "final-hawaii-search-hilo.png",
+      "sha256": "51869f26619ae0efacebdbd33935ee46e955f8c5287d8ae944482e68315d32f6"
+    },
+    {
+      "fileName": "final-hawaii-hilo-selected.png",
+      "sha256": "65d8ff589b5559875ccec8dd9ac874a8fc83ecda1c022298c0de7c9e893f8f8c"
+    },
+    {
+      "fileName": "final-ours-animal-prepared.png",
+      "sha256": "85569586ca8243ad714a4c0e70aba09106a6e54a0c003a8231af3cd5afffef74"
+    },
+    {
+      "fileName": "android-navigation-browser-matrix2.json",
+      "sha256": "94bc69112436e26825c8b981c5115b95189536947e31103f29d609c90d4fa80a"
+    },
+    {
+      "fileName": "android-navigation-browser-matrix.json",
+      "sha256": "9cfc2e08073e6b97e7804f814b1cac82f990240d46055bd32c53282c4ab2cc3c"
+    },
+    {
+      "fileName": "release-identity.json",
+      "sha256": "e878a1991f6f1106706beea2a943a41362e02221b1596514465367c2007e2d89"
+    }
+  ],
+  "claimBoundary": "Exact final artifact and bounded functionality/lifecycle/browser coverage. Final head-to-head memory cohort is separate; no result is inferred from a pilot, host test, source change or partial collection."
+}

@@ -1,0 +1,462 @@
+{
+  "aliases": {
+    "sr-ec": "sr-Cyrl",
+    "ku-latn": "ku-Latn",
+    "skr-arab": "skr-Arab",
+    "zh-hans": "zh-Hans",
+    "zh-hant": "zh-Hant",
+    "pt-br": "pt-BR",
+    "bcl": "bik",
+    "diq": "zza",
+    "iw": "he",
+    "in": "id",
+    "ji": "yi",
+    "no": "nb"
+  },
+  "locales": [
+    {
+      "code": "ar",
+      "name": "العربية",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "bik",
+      "name": "Bikol",
+      "coverage": 0.7981947130883301,
+      "machineTranslated": true
+    },
+    {
+      "code": "bn",
+      "name": "বাংলা",
+      "coverage": 0.7981947130883301,
+      "machineTranslated": true
+    },
+    {
+      "code": "br",
+      "name": "Brezhoneg",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ca",
+      "name": "Català",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "cs",
+      "name": "Čeština",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "da",
+      "name": "Dansk",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "dag",
+      "name": "Dagbanli",
+      "coverage": 0.041263700838168924,
+      "machineTranslated": false
+    },
+    {
+      "code": "de",
+      "name": "Deutsch",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "el",
+      "name": "Ελληνικά",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "en",
+      "name": "English",
+      "coverage": 1,
+      "machineTranslated": false
+    },
+    {
+      "code": "eo",
+      "name": "Esperanto",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "es",
+      "name": "Español",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "fa",
+      "name": "فارسی",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "fi",
+      "name": "suomi",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "fr",
+      "name": "Français",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "gsw",
+      "name": "Schwiizerdütsch",
+      "coverage": 0.559638942617666,
+      "machineTranslated": true
+    },
+    {
+      "code": "ha",
+      "name": "Hausa",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "he",
+      "name": "עברית",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "hi",
+      "name": "हिन्दी",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "hy",
+      "name": "Հայերեն",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "ia",
+      "name": "Interlingua",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "id",
+      "name": "Bahasa Indonesia",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ie",
+      "name": "Interlingue",
+      "coverage": 0.013539651837524178,
+      "machineTranslated": false
+    },
+    {
+      "code": "ig",
+      "name": "Igbo",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "igl",
+      "name": "Igala",
+      "coverage": 0.029013539651837523,
+      "machineTranslated": false
+    },
+    {
+      "code": "io",
+      "name": "Ido",
+      "coverage": 0.006447453255963894,
+      "machineTranslated": false
+    },
+    {
+      "code": "it",
+      "name": "italiano",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ja",
+      "name": "日本語",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "kab",
+      "name": "Taqbaylit",
+      "coverage": 0.036105738233397806,
+      "machineTranslated": false
+    },
+    {
+      "code": "ko",
+      "name": "한국어",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ku-Latn",
+      "name": "Kurdî",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "lb",
+      "name": "Lëtzebuergesch",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ln",
+      "name": "lingála",
+      "coverage": 0.7981947130883301,
+      "machineTranslated": true
+    },
+    {
+      "code": "mk",
+      "name": "македонски",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ms",
+      "name": "Bahasa Melayu",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "my",
+      "name": "မြန်မာဘာသာ",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "nb",
+      "name": "norsk bokmål",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "nl",
+      "name": "Nederlands",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "nqo",
+      "name": "ߒߞߏ",
+      "coverage": 0.027724049000644745,
+      "machineTranslated": false
+    },
+    {
+      "code": "or",
+      "name": "ଓଡି଼ଆ",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "pa",
+      "name": "ਪੰਜਾਬੀ",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "pl",
+      "name": "Polski",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ps",
+      "name": "پښتو",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "pt",
+      "name": "português",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "pt-BR",
+      "name": "Português do Brasil",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ro",
+      "name": "Română",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "roa-Tara",
+      "name": "Tarandíne",
+      "coverage": 0.015473887814313346,
+      "machineTranslated": false
+    },
+    {
+      "code": "ru",
+      "name": "русский",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "sc",
+      "name": "Sardu",
+      "coverage": 0.030947775628626693,
+      "machineTranslated": false
+    },
+    {
+      "code": "scn",
+      "name": "Sicilianu",
+      "coverage": 0.7981947130883301,
+      "machineTranslated": true
+    },
+    {
+      "code": "sdc",
+      "name": "Sassaresu",
+      "coverage": 0.008381689232753063,
+      "machineTranslated": false
+    },
+    {
+      "code": "se",
+      "name": "davvisámegillii",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "sk",
+      "name": "Slovenčina",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "skr-Arab",
+      "name": "سرائیکی",
+      "coverage": 0.04384268214055448,
+      "machineTranslated": false
+    },
+    {
+      "code": "sl",
+      "name": "slovenščina",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "sms",
+      "name": "sääʹmǩiõll",
+      "coverage": 0.012894906511927788,
+      "machineTranslated": false
+    },
+    {
+      "code": "sq",
+      "name": "Shqip",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "sr-Cyrl",
+      "name": "српски",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "sro",
+      "name": "Sardu campidanesu",
+      "coverage": 0.008381689232753063,
+      "machineTranslated": false
+    },
+    {
+      "code": "sv",
+      "name": "Svenska",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "sw",
+      "name": "Kiswahili",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "ta",
+      "name": "தமிழ்",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "te",
+      "name": "తెలుగు",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "th",
+      "name": "ภาษาไทย",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "tn",
+      "name": "Setswana",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "tr",
+      "name": "Türkçe",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "uk",
+      "name": "Українська",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "yi",
+      "name": "ייִדיש",
+      "coverage": 0.7988394584139265,
+      "machineTranslated": true
+    },
+    {
+      "code": "yo",
+      "name": "Èdè Yorùbá",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "zgh",
+      "name": "ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ",
+      "coverage": 0.016118633139909737,
+      "machineTranslated": false
+    },
+    {
+      "code": "zh-Hans",
+      "name": "简体中文",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "zh-Hant",
+      "name": "繁體中文",
+      "coverage": 0.7994842037395229,
+      "machineTranslated": true
+    },
+    {
+      "code": "zza",
+      "name": "Zazaki",
+      "coverage": 0.029013539651837523,
+      "machineTranslated": false
+    }
+  ]
+}

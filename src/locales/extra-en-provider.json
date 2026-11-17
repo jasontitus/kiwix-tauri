@@ -1,0 +1,12 @@
+{
+  "Open external archive": "Open external archive",
+  "Read a ZIM directly from USB, removable storage or a document provider without copying it into this app.": "Read a ZIM directly from USB, removable storage or a document provider without copying it into this app.",
+  "Keep the drive connected and the provider available while reading. Removing the library reference never deletes the external original.": "Keep the drive connected and the provider available while reading. Removing the library reference never deletes the external original.",
+  "This session only: reading permission and the library reference are not saved in private or read-only mode.": "This session only: reading permission and the library reference are not saved in private or read-only mode.",
+  "For a split ZIM, explicitly select its folder. The folder must contain only one complete archive; access is limited to its immediate archive parts.": "For a split ZIM, explicitly select its folder. The folder must contain only one complete archive; access is limited to its immediate archive parts.",
+  "Direct reading is unavailable. Reconnect the drive, restore provider access, or explicitly import a managed copy instead. Providers that offer only streams cannot be opened directly.": "Direct reading is unavailable. Reconnect the drive, restore provider access, or explicitly import a managed copy instead. Providers that offer only streams cannot be opened directly.",
+  "Choose ZIM file": "Choose ZIM file",
+  "Choose split archive folder": "Choose split archive folder",
+  "Import a managed copy": "Import a managed copy",
+  "Opening…": "Opening…"
+}

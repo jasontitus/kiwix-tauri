@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "현재 활성 아카이브만 카메라 접근을 요청할 수 있습니다. 시스템에서도 권한을 요청할 수 있습니다. 문서 아래에서 언제든 접근 권한을 취소할 수 있습니다.";
+"NSLocationUsageDescription" = "시스템은 현재 활성 아카이브에만 위치를 제공합니다. 문서 아래에서 언제든 접근 권한을 취소할 수 있습니다.";
+"NSLocationWhenInUseUsageDescription" = "시스템은 현재 활성 아카이브에만 위치를 제공합니다. 문서 아래에서 언제든 접근 권한을 취소할 수 있습니다.";
+"NSLocalNetworkUsageDescription" = "근처의 LocalSwarm 장치를 검색하고 로컬 네트워크에서 오프라인 아카이브를 공유하세요. 신뢰할 수 있는 네트워크에서만 검색 또는 공유를 활성화하십시오.";

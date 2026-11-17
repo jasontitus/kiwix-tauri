@@ -1,0 +1,19 @@
+{
+  "license": "GPL-3.0-or-later",
+  "snapshotDate": "2026-10-28",
+  "areaGroups": {
+    "source": "../kiwix-apple/Support/StreetZimAreaGroups.plist",
+    "upstream": [
+      "StreetZim cloud/regions.tsv",
+      "StreetZim cloud/region-variants.tsv"
+    ],
+    "meaning": "Presentation geography only; unknown catalog IDs belong to other. Never infer availability from this registry."
+  },
+  "regionLanguages": {
+    "source": "../kiwix-apple/Support/StreetZimRegionLanguages.plist",
+    "upstream": [
+      "StreetZim cloud/region-languages.tsv"
+    ],
+    "meaning": "Region-local languages; intersect with offered catalog languages, matching primary language independently of script and region. Never infer membership from catalog order."
+  }
+}

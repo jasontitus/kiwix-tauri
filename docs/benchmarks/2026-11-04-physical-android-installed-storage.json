@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-android-settings-storage-observation",
+  "device": {
+    "model": "SM-A356U",
+    "android": 16,
+    "api": 36
+  },
+  "artifactCohort": "frozen-5eec1e4-versus-official-3.14.1",
+  "method": "Normal Samsung Settings > App info > Storage; exact displayed units and rounded values, not a byte-accurate filesystem census. Post-benchmark clean profiles have two archive references and one Hawaii tab after earlier Animal runs; caches reflect each actual app workflow, not identical cache contents. No data/cache clearing for this observation. Shared source archives are outside app-private totals and are the same files. No assumption about OEM filesystem compression or category accounting.",
+  "apps": {
+    "ours": {
+      "package": "org.kiwix.workbench",
+      "appDisplay": "45.92 MB",
+      "dataDisplay": "8.96 MB",
+      "cacheDisplay": "16.71 MB",
+      "totalDisplay": "71.59 MB",
+      "evidenceStem": "102-clean-ours-installed-storage"
+    },
+    "official": {
+      "package": "org.kiwix.kiwixmobile.standalone",
+      "appDisplay": "77.60 MB",
+      "dataDisplay": "28.52 MB",
+      "cacheDisplay": "471 kB",
+      "totalDisplay": "107 MB",
+      "evidenceStem": "104-clean-official-installed-storage"
+    }
+  },
+  "privateEvidence": [
+    {
+      "basename": "102-clean-ours-installed-storage.xml",
+      "bytes": 21286,
+      "sha256": "2c94bd574a3aee0c404d7c8efa1d63c018cfce9f3a8b661f30b1fc600e2ee761"
+    },
+    {
+      "basename": "102-clean-ours-installed-storage.png",
+      "bytes": 129405,
+      "sha256": "0b3d1cb1bbd4b6fbd7216d1825ec73f900ad81a764a733c8a8f82f9a7902a7d7"
+    },
+    {
+      "basename": "104-clean-official-installed-storage.xml",
+      "bytes": 21284,
+      "sha256": "bdf57448128a6b71b19ff219c8a90f8e5240993d1bf7e2b8886493d86b562e5d"
+    },
+    {
+      "basename": "104-clean-official-installed-storage.png",
+      "bytes": 127457,
+      "sha256": "c24788f748e74790ccee21ec5ed806e3e2c49ee977c2e48e388cb8d3223bf800"
+    }
+  ],
+  "claimBoundary": "Smaller observed Settings-reported installed footprint in this exercised profile; not exact bytes, fresh-install default size, all archive storage, or a causal allocation diagnosis."
+}

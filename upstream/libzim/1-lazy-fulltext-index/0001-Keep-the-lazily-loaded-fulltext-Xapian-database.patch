@@ -1,0 +1,77 @@
+From 401ecd49d36b1faacd915b6db3bde87b8b2ff9d4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 5 Nov 2026 18:40:12 +0000
+Subject: [PATCH] Keep the lazily loaded fulltext Xapian database
+
+When an archive is opened with `OpenConfig().preloadXapianDb(false)`,
+`FileImpl::getXapianDb()` loads the fulltext database on first use but
+discards the result of `loadXapianDb()` before marking the database as
+created. `mp_xapianDb` therefore stays null forever and every
+`Searcher::search()` on such an archive throws "Cannot create Search
+without FT Xapian index", although `Archive::hasFulltextIndex()` returns
+true.
+
+Store the loaded database, as the preloading path in the constructor
+already does, and add a regression test.
+
+The title index used by `SuggestionSearcher` is opened independently of
+`getXapianDb()` and is not affected.
+---
+ src/fileimpl.cpp |  2 +-
+ test/search.cpp  | 27 +++++++++++++++++++++++++++
+ 2 files changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/src/fileimpl.cpp b/src/fileimpl.cpp
+index 3d1932c..6838e4d 100644
+--- a/src/fileimpl.cpp
++++ b/src/fileimpl.cpp
+@@ -911,7 +911,7 @@ bool checkTitleListing(const IndirectDirentAccessor& accessor, entry_index_type
+     if (!m_xapianDbCreated.load(std::memory_order_acquire)) {
+       std::lock_guard<std::mutex> lock(m_xapianDbCreationMutex);
+       if (!m_xapianDbCreated.load(std::memory_order_acquire)) {
+-        loadXapianDb();
++        mp_xapianDb = loadXapianDb();
+         m_xapianDbCreated.store(true, std::memory_order_release);
+       }
+     }
+diff --git a/test/search.cpp b/test/search.cpp
+index 4125d66..277b0b9 100644
+--- a/test/search.cpp
++++ b/test/search.cpp
+@@ -87,6 +87,33 @@ TEST(Search, indexFullPath)
+   ASSERT_EQ(result, results.end());
+ }
+ 
++// The fulltext index must be usable when its loading is delayed until the
++// first search (OpenConfig::preloadXapianDb(false)).
++TEST(Search, fulltextIndexNotPreloaded)
++{
++  TempZimArchive tza("testZim");
++  zim::writer::Creator creator;
++  creator.configIndexing(true, "en");
++  creator.startZimCreation(tza.getPath());
++  creator.addItem(std::make_shared<TestItem>("path0", "text/html", "Test Article0", "This is a test article about zebras"));
++  creator.addItem(std::make_shared<TestItem>("path1", "text/html", "Test Article1", "This is a test article about giraffes"));
++
++  creator.setMainPath("path0");
++  creator.finishZimCreation();
++
++  const zim::Archive archive(tza.getPath(), zim::OpenConfig().preloadXapianDb(false));
++  ASSERT_TRUE(archive.hasFulltextIndex());
++
++  for (int i = 0; i < 2; ++i) {
++    // The second searcher must reuse the database loaded by the first one.
++    zim::Searcher searcher(archive);
++    auto search = searcher.search(zim::Query("giraffe"));
++    ASSERT_EQ(1, search.getEstimatedMatches());
++    auto result = search.getResults(0, 1);
++    ASSERT_EQ(result.begin().getPath(), "path1");
++  }
++}
++
+ TEST(Search, fulltextSnippet)
+ {
+   TempZimArchive tza("testZim");
+-- 
+2.43.0
+

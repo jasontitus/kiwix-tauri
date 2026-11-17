@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Hanya arsip aktif ini yang dapat meminta akses kamera. Sistem Anda mungkin juga meminta izin. Anda dapat mencabut akses di bawah artikel kapan saja.";
+"NSLocationUsageDescription" = "Sistem Anda hanya akan memberikan lokasi Anda kepada arsip aktif ini. Anda dapat mencabut akses di bawah artikel kapan saja.";
+"NSLocationWhenInUseUsageDescription" = "Sistem Anda hanya akan memberikan lokasi Anda kepada arsip aktif ini. Anda dapat mencabut akses di bawah artikel kapan saja.";
+"NSLocalNetworkUsageDescription" = "Temukan perangkat LocalSwarm terdekat dan bagikan arsip offline di jaringan lokal Anda. Aktifkan penemuan atau berbagi hanya di jaringan tepercaya.";

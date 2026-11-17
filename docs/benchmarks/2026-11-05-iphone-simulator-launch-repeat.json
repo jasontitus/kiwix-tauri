@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "status": "Separate fresh-preparation repetition of paired simulator first-frame-and-responsive duration; not pooled with original batch",
+  "platform": "iOS Simulator 26.5 on Apple Silicon macOS; not physical iPhone",
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "method": "Official XCTApplicationLaunchMetric(waitUntilResponsive: true); each iteration terminates the target and requires notRunning before launch",
+  "boundary": "First displayed frame and main-thread responsiveness; NOT offline WebView/archive content readiness or search speed",
+  "protocol": {
+    "order": "Grouped ours then upstream",
+    "retainedPerApp": 3,
+    "discardedInitialPerApp": 1,
+    "filesystemCaches": "Uncontrolled; process-cold, not storage-cold",
+    "hostOtherHeavyBuilds": "Completed before series; no parent build during timed launches"
+  },
+  "results": [
+    {
+      "label": "ours",
+      "metricIdentifier": "com.apple.dt.XCTMetric_ApplicationLaunch-ApplicationFirstFramePresentationResponsive.duration",
+      "unit": "s",
+      "samples": [
+        0.871202333,
+        0.8551610000000001,
+        0.8393391250000001
+      ],
+      "retainedSampleCount": 3,
+      "discardedInitialIterations": 1,
+      "meanSeconds": 0.8552341526666667,
+      "medianSeconds": 0.8551610000000001,
+      "minSeconds": 0.8393391250000001,
+      "maxSeconds": 0.871202333
+    },
+    {
+      "label": "upstream",
+      "metricIdentifier": "com.apple.dt.XCTMetric_ApplicationLaunch-ApplicationFirstFramePresentationResponsive.duration",
+      "unit": "s",
+      "samples": [
+        1.578112709,
+        1.5693855840000002,
+        1.5294150000000002
+      ],
+      "retainedSampleCount": 3,
+      "discardedInitialIterations": 1,
+      "meanSeconds": 1.5589710976666669,
+      "medianSeconds": 1.5693855840000002,
+      "minSeconds": 1.5294150000000002,
+      "maxSeconds": 1.578112709
+    }
+  ],
+  "medianOursShorterPercent": 45.50982188708572,
+  "cleanup": {
+    "xcodebuildExitCode": 0,
+    "runnerAbsenceConfirmed": true,
+    "physicalDeviceContact": false
+  },
+  "artifactBindings": {
+    "planSHA256": "33ba9a16041c01401c0a14ef2828078a47446d0abcdfd05de497b07adfa1e80b",
+    "testBinarySHA256": "231edd25401e679139e65ffa6c6114ebde09ca640c6b7f76af11a3784059ccbc",
+    "trackedSourceSHA256": {
+      "SimulatorLaunchMetrics.swift": "3fc240a961ebb1494f91beec7f6b0805f048950d81a4e881912916bfd6bcf4fc",
+      "project.yml": "32bff0a569e66792d2b45d525665ab0c17301a96fec1c44df8c669a70884886f"
+    }
+  },
+  "privateEvidenceSHA256": {
+    "metrics.json": "36c89cff5d68abb5b893ad7a4fffd0923f63446da3b73e9e2a5f97d9b22bd5c1",
+    "execution.json": "7fbbddf7f09d833d538a0975b90384717fb92403a699283fe66974116da50d7c",
+    "xcodebuild.log": "bb8a2c7e19dd724b67d6c066faefbff54d12f1f57df332852dc7151398abf015",
+    "LaunchMetrics.xcresult/database.sqlite3": "6d06401b78483a8291e522dbbf744be28e7c8b3b1f024d752029956b0e08a526"
+  },
+  "limits": [
+    "Three samples per app, one grouped order, one workstation/runtime; no controlled independent replication or physical phone speed claim.",
+    "Earlier xctrace App Launch probe had no lifecycle rows and no phase table; excluded rather than substituted with spawn/AX wall time.",
+    "The dedicated XCTest observer was compiled; measured application binaries were not rebuilt or modified."
+  ],
+  "privateRunBasename": "launch-run-1793921932059172000",
+  "elapsedSecondsIncludingCleanup": 33.02
+}

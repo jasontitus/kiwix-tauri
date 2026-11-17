@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "An aktibong arkibong ini sana an pwedeng maghagad kan kamera. An saimong sistema pwede man maghagad nin permiso. Pwede mong bawion an access sa ibaba kan artikulo sa anuman na oras.";
+"NSLocationUsageDescription" = "Itatao sana kan saimong sistema an saimong lokasyon sa aktibong arkibong ini.' Pwede mong bawion an access sa ibaba kan artikulo sa anuman na oras.";
+"NSLocationWhenInUseUsageDescription" = "Itatao sana kan saimong sistema an saimong lokasyon sa aktibong arkibong ini.' Pwede mong bawion an access sa ibaba kan artikulo sa anuman na oras.";
+"NSLocalNetworkUsageDescription" = "Hanapon an mga haraning LocalSwarm device asin ihiras an mga offline na archive sa saimong lokal na network. I-enable an pagdiskubre o paghiras sana sa sarong pinagtitiwalaan na network.";

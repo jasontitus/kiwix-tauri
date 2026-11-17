@@ -1,0 +1,82 @@
+{
+  "scope": "Android renderer source investigation and one compact-navigation CSS candidate; not an established release-memory improvement",
+  "sourceBase": "3a20fec",
+  "changedPaths": ["src/platform.css"],
+  "frozenSource": {
+    "path": "src/platform.css",
+    "sha256": "000286a92964c953ab9c6c7298f09d6365ca497dadfca5adf1eff7b526a781ae",
+    "change": "Add overflow: visible only to the Android .sidebar rule inside @media (max-width: 540px), line 494."
+  },
+  "candidate": {
+    "observedCause": "The compact vertical-rail overflow-y:auto rule survives conversion into a fixed horizontal phone navigation bar. Actual WebView 156 reports the sidebar as an accelerated overflow scroller, with 178-device-pixel viewport height, 179-device-pixel painted content height, and a narrow accelerated scrollbar.",
+    "sourceCause": "At ordinary scaling the Android 64 CSS px border-box bar, 8 CSS px vertical padding and 1 CSS px border leave 55 CSS px for navigation buttons with a 56 CSS px minimum height.",
+    "mechanism": "Reset both overflow axes to visible for the compact horizontal Android bar, removing the accidental scroll-container requirement without clipping navigation content. This may remove a compositor scroll node, scrollbar and associated backing allocation; no resulting layer-count, byte or PSS reduction has been measured.",
+    "unchanged": ["All seven navigation destinations and handlers", "Accessible names, titles and current-page semantics", "Fonts, line heights, touch targets, labels and icons", "Bar height, positioning, safe-area padding and content bottom reservation", "Tablet vertical-rail scrolling above 540px", "iOS navigation", "Article frame origin and all reader functionality"],
+    "risk": "Visible overflow can paint content or focus outlines outside the navigation box. Android accessibility text/display enlargement and keyboard focus traversal require runtime checks; source review is not a substitute. Four reported layers do not imply four textures or that all four disappear."
+  },
+  "physicalDiagnostic": {
+    "platform": "Samsung SM-A356U, API 36, WebView 156",
+    "product": "Existing release APK identified by prefix 8ccbe629; diagnostic same-signer instrumentation enabled WebView debugging without changing the product APK",
+    "state": "Animal article, one reader tab, Archive Original appearance",
+    "ordering": ["Allocator trace before heap snapshot and deliberate diagnostic scrolling", "Heap snapshot may trigger GC", "Successful layer capture after heap snapshot and normal scroll away/back"],
+    "acceptanceBoundary": "Instrumented diagnostics are not nondebug release PSS acceptance samples. No official-app allocator or heap snapshot was captured in this diagnostic cohort.",
+    "rendererOwnership": "Trace renderer PID 8306 is tied by before/after receipt to the owned sandboxed renderer generation, startTicks 53726841; main PID 8282 is separate.",
+    "allocator": {
+      "artifact": "physical-baseline-allocator.trace.json",
+      "sha256": "7f7269e2357575b8339f3d495433fc3bdd8db230bd7906d4c909e649bd2cfd24",
+      "rendererTileMemoryBytes": 15286272,
+      "rendererBlinkGcSizeBytes": 24211536,
+      "rendererBlinkGcEffectiveSizeBytes": 10171806,
+      "rendererV8SizeBytes": 6599620,
+      "warning": "Allocator categories and ownership graphs overlap. Do not sum these values or equate them with PSS, retained ownership, or collectible savings."
+    },
+    "heap": {
+      "artifact": "physical-baseline-heap.heapsnapshot",
+      "summaryArtifact": "physical-baseline-heap-summary.json",
+      "nodeCount": 257042,
+      "edgeCount": 902380,
+      "summedSerializedSelfSizeBytes": 19222997,
+      "nativeSummedSelfSizeBytes": 15919957,
+      "internalNodeCount": 155399,
+      "internalNodeSummedSelfSizeBytes": 12076160,
+      "externalStringDataCount": 354,
+      "externalStringDataSummedSelfSizeBytes": 1716657,
+      "nativeTextNodeCount": 7284,
+      "nativeTextSummedSelfSizeBytes": 582800,
+      "nativeHtmlDocumentCount": 2,
+      "nativeXmlDocumentCount": 5,
+      "nativeDomStringMapCount": 3,
+      "nativeDomStringMapSummedSelfSizeBytes": 120,
+      "nativeCssStyleDeclarationCount": 6,
+      "nativeCssStyleDeclarationSummedSelfSizeBytes": 352,
+      "warning": "Structural schema/count checks and shallow self_size aggregation only. No dominator or retained-size analysis was performed. Serialized heap nodes are not DOM nodes and these values do not account for the complete native renderer."
+    },
+    "layers": {
+      "artifact": "physical-scroll-layers.json",
+      "reportedLayerCount": 15,
+      "sidebarScrollLayer": "12: 1080x178, OverflowScrolling, drawsContent false",
+      "sidebarPaintLayer": "13: 1080x179, Overlap",
+      "sidebarScrollbarLayer": "14: 11x178, Scrollbar",
+      "shellRootPaintLayer": "9: 1080x2114, RootScroller and OverflowScrolling",
+      "rwPageSeparateScrollLayer": false
+    }
+  },
+  "rejectedHypotheses": [
+    "Theme classification is already lazy for Archive Original: fresh original mode does not run per-element computed-style inspection, dataset access or backdrop-cache population. The measured three native DOMStringMap objects also contradict an article-wide dataset allocation explanation for this state.",
+    "No unconditional full-article HTML/text clone cache was found. Annotation indexing is already lazy; speech and live export broad scans are command-driven. The snapshot does not establish a duplicated full article tree or a retained buffer responsible for the full deficit.",
+    "The shell root has scrollHeight 751 and clientHeight 751. Body rounding to 752 with a fractional 751.644 rect does not demonstrate a one-pixel document scroll range. No speculative height-rounding fix was made.",
+    "The prior root-overflow experiment already tested html:has(.rw-page > .rw-archive-frame){overflow:hidden!important} under zero root scroll range and did not establish a useful gain. It was not repeated.",
+    "The earlier opaque experiment changed the iframe element background only. Actual archive body is already opaque rgb(248,249,250), while html is transparent. No evidence establishes missing child-canvas opacity; no root-color alteration was made, preserving Archive Original appearance.",
+    "The mobile rw-statusbar is intentional floating reader controls/status, not an obsolete hidden footer. It was preserved.",
+    "Additional .apk resident mappings and Intl/ICU startup are leads, not proven sources of removable memory. No localization functionality was removed or replaced."
+  ],
+  "independentReview": {
+    "reviewer": "OptimizeRendererMemory.ReviewThemeAllocation",
+    "coverage": "Current-source theme admission and candidate rejection; exact applied compact Android overflow change; local-only shallow heap-summary helper including exclusive output creation",
+    "disposition": "Applied CSS source gate closed with no findings. Helper pre-execution gate closed after replacing check-then-write with exclusive creation. No builds, tests or device operations were performed by the reviewer."
+  },
+  "verificationExercisedByWorker": ["Read current source and existing regressions", "Analyzed supplied physical diagnostic JSON", "Ran independently reviewed local-only heap-summary helper once", "Recorded frozen source/helper hashes"],
+  "notExercisedByWorker": ["Build", "Tests", "Lint", "Formatter", "Device access", "Post-change compositor capture", "Post-change PSS", "Post-change visual/accessibility checks"],
+  "parentRuntimeGates": ["320/384/540 CSS px compact navigation, RTL and long labels", "200% text scaling and maximum Android font/display settings", "Keyboard and seven-destination focus/tap accessibility", "Widths above 540px retain vertical rail scrolling", "Same-state compositor evidence that accidental sidebar scroll node/scrollbar disappear without lost content", "Nondebug release paired memory acceptance and unchanged article/media/map behavior"],
+  "conclusion": "One evidence-backed accidental navigation scroller is removed in current source. Neither this candidate nor the actual allocator/heap diagnostics account for or demonstrate closure of the full memory gap against official Kiwix."
+}

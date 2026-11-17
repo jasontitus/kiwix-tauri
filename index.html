@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <script src="/theme-boot.js"></script>
+    <!-- Paint a visible, themed placeholder before any module or stylesheet
+         loads. React replaces this subtree on its first commit; until then the
+         window can never be an unstyled white box. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--paper, #f2f2f7);
+        color: var(--ink, #1c1c1e);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      :root[data-theme="dark"] html,
+      :root[data-theme="dark"] body {
+        background: var(--paper, #000000);
+        color: var(--ink, #f2f2f7);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] html,
+        :root[data-theme="system"] body {
+          background: var(--paper, #000000);
+          color: var(--ink, #f2f2f7);
+        }
+      }
+      #kiwix-startup-placeholder {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: inherit;
+        color: inherit;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #kiwix-startup-placeholder .kiwix-boot-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 3px solid color-mix(in srgb, currentColor 22%, transparent);
+        border-top-color: currentColor;
+        animation: kiwix-boot-spin 0.9s linear infinite;
+      }
+      #kiwix-startup-placeholder p {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+      }
+      #kiwix-startup-placeholder small {
+        max-width: 32rem;
+        padding: 0 1.5rem;
+        color: #626269;
+        font-size: 12px;
+        line-height: 1.5;
+        text-align: center;
+      }
+      :root[data-theme="dark"] #kiwix-startup-placeholder small {
+        color: #aeaeb2;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] #kiwix-startup-placeholder small {
+          color: #aeaeb2;
+        }
+      }
+      @keyframes kiwix-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #kiwix-startup-placeholder .kiwix-boot-mark {
+          animation: none;
+        }
+      }
+      #kiwix-startup-failure {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--paper, #f2f2f7);
+        color: var(--ink, #1c1c1e);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: auto;
+      }
+      :root[data-theme="dark"] #kiwix-startup-failure {
+        background: var(--paper, #000000);
+        color: var(--ink, #f2f2f7);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] #kiwix-startup-failure {
+          background: var(--paper, #000000);
+          color: var(--ink, #f2f2f7);
+        }
+      }
+      #kiwix-startup-failure .kiwix-failure-card {
+        width: min(620px, 100%);
+        max-width: 100%;
+        overflow: hidden;
+        box-sizing: border-box;
+        padding: 26px;
+        border-radius: 16px;
+        background: var(--surface, #ffffff);
+        border: 1px solid var(--line, #d1d1d6);
+        box-shadow: 0 16px 48px #0000001f;
+      }
+      :root[data-theme="dark"] #kiwix-startup-failure .kiwix-failure-card {
+        background: var(--surface, #1c1c1e);
+        border-color: var(--line, #3a3a3c);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] #kiwix-startup-failure .kiwix-failure-card {
+          background: var(--surface, #1c1c1e);
+          border-color: var(--line, #3a3a3c);
+        }
+      }
+      #kiwix-startup-failure h1 {
+        margin: 4px 0 8px;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+      #kiwix-startup-failure .kiwix-failure-eyebrow {
+        margin: 0;
+        color: #626269;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #kiwix-startup-failure .kiwix-failure-reason {
+        margin: 0 0 16px;
+        font-size: 14px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      #kiwix-startup-failure dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 6px 16px;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      #kiwix-startup-failure dt {
+        color: #626269;
+      }
+      #kiwix-startup-failure dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      #kiwix-startup-failure details {
+        margin-bottom: 16px;
+        font-size: 12px;
+      }
+      #kiwix-startup-failure summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      #kiwix-startup-failure pre {
+        max-height: 220px;
+        overflow: auto;
+        margin: 10px 0 0;
+        padding: 10px;
+        border-radius: 8px;
+        background: #f2f2f7;
+        color: inherit;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      :root[data-theme="dark"] #kiwix-startup-failure pre {
+        background: #111113;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] #kiwix-startup-failure pre {
+          background: #111113;
+        }
+      }
+      #kiwix-startup-failure .kiwix-failure-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      #kiwix-startup-failure button {
+        min-height: 34px;
+        padding: 6px 14px;
+        border-radius: 9px;
+        border: 1px solid #d1d1d6;
+        background: #ffffff;
+        color: #1c1c1e;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #kiwix-startup-failure button.primary {
+        border-color: #0066cc;
+        background: #0066cc;
+        color: #ffffff;
+      }
+      :root[data-theme="dark"] #kiwix-startup-failure button {
+        border-color: #3a3a3c;
+        background: #2c2c2e;
+        color: #f2f2f7;
+      }
+      :root[data-theme="dark"] #kiwix-startup-failure button.primary {
+        border-color: #7ab8ff;
+        background: #7ab8ff;
+        color: #000000;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root[data-theme="system"] #kiwix-startup-failure button {
+          border-color: #3a3a3c;
+          background: #2c2c2e;
+          color: #f2f2f7;
+        }
+        :root[data-theme="system"] #kiwix-startup-failure button.primary {
+          border-color: #7ab8ff;
+          background: #7ab8ff;
+          color: #000000;
+        }
+      }
+      #kiwix-startup-failure .kiwix-copy-status {
+        margin: 10px 0 0;
+        min-height: 1.4em;
+        color: #626269;
+        font-size: 12px;
+      }
+    </style>
+    <!-- Boot guard is a classic script so it is installed even when the module
+         bundle never loads. It records asset/IPC/snapshot failures and owns the
+         diagnostic panel the native watchdog asks for. -->
+    <script src="/boot-guard.js"></script>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>Kiwix</title>
+  </head>
+  <body>
+    <div id="root">
+      <div id="kiwix-startup-placeholder" role="status" aria-live="polite">
+        <div class="kiwix-boot-mark" aria-hidden="true"></div>
+        <p>Starting Kiwix…</p>
+        <small>Your offline library is opening. If this takes more than a few seconds, Kiwix will show diagnostics instead of leaving this window blank.</small>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

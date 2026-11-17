@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Bare dette aktive arkivet kan be om tilgang til kameraet. Systemet ditt kan også be om tillatelse. Du kan når som helst trekke tilbake tilgangen nedenfor artikkelen.";
+"NSLocationUsageDescription" = "Systemet ditt gir bare posisjonen din til dette aktive arkivet. Du kan når som helst trekke tilbake tilgangen nedenfor artikkelen.";
+"NSLocationWhenInUseUsageDescription" = "Systemet ditt gir bare posisjonen din til dette aktive arkivet. Du kan når som helst trekke tilbake tilgangen nedenfor artikkelen.";
+"NSLocalNetworkUsageDescription" = "Oppdag LocalSwarm-enheter i nærheten og del offline-arkiver på ditt lokale nettverk. Aktiver oppdagelse eller deling bare på et klarert nettverk.";

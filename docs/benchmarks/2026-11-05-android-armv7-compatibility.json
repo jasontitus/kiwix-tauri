@@ -1,0 +1,330 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "scope": "ARMv7 production APK and LP32 boundary compatibility; not an ARM64 performance comparison or 32-bit-only OS certification",
+  "source": {
+    "baseCommit": "a044370736519e400ab9d0901bb88714c31a5eb8",
+    "sourceArchiveSha256": "2edd9846451822ce61c9770d6b93b47abac62243cd6ec0dfa368441db716056b",
+    "overlays": [],
+    "sourceFiles": {
+      "src/reader-bridge.js": "131e97f17ded1870b6e1f80d20e7c0d7dc5ee8148067351b63a573b17ca270a0",
+      "vite.config.ts": "941289634953b9a085d8a6893b992e5c59d83c9971a1534a9eca6b17e59adc48",
+      "src-tauri/native/archive.cpp": "f2211311f690ac0f9272b48b5f6fc9cb36f900983430982224663161c5c91363",
+      "src-tauri/native/mobile_sdk.rs": "4ce9ca374810ffb5e2c42b3b4a9f97b1b54fd158352dd441776da3bc391674b5",
+      "scripts/build-android-sdk.py": "221263525617ae1e1b0881287633a691db6a079cc7a121929f6d9b6f59393a74",
+      "src-tauri/native/libzim-split-ranges.patch": "cedf21a1a02e5a1ac8947fde8351d828cb0c0767a25128279e87d22338226ce0",
+      "src-tauri/native/libzim-retained-fd.patch": "851394f071270439dcdd873d1a80e9b1e2fc7043d8a49e86fc33cfe13efa37d4",
+      "src-tauri/native/xapian-fd-offset.patch": "195b43d56970f5a6068cc0866e3be5110de830f0ada1c61d9c1901b68c76736f",
+      "src-tauri/native/libzim-lp32-raw-blob.patch": "a28d0b56bb0ed595e40d7366ffa8617ef2f7fe9ac00f1d807d36cb295ede73f6",
+      "src-tauri/native/libzim-zstd-cache-accounting.patch": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+      "src-tauri/native/libzim-decoded-cluster-retirement.patch": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+      "src-tauri/Cargo.lock": "6264bb00fc9834d9231510089a4e04aa21a07f84c06dddf09b74f744514f4ec4",
+      "package-lock.json": "55d81d33cbab8487d8d2cbc8dc819b41a594f750546176bee56f0ad53fffdaf8"
+    },
+    "target": "armv7-linux-androideabi",
+    "androidAbi": "armeabi-v7a",
+    "sdkManifestSha256": "b4162d1d00e67cb6d9492fab1829274fb5d089c6d5d1a64481c1020905caba3e",
+    "sdkPatches": [
+      {
+        "marker": "kiwix-split-ranges-v1",
+        "component": "zim",
+        "sha256": "cedf21a1a02e5a1ac8947fde8351d828cb0c0767a25128279e87d22338226ce0",
+        "path": "share/provenance/libzim-split-ranges.patch"
+      },
+      {
+        "marker": "kiwix-retained-fd-v1",
+        "component": "zim",
+        "sha256": "851394f071270439dcdd873d1a80e9b1e2fc7043d8a49e86fc33cfe13efa37d4",
+        "path": "share/provenance/libzim-retained-fd.patch"
+      },
+      {
+        "marker": "kiwix-xapian-fd-offset-v1",
+        "component": "xapian",
+        "sha256": "195b43d56970f5a6068cc0866e3be5110de830f0ada1c61d9c1901b68c76736f",
+        "path": "share/provenance/xapian-fd-offset.patch"
+      },
+      {
+        "marker": "kiwix-zstd-cache-accounting-v1",
+        "component": "zim",
+        "sha256": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+        "path": "share/provenance/libzim-zstd-cache-accounting.patch"
+      },
+      {
+        "marker": "kiwix-decoded-cluster-retirement-v1",
+        "component": "zim",
+        "sha256": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+        "path": "share/provenance/libzim-decoded-cluster-retirement.patch"
+      },
+      {
+        "marker": "kiwix-lp32-raw-blob-v1",
+        "component": "zim",
+        "sha256": "a28d0b56bb0ed595e40d7366ffa8617ef2f7fe9ac00f1d807d36cb295ede73f6",
+        "path": "share/provenance/libzim-lp32-raw-blob.patch"
+      }
+    ]
+  },
+  "build": {
+    "apk": {
+      "bytes": 57122861,
+      "sha256": "c032fdb82a229ac3b63ee06def8098ee18c706cd4fdb5524573a0588e1fb2bd2",
+      "signerCertificateSha256": "b2a7c3e842f1afe0483890e6cf0360440c5eae08ce378175765615cf4598f4f3"
+    },
+    "nativeLibrary": {
+      "bytes": 55165388,
+      "sha256": "6cb37e0aceb15f5d3d105b1a8f81d08629bae1758e00029b2cdea9de781d4c8c",
+      "class": "ELF32",
+      "machine": "ARM",
+      "exports": [
+        "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+        "Java_app_tauri_plugin_PluginManager_sendChannelData",
+        "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+        "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+        "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+        "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+        "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+        "Java_org_kiwix_workbench_Rust_handleRequest",
+        "Java_org_kiwix_workbench_Rust_ipc",
+        "Java_org_kiwix_workbench_Rust_onCreate",
+        "Java_org_kiwix_workbench_Rust_onDestroy",
+        "Java_org_kiwix_workbench_Rust_onEval",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+        "Java_org_kiwix_workbench_Rust_onLowMemory",
+        "Java_org_kiwix_workbench_Rust_onNewIntent",
+        "Java_org_kiwix_workbench_Rust_onPageLoaded",
+        "Java_org_kiwix_workbench_Rust_onPageLoading",
+        "Java_org_kiwix_workbench_Rust_onPause",
+        "Java_org_kiwix_workbench_Rust_onResume",
+        "Java_org_kiwix_workbench_Rust_onStart",
+        "Java_org_kiwix_workbench_Rust_onStop",
+        "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+        "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+        "Java_org_kiwix_workbench_Rust_shouldOverride"
+      ],
+      "loadAlignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    "manifestByteIdenticalToAcceptedArm64Ascii": true,
+    "debuggable": false,
+    "backupAllowed": false,
+    "instrumentationInProduct": false,
+    "sharedCppRuntime": false,
+    "zipAlignmentBytes": 16384,
+    "jniExportCount": 27
+  },
+  "device": {
+    "model": "SM-A356U",
+    "androidApi": 36,
+    "androidVersion": "16",
+    "webViewVersion": "156.0.8078.49",
+    "supports32BitApplications": true,
+    "observedProcesses": [
+      {
+        "pid": "26892",
+        "name": "org.kiwix.workbench",
+        "requiredAbi": "armeabi-v7a",
+        "instructionSet": "arm"
+      },
+      {
+        "pid": "26958",
+        "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+        "requiredAbi": "arm64-v8a",
+        "instructionSet": "arm64"
+      }
+    ],
+    "installedApkHashMatched": true
+  },
+  "archives": [
+    {
+      "filename": "wikipedia_en_100_2026-08.zim",
+      "bytes": 333429922,
+      "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b"
+    },
+    {
+      "filename": "osm_en_hawaii_2026-10-26.zim",
+      "bytes": 150605015,
+      "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d"
+    }
+  ],
+  "runtime": {
+    "warning": "This app isn't compatible with the latest version of Android. Check for an update or contact the app's developer.",
+    "warningAction": "Ordinary OK acknowledged; no suppression or source change",
+    "warningCause": "Not established; deprecated ABI is an inference only",
+    "animalHeadingImagesClassificationObserved": true,
+    "submittedAnimalTitleSearchObservedResults": [
+      "Animal",
+      "Animal Characteristics",
+      "Animal Evolution"
+    ],
+    "titleResultCountLabel": "About 40 results",
+    "hawaiiVectorMapObserved": true,
+    "hiloSearchResultsObserved": true,
+    "hiloSelectedRoadsBuildingsStreamObserved": true,
+    "oneEnglishAnimalTabRestored": true,
+    "activityFreeBackRetirementProven": false,
+    "startupOrMemoryComparisonPerformed": false
+  },
+  "lp32Differential": {
+    "purpose": "Standalone native sparse-cluster boundary regression; separate from actual real-ZIM APK smoke",
+    "probeSourceSha256": "05babcb24287814194f3b49db4f3510da7127f3040f150704853d27c55a42567",
+    "recipeSha256": "fc63e56d68c5c5c0c170817ef0b99565a6a8dcce8db500a47b6b4c4033eb66b2",
+    "variants": {
+      "reverted": {
+        "returnCode": 1,
+        "result": {
+          "schema": 1,
+          "variant": "reverted",
+          "ok": false,
+          "stage": "complete",
+          "pointerBytes": 4,
+          "sizeTBytes": 4,
+          "offTBytes": 8,
+          "logicalFileBytes": 4294968349,
+          "logicalBlobBytes": 4294968320,
+          "allocatedBytes": 16384,
+          "setup": true,
+          "metadata": true,
+          "wholeOversizedEmpty": true,
+          "head": false,
+          "cross4GiB": false,
+          "high": false,
+          "tail": false,
+          "next": false,
+          "exceptions": 4,
+          "cleanup": true,
+          "errno": 0
+        }
+      },
+      "patched": {
+        "returnCode": 0,
+        "result": {
+          "schema": 1,
+          "variant": "patched",
+          "ok": true,
+          "stage": "complete",
+          "pointerBytes": 4,
+          "sizeTBytes": 4,
+          "offTBytes": 8,
+          "logicalFileBytes": 4294968349,
+          "logicalBlobBytes": 4294968320,
+          "allocatedBytes": 16384,
+          "setup": true,
+          "metadata": true,
+          "wholeOversizedEmpty": true,
+          "head": true,
+          "cross4GiB": true,
+          "high": true,
+          "tail": true,
+          "next": true,
+          "exceptions": 0,
+          "cleanup": true,
+          "errno": 0
+        }
+      }
+    },
+    "cleanup": {
+      "fixtureUnlinkedByBothProbes": true,
+      "ownedBinariesRemoved": true,
+      "ownedDirectoryRemoved": true,
+      "recursiveDeletionUsed": false
+    }
+  },
+  "restoration": {
+    "apkSha256": "0f04390127c81e9d8ce23965fa595876298fbb2ac722daa3f88a154485932a33",
+    "primaryCpuAbi": "arm64-v8a",
+    "inPlaceInstallSucceeded": true,
+    "installedHashMatched": true,
+    "actualAnimalHeadingImagesOneEnglishTabObserved": true,
+    "bothBenchmarkAppsStoppedAndHome": true,
+    "officialAllFilesAccess": "off",
+    "diagnosticPackageInstalled": false,
+    "voiceOverTalkBackOrAudioEnabled": false,
+    "iphoneAccessed": false
+  },
+  "limitations": [
+    "Compatibility warning remains; not warning-free modern Android release acceptance.",
+    "64-bit OS and renderer; no 32-bit-only device or low-memory hardware certification.",
+    "No ARMv7 activity-free notification acceptance, memory/startup/search latency or official-app comparison.",
+    "Build and sparse boundary regression are not substitutes for the separately observed real Wikipedia and StreetZIM runtime."
+  ],
+  "privateEvidence": [
+    {
+      "file": "release-identity.json",
+      "sha256": "411f7587cf9cc67a34c0b8f0908d6f9898c798d0f63b67c42cfd2629ff6036e2"
+    },
+    {
+      "file": "commands.json",
+      "sha256": "3cda67b1cb78f485df29b78c5e6bf8cdd495ee299ea9f2225ba286cebf7c89d7"
+    },
+    {
+      "file": "physical-processes.txt",
+      "sha256": "2945f0169eb003c68efee2857c709fe7c71858e2a88aa848e5320cf0d2fafa4a"
+    },
+    {
+      "file": "installed-package.txt",
+      "sha256": "3ae1336ace2044b5ad8217c2ba059dd093825415671545d0ba2ef0ed9ec80174"
+    },
+    {
+      "file": "physical-animal.png",
+      "sha256": "7e37d4dc9c5776934646afe9c45d709698b1b8922fa50c3840db2633ee6f0495"
+    },
+    {
+      "file": "physical-animal-after-warning.png",
+      "sha256": "dc97b7c56a0ca2bf437699eadad61055902e26f08fc59b6f4bf844c75f854c5a"
+    },
+    {
+      "file": "physical-title-results.png",
+      "sha256": "f3215f5e19f4f3eb768bafb8af14bb88190b0c59586f2295952676c38183bd13"
+    },
+    {
+      "file": "physical-library.png",
+      "sha256": "27c39ace94fddb239f96517a503e6e6c7c0c720f603469ee658d0360d4d7653c"
+    },
+    {
+      "file": "physical-hawaii-map.png",
+      "sha256": "984c1e968d8634f41afe28733ee95fd9eaaec385350c2ad45a5d56c71504d3e5"
+    },
+    {
+      "file": "physical-hilo-search.png",
+      "sha256": "c9b65d7955fb3e61a4c91d34c4d142416ae583e53fd954448b773ce634a2adbc"
+    },
+    {
+      "file": "physical-hilo-selected.png",
+      "sha256": "42a1a7d4c3ee02afd6d6180c86830216e1ecd4fb775aa33ff10b96b2df6cc34f"
+    },
+    {
+      "file": "physical-animal-restored.png",
+      "sha256": "8f751085265a8d978e7f7a7b684ac78bfffdf8d9791bf0a13c1015d4aa760d08"
+    },
+    {
+      "file": "back-activities-before-wait.txt",
+      "sha256": "ea58e9684e2d8f9467c1ef5d840fa39c61be1d20967c604d339c3558aa23a24a"
+    },
+    {
+      "file": "physical-after-back.png",
+      "sha256": "66312e5e6baef0b18e13df1d7216635c84cee8c1e917f3ac8d0e630e7dad3352"
+    },
+    {
+      "file": "restored-arm64-package.txt",
+      "sha256": "ff0f21b10b05bf4bedca47c89eeee5f4bea50640f9283cc0aa96bba82f4aebc5"
+    },
+    {
+      "file": "restored-arm64-animal.png",
+      "sha256": "89d75ca544d6ab8d297b9971dd22bdf367627ae04846b018072aa380bd7b4d38"
+    },
+    {
+      "file": "build-receipt.json",
+      "sha256": "2110af4750b758525095796e5c872dcf6b8ec2b127714356e10f042c7853e02a"
+    },
+    {
+      "file": "device-run.json",
+      "sha256": "a17b41602696a40f7a0392025a3f7de1a910dbf511ba0167f02b5f74179b7be6"
+    }
+  ]
+}

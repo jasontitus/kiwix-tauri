@@ -1,0 +1,210 @@
+[package]
+name = "kiwix-workbench"
+version = "0.1.0"
+# Application crate: never published, so vendored path dependencies are fine.
+publish = false
+description = "Offline knowledge library and reader"
+authors = ["Kiwix contributors"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.90"
+default-run = "kiwix-workbench"
+
+[lib]
+name = "kiwix_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+# The lib test target compiles native/desktop_sdk.rs to test SDK root resolution.
+cc = "1"
+# The updater tests build a mock Tauri app so the real plugin state and
+# minisign verification run without launching a window.
+tauri = { version = "2.12", features = ["test"] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+bytes = "1"
+futures-util = "0.3"
+roxmltree = "0.21"
+uuid = { version = "1", features = ["v4", "serde"] }
+url = "2"
+sha1 = "0.11"
+sha2 = "0.10"
+md-5 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+libc = "0.2"
+axum = "0.8"
+percent-encoding = "2"
+tokio-util = { version = "0.7", features = ["io"] }
+directories = "6"
+rust-embed = { version = "8", features = ["debug-embed"] }
+http = "1"
+mime_guess = "2"
+# Already in the graph through tauri-utils; html5ever names the parser API
+# (default options, recording tree sink) that dom_query's constructors hide.
+dom_query = { version = "0.28.0", default-features = false }
+html5ever = "0.39.0"
+# Already in the graph through dom_query; the PDF sanitizer tokenizes <style>
+# text with it to tell a CSS `<` delimiter from a `<` inside a string or URL.
+cssparser = "0.37.0"
+librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
+cap-std = "4"
+cap-fs-ext = "4"
+anyhow = "1"
+icu_plurals = "2.4"
+icu_decimal = { version = "2.4", features = ["alloc"] }
+icu_locale = "2.4"
+# Sharing handlers cache formatters across Tokio threads.
+icu_provider = { version = "2.4", features = ["sync"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+unicode-normalization = "0.1"
+icu_casemap = "2.4"
+socket2 = { version = "0.6", features = ["all"] }
+sys-locale = "0.3"
+if-addrs = "0.15"
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+mdns-sd = { version = "=0.17.2", path = "vendor/mdns-sd" }
+subtle = "2"
+zeroize = { version = "1.9", features = ["serde"] }
+getrandom = "0.3"
+# Separate owner-authenticated private reading sync; never the public sharing TLS identity.
+# Only Noise_XX_25519_ChaChaPoly_BLAKE2s is used (see src/private_sync.rs). The
+# default resolver would also compile the AES-GCM cipher and the SHA-2 hash.
+snow = { version = "0.10", default-features = false, features = ["default-resolver", "std", "use-curve25519", "use-chacha20poly1305", "use-blake2", "use-getrandom"] }
+# Cross-platform offline neural read-aloud. sherpa-onnx supplies the Kokoro
+# inference runtime on desktop, iOS and Android; rodio plays the generated WAV
+# through the platform audio device. The Kokoro model is optional at runtime:
+# the system voice path stays available until the user downloads it. On
+# Windows the sherpa-onnx DLLs are load-time imports, so the app cannot start
+# without them; packaging installs them beside the executable.
+# Declared per target below: Windows needs the shared (DLL) build.
+# Misaki supplies Kokoro's phoneme inventory (including plurals and POS
+# heteronyms) without a runtime espeak dependency. The no-default build keeps
+# the binary self-contained on iOS and Android.
+misaki-rs = { version = "0.9.0", default-features = false }
+regex = "1"
+rodio = { version = "0.20.1", default-features = false, features = ["wav"] }
+bzip2 = "0.6"
+tar = "0.4"
+
+# SHA-256 runs over archive payloads during acquisition and destructive ownership
+# checks. RustCrypto 0.10 requires this feature for runtime-checked ARM SHA2;
+# without it, Apple Silicon and ARM phones always use the software compressor.
+# Not on Windows ARM64: sha2-asm's AArch64 code is GNU assembly, which MSVC
+# cannot build; Windows ARM64 uses the portable compressor.
+[target.'cfg(all(target_arch = "aarch64", not(target_os = "windows")))'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
+# Kokoro read-aloud runtime (see [dependencies]). Static everywhere except
+# Windows, which needs the shared build (see the Windows table below).
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+sherpa-onnx = "2.0.1"
+
+# Safe effective-UID and CPU-clock reads for ownership checks and diagnostics
+# (`fs_ext::effective_uid`, `cpu_time`). `libc` stays for the calls rustix does
+# not wrap: flock/statvfs and macOS/iOS/BSD getpeereid; Linux SO_PEERCRED uses
+# rustix's `net` feature. Already in the graph through cap-std; no default
+# features so only these modules compile.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["process", "time", "net"] }
+
+# Iteration builds keep line tables so backtraces stay actionable, but skip the
+# full variable/type debug info that dominates debug-object size and link time.
+[profile.dev]
+debug = "line-tables-only"
+
+# Phone development builds still verify multi-gigabyte files. Keep hashing fast
+# without changing checks, disabling debug assertions, or optimizing the app.
+[profile.dev.package.sha2]
+opt-level = 3
+
+# Keep non-runtime symbol/string tables out of shipping native libraries.
+# Debug builds retain symbols for local diagnosis.
+[profile.release]
+strip = "symbols"
+# Preserve optimization and unwinding while allowing whole-crate optimization.
+codegen-units = 1
+
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+# Signed desktop updates. The frontend never calls the plugin's JS commands;
+# the app's own commands enforce privacy, transfer and confirmation gates.
+tauri-plugin-updater = { version = "2.14", default-features = false, features = ["rustls-tls", "zip"] }
+trash = "5"
+# Native filesystem notifications for live monitored-folder watching. Desktop
+# only: Android/iOS keep the periodic scan, and the dependency never enters
+# their builds. Pulls notify-types plus the platform backend (FSEvents on
+# macOS, inotify on Linux, ReadDirectoryChangesW on Windows).
+notify = "8"
+
+[target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
+tauri-plugin-kiwix-mobile = { path = "plugins/tauri-plugin-kiwix-mobile" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", optional = true }
+# librqbit's reqwest 0.13 HTTPS client verifies through the Android platform
+# trust manager. These are the versions already in its dependency tree; the app
+# only supplies the one-time JNI initialization (`src/android_tls.rs`) and the
+# matching Kotlin component (`vendor/rustls-platform-verifier-android-0.2.0`).
+rustls-platform-verifier = "0.7.1"
+jni_0_22 = { package = "jni", version = "0.22.4" }
+ndk-context = "0.1.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18.2"
+webkit2gtk = { version = "2.0.2", features = ["v2_40"] }
+# GeoClue location over the system bus (location_linux.rs); the note below about
+# keeping zbus out of Linux builds was about the unused single-instance plugin.
+zbus = { version = "5.19", default-features = false, features = ["async-io"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Only Windows registers this plugin (lib.rs); Linux and macOS use instance.rs's
+# own socket rendezvous. Declaring it for every desktop target compiled the
+# plugin's Linux backend (zbus/D-Bus, ~31 packages) into builds that never used it.
+tauri-plugin-single-instance = "2"
+# sherpa-onnx's only static Windows archive is built with the static C++
+# runtime (/MT); the app and the libzim SDK use the DLL runtime (/MD), so the
+# static link fails with duplicate std symbols. The shared build keeps the
+# runtime inside sherpa-onnx's own DLLs behind a C API; the packaging step
+# bundles those DLLs beside the executable (docs/PACKAGING.md).
+sherpa-onnx = { version = "2.0.1", default-features = false, features = ["shared"] }
+webview2-com = "0.39.1"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_IO", "Win32_System_Memory", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_Pipes", "Foundation", "Devices_Geolocation"] }
+
+[target.'cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))'.dependencies]
+# Desktop only; macOS opens through NSWorkspace instead (src/os_open.rs).
+opener = "0.8"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+# NSWorkspace opening hands sandboxed receivers a file extension. Already in
+# the graph through Tauri; this only enables the NSWorkspace binding.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+android-evaluation = ["dep:jni"]
+localswarm-profiling = []
+
+[patch.crates-io]
+# 0.7.0 selects Linux interface binding on iOS; use Apple's indexed binding.
+librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
+# Wry's fresh incognito GTK contexts must each receive the app/IPC protocols.
+tauri-runtime-wry = { path = "vendor/tauri-runtime-wry-2.12.3" }
+# Reader media policy: inline playback and PiP; WebKit owns archive playback
+# activation, matching the upstream Apple application's configuration.
+wry = { path = "vendor/wry-0.57.1" }

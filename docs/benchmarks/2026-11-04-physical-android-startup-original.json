@@ -1,0 +1,551 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-android-startup-visible-marker-to-Animal-content",
+  "publicationReview": "passed-independent-frame-numeric-and-sanitization-review",
+  "cohortStatus": "incomplete-confirmation-one-rejection-retained",
+  "plannedSequence": [
+    "ours",
+    "official",
+    "official",
+    "ours",
+    "ours",
+    "official",
+    "official",
+    "ours"
+  ],
+  "capturedCount": 8,
+  "admittedCount": 7,
+  "rejectedCount": 1,
+  "retryCount": 0,
+  "replacementCount": 0,
+  "completeCohortRanking": null,
+  "pooledMedianComparison": null,
+  "endpoint": "Original-video observable first Open-tap pointer marker transition to Animal heading, full visible montage, and visible classification; not physical tap/electrical input, first paint, app-only CPU time, document-load completion, interactivity, or offscreen readiness.",
+  "intervalFormulaMs": "[readyPreviousPTS - markerFirstPTS, readyFirstPTS - markerPreviousPTS] * 1000; these are observable-marker bounds, not physical-input uncertainty.",
+  "geometry": [
+    1080,
+    2340
+  ],
+  "helperSha256": "87479d776fef944687da4f9f0905370bbe4eb235fb9566ea8462563998af5c2c",
+  "parameters": {
+    "perChannelTolerance": 12,
+    "foregroundThreshold": 0.99,
+    "sampleStride": 2,
+    "minimumConfirmationSeconds": "0.100000"
+  },
+  "templates": {
+    "ours": [
+      {
+        "name": "Animal-heading",
+        "templateSha256": "fa020ec0c629e1101e8cd35bf8ed5af4e2ee87fa6fd0853db8c63bef4024d15e",
+        "rect": [
+          60,
+          245,
+          1020,
+          355
+        ],
+        "foregroundPixels": 1264,
+        "sampledRgbInt16Sha256": "33f57456ea263c268d7704b92f0116a05b9614bcef50d7bb0f4abc858937a2b9",
+        "foregroundMaskSha256": "0764aec7202e38792915d072e1deb4d03dba11874422c2233ada9de203e8a746"
+      },
+      {
+        "name": "Animal-montage",
+        "templateSha256": "fa020ec0c629e1101e8cd35bf8ed5af4e2ee87fa6fd0853db8c63bef4024d15e",
+        "rect": [
+          115,
+          565,
+          970,
+          1370
+        ],
+        "foregroundPixels": 157443,
+        "sampledRgbInt16Sha256": "45bef5d8f629dfec055e8c039ce722be01678ab17fe8b3abaa1b54764d0806a3",
+        "foregroundMaskSha256": "551c415a19006950d67a55b77160471d5b85d44b2f9845ea240c01b7a254a672"
+      },
+      {
+        "name": "Animal-classification",
+        "templateSha256": "fa020ec0c629e1101e8cd35bf8ed5af4e2ee87fa6fd0853db8c63bef4024d15e",
+        "rect": [
+          85,
+          1380,
+          1000,
+          1840
+        ],
+        "foregroundPixels": 6214,
+        "sampledRgbInt16Sha256": "fb9f2d54f41e623f6fa94e0245c797e171f03235bb8c4f943bfcbef74d1dfff0",
+        "foregroundMaskSha256": "1536331d589675aeced461d10f1d29f6401f22509a15c9ee0fa2a1972813eeda"
+      }
+    ],
+    "official": [
+      {
+        "name": "Animal-heading",
+        "templateSha256": "6c769c47d94be923f3fe25e6cf21d3e01702a85ceca8b8cefce8a1e4c3b880a6",
+        "rect": [
+          60,
+          255,
+          1020,
+          370
+        ],
+        "foregroundPixels": 1265,
+        "sampledRgbInt16Sha256": "57711410435c47cf938216404441f727c221d1dd0101c8a3fedab1f7b604b56d",
+        "foregroundMaskSha256": "bc31fd5b140e7c96d1ec0d3a782879a3b2afd703ebb2d7cf470981a7e92e1b2e"
+      },
+      {
+        "name": "Animal-montage",
+        "templateSha256": "6c769c47d94be923f3fe25e6cf21d3e01702a85ceca8b8cefce8a1e4c3b880a6",
+        "rect": [
+          115,
+          577,
+          970,
+          1382
+        ],
+        "foregroundPixels": 157461,
+        "sampledRgbInt16Sha256": "72e1f69a38cff602941a6d5e8edfdde61b1a0b6d9d036ca36aa5f97e91f71807",
+        "foregroundMaskSha256": "78c7dd525f243c62bf3621af95bbfbf3e33f48a7c26782a55e1e1927d72517c2"
+      },
+      {
+        "name": "Animal-classification",
+        "templateSha256": "6c769c47d94be923f3fe25e6cf21d3e01702a85ceca8b8cefce8a1e4c3b880a6",
+        "rect": [
+          85,
+          1392,
+          1000,
+          1852
+        ],
+        "foregroundPixels": 6203,
+        "sampledRgbInt16Sha256": "addeba920358b9e1c016f7ccf132f92a69f3d1bc921c5efc8b1a60297b774efc",
+        "foregroundMaskSha256": "b4281f81393c7a6b60ad17ecf6c0ea4868d490795e6f7d152bf8e4e76ea335c7"
+      }
+    ]
+  },
+  "series": [
+    {
+      "block": 0,
+      "app": "ours",
+      "label": "startup-clean-startup-b0-ours",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "cbcc10d7ce411e6ea148ef7b88a1914c11dd75902cc142e340cfd03bd3d40971",
+      "videoBytes": 998936,
+      "originalFrameCount": 152,
+      "containerDurationSeconds": "22.552867",
+      "lastOriginalFramePtsSeconds": "19.480633",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 25,
+      "markerFirstIndex": 26,
+      "markerIntervalSeconds": [
+        "7.532722",
+        "7.548133"
+      ],
+      "readyPreviousIndex": 125,
+      "readyFirstIndex": 126,
+      "readyIntervalSeconds": [
+        "9.014711",
+        "9.246689"
+      ],
+      "confirmationIndex": 127,
+      "confirmationPtsSeconds": "12.328867",
+      "confirmationSeparationMs": "3082.178000",
+      "observableLatencyIntervalMs": [
+        "1466.578000",
+        "1713.967000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 1,
+      "app": "official",
+      "label": "startup-clean-startup-b1-official",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "6096cdb27cff7a0bf6773dab36ac98dd5824eeeccb481e39c6ac828efac90bc8",
+      "videoBytes": 989561,
+      "originalFrameCount": 106,
+      "containerDurationSeconds": "18.461333",
+      "lastOriginalFramePtsSeconds": "17.081033",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 33,
+      "markerFirstIndex": 34,
+      "markerIntervalSeconds": [
+        "7.740256",
+        "7.766556"
+      ],
+      "readyPreviousIndex": 90,
+      "readyFirstIndex": 91,
+      "readyIntervalSeconds": [
+        "8.803844",
+        "8.889111"
+      ],
+      "confirmationIndex": 97,
+      "confirmationPtsSeconds": "9.012556",
+      "confirmationSeparationMs": "123.445000",
+      "observableLatencyIntervalMs": [
+        "1037.288000",
+        "1148.855000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 2,
+      "app": "official",
+      "label": "startup-clean-startup-b2-official",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "fcc3d7722dde0a27f612401191b6b5d3a98ee4d28eef6d212345058beffb78a2",
+      "videoBytes": 990783,
+      "originalFrameCount": 123,
+      "containerDurationSeconds": "20.409056",
+      "lastOriginalFramePtsSeconds": "17.672078",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 31,
+      "markerFirstIndex": 32,
+      "markerIntervalSeconds": [
+        "7.587756",
+        "7.615500"
+      ],
+      "readyPreviousIndex": 89,
+      "readyFirstIndex": 90,
+      "readyIntervalSeconds": [
+        "8.760600",
+        "8.791822"
+      ],
+      "confirmationIndex": 94,
+      "confirmationPtsSeconds": "8.914211",
+      "confirmationSeparationMs": "122.389000",
+      "observableLatencyIntervalMs": [
+        "1145.100000",
+        "1204.066000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 3,
+      "app": "ours",
+      "label": "startup-clean-startup-b3-ours",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "7d16de155499813b170c57cc6a9462351f82a11a5e64d3638579e172e475f15b",
+      "videoBytes": 974824,
+      "originalFrameCount": 125,
+      "containerDurationSeconds": "21.851033",
+      "lastOriginalFramePtsSeconds": "17.118100",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 27,
+      "markerFirstIndex": 28,
+      "markerIntervalSeconds": [
+        "7.797700",
+        "7.815989"
+      ],
+      "readyPreviousIndex": 100,
+      "readyFirstIndex": 101,
+      "readyIntervalSeconds": [
+        "9.085300",
+        "9.294144"
+      ],
+      "confirmationIndex": 102,
+      "confirmationPtsSeconds": "12.081822",
+      "confirmationSeparationMs": "2787.678000",
+      "observableLatencyIntervalMs": [
+        "1269.311000",
+        "1496.444000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 4,
+      "app": "ours",
+      "label": "startup-clean-startup-b4-ours",
+      "analysisStatus": "rejected",
+      "independentAdmission": "rejected-missing-later-encoded-confirmation",
+      "rejectionReasons": [
+        "No uninterrupted positive confirmation at least100ms later"
+      ],
+      "videoSha256": "517f40699310fca018b89de78f8e363f67f84e3b65fde18367a1f377739d7dc1",
+      "videoBytes": 928195,
+      "originalFrameCount": 75,
+      "containerDurationSeconds": "9.797533",
+      "lastOriginalFramePtsSeconds": "9.417611",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 7,
+      "markerFirstIndex": 8,
+      "markerIntervalSeconds": [
+        "7.848011",
+        "7.884111"
+      ],
+      "readyPreviousIndex": 73,
+      "readyFirstIndex": 74,
+      "readyIntervalSeconds": [
+        "9.037689",
+        "9.417611"
+      ],
+      "confirmationIndex": null,
+      "confirmationPtsSeconds": null,
+      "confirmationSeparationMs": null,
+      "observableLatencyIntervalMs": null,
+      "unconfirmedObservedIntervalMs": [
+        "1153.578000",
+        "1569.600000"
+      ],
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 5,
+      "app": "official",
+      "label": "startup-clean-startup-b5-official",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "87fdc7a6b367cd1a7b31688492c9293178e1cd95a4b4e2e0baef2860725e92e9",
+      "videoBytes": 1016320,
+      "originalFrameCount": 101,
+      "containerDurationSeconds": "19.840033",
+      "lastOriginalFramePtsSeconds": "17.045322",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 9,
+      "markerFirstIndex": 10,
+      "markerIntervalSeconds": [
+        "7.898500",
+        "7.907200"
+      ],
+      "readyPreviousIndex": 65,
+      "readyFirstIndex": 66,
+      "readyIntervalSeconds": [
+        "9.038878",
+        "9.093500"
+      ],
+      "confirmationIndex": 70,
+      "confirmationPtsSeconds": "9.195400",
+      "confirmationSeparationMs": "101.900000",
+      "observableLatencyIntervalMs": [
+        "1131.678000",
+        "1195.000000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 6,
+      "app": "official",
+      "label": "startup-clean-startup-b6-official",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "898c69c2dde4a4057e9960895849cc6ef3318b5e582e2f248646f90ae42f88c3",
+      "videoBytes": 968199,
+      "originalFrameCount": 96,
+      "containerDurationSeconds": "17.796856",
+      "lastOriginalFramePtsSeconds": "13.437344",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 31,
+      "markerFirstIndex": 32,
+      "markerIntervalSeconds": [
+        "7.734000",
+        "7.751567"
+      ],
+      "readyPreviousIndex": 87,
+      "readyFirstIndex": 88,
+      "readyIntervalSeconds": [
+        "8.841811",
+        "8.891500"
+      ],
+      "confirmationIndex": 91,
+      "confirmationPtsSeconds": "8.992956",
+      "confirmationSeparationMs": "101.456000",
+      "observableLatencyIntervalMs": [
+        "1090.244000",
+        "1157.500000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    },
+    {
+      "block": 7,
+      "app": "ours",
+      "label": "startup-clean-startup-b7-ours",
+      "analysisStatus": "candidate-requires-independent-full-frame-review",
+      "independentAdmission": "admitted",
+      "rejectionReasons": [],
+      "videoSha256": "f4e7bfce6aa45a282a24e0ec7d04af387ec3f3071722a580f64a0686c65637b6",
+      "videoBytes": 1009709,
+      "originalFrameCount": 104,
+      "containerDurationSeconds": "17.163778",
+      "lastOriginalFramePtsSeconds": "17.154733",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "markerBeforeIndex": 8,
+      "markerFirstIndex": 9,
+      "markerIntervalSeconds": [
+        "7.892056",
+        "7.919667"
+      ],
+      "readyPreviousIndex": 77,
+      "readyFirstIndex": 78,
+      "readyIntervalSeconds": [
+        "9.197589",
+        "9.402311"
+      ],
+      "confirmationIndex": 79,
+      "confirmationPtsSeconds": "14.889056",
+      "confirmationSeparationMs": "5486.745000",
+      "observableLatencyIntervalMs": [
+        "1277.922000",
+        "1510.255000"
+      ],
+      "unconfirmedObservedIntervalMs": null,
+      "firstReadyScores": {
+        "Animal-heading": 1.0,
+        "Animal-montage": 1.0,
+        "Animal-classification": 1.0
+      }
+    }
+  ],
+  "adjacentPairs": [
+    {
+      "pair": 0,
+      "oursBlock": 0,
+      "officialBlock": 1,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "317.723000",
+        "676.679000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    },
+    {
+      "pair": 1,
+      "oursBlock": 3,
+      "officialBlock": 2,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "65.245000",
+        "351.344000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    },
+    {
+      "pair": 2,
+      "oursBlock": 4,
+      "officialBlock": 5,
+      "status": "unavailable-rejected-member-retained",
+      "oursMinusOfficialIntervalMs": null,
+      "sign": null
+    },
+    {
+      "pair": 3,
+      "oursBlock": 7,
+      "officialBlock": 6,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "120.422000",
+        "420.011000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    }
+  ],
+  "limitations": [
+    "One captured ours block has only a final positive encoded frame and lacks the frozen >=100ms later-frame confirmation. It remains rejected in the complete eight-capture record; no replacement or threshold change.",
+    "Only three adjacent pairs have two confirmation-valid members; their interval signs are descriptive and are not a complete-eight cohort ranking.",
+    "Native VFR encoding has long gaps in some confirmations; no interpolation or unseen continuous-readiness claim. Container duration or static final-frame hold does not supply a later encoded frame.",
+    "Some official ready frames retain chrome loading progress despite complete required visual content.",
+    "Both untimed calibration videos remain excluded from the sampled cohort.",
+    "Raw videos, screenshots, process observations, capture receipts, device identifiers and absolute private paths are not included in this sanitized receipt."
+  ]
+}

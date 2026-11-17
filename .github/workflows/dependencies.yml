@@ -1,0 +1,77 @@
+name: Dependency policy
+
+# Dependency advisories and licenses change only when a lockfile or policy file
+# changes, so this runs on those paths, weekly, or on demand instead of on every
+# code push. Keeps the Checks workflow to compile/test work.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/Cargo.lock'
+      - 'src-tauri/deny.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/dependencies.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/Cargo.lock'
+      - 'src-tauri/deny.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/dependencies.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependencies-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm:
+    name: npm advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm advisories
+        run: npm audit --audit-level=moderate
+
+  cargo-deny:
+    # One run per shipping target (aarch64 Linux and the iOS simulator add no
+    # crate these do not already cover). Without --target, cargo-deny evaluates
+    # each dependency edge's platform condition on its own, so it combines edges
+    # no real build has together (e.g. app -> tauri-plugin-single-instance on
+    # Windows, plugin -> zbus on Linux) and reports crates that never ship.
+    name: cargo-deny (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+          - aarch64-apple-ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo-deny (advisories, licenses, sources, bans)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: src-tauri/Cargo.toml
+          arguments: --all-features --target ${{ matrix.target }}
+          command: check

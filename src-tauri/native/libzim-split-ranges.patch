@@ -1,0 +1,68 @@
+--- a/src/file_compound.h
++++ b/src/file_compound.h
+@@ -46,7 +46,7 @@
+ struct less_range
+ {
+   bool operator()(const Range& lhs, const Range& rhs) const {
+-    return lhs.min < rhs.min && lhs.max <= rhs.min;
++    return lhs.min < rhs.min;
+   }
+ };
+ 
+@@ -81,22 +81,20 @@
+     bool is_multiPart() const { return size() > 1; };
+ 
+     PartIterator locate(offset_t offset) const {
+-      const PartIterator partIt = lower_bound(Range(offset, offset));
+-      ASSERT(partIt != end(), ==, true);
+-      return partIt;
++      ASSERT(offset.v, <, _fsize.v);
++      auto partIt = upper_bound(Range(offset, offset));
++      ASSERT(partIt != begin(), ==, true);
++      return --partIt;
+     }
+ 
+     PartRange locate(offset_t offset, zsize_t size) const {
+-      const Range queryRange(offset, offset+size);
+-      // equal_range expects comparator to satisfy the `Compare` requirement.
+-      // (ie `comp(a, b) == !comp(b, a)`) which is not the case for `less_range`
+-      // If not satisfy, this is UB.
+-      // Even if UB, stdlib's equal_range behaves "correctly".
+-      // But libc++ (used in Apple, Android, ..) is not.
+-      // In all case, we are triggering a UB and it is to us to not call equal_range.
+-      // So let's use lower_bound and upper_bound which doesn't need such requirement.
+-      // See https://stackoverflow.com/questions/67042750/should-setequal-range-return-pair-setlower-bound-setupper-bound
+-      return {lower_bound(queryRange), upper_bound(queryRange)};
++      ASSERT(offset.v, <=, _fsize.v);
++      ASSERT(size.v, <=, _fsize.v - offset.v);
++      if (size.v == 0) return {end(), end()};
++      // Order stored ranges by their starts, not overlap: overlapping query
++      // ranges are not a strict weak ordering, and libc++ may skip a part.
++      const auto lastByte = offset_t(offset.v + size.v - 1);
++      return {locate(offset), upper_bound(Range(lastByte, lastByte))};
+     }
+ 
+   private: // functions
+--- a/src/file_reader.cpp
++++ b/src/file_reader.cpp
+@@ -186,7 +186,9 @@
+ #endif // ENABLE_USE_MMAP
+ 
+ const Buffer BaseFileReader::get_buffer(offset_t offset, zsize_t size) const {
+-  ASSERT(size, <=, _size);
++  ASSERT(offset.v, <=, _size.v);
++  ASSERT(size.v, <=, _size.v - offset.v);
++  if (size.v == 0) return Buffer::makeBuffer(size);
+ #ifdef ENABLE_USE_MMAP
+   try {
+     return get_mmap_buffer(offset, size);
+--- a/src/fileimpl.cpp
++++ b/src/fileimpl.cpp
+@@ -853,6 +853,7 @@
+     auto full_offset = getBlobOffset(clusterIdx, blobIdx);
+ 
+     auto part_its = getFileParts(full_offset, zsize_t(cluster->getBlobSize(blobIdx)));
++    if (part_its.first == part_its.second) return ItemDataDirectAccessInfo();
+     auto first_part = part_its.first;
+     if (++part_its.first != part_its.second) {
+      // The content is split on two parts. We cannot have direct access

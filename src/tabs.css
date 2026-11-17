@@ -1,0 +1,36 @@
+.reader-tab {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tab-select[draggable="true"] {
+  cursor: grab;
+}
+
+.tab-select[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.reader-tab.tab-drop-before::before,
+.reader-tab.tab-drop-after::after {
+  content: "";
+  position: absolute;
+  inset-block: 5px;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.reader-tab.tab-drop-before::before {
+  inset-inline-start: 0;
+}
+
+.reader-tab.tab-drop-after::after {
+  inset-inline-end: 0;
+}
+
+.tab-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

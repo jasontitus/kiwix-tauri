@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_new_tab_short">New tab</string>
+    <string name="shortcut_new_tab_long">Open a new tab</string>
+    <string name="shortcut_get_content_short">Content</string>
+    <string name="shortcut_get_content_long">Get content</string>
+</resources>

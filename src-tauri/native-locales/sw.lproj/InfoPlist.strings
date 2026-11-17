@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Ni jalada hili linalotumika pekee linaloweza kuomba kutumia kamera. Mfumo wako pia unaweza kuomba ruhusa. Unaweza kufuta ruhusa ya ufikiaji chini ya makala wakati wowote.";
+"NSLocationUsageDescription" = "Mfumo wako utatoa taarifa ya mahali ulipo kwa jalada hili linalotumika pekee. Unaweza kufuta ruhusa ya ufikiaji chini ya makala wakati wowote.";
+"NSLocationWhenInUseUsageDescription" = "Mfumo wako utatoa taarifa ya mahali ulipo kwa jalada hili linalotumika pekee. Unaweza kufuta ruhusa ya ufikiaji chini ya makala wakati wowote.";
+"NSLocalNetworkUsageDescription" = "Gundua vifaa vilivyo karibu na LocalSwarm na ushiriki kumbukumbu za nje ya mtandao kwenye mtandao wako wa karibu. Washa ugunduzi au kushiriki kwenye mtandao unaoaminika pekee.";

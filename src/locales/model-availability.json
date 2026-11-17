@@ -1,0 +1,694 @@
+{
+  "servicesRequested": [
+    "session default model",
+    "session slow model"
+  ],
+  "reviewed": false,
+  "defaultModelDeclinedLocales": {
+    "bik": "I cannot competently translate this full set of technical UI labels into Bikol (bik) with reliable grammar, terminology, and consistency. I am declining rather than substituting English or another Philippine language. No translations have been produced or native-reviewed.",
+    "br": "I cannot competently translate this complete set of technical UI labels into Breton (br) with reliable grammar, terminology, and natural phrasing. Rather than provide potentially misleading translations or substitute another language, I am declining. No translations have been produced or native-reviewed.",
+    "dag": "I cannot competently translate this complete set of UI labels into Dagbanli (dag). In particular, I cannot reliably ensure accurate technical terminology, natural UI phrasing, and grammatical consistency in this low-resource language. I therefore decline rather than provide unreliable translations or substitute English or another language.",
+    "ie": "I cannot competently translate this complete UI into Interlingue (ie) with sufficient confidence, particularly its technical terminology. I risk confusing Interlingue with Interlingua or producing inaccurate wording. I therefore decline rather than substitute another language or provide unreliable unreviewed machine translations.",
+    "ig": "I cannot competently translate this full set of 323 technical UI labels into clear, idiomatic Igbo (ig) with reliable terminology and grammatical accuracy. Rather than provide unreliable translations or substitute English or another language, I am declining. No translations have been produced or native-reviewed.",
+    "igl": "I cannot competently translate these 323 UI labels into Igala (igl), particularly the technical terminology and nuanced instructions. I cannot provide reliable unreviewed machine translations without risking incorrect Igala or substituting another language.",
+    "io": "I cannot competently translate all 323 UI labels into Ido (BCP 47: io), particularly the technical terminology and longer privacy and file-management messages. I cannot provide sufficiently reliable unreviewed machine translations without risking incorrect Ido or substitution from another language.",
+    "kab": "I cannot competently translate this complete set of 323 UI labels into Taqbaylit (kab), particularly the technical descriptions of archive integrity, map assembly, network sharing, and privacy. I cannot reliably provide clear, accurate Kabyle UI copy throughout without substituting another language or inventing terminology. I am therefore declining rather than presenting unreliable, unreviewed machine translations.",
+    "nqo": "I cannot competently translate these UI labels into N’Ko (nqo) in the requested ߒߞߏ script. I cannot reliably ensure accurate terminology, grammar, or natural UI phrasing across all 323 labels, so I am declining rather than supplying unreliable unreviewed machine translations.",
+    "roa-Tara": "I cannot competently translate this full UI into Tarandíne (roa-Tara). My knowledge of its vocabulary, grammar, and spelling conventions is insufficient to provide reliable translations without substituting Italian or inventing forms. I am therefore declining rather than supplying an unreviewed machine translation that misrepresents the requested language.",
+    "sc": "I cannot competently translate this complete set of technical UI labels into Sardinian (sc) with sufficient confidence. Rather than substitute Italian, English, or unreliable Sardinian, I am declining. No translations have been produced or native-reviewed.",
+    "sdc": "I cannot competently translate this full UI into Sassaresu (sdc). I cannot reliably distinguish authentic Sassaresu vocabulary and grammar from neighboring Sardinian, Corsican, or Italian forms, so providing translations would risk substituting another language. No translations are supplied; native review has not occurred.",
+    "se": "I cannot competently translate this complete set of 323 UI labels into Northern Sámi (davvisámegiella, BCP 47: se), especially the technical terminology and grammatical forms required for clear, accurate interface text. Under your competence gate, I am declining rather than providing unreliable unreviewed machine translations or substituting another language.",
+    "skr-Arab": "I cannot competently translate this full UI into Saraiki in Arabic script (skr-Arab) without risking substitution of Urdu or Punjabi wording. I am therefore declining rather than providing unreliable translations. No translations have been produced or native-reviewed.",
+    "sms": "I cannot competently translate this full set of UI labels into Skolt Sámi (sääʹmǩiõll, BCP 47: sms), including its distinctive orthography and technical terminology. I therefore decline rather than provide unreliable translations or substitute another language.",
+    "sro": "I cannot competently translate all 323 UI labels into Campidanese Sardinian (sro) with reliable dialect-specific grammar and terminology. I would risk mixing in other Sardinian varieties or Italian, so I am declining rather than supplying an unreliable, unreviewed machine translation.",
+    "zgh": "I cannot competently translate this complete UI into Standard Moroccan Tamazight (zgh) in Tifinagh script. I cannot reliably ensure accurate terminology, grammar, and natural UI wording across all labels. Under your competence gate, I am declining rather than providing unreliable, unreviewed machine translations or substituting another language or script.",
+    "zza": "I cannot competently translate this complete UI into Zazaki (zza). My proficiency is insufficient to reliably preserve Zazaki grammar, terminology, and consistency across all 323 labels without mixing in another language or inventing translations. I therefore decline rather than provide unreliable unreviewed machine translations.",
+    "ku-Latn": "I cannot competently translate this full set of technical UI labels into Kurmanji Kurdish in Latin script (ku-Latn) with sufficient confidence in grammar, terminology, and consistency. I am declining rather than substituting another language or providing unreliable translations.",
+    "ln": "I cannot competently translate this full set of 323 UI labels into Lingála (ln) with reliable technical terminology, natural phrasing, and consistent short statuses. I am declining rather than supplying potentially misleading translations or substituting another language. No translations have been produced or native-reviewed.",
+    "my": "I cannot competently translate this full set of 323 UI labels into clear, idiomatic Myanmar (my), particularly the technical terminology for archive integrity, map assembly, and local sharing. I am declining rather than returning unreliable translations or substituting another language. No translations have been produced or native-reviewed.",
+    "or": "I cannot competently translate this full set of technical UI labels into clear, idiomatic Odia (or) in Odia script with sufficient confidence. I am declining under your competence gate rather than supplying unreliable translations or substituting another language. No translations have been produced or native-reviewed.",
+    "scn": "I cannot competently translate this entire technical UI into Sicilian (scn) with reliable idiomatic phrasing and consistent terminology without risking Italian substitutions. I am therefore declining rather than providing unreliable unreviewed machine translations.",
+    "tn": "I cannot confidently provide competent Setswana (tn) translations for all 323 labels, particularly the technical terms for archive integrity, map assembly, network sharing, and privacy. Rather than substitute English or another language, or present unreliable machine translations, I am declining this translation request.",
+    "yi": "I cannot reliably provide competent Yiddish (yi, Hebrew script) translations for this entire technical UI set, especially its archive-management, map-assembly, and network-sharing terminology. Rather than supply potentially misleading or unnatural translations, I am declining this unreviewed machine-translation request."
+  },
+  "strongerModelDeclinedLocales": {
+    "dag": "I do not have sufficient competence in Dagbanli (BCP 47: dag) to translate these UI labels reliably, even as unreviewed draft copy. In particular, I cannot confidently maintain standard Dagbanli orthography and accurate technical, privacy, and permission terminology across the full set without inventing wording or substituting a related language.",
+    "ie": "I cannot reliably translate this full set of technical UI labels into Interlingue (Occidental, BCP 47: ie) with consistent grammar, established vocabulary, and correct orthography. My competence is insufficient to avoid mixing in Interlingua or inventing technical terms, even for an explicitly unreviewed draft.",
+    "igl": "I do not have sufficient competence in Igala (BCP 47: igl) to translate these 541 UI labels accurately, even as explicitly unreviewed drafts. I cannot reliably produce Igala orthography, grammar, and technical terminology without risking invented forms or substitution from a related language.",
+    "io": "I cannot reliably translate this full UI set into Ido (io), including its technical, privacy, and permission wording. My command of Ido vocabulary and grammar is insufficient to produce consistently accurate draft copy without risking invented terminology or interference from Esperanto. I am therefore declining rather than providing unreliable translations, even labelled as unreviewed.",
+    "kab": "I cannot reliably translate this full set into accurate, idiomatic Taqbaylit (kab), particularly the technical, security, permissions, and privacy messages. My competence is insufficient to ensure consistent Kabyle terminology and orthography even for explicitly unreviewed UI drafts, so I will not substitute a related language or invent translations.",
+    "nqo": "I do not have sufficient competence in N’Ko (ߒߞߏ, BCP47 nqo) to translate these 541 UI labels reliably, even as unreviewed drafts. In particular, I cannot ensure accurate N’Ko spelling, grammar, and technical terminology for the reader, privacy, permissions, and download controls. Providing translations would risk invented wording or substitution from a related language.",
+    "roa-Tara": "I do not have sufficient competence in Tarandíne (roa-Tara) to translate these UI labels accurately, even as explicitly unreviewed drafts. I cannot reliably maintain Tarandíne grammar, established orthography, and technical terminology across the full set without risking invented forms or substitution with Italian or another related language.",
+    "sc": "I cannot reliably produce all 539 labels in accurate Sardinian (sc), with consistent Sardinian orthography and appropriate technical terminology, even as unreviewed draft UI copy. In particular, I lack sufficient confidence in the longer security, permissions, networking, and read-only-mode messages to avoid misleading wording or interference from Italian. I am therefore declining rather than providing unreliable translations.",
+    "sdc": "I cannot reliably produce Sassaresu (BCP 47: sdc) across these 551 UI labels with consistent orthography and accurate technical terminology, even as unreviewed draft copy. My competence is insufficient to avoid introducing Italian, Sardinian, or Corsican forms in place of Sassaresu, so I am declining rather than providing unreliable translations.",
+    "se": "I cannot reliably translate this full UI into Northern Sámi (davvisámegiella, BCP 47: se) with sufficiently accurate grammar, inflection, and technical terminology, even for unreviewed draft copy. In particular, the privacy, permissions, networking, and archive-management text exceeds my dependable translation competence. I am returning no translations rather than risking invented terminology or forms from related Sámi languages.",
+    "skr-Arab": "I cannot reliably produce all 529 labels in idiomatic Saraiki (skr-Arab) with consistent orthography and accurate technical, security, and privacy terminology without risking substitution from Urdu or Punjabi. I therefore cannot meet your requested competence threshold, even for explicitly unreviewed draft UI copy.",
+    "sms": "I cannot reliably translate these labels into Skolt Sámi (sääʹmǩiõll, BCP 47: sms). My competence in its orthography, inflection, and technical UI terminology is insufficient to produce this 549-label set accurately enough even as explicitly unreviewed draft copy. Attempting it would risk invented forms or contamination from related Sámi languages.",
+    "sro": "I cannot reliably translate this full set of technical UI labels into Campidanese Sardinian (Sardu campidanesu, BCP 47: sro) with consistent, established orthography and terminology. My competence is insufficient to avoid mixing in other Sardinian varieties or Italian, particularly in the detailed permissions, privacy, networking, and archive-management messages. I therefore cannot meet your accuracy requirement even for explicitly unreviewed draft UI copy.",
+    "zgh": "I cannot reliably translate all 551 labels into Standard Moroccan Tamazight (zgh) in Tifinagh with sufficiently accurate grammar, standardized spelling, and technical UI terminology, even for unreviewed draft copy. Attempting this would risk invented terminology or mixing in related Amazigh varieties, contrary to your requirements.",
+    "zza": "I do not have sufficient competence in Zazaki (BCP 47: zza) to translate these 541 UI labels reliably, even as unreviewed drafts. I cannot confidently maintain accurate Zazaki grammar, established orthography, and technical terminology throughout without risking invented wording or substitution from related languages.",
+    "ku-Latn": "I cannot reliably translate this entire UI set into Kurmanji Kurdish in Latin script (ku-Latn), even to an unreviewed-draft standard. My command of Kurmanji grammar and specialized terminology for archive handling, permissions, networking, and privacy is not strong enough to avoid potentially misleading wording or inconsistent terminology across these labels.",
+    "or": "I cannot reliably produce all 539 labels in accurate Odia (or), particularly the technical, permission, and privacy messages, at a quality suitable even for unreviewed draft UI copy. My command of Odia grammar, idiom, and technical terminology is insufficient for this request; I would risk unnatural or misleading translations.",
+    "scn": "I cannot reliably translate this full UI into Sicilian (scn) with consistent orthography and accurate technical terminology, particularly for permissions, privacy, networking, and archive operations. My Sicilian competence is insufficient to avoid Italian substitutions or invented forms throughout these 555 labels, even for an explicitly unreviewed draft.",
+    "tn": "I cannot reliably translate this full set into accurate Setswana (tn). My competence is insufficient for consistent Setswana grammar, idiomatic UI terminology, and precise technical wording about archive integrity, permissions, privacy, and networking. Even as unreviewed draft copy, I could introduce misleading wording or forms from related languages, so I am declining rather than supplying unreliable translations."
+  },
+  "latestCatalogCopyAcquisition": {
+    "sources": [
+      "Browsing session expired after a privacy transition",
+      "Catalog cache warning:",
+      "Catalog filter cache warning:",
+      "Could not refresh catalog filter choices. Showing cached choices that may be out of date.",
+      "Could not refresh the catalog. Showing a cached page that may be out of date.",
+      "These filter choices are not saved for offline browsing.",
+      "This catalog page is not saved for offline browsing."
+    ],
+    "translatedLocales": [
+      "ar",
+      "bn",
+      "ca",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "eo",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "gsw",
+      "ha",
+      "he",
+      "hi",
+      "hy",
+      "ia",
+      "id",
+      "ig",
+      "it",
+      "ja",
+      "ko",
+      "ku-Latn",
+      "lb",
+      "mk",
+      "ms",
+      "my",
+      "nb",
+      "nl",
+      "or",
+      "pa",
+      "pl",
+      "ps",
+      "pt",
+      "pt-BR",
+      "ro",
+      "ru",
+      "scn",
+      "sk",
+      "sl",
+      "sq",
+      "sr-Cyrl",
+      "sv",
+      "sw",
+      "ta",
+      "te",
+      "th",
+      "tn",
+      "tr",
+      "uk",
+      "yi",
+      "yo",
+      "zh-Hans",
+      "zh-Hant"
+    ],
+    "declinedLocales": {
+      "bik": {
+        "defaultModel": "I’m not sufficiently competent in Bikol (bik) to provide reliable, natural translations of these UI strings without substituting another language.",
+        "strongerModel": "I cannot confidently provide accurate, natural phrasing for these technical UI strings in Bikol (bik) without risking substitution from a related language."
+      },
+      "br": {
+        "defaultModel": "I cannot reliably produce natural, accurate Breton UI translations for these strings, particularly the privacy-transition and cache terminology.",
+        "strongerModel": "I’m not sufficiently competent in Breton (br) to provide reliably accurate, natural UI translations for these strings."
+      },
+      "ln": {
+        "defaultModel": "I’m not sufficiently competent in Lingála to reliably translate these technical UI strings with natural, accurate phrasing.",
+        "strongerModel": "I can’t reliably provide accurate, natural Lingala (ln) phrasing for these technical UI strings."
+      },
+      "se": {
+        "defaultModel": "I’m not sufficiently proficient in Northern Sámi (davvisámegiella, se) to provide reliable, natural translations of these UI strings without native-language review.",
+        "strongerModel": "I cannot reliably provide accurate, natural Northern Sámi (BCP 47: se) phrasing for these technical UI strings without native-language review."
+      }
+    },
+    "previouslyPartialLocalesNotRetried": [
+      "dag",
+      "ie",
+      "igl",
+      "io",
+      "kab",
+      "nqo",
+      "roa-Tara",
+      "sc",
+      "sdc",
+      "skr-Arab",
+      "sms",
+      "sro",
+      "zgh",
+      "zza"
+    ],
+    "reviewed": false
+  },
+  "latestSpeechCopyAcquisition": {
+    "sources": [
+      "The article did not provide text for read-aloud.",
+      "This article is too large for read-aloud.",
+      "This article has no readable text."
+    ],
+    "translatedLocales": [
+      "ar",
+      "bn",
+      "ca",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "eo",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "gsw",
+      "ha",
+      "he",
+      "hi",
+      "hy",
+      "ia",
+      "id",
+      "ig",
+      "it",
+      "ja",
+      "ko",
+      "ku-Latn",
+      "lb",
+      "mk",
+      "ms",
+      "my",
+      "nb",
+      "nl",
+      "or",
+      "pa",
+      "pl",
+      "ps",
+      "pt",
+      "pt-BR",
+      "ro",
+      "ru",
+      "scn",
+      "sk",
+      "sl",
+      "sq",
+      "sr-Cyrl",
+      "sv",
+      "sw",
+      "ta",
+      "te",
+      "th",
+      "tn",
+      "tr",
+      "uk",
+      "yi",
+      "yo",
+      "zh-Hans",
+      "zh-Hant"
+    ],
+    "partialLocalesNotRetried": [
+      "dag",
+      "ie",
+      "igl",
+      "io",
+      "kab",
+      "nqo",
+      "roa-Tara",
+      "sc",
+      "sdc",
+      "skr-Arab",
+      "sms",
+      "sro",
+      "zgh",
+      "zza",
+      "bik",
+      "br",
+      "ln",
+      "se"
+    ],
+    "reviewed": false
+  },
+  "latestNativeAndControlAcquisition": {
+    "date": "2026-11-01",
+    "service": "Language-model translation (session default model)",
+    "reviewed": false,
+    "locales": {
+      "fr": {
+        "requested": 190,
+        "stored": 189,
+        "declined": null,
+        "rejected": []
+      },
+      "de": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "es": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "it": {
+        "requested": 191,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "pt": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "pt-BR": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "ja": {
+        "requested": 191,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "zh-Hans": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "ar": {
+        "requested": 191,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "bn": {
+        "requested": 193,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "ca": {
+        "requested": 192,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "cs": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "da": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "el": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "eo": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "fa": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "fi": {
+        "requested": 191,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "he": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "hi": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "hy": {
+        "requested": 192,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "id": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "ko": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "mk": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "ms": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "nb": {
+        "requested": 191,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "nl": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "pl": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "ro": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "ru": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "sk": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "sl": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "sq": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "sr-Cyrl": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "sv": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "sw": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "ta": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "te": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "th": {
+        "requested": 191,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "tr": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "uk": {
+        "requested": 190,
+        "stored": 1,
+        "declined": null,
+        "rejected": []
+      },
+      "zh-Hant": {
+        "requested": 190,
+        "stored": 2,
+        "declined": null,
+        "rejected": []
+      },
+      "bik": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in bik (Central Bikol) to reliably translate these technical controls without mixing in related languages or inventing forms.",
+        "rejected": []
+      },
+      "br": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Breton (br) to translate these technical controls reliably without risking invented forms or interference from related languages.",
+        "rejected": []
+      },
+      "dag": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Dagbani (dag) in its written script to reliably translate these controls without inventing forms or substituting a related language.",
+        "rejected": []
+      },
+      "gsw": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Swiss German (gsw) to translate this technical interface reliably without substituting Standard German or inventing Swiss German forms. I am therefore declining rather than providing unreliable translations.",
+        "rejected": []
+      },
+      "ha": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I’m not sufficiently competent in Hausa (ha, Latin script) to translate this technical interface reliably without risking incorrect or invented forms. I’m therefore declining rather than substituting English or a related language.",
+        "rejected": []
+      },
+      "ia": {
+        "requested": 190,
+        "stored": 190,
+        "declined": null,
+        "rejected": []
+      },
+      "ie": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "The language code “ie” denotes Interlingue (Occidental). I do not have sufficient competence in Interlingue to translate these controls reliably without inventing forms or borrowing from related languages. I therefore decline rather than provide unreliable translations.",
+        "rejected": []
+      },
+      "ig": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Igbo (ig) to translate this technical interface reliably without risking invented forms or substitutions from related languages. I am therefore declining as requested.",
+        "rejected": []
+      },
+      "igl": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Igala (igl) to translate these controls reliably without inventing forms or substituting a related language. I therefore decline to provide translations, even as unreviewed machine text.",
+        "rejected": []
+      },
+      "io": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Ido (io) to translate these technical interface strings reliably without introducing invented forms or borrowing from related languages. I therefore decline rather than provide unreliable translations, even as unreviewed machine text.",
+        "rejected": []
+      },
+      "kab": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Kabyle (kab), in its Latin script, to reliably translate these technical interface strings without risking invented forms or substitution from related languages. I therefore decline rather than provide unreliable translations.",
+        "rejected": []
+      },
+      "ku-Latn": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Kurdish Kurmanji in the Latin script (ku-Latn) to reliably translate this technical UI text without risking invented forms or borrowing from related languages. I’m therefore declining rather than providing unreliable translations.",
+        "rejected": []
+      },
+      "lb": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Luxembourgish (lb) to translate this technical UI text reliably without risking invented forms or interference from related languages.",
+        "rejected": []
+      },
+      "ln": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Lingala (ln) to reliably translate this technical interface text without risking incorrect or invented forms.",
+        "rejected": []
+      },
+      "my": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I’m not sufficiently confident in my Burmese (my) language and script competence to translate these technical controls reliably without inventing or misusing terms.",
+        "rejected": []
+      },
+      "nqo": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in N’Ko (nqo) and its script to translate these controls reliably without inventing forms or substituting a related language.",
+        "rejected": []
+      },
+      "or": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Odia (or), in the Odia script, to reliably translate these technical interface strings without risking incorrect or invented forms.",
+        "rejected": []
+      },
+      "pa": {
+        "requested": 190,
+        "stored": 0,
+        "declined": null,
+        "rejected": []
+      },
+      "ps": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Pashto (ps) in its Arabic-based script to reliably translate this full set of technical interface strings without risking incorrect or invented forms.",
+        "rejected": []
+      },
+      "roa-Tara": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in roa-Tara (Tarantino) to translate these controls reliably without substituting a related language or inventing forms.",
+        "rejected": []
+      },
+      "sc": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Sardinian (sc) to translate these controls reliably without mixing in related languages or inventing forms. Labeling the text as unreviewed machine translation would not resolve that limitation.",
+        "rejected": []
+      },
+      "scn": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Sicilian (scn) to translate these technical controls reliably without introducing Italian-influenced or invented forms. I’m therefore declining rather than providing translations that may not be valid Sicilian.",
+        "rejected": []
+      },
+      "sdc": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Sassarese (sdc) to translate these controls reliably in its exact language and script. I am declining rather than substituting a related language or inventing forms.",
+        "rejected": []
+      },
+      "se": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Northern Sámi (se) to reliably translate these technical interface strings without risking invented forms or mixing in related languages. I therefore decline to translate them, as requested.",
+        "rejected": []
+      },
+      "skr-Arab": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Saraiki written in the Arabic script (skr-Arab) to translate these controls reliably without substituting related-language wording or inventing forms. I am therefore declining rather than providing potentially misleading translations.",
+        "rejected": []
+      },
+      "sms": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Skolt Sámi (sms), including its exact written forms, to translate these controls reliably. I will not substitute a related language, invent forms, or use English as a translation.",
+        "rejected": []
+      },
+      "sro": {
+        "requested": 192,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in sro (Campidanese Sardinian) to translate these controls reliably in the exact language requested. I therefore decline rather than substitute another Sardinian variety, English, or invented forms.",
+        "rejected": []
+      },
+      "tn": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Setswana (tn) to translate this technical interface reliably without risking invented forms or substitution from related languages. I therefore decline to provide the translations.",
+        "rejected": []
+      },
+      "yi": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Yiddish (yi), in its Hebrew script, to reliably translate this technical interface text without risking invented forms or influence from related languages.",
+        "rejected": []
+      },
+      "yo": {
+        "requested": 190,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Yorùbá (yo), including its diacritics and technical UI terminology, to translate this set reliably without inventing forms or substituting English.",
+        "rejected": []
+      },
+      "zgh": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Standard Moroccan Tamazight (zgh) in the Tifinagh script to reliably translate these technical controls without inventing forms or substituting a related language. I therefore decline to provide translations.",
+        "rejected": []
+      },
+      "zza": {
+        "requested": 191,
+        "stored": 0,
+        "declined": "I do not have sufficient competence in Zazaki (zza) in its written script to translate these controls reliably without risking related-language substitutions or invented forms.",
+        "rejected": []
+      }
+    },
+    "interlinguaRemainder": {
+      "requested": 198,
+      "stored": 198,
+      "rejected": [],
+      "reviewed": false
+    }
+  }
+}

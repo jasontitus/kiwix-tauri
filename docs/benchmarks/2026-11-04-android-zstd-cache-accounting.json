@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "claim": "Correct Android libzim Zstd stream-memory accounting without reducing the nominal cache budget or changing archive decoding and authority contracts",
+  "status": "Source fix and focused host regression exercised; Android release memory benefit not established",
+  "upstream": {
+    "libzimVersion": "9.8.2",
+    "libzimCommit": "26ec526f74e8342a40da5ab14e364546988e0e1a",
+    "libzimSourceArchiveSha256": "5e1030752a7e7ab98319493d3cbc1b693aea322f9822ba05dfb31819aa880809",
+    "defect": "ZSTD_INFO::state_size queried the null encoder when a decoder existed, and the null decoder otherwise. Pinned Zstd returns zero for these null size queries.",
+    "fix": "Query ZSTD_sizeof_DStream for a decoder, otherwise ZSTD_sizeof_CStream for the encoder.",
+    "timing": "Cluster construction decodes the offset table before cache insertion. Zstd initializes streaming buffers before producing that output, so corrected insertion accounting observes initialized decoder allocations."
+  },
+  "changedSources": {
+    "src-tauri/native/libzim-zstd-cache-accounting.patch": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+    "scripts/build-android-sdk.py": "44d7cf537ac8d387a6549faff65ba5eb3a7ceb4ec3073e1f7747966980d327f4",
+    "src-tauri/native/mobile_sdk.rs": "e632efafbc00356078682a4c91aaa4dfb76ec39d7c7d6378a5c6fa78c5bd9057"
+  },
+  "integration": {
+    "patchMarker": "kiwix-zstd-cache-accounting-v1",
+    "targets": ["aarch64-linux-android", "armv7-linux-androideabi"],
+    "requiredProvenanceRecords": {"aarch64-linux-android": 4, "armv7-linux-androideabi": 5},
+    "iosAndDesktop": "Unchanged; this cutover is Android-specific",
+    "strictPatchAcceptance": "Corrected patch successfully dry-ran and applied with --fuzz=0 to freshly extracted, checksum-verified pinned source after preceding required patches were applied to their respective components.",
+    "previousApplicationFinding": "The first SDK attempt rejected an insufficiently contextualized test-include hunk. The hunk was corrected, independently reviewed, and exercised on fresh source; the failed work tree was not reused."
+  },
+  "hostRegression": {
+    "compiler": "Apple Clang 21.0.0",
+    "architecture": "aarch64",
+    "meson": "1.12.1",
+    "zstd": "1.5.7",
+    "lzma": "5.8.4",
+    "googleTest": "1.14.0 pinned fallback",
+    "configuration": "Reader-only native core; Xapian disabled; header buffering disabled; only compression and decoderstreamreader targets built",
+    "beforeProductionSourceSha256": "7bed91dad6ec99017ff0659f34a4c8c27a776a238371777ebc2f4d9b15fa2dcb",
+    "afterProductionSourceSha256": "6dcce982eb1cf560a040c05caf1e33f987fea2bb10281734f82543184ecb096f",
+    "cases": [
+      {
+        "test": "CompressionTest.zstdStreamMemoryAccounting",
+        "before": {"executed": 1, "passed": 0, "exitCode": 1, "failure": "Encoder accounting returned 0 versus 5280 bytes; decoder accounting returned 0 versus 95984 bytes"},
+        "after": {"executed": 1, "passed": 1, "exitCode": 0}
+      },
+      {
+        "test": "DecoderStreamReaderTest.zstdClusterCostIncludesDecoderBeforeBlobRead",
+        "before": {"executed": 1, "passed": 0, "exitCode": 1, "failure": "Cluster insertion cost equaled the decoder-free baseline: 131160 versus 131160 bytes"},
+        "after": {"executed": 1, "passed": 1, "exitCode": 0},
+        "coverage": "Insertion cost before any blob read, eviction of an unowned cached cluster, and continued access through a live owner after cache eviction"
+      }
+    ]
+  },
+  "realArchiveHostProbe": {
+    "scope": "Read-only host Zstd 1.5.7 decoder allocations after each compressed cluster offset table was decoded; each decoder was freed before sampling the next cluster",
+    "probeSourceSha256": "fc8a878c03a567219b82033e0d5bc191008d7b8ba14805c4a969420e4cdcfcce",
+    "stdoutSha256": "7ce31a00ff25e3a76627e52ac895e5397ed98f700dbea43aaa379554772e8a99",
+    "archives": [
+      {
+        "file": "wikipedia_en_100_2026-08.zim",
+        "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+        "fileBytes": 333429922,
+        "zstdClusters": 39,
+        "decoderAllocatedBytesRange": [8877872, 8877872],
+        "oldEstimatedInsertionCostBytesRange": [442631, 1040987],
+        "correctedEstimatedInsertionCostBytesRange": [1302966, 3119826]
+      },
+      {
+        "file": "osm_en_hawaii_2026-10-26.zim",
+        "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d",
+        "fileBytes": 150605015,
+        "zstdClusters": 231,
+        "decoderAllocatedBytesRange": [372049, 8877872],
+        "oldEstimatedInsertionCostBytesRange": [74160, 1414622],
+        "correctedEstimatedInsertionCostBytesRange": [154774, 4240762]
+      }
+    ]
+  },
+  "boundaries": [
+    "The nominal global cluster-cache budget remains 16777216 bytes. No cache-capacity reduction was made.",
+    "Accounting remains an estimate: offsets plus half the decoded extent and a stream-memory contribution clamped to the decoded extent. This correction is not a hard allocated- or resident-memory cap.",
+    "Cache costs are recorded at insertion; later decoder growth is not dynamically recosted. Existing single-oversized-entry retention behavior remains unchanged.",
+    "Host decoder allocation is not Android PSS. All-cluster probe values must not be summed and presented as simultaneously retained memory or savings.",
+    "A small real reading working set may remain below the corrected budget and cause no additional eviction or memory reduction.",
+    "No phone access or phone-memory claim is part of this evidence. Android SDK/release integration and physical memory acceptance remain separate checks."
+  ]
+}

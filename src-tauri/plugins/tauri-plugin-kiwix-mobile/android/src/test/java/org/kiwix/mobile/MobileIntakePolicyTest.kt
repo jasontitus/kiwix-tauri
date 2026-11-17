@@ -1,0 +1,91 @@
+package org.kiwix.mobile
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class MobileIntakePolicyTest {
+    @Test
+    fun queuedScreenUpdateCannotRebaseOntoAReplacementActivity() {
+        val original = Any()
+        val replacement = Any()
+        assertTrue(activityScreenCallbackCurrent(original, 7, original, 7, original))
+        assertFalse(activityScreenCallbackCurrent(original, 7, replacement, 8, replacement))
+        assertFalse(activityScreenCallbackCurrent(original, 7, original, 8, original))
+        assertFalse(activityScreenCallbackCurrent(original, 7, original, 7, replacement))
+        assertFalse(activityScreenCallbackCurrent(original, 7, null, 7, null))
+        assertFalse(activityScreenCallbackCurrent(null, 7, replacement, 8, replacement))
+        assertTrue(activityScreenCallbackCurrent(null, 7, null, 7, null))
+    }
+
+    @Test
+    fun obscuredActivityKeepsForegroundOwnershipUntilStopped() {
+        val state = ActivityWindowState()
+        state.resumed()
+        state.paused()
+        assertTrue(state.foreground)
+        assertFalse(state.interactive)
+        state.paused()
+        assertTrue(state.foreground)
+        state.stopped()
+        assertFalse(state.foreground)
+        assertFalse(state.interactive)
+        state.resumed()
+        assertTrue(state.foreground)
+        assertTrue(state.interactive)
+    }
+
+    @Test
+    fun pauseCannotAdmitAColdOrRetiredWindow() {
+        val state = ActivityWindowState()
+        state.paused()
+        assertFalse(state.foreground)
+        assertFalse(state.interactive)
+        state.restore(started = true, resumed = false)
+        assertTrue(state.foreground)
+        assertFalse(state.interactive)
+        state.stopped()
+        state.paused()
+        assertFalse(state.foreground)
+        assertFalse(state.interactive)
+    }
+
+    @Test
+    fun stoppedActivityAlwaysReportsSuspension() {
+        // onPause may have reported inactivity for a dialog, and its flag may
+        // be clear by onStop. A real stop must still suspend the engine.
+        for (notificationPending in listOf(false, true)) {
+            val (event, _) = stoppedActivityLifecycle(notificationPending)
+            assertEquals("mobile-suspended", event)
+        }
+    }
+
+    @Test
+    fun stoppedActivityDistinguishesNotificationBackgrounding() {
+        assertEquals(
+            "activity-stopped",
+            stoppedActivityLifecycle(notificationPending = false).second,
+        )
+        assertEquals(
+            "notification-permission-backgrounded",
+            stoppedActivityLifecycle(notificationPending = true).second,
+        )
+    }
+
+    @Test
+    fun intakePersistsOnlyWhenEveryGrantIsDurable() {
+        assertTrue(intakeCanPersist(listOf(true)))
+        assertTrue(intakeCanPersist(listOf(true, true)))
+        assertFalse(intakeCanPersist(listOf(true, false)))
+        assertFalse(intakeCanPersist(listOf(false)))
+        assertFalse(intakeCanPersist(emptyList()))
+    }
+
+    @Test
+    fun coldStartNoticeOnlyWhenTransientBatchWasLost() {
+        assertTrue(intakeColdStartNotice(transientMarker = true, inMemoryBatches = 0))
+        assertFalse(intakeColdStartNotice(transientMarker = true, inMemoryBatches = 1))
+        assertFalse(intakeColdStartNotice(transientMarker = false, inMemoryBatches = 0))
+    }
+}

@@ -1,0 +1,926 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "apkIdentities": {
+    "ours": {
+      "sha256": "09da3ccb6910ce51b5dc66c4d82be27153749a26442f6fa7092e1eb4d01600ec",
+      "bytes": 83808299,
+      "filename": "ours-release-arm64-replay-fixed.apk"
+    },
+    "upstream": {
+      "sha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+      "bytes": 70366062,
+      "filename": "kiwix-android-v3.14.1-arm64-v8a.apk"
+    }
+  },
+  "wikipedia": {
+    "ours": {
+      "pssMedianKiB": 212863.0,
+      "pssRangeKiB": [
+        212695,
+        213018
+      ],
+      "swapPssMedianKiB": 884.0,
+      "settleSeconds": 30,
+      "sampleCount": 10,
+      "sampleSpanSeconds": 35.006805833021645,
+      "processes": {
+        "8978": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "45519"
+        },
+        "9018": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "45572"
+        }
+      },
+      "amTotalTimeMs": [
+        271,
+        287,
+        316,
+        279,
+        385
+      ],
+      "amMedianMs": 287,
+      "storageLogicalBytes": {
+        "code": 85635655,
+        "data": 19641675,
+        "deviceEncryptedData": 0,
+        "external": null,
+        "profilesCurrent": 4235,
+        "profilesReference": 0
+      },
+      "storageAllocatedKiB": {
+        "code": 83688,
+        "data": 22644,
+        "deviceEncryptedData": 24,
+        "external": null,
+        "profilesCurrent": 12,
+        "profilesReference": 4
+      },
+      "samples": [
+        {
+          "secondsFromFirst": 0.0,
+          "pssKiB": 212695,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216492,
+              "Pss": 107906,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104789,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 3.5591796660155524,
+          "pssKiB": 212743,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216540,
+              "Pss": 107954,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104789,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 7.169489249994513,
+          "pssKiB": 212785,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216584,
+              "Pss": 107997,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 10.887492916022893,
+          "pssKiB": 212801,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216600,
+              "Pss": 108013,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 14.729546832997585,
+          "pssKiB": 212853,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216652,
+              "Pss": 108065,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 18.604572790995007,
+          "pssKiB": 212873,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216672,
+              "Pss": 108085,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 22.576223125011893,
+          "pssKiB": 212917,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216716,
+              "Pss": 108129,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 26.630873582995264,
+          "pssKiB": 212941,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216740,
+              "Pss": 108153,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 30.78039479101426,
+          "pssKiB": 212977,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216776,
+              "Pss": 108189,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104788,
+              "SwapPss": 579
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 35.006805833021645,
+          "pssKiB": 213018,
+          "swapPssKiB": 884,
+          "processMetricsKiB": {
+            "8978": {
+              "Rss": 216820,
+              "Pss": 108231,
+              "SwapPss": 305
+            },
+            "9018": {
+              "Rss": 191096,
+              "Pss": 104787,
+              "SwapPss": 579
+            }
+          }
+        }
+      ]
+    },
+    "upstream": {
+      "pssMedianKiB": 193508.0,
+      "pssRangeKiB": [
+        193442,
+        193584
+      ],
+      "swapPssMedianKiB": 879.0,
+      "settleSeconds": 30,
+      "sampleCount": 10,
+      "sampleSpanSeconds": 26.711610166996252,
+      "processes": {
+        "7428": {
+          "name": "org.kiwix.kiwixmobile.standalone",
+          "startTicks": "35043"
+        },
+        "7532": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1",
+          "startTicks": "35111"
+        }
+      },
+      "amTotalTimeMs": [
+        516,
+        524,
+        568,
+        586,
+        543
+      ],
+      "amMedianMs": 543,
+      "storageLogicalBytes": {
+        "code": 77055894,
+        "data": 14403310,
+        "deviceEncryptedData": 0,
+        "external": 3638,
+        "profilesCurrent": 7462,
+        "profilesReference": 0
+      },
+      "storageAllocatedKiB": {
+        "code": 75312,
+        "data": 14872,
+        "deviceEncryptedData": 24,
+        "external": 80,
+        "profilesCurrent": 12,
+        "profilesReference": 4
+      },
+      "samples": [
+        {
+          "secondsFromFirst": 0.0,
+          "pssKiB": 193576,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226600,
+              "Pss": 113433,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80143,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 2.612262874987209,
+          "pssKiB": 193580,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226604,
+              "Pss": 113437,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80143,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 5.286731874977704,
+          "pssKiB": 193584,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226608,
+              "Pss": 113441,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80143,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 8.060554958996363,
+          "pssKiB": 193540,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226624,
+              "Pss": 113404,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80136,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 11.229256749997148,
+          "pssKiB": 193498,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226624,
+              "Pss": 113363,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80135,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 14.16468812499079,
+          "pssKiB": 193502,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226628,
+              "Pss": 113367,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80135,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 17.146562166977674,
+          "pssKiB": 193506,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226632,
+              "Pss": 113371,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80135,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 20.25266799997189,
+          "pssKiB": 193510,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226636,
+              "Pss": 113375,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80135,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 23.422208041971317,
+          "pssKiB": 193494,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226636,
+              "Pss": 113360,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80134,
+              "SwapPss": 582
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 26.711610166996252,
+          "pssKiB": 193442,
+          "swapPssKiB": 879,
+          "processMetricsKiB": {
+            "7428": {
+              "Rss": 226584,
+              "Pss": 113308,
+              "SwapPss": 297
+            },
+            "7532": {
+              "Rss": 164320,
+              "Pss": 80134,
+              "SwapPss": 582
+            }
+          }
+        }
+      ]
+    }
+  },
+  "streetzimRenderedOverview": {
+    "ours": {
+      "pssMedianKiB": 230543.0,
+      "pssRangeKiB": [
+        230074,
+        230984
+      ],
+      "swapPssMedianKiB": 1484.0,
+      "settleSeconds": 30,
+      "sampleCount": 10,
+      "sampleSpanSeconds": 52.69476574999862,
+      "processes": {
+        "15107": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "122710"
+        },
+        "15148": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "122748"
+        }
+      },
+      "storageLogicalBytes": {
+        "code": 85635655,
+        "data": 23105902,
+        "deviceEncryptedData": 0,
+        "external": null,
+        "profilesCurrent": 4235,
+        "profilesReference": 0
+      },
+      "storageAllocatedKiB": {
+        "code": 83688,
+        "data": 26956,
+        "deviceEncryptedData": 24,
+        "external": null,
+        "profilesCurrent": 12,
+        "profilesReference": 4
+      },
+      "samples": [
+        {
+          "secondsFromFirst": 0.0,
+          "pssKiB": 230074,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239364,
+              "Pss": 129331,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100743,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 5.640223791997414,
+          "pssKiB": 230173,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239464,
+              "Pss": 129431,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 11.351726624998264,
+          "pssKiB": 230313,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239604,
+              "Pss": 129571,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 17.065826542006107,
+          "pssKiB": 230418,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239708,
+              "Pss": 129675,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100743,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 22.915421417012112,
+          "pssKiB": 230501,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239792,
+              "Pss": 129759,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 28.776444334012922,
+          "pssKiB": 230585,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239876,
+              "Pss": 129843,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 34.66351499999291,
+          "pssKiB": 230673,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 239964,
+              "Pss": 129931,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 40.617432833998464,
+          "pssKiB": 230793,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 240096,
+              "Pss": 130051,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 46.66426008401322,
+          "pssKiB": 230890,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 240192,
+              "Pss": 130147,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100743,
+              "SwapPss": 893
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 52.69476574999862,
+          "pssKiB": 230984,
+          "swapPssKiB": 1484,
+          "processMetricsKiB": {
+            "15107": {
+              "Rss": 240288,
+              "Pss": 130242,
+              "SwapPss": 591
+            },
+            "15148": {
+              "Rss": 186464,
+              "Pss": 100742,
+              "SwapPss": 893
+            }
+          }
+        }
+      ]
+    },
+    "upstream": {
+      "pssMedianKiB": 194048.0,
+      "pssRangeKiB": [
+        194026,
+        194072
+      ],
+      "swapPssMedianKiB": 1491.0,
+      "settleSeconds": 30,
+      "sampleCount": 10,
+      "sampleSpanSeconds": 58.00051662500482,
+      "processes": {
+        "16991": {
+          "name": "org.kiwix.kiwixmobile.standalone",
+          "startTicks": "149310"
+        },
+        "17100": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1",
+          "startTicks": "149375"
+        }
+      },
+      "storageLogicalBytes": {
+        "code": 77055894,
+        "data": 16365575,
+        "deviceEncryptedData": 0,
+        "external": 0,
+        "profilesCurrent": 8842,
+        "profilesReference": 0
+      },
+      "storageAllocatedKiB": {
+        "code": 75312,
+        "data": 16816,
+        "deviceEncryptedData": 24,
+        "external": 32,
+        "profilesCurrent": 16,
+        "profilesReference": 4
+      },
+      "samples": [
+        {
+          "secondsFromFirst": 0.0,
+          "pssKiB": 194056,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236540,
+              "Pss": 121868,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 6.260966083005769,
+          "pssKiB": 194064,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236548,
+              "Pss": 121876,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 12.583719541027676,
+          "pssKiB": 194072,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236556,
+              "Pss": 121884,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 18.86368375000893,
+          "pssKiB": 194032,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236516,
+              "Pss": 121844,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 25.125041000021156,
+          "pssKiB": 194026,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236520,
+              "Pss": 121838,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 31.777917250001337,
+          "pssKiB": 194034,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236528,
+              "Pss": 121846,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 38.317921500012744,
+          "pssKiB": 194038,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236532,
+              "Pss": 121850,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 44.803622000006726,
+          "pssKiB": 194046,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236540,
+              "Pss": 121858,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 51.392439166025724,
+          "pssKiB": 194050,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236544,
+              "Pss": 121862,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        },
+        {
+          "secondsFromFirst": 58.00051662500482,
+          "pssKiB": 194054,
+          "swapPssKiB": 1491,
+          "processMetricsKiB": {
+            "16991": {
+              "Rss": 236548,
+              "Pss": 121866,
+              "SwapPss": 584
+            },
+            "17100": {
+              "Rss": 156012,
+              "Pss": 72188,
+              "SwapPss": 907
+            }
+          }
+        }
+      ]
+    }
+  },
+  "limits": [
+    "AM TotalTime is not first paint/article readiness",
+    "PSS sums sequential main plus exclusively package-attributed renderer reads; excludes shared OS/GPU/display services",
+    "StreetZim restored-camera/blank-render series excluded; accepted memory is post-interaction including upstream native-Home recovery",
+    "Different viewport heights/default app layout; VM not physical phone",
+    "Storage is a workflow snapshot, not controlled cache growth"
+  ],
+  "workloads": {
+    "wikipedia": {
+      "url": "https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_2026-08.zim",
+      "bytes": 333429922,
+      "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+      "entries": 9320,
+      "articles": 5056,
+      "titleIndex": true,
+      "fulltextIndex": true,
+      "mainTarget": "index",
+      "article": "Animal",
+      "indexedQuery": "multicellular",
+      "filename": "wikipedia_en_100_2026-08.zim"
+    },
+    "streetzim": {
+      "bytes": 150605015,
+      "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d",
+      "entries": 724178,
+      "articles": 10329,
+      "titleIndex": true,
+      "fulltextIndex": true,
+      "mainTarget": "index.html",
+      "placeQuery": "Honolulu",
+      "filename": "osm_en_hawaii_2026-10-26.zim"
+    }
+  },
+  "environment": {
+    "host": "M2 Max, Mac14,5, 64 GiB, macOS 27.0.1 (26A434)",
+    "emulator": "API33 Google APIs ARM64 Pixel6",
+    "cores": 2,
+    "ramMiB": 2048,
+    "screenPixels": [
+      1080,
+      2400
+    ],
+    "gpu": "SwiftShader",
+    "webview": "109.0.5414.123",
+    "offline": "owned emulator airplane mode, Wi-Fi disabled",
+    "existingDevices": "untouched"
+  },
+  "method": {
+    "wikipediaStartup": "one Animal tab; opposite package force-stopped; warmup then five process-cold am start -W; upstream group first; caches not purged",
+    "memory": "10 sequential main/renderer smaps_rollup samples after >=30 s; exact exclusive packageList ownership and PID startTicks stable before/after each sample; PSS and swap PSS summed, RSS not summed",
+    "map": "one tab, two library references; equivalent Home and user-pan overview; upstream native-Home recovery; post-interaction not matched restoration",
+    "storage": "enumerated app code, CE/DE data, external and ART profiles after workflows; public ZIMs excluded; no cache-growth ranking",
+    "install": "no-incremental, no-streaming; pulled APK SHA256 verified"
+  }
+}

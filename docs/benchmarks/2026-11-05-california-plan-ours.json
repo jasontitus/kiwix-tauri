@@ -1,0 +1,1226 @@
+{
+  "schema": 1,
+  "alias": "ours",
+  "workload": "street",
+  "archive": {
+    "name": "osm_de_california_2026-10-13.zim",
+    "sha256": "d3fcd070f15e2259a95a629362b243fd96d26b9da2adcb8745feff3edd8ca579"
+  },
+  "environment": {
+    "theme": "Archive Auto theme; default app chrome. Horizontal-only pans do not exercise native vertical chrome hiding.",
+    "font": "Default embedded map and app text sizes"
+  },
+  "startIdentity": "California map restored by its Home control",
+  "prepare": [
+    {
+      "op": "dwell",
+      "seconds": 2
+    },
+    {
+      "op": "dwell",
+      "seconds": 2
+    },
+    {
+      "op": "tap",
+      "x": 989,
+      "y": 601
+    },
+    {
+      "op": "dwell",
+      "seconds": 1.5
+    }
+  ],
+  "return": [
+    {
+      "op": "tap",
+      "x": 989,
+      "y": 601
+    },
+    {
+      "op": "dwell",
+      "seconds": 1.5
+    }
+  ],
+  "cycles": [
+    {
+      "query": "No search: three zoom increments, horizontal pan east 140 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 320,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 140 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 600,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 160 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 300,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 160 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 620,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 180 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 280,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 180 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 640,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 200 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 260,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 200 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 660,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 220 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 240,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 220 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 680,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 240 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 220,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 240 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 700,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 260 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 200,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 260 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 720,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 280 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 180,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 280 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 740,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 300 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 160,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 300 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 760,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan east 320 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 140,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    },
+    {
+      "query": "No search: three zoom increments, horizontal pan west 320 device pixels, Home",
+      "article": "California map restored by its Home control",
+      "actions": [
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "tap",
+          "x": 988,
+          "y": 326
+        },
+        {
+          "op": "dwell",
+          "seconds": 0.7
+        },
+        {
+          "op": "swipe",
+          "x1": 460,
+          "y1": 1200,
+          "x2": 780,
+          "y2": 1200,
+          "ms": 400
+        },
+        {
+          "op": "dwell",
+          "seconds": 2
+        },
+        {
+          "op": "tap",
+          "x": 989,
+          "y": 601
+        },
+        {
+          "op": "dwell",
+          "seconds": 1.5
+        },
+        {
+          "op": "ready",
+          "reference": "2026-11-05-california-reference-ours.png",
+          "identity": "California map restored by its Home control"
+        }
+      ]
+    }
+  ]
+}

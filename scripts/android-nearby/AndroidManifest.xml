@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.kiwix.nearby.test">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <application android:label="Kiwix Nearby acceptance instrumentation" android:allowBackup="false" android:hasCode="true" android:debuggable="false" />
+    <instrumentation android:name="org.kiwix.nearby.NearbyInstrumentation" android:targetPackage="org.kiwix.workbench" android:functionalTest="true" android:handleProfiling="false" />
+</manifest>

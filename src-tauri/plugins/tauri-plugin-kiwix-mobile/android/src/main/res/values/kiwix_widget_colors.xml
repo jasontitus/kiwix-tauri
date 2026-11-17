@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="kiwix_widget_background_color">#F2FFFFFF</color>
+    <color name="kiwix_widget_field">#FFF6F6F6</color>
+    <color name="kiwix_widget_stroke">#33000000</color>
+    <color name="kiwix_widget_button_fill">#14000000</color>
+    <color name="kiwix_widget_foreground">#FF1F1F1F</color>
+    <color name="kiwix_widget_muted">#FF5A5A5A</color>
+    <color name="kiwix_widget_accent">#FF1A5FB4</color>
+</resources>

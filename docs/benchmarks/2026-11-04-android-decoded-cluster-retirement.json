@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "claim": "Retire a compressed cluster's decoder after every logical blob is successfully materialized, while retaining independent decoded buffers for random and range reads",
+  "status": "Focused host fail-before/pass-after verification completed; Android release memory benefit not established",
+  "libzimCommit": "26ec526f74e8342a40da5ab14e364546988e0e1a",
+  "changedSources": {
+    "src-tauri/native/libzim-decoded-cluster-retirement.patch": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+    "scripts/build-android-sdk.py": "221263525617ae1e1b0881287633a691db6a079cc7a121929f6d9b6f59393a74",
+    "src-tauri/native/mobile_sdk.rs": "4ce9ca374810ffb5e2c42b3b4a9f97b1b54fd158352dd441776da3bc391674b5"
+  },
+  "integration": {
+    "marker": "kiwix-decoded-cluster-retirement-v1",
+    "scope": "Both Android targets; iOS and desktop patch sets unchanged",
+    "requiredProvenanceRecords": {"aarch64-linux-android": 5, "armv7-linux-androideabi": 6, "ios": 3},
+    "accountingPatchSha256Unchanged": "95f464462f33bc2ba46a9b52afe514999e5fe3de67c583519f79be2ff03cd8d1",
+    "exercisedPatchFileSha256": "e1d90438361d68c4bab86e6233c45f8e7ea215429e0f7fe6e660df507e7222f1",
+    "canonicalPatchFileSha256": "6b2af9dff3044176e42966f550371691ff2630361a0cb35cbb49bdde19c2311e",
+    "canonicalStrictDryRun": "The exact final canonical patch subsequently passed patch --batch --fuzz=0 --dry-run against the retained pre-retirement source with preceding patches applied; no source application or test repetition was needed.",
+    "canonicalGeneration": "Final patch generated with the real diff -u binary from retained pre-retirement source and the exercised post-retirement source. Formatting changes do not alter resulting production or test bytes.",
+    "strictComposition": "Fresh pinned source accepted all preceding patches and retirement with --fuzz=0. A second fresh source accepted the full libzim sequence followed by the optional LP32 raw-blob correction."
+  },
+  "exercisedPostRetirementSourceSha256": {
+    "src/cluster.cpp": "0e89f631fc6e6e8dab907b9e49376a04bc479f65125446d43053270475c49fd2",
+    "src/cluster.h": "5b8ac02afb4cdd39c275ce89eedbf073a13eab96d440aa28f572e5dec22cb590",
+    "test/decoderstreamreader.cpp": "78f6303549d2770b7bf9d52cf6f6cdc4c585c17decdad89d01f1b77f4b1af8e7"
+  },
+  "behavior": [
+    "No additional reads or decompression are requested to trigger retirement.",
+    "Completion is all logical cluster blobs, not the end of the first compression frame.",
+    "Partial or failed final decoding retains the decoder and previously materialized blobs.",
+    "Raw readers retain their prior ownership and behavior.",
+    "The conservative SIZE_MAX guard excludes LP32 oversized-blob placeholders from completion.",
+    "Memory-size queries and reader retirement share the existing cluster mutex; costing is null-safe after retirement.",
+    "No archive-handle, source-identity, retained-descriptor, split-file, permission or revocation contracts change."
+  ],
+  "hostVerification": {
+    "environment": {"architecture": "aarch64", "compiler": "Apple Clang 21.0.0", "zstd": "1.5.7", "lzma": "5.8.4", "googleTest": "1.14.0 pinned fallback"},
+    "configuration": "Native reader-only core, Xapian disabled, header buffering disabled; compression and decoderstreamreader targets only",
+    "before": {
+      "retirementCasesExecuted": 6,
+      "failedAsIntended": ["completedClustersRetireDecoderAndKeepRandomReads", "concatenatedFramesRetireOnlyAfterCompleteLogicalCluster", "completedLzmaClusterAlsoRetiresDecoder", "cachePublicationCostAndFinalReadShareReaderLock"],
+      "preservationControlsPassed": ["truncatedFinalBlobKeepsDecoderAndPriorBlob", "completedRawClusterKeepsReaderAndRanges"],
+      "example": "A completed single-blob reader was not destroyed; estimated cost stayed 393244 bytes instead of the retired-reader baseline 131092 bytes."
+    },
+    "after": {
+      "decoderCasesExecuted": 7,
+      "decoderCasesPassed": 7,
+      "compressionAccountingCasesExecuted": 1,
+      "compressionAccountingCasesPassed": 1,
+      "coverage": "All six retirement cases plus the prior cluster-cost accounting regression and stream-size accounting regression"
+    }
+  },
+  "boundaries": [
+    "The global nominal cluster-cache budget remains 16777216 bytes; no capacity reduction was made.",
+    "Cached costs remain one-time estimates with the existing half-decoded-data contribution and decoder-size clamp; this is not a hard resident-memory ceiling.",
+    "The original first dry-run rejected a costing-hunk context boundary. It was corrected before application; the proof resumed only the failed non-mutating step, preserving successful setup and original failure identities.",
+    "The cache-publication concurrency regression uses an explicit cost gate and a 25 ms observation; it is not exhaustive race or ThreadSanitizer certification.",
+    "LP32 patch composition was verified, not ARMv7 runtime execution.",
+    "No phone memory saving or completed Android SDK/release verification is asserted by these host results."
+  ]
+}

@@ -1,0 +1,27 @@
+name: KiwixSimulatorLaunchMetrics
+options:
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  KiwixSimulatorLaunchMetrics:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SimulatorLaunchMetrics.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tiltastech.kiwix.simulatorlaunchmetrics
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+schemes:
+  KiwixSimulatorLaunchMetrics:
+    build:
+      targets:
+        KiwixSimulatorLaunchMetrics: [test]
+    test:
+      targets:
+        - KiwixSimulatorLaunchMetrics
+      gatherCoverageData: false
+      parallelizable: false

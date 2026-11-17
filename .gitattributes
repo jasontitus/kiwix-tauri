@@ -1,0 +1,7 @@
+# Tests hash vendored sources, libzim/Xapian patches and fixtures byte for
+# byte, and SDK manifests record patch SHA-256s. Keep LF in every working tree,
+# including Windows checkouts with core.autocrlf=true.
+* text=auto eol=lf
+# cmd.exe can misparse labels in LF batch files.
+*.bat text eol=crlf
+*.cmd text eol=crlf

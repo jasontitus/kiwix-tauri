@@ -1,0 +1,266 @@
+--- a/src/cluster.h
++++ b/src/cluster.h
+@@ -60,7 +60,7 @@
+       const bool isExtended;
+ 
+     private:
+-      std::unique_ptr<IStreamReader> m_reader;
++      mutable std::unique_ptr<IStreamReader> m_reader;
+ 
+       // offsets of the blob boundaries relative to the start of the cluster data
+       // (*after* the first byte (clusterInfo))
+--- a/src/cluster.cpp
++++ b/src/cluster.cpp
+@@ -167,6 +167,13 @@
+         m_blobReaders.push_back(m_reader->sub_reader(blobSize));
+       }
+     }
++    if (isCompressed() && m_blobReaders.size() == count().v
++        && m_blobOffsets.back().v <= SIZE_MAX) {
++      // Every logical byte now belongs to independent decoded blob buffers.
++      // Oversized LP32 placeholders do not establish that completion.
++      // Raw readers keep their existing file/range ownership unchanged.
++      m_reader.reset();
++    }
+     return *m_blobReaders[blob_index_type(n)];
+   }
+ 
+@@ -209,11 +216,8 @@
+   // - The decoding/decompressing stream itself may allocate memory.
+   // Our approach is to return the average memory consumption by this cluster
+   // under the assumption that half of its data is decompressed.
+-  // Note:
+-  //  - No need to protect this method from concurrent access (as well
+-  //    as memoize its result) as it is intended to be called by ConcurentCache
+-  //    which should invoke this method exactly once per cluster object
+   size_t Cluster::getMemorySize() const {
++    std::lock_guard<std::mutex> lock(m_readerAccessMutex);
+     const auto blobOffsetsSize = sizeof(offset_t) * m_blobOffsets.size();
+     const auto decompressedDataSize = m_blobOffsets.back().v;
+ 
+@@ -224,7 +228,7 @@
+     // Memory consumption by the decompressor stream.
+     // For non-compressed data reader it is assumed to be 0 (see the comment
+     // in BaseFileReader::getMemorySize())
+-    auto streamSize = m_reader->getMemorySize();
++    auto streamSize = m_reader ? m_reader->getMemorySize() : 0;
+ 
+     // Compression levels may define a huge window and make decompression
+     // stream allocate a huge memory to store it. However (at least on
+--- a/test/decoderstreamreader.cpp
++++ b/test/decoderstreamreader.cpp
+@@ -22,7 +22,13 @@
+ #include "cluster.h"
+ #include "concurrent_cache.h"
+ #include "endian_tools.h"
++#include "rawstreamreader.h"
+ 
++#include <atomic>
++#include <chrono>
++#include <cstring>
++#include <future>
++
+ #include "gtest/gtest.h"
+ 
+ namespace
+@@ -140,4 +146,200 @@
+   EXPECT_EQ(std::string(second->getBlob(zim::blob_index_t(0))), payload);
+ }
+ 
++struct DecoderLifetimeGate {
++  std::promise<void> entered;
++  std::promise<void> resume;
++  std::shared_future<void> resumed = resume.get_future().share();
++  std::atomic<bool> armed{true};
++};
++
++template<class Decoder>
++class LifetimeDecoderReader : public zim::DecoderStreamReader<Decoder> {
++public:
++  LifetimeDecoderReader(std::shared_ptr<const zim::Reader> input,
++                        std::atomic<unsigned>& destroyed,
++                        DecoderLifetimeGate* gate = nullptr)
++    : zim::DecoderStreamReader<Decoder>(input), destroyed_(destroyed), gate_(gate) {}
++
++  ~LifetimeDecoderReader() override { ++destroyed_; }
++
++  size_t getMemorySize() const override {
++    const auto size = zim::DecoderStreamReader<Decoder>::getMemorySize();
++    if (gate_ && gate_->armed.exchange(false)) {
++      gate_->entered.set_value();
++      gate_->resumed.wait();
++    }
++    return size;
++  }
++
++private:
++  std::atomic<unsigned>& destroyed_;
++  DecoderLifetimeGate* gate_;
++};
++
++class LifetimeRawReader : public zim::RawStreamReader {
++public:
++  LifetimeRawReader(std::shared_ptr<const zim::Reader> input,
++                    std::atomic<unsigned>& destroyed)
++    : zim::RawStreamReader(input), destroyed_(destroyed) {}
++  ~LifetimeRawReader() override { ++destroyed_; }
++private:
++  std::atomic<unsigned>& destroyed_;
++};
++
++zim::Buffer lifetimeInput(const std::string& data) {
++  auto buffer = zim::Buffer::makeBuffer(zim::zsize_t(data.size()));
++  std::memcpy(const_cast<char*>(buffer.data()), data.data(), data.size());
++  return buffer;
++}
++
++std::string lifetimeClusterData(const std::vector<std::string>& blobs) {
++  uint32_t offset = uint32_t((blobs.size() + 1) * sizeof(uint32_t));
++  std::string data(offset, '\0');
++  for (size_t i = 0; i <= blobs.size(); ++i) {
++    zim::toLittleEndian(offset, &data[i * sizeof(uint32_t)]);
++    if (i < blobs.size()) offset += uint32_t(blobs[i].size());
++  }
++  for (const auto& blob : blobs) data += blob;
++  return data;
++}
++
++template<class Decoder = ZSTD_INFO>
++std::shared_ptr<zim::Cluster> lifetimeCluster(
++    const std::string& encoded, std::atomic<unsigned>& destroyed,
++    DecoderLifetimeGate* gate = nullptr,
++    zim::Cluster::Compression compression = zim::Cluster::Compression::Zstd) {
++  auto input = std::make_shared<zim::BufferReader>(lifetimeInput(encoded));
++  auto reader = std::unique_ptr<zim::IStreamReader>(
++      new LifetimeDecoderReader<Decoder>(input, destroyed, gate));
++  return std::make_shared<zim::Cluster>(std::move(reader), compression, false, size_t(-1));
++}
++
++TEST(DecoderStreamReaderTest, completedClustersRetireDecoderAndKeepRandomReads) {
++  for (const auto& blobs : std::vector<std::vector<std::string>>{
++           {std::string(256 * 1024, 'a')}, {"first", std::string(256 * 1024, 'b')}, {"first", ""}}) {
++    std::atomic<unsigned> destroyed{0};
++    const auto decoded = lifetimeClusterData(blobs);
++    auto cluster = lifetimeCluster(compress<ZSTD_INFO>(decoded), destroyed);
++    const auto baseCost = (blobs.size() + 1) * sizeof(zim::offset_t) + decoded.size() / 2;
++    EXPECT_GT(cluster->getMemorySize(), baseCost);
++    EXPECT_EQ(destroyed.load(), 0U);
++    if (blobs.size() > 1) {
++      EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++      EXPECT_EQ(destroyed.load(), 0U);
++    }
++    const auto last = zim::blob_index_t(blobs.size() - 1);
++    EXPECT_EQ(std::string(cluster->getBlob(last, zim::offset_t(0), zim::zsize_t(1))),
++              blobs.back().substr(0, 1));
++    EXPECT_EQ(destroyed.load(), 1U);
++    EXPECT_EQ(cluster->getMemorySize(), baseCost);
++    for (size_t i = blobs.size(); i-- > 0;) {
++      EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(i))), blobs[i]);
++    }
++    cluster.reset();
++    EXPECT_EQ(destroyed.load(), 1U);
++  }
++}
++
++TEST(DecoderStreamReaderTest, concatenatedFramesRetireOnlyAfterCompleteLogicalCluster) {
++  const std::vector<std::string> blobs = {"first", std::string(256 * 1024, 'b')};
++  const auto decoded = lifetimeClusterData(blobs);
++  const auto split = (blobs.size() + 1) * sizeof(uint32_t) + blobs[0].size();
++  const auto encoded = compress<ZSTD_INFO>(decoded.substr(0, split))
++      + compress<ZSTD_INFO>(decoded.substr(split));
++  std::atomic<unsigned> destroyed{0};
++  auto cluster = lifetimeCluster(encoded, destroyed);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++  EXPECT_EQ(destroyed.load(), 0U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(1), zim::offset_t(7), zim::zsize_t(9))),
++            blobs[1].substr(7, 9));
++  EXPECT_EQ(destroyed.load(), 1U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(1))), blobs[1]);
++}
++
++TEST(DecoderStreamReaderTest, truncatedFinalBlobKeepsDecoderAndPriorBlob) {
++  const std::vector<std::string> blobs = {"first", std::string(256 * 1024, 'b')};
++  const auto decoded = lifetimeClusterData(blobs);
++  const auto split = (blobs.size() + 1) * sizeof(uint32_t) + blobs[0].size();
++  auto finalFrame = compress<ZSTD_INFO>(decoded.substr(split));
++  finalFrame.resize(finalFrame.size() / 2);
++  const auto encoded = compress<ZSTD_INFO>(decoded.substr(0, split)) + finalFrame;
++  std::atomic<unsigned> destroyed{0};
++  auto cluster = lifetimeCluster(encoded, destroyed);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++  EXPECT_THROW(cluster->getBlob(zim::blob_index_t(1)), std::runtime_error);
++  EXPECT_EQ(destroyed.load(), 0U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++  cluster.reset();
++  EXPECT_EQ(destroyed.load(), 1U);
++}
++
++TEST(DecoderStreamReaderTest, completedLzmaClusterAlsoRetiresDecoder) {
++  const std::vector<std::string> blobs = {"first", std::string(256 * 1024, 'b')};
++  const auto decoded = lifetimeClusterData(blobs);
++  std::string encoded(lzma_stream_buffer_bound(decoded.size()), '\0');
++  size_t size = 0;
++  ASSERT_EQ(lzma_easy_buffer_encode(1, LZMA_CHECK_CRC64, nullptr,
++      reinterpret_cast<const uint8_t*>(decoded.data()), decoded.size(),
++      reinterpret_cast<uint8_t*>(&encoded[0]), &size, encoded.size()), LZMA_OK);
++  encoded.resize(size);
++  std::atomic<unsigned> destroyed{0};
++  auto cluster = lifetimeCluster<LZMA_INFO>(encoded, destroyed, nullptr, zim::Cluster::Compression::Lzma);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++  EXPECT_EQ(destroyed.load(), 0U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(1))), blobs[1]);
++  EXPECT_EQ(destroyed.load(), 1U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0))), blobs[0]);
++}
++
++TEST(DecoderStreamReaderTest, completedRawClusterKeepsReaderAndRanges) {
++  const std::vector<std::string> blobs = {"first", "second"};
++  const auto decoded = lifetimeClusterData(blobs);
++  auto input = std::make_shared<zim::BufferReader>(lifetimeInput(decoded));
++  std::atomic<unsigned> destroyed{0};
++  auto reader = std::unique_ptr<zim::IStreamReader>(new LifetimeRawReader(input, destroyed));
++  auto cluster = std::make_shared<zim::Cluster>(std::move(reader),
++      zim::Cluster::Compression::None, false, size_t(-1));
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(1))), blobs[1]);
++  EXPECT_EQ(destroyed.load(), 0U);
++  EXPECT_EQ(std::string(cluster->getBlob(zim::blob_index_t(0), zim::offset_t(1), zim::zsize_t(3))), "irs");
++  EXPECT_GT(cluster->getMemorySize(), 0U);
++  cluster.reset();
++  EXPECT_EQ(destroyed.load(), 1U);
++}
++
++TEST(DecoderStreamReaderTest, cachePublicationCostAndFinalReadShareReaderLock) {
++  std::atomic<unsigned> destroyed{0};
++  DecoderLifetimeGate gate;
++  const std::vector<std::string> blobs = {std::string(256 * 1024, 'a')};
++  const auto decoded = lifetimeClusterData(blobs);
++  auto cluster = lifetimeCluster(compress<ZSTD_INFO>(decoded), destroyed, &gate);
++  auto entered = gate.entered.get_future();
++  zim::ConcurrentCache<int, std::shared_ptr<zim::Cluster>, zim::ClusterMemorySize> cache(16 * 1024 * 1024);
++  auto producer = std::async(std::launch::async, [&]() {
++    return cache.getOrPut(1, [&]() { return cluster; });
++  });
++  const bool costEntered = entered.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
++  if (!costEntered) {
++    gate.resume.set_value();
++    producer.wait();
++    FAIL() << "Cache insertion did not enter reader cost calculation";
++    return;
++  }
++  auto consumer = std::async(std::launch::async, [&]() {
++    auto ready = cache.getOrPut(1, []() -> std::shared_ptr<zim::Cluster> {
++      throw std::runtime_error("Published cache slot unexpectedly missed");
++    });
++    return std::string(ready->getBlob(zim::blob_index_t(0)));
++  });
++  const auto whileCostHeld = consumer.wait_for(std::chrono::milliseconds(25));
++  gate.resume.set_value();
++  EXPECT_FALSE(producer.get() == nullptr);
++  EXPECT_EQ(consumer.get(), blobs[0]);
++  EXPECT_EQ(whileCostHeld, std::future_status::timeout);
++  EXPECT_EQ(destroyed.load(), 1U);
++  EXPECT_EQ(cluster->getMemorySize(), 2 * sizeof(zim::offset_t) + decoded.size() / 2);
++}
++
+ } // unnamed namespace

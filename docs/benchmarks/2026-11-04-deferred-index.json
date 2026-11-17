@@ -1,0 +1,538 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "sourceChange": "src-tauri/native/archive.cpp: all three kz_archive constructors use OpenConfig().preloadXapianDb(false)",
+  "baselineCommit": "825b8cb",
+  "environment": "macOS ARM64 native ABI probe; Apple clang++ C++17 -O3; explicit macOS SDK; same schema-2 desktop libzim SDK; separate Python process per invocation; assertions enabled",
+  "method": "3 repetitions per archive/path-or-retained-FD/variant, reverse variant order in middle repetition. Timing includes ABI result handling/copy/free/JSON; retained open includes Python FD/stat setup. /bin/ps RSS is the current probe process, not app PSS. Caller FD closed immediately after retained open.",
+  "limits": [
+    "Not Android startup/app-memory improvement evidence",
+    "No storage cold-cache or statistical significance claim",
+    "First full-text timings and post-search RSS mixed; no post-search memory saving claim",
+    "Full title result sets not retained; expected title match asserted",
+    "Comparison report APK remains separate frozen pre-optimization 09da identity"
+  ],
+  "androidArtifact": {
+    "file": "ours-release-arm64-deferred-index.apk",
+    "bytes": 83808299,
+    "sha256": "f285a5244a8095ec8d9501ecda05b0f0335b2d28d37bfffe99fde30ee921259c",
+    "signing": "local Android Debug development certificate; optimized non-debuggable release",
+    "sourceDelta": "defer Xapian initialization consistently in all three native archive constructors"
+  },
+  "nativeRuns": [
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 0,
+      "openMs": 5.125209000000019,
+      "rssAfterOpenKiB": 18672,
+      "titleMs": 10.198167000000035,
+      "firstFulltextMs": 61.21466599999997,
+      "repeatFulltextMs": 29.693583999999994,
+      "rssAfterSearchKiB": 56208,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 0,
+      "openMs": 1.559625000000009,
+      "rssAfterOpenKiB": 16512,
+      "titleMs": 4.930458999999998,
+      "firstFulltextMs": 45.66787500000002,
+      "repeatFulltextMs": 29.106208000000024,
+      "rssAfterSearchKiB": 57312,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 0,
+      "openMs": 1.6482499999999969,
+      "rssAfterOpenKiB": 17760,
+      "titleMs": 4.581333,
+      "firstFulltextMs": 43.825750000000006,
+      "repeatFulltextMs": 30.457125,
+      "rssAfterSearchKiB": 55216,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 0,
+      "openMs": 1.4210829999999965,
+      "rssAfterOpenKiB": 16640,
+      "titleMs": 4.612332999999996,
+      "firstFulltextMs": 42.008374999999994,
+      "repeatFulltextMs": 27.910625000000007,
+      "rssAfterSearchKiB": 55136,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 0,
+      "openMs": 44.666,
+      "rssAfterOpenKiB": 22768,
+      "titleMs": 5.941374999999999,
+      "firstFulltextMs": 43.05466699999999,
+      "repeatFulltextMs": 1.2558330000000117,
+      "rssAfterSearchKiB": 50976,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 0,
+      "openMs": 1.9262079999999986,
+      "rssAfterOpenKiB": 21824,
+      "titleMs": 4.586417000000003,
+      "firstFulltextMs": 25.724624999999993,
+      "repeatFulltextMs": 1.2638749999999976,
+      "rssAfterSearchKiB": 50880,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 0,
+      "openMs": 2.015667000000006,
+      "rssAfterOpenKiB": 22704,
+      "titleMs": 4.350832999999998,
+      "firstFulltextMs": 24.834375000000005,
+      "repeatFulltextMs": 1.24237499999999,
+      "rssAfterSearchKiB": 50880,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 0,
+      "openMs": 1.9202500000000053,
+      "rssAfterOpenKiB": 22224,
+      "titleMs": 4.612417000000001,
+      "firstFulltextMs": 25.50208300000001,
+      "repeatFulltextMs": 1.2604999999999977,
+      "rssAfterSearchKiB": 50912,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 1,
+      "openMs": 1.467999999999997,
+      "rssAfterOpenKiB": 16240,
+      "titleMs": 4.676624999999997,
+      "firstFulltextMs": 43.300375,
+      "repeatFulltextMs": 28.999708,
+      "rssAfterSearchKiB": 55792,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 1,
+      "openMs": 1.6784590000000001,
+      "rssAfterOpenKiB": 17424,
+      "titleMs": 4.642166999999995,
+      "firstFulltextMs": 42.246042,
+      "repeatFulltextMs": 28.595874999999992,
+      "rssAfterSearchKiB": 54416,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 1,
+      "openMs": 1.4459589999999967,
+      "rssAfterOpenKiB": 16672,
+      "titleMs": 4.600792000000006,
+      "firstFulltextMs": 43.3615,
+      "repeatFulltextMs": 29.508833,
+      "rssAfterSearchKiB": 54528,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 1,
+      "openMs": 1.6589160000000034,
+      "rssAfterOpenKiB": 17344,
+      "titleMs": 4.6668340000000015,
+      "firstFulltextMs": 43.590292,
+      "repeatFulltextMs": 29.068250000000003,
+      "rssAfterSearchKiB": 54800,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 1,
+      "openMs": 2.4667500000000038,
+      "rssAfterOpenKiB": 22016,
+      "titleMs": 4.446707999999994,
+      "firstFulltextMs": 25.200958000000004,
+      "repeatFulltextMs": 1.2717919999999938,
+      "rssAfterSearchKiB": 51152,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 1,
+      "openMs": 1.938915999999999,
+      "rssAfterOpenKiB": 22800,
+      "titleMs": 4.438707999999999,
+      "firstFulltextMs": 24.440082999999994,
+      "repeatFulltextMs": 1.2387500000000107,
+      "rssAfterSearchKiB": 51360,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 1,
+      "openMs": 2.0323330000000044,
+      "rssAfterOpenKiB": 22224,
+      "titleMs": 4.400542000000001,
+      "firstFulltextMs": 25.030208,
+      "repeatFulltextMs": 1.3019590000000054,
+      "rssAfterSearchKiB": 51184,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 1,
+      "openMs": 2.1571249999999957,
+      "rssAfterOpenKiB": 22704,
+      "titleMs": 4.551624999999997,
+      "firstFulltextMs": 25.507958000000006,
+      "repeatFulltextMs": 1.2230839999999992,
+      "rssAfterSearchKiB": 51440,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 2,
+      "openMs": 1.5217499999999953,
+      "rssAfterOpenKiB": 16896,
+      "titleMs": 4.551582999999998,
+      "firstFulltextMs": 42.287875,
+      "repeatFulltextMs": 28.469333,
+      "rssAfterSearchKiB": 54288,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "path",
+      "repetition": 2,
+      "openMs": 1.4464579999999976,
+      "rssAfterOpenKiB": 16640,
+      "titleMs": 4.535749999999998,
+      "firstFulltextMs": 41.13912500000001,
+      "repeatFulltextMs": 28.218583000000006,
+      "rssAfterSearchKiB": 54288,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 2,
+      "openMs": 1.5405000000000002,
+      "rssAfterOpenKiB": 16896,
+      "titleMs": 4.5171249999999965,
+      "firstFulltextMs": 42.018667,
+      "repeatFulltextMs": 28.520749999999996,
+      "rssAfterSearchKiB": 54288,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "wikipedia",
+      "mode": "retained",
+      "repetition": 2,
+      "openMs": 1.4447089999999954,
+      "rssAfterOpenKiB": 16640,
+      "titleMs": 4.568166999999998,
+      "firstFulltextMs": 42.582292,
+      "repeatFulltextMs": 28.800542,
+      "rssAfterSearchKiB": 54224,
+      "article": {
+        "path": "Animal",
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d"
+      },
+      "fulltextResultSha256": "d67bbcaf86b79e0dda0e06a40f0c1ac0f69ab1ad83668b2d702cf278521a6a22",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 2,
+      "openMs": 2.048499999999995,
+      "rssAfterOpenKiB": 22704,
+      "titleMs": 4.386875000000005,
+      "firstFulltextMs": 24.562125000000005,
+      "repeatFulltextMs": 1.2498329999999918,
+      "rssAfterSearchKiB": 50896,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "path",
+      "repetition": 2,
+      "openMs": 1.8008750000000004,
+      "rssAfterOpenKiB": 21824,
+      "titleMs": 4.377417000000001,
+      "firstFulltextMs": 26.267916000000003,
+      "repeatFulltextMs": 1.2558339999999975,
+      "rssAfterSearchKiB": 50880,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "before",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 2,
+      "openMs": 2.0566249999999995,
+      "rssAfterOpenKiB": 22736,
+      "titleMs": 4.386250000000001,
+      "firstFulltextMs": 24.099125000000004,
+      "repeatFulltextMs": 1.2294999999999945,
+      "rssAfterSearchKiB": 51344,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    {
+      "variant": "after",
+      "workload": "streetzim",
+      "mode": "retained",
+      "repetition": 2,
+      "openMs": 1.828749999999997,
+      "rssAfterOpenKiB": 22224,
+      "titleMs": 4.379041,
+      "firstFulltextMs": 24.297917,
+      "repeatFulltextMs": 1.2168330000000005,
+      "rssAfterSearchKiB": 50912,
+      "article": {
+        "path": "wiki-article/Honolulu",
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+      },
+      "fulltextResultSha256": "9509839a2c56c04a2507b62bab37c708579c1999eb91250729707a180600ebed",
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    }
+  ],
+  "equivalence": {
+    "metadataAndIndexFlagsAcrossVariants": true,
+    "fulltextResultsIncludingSnippetsAcrossVariants": true,
+    "firstRepeatedFulltextWithinRun": true,
+    "fullArticleBytesAgainstIndependentLibzimRead": true,
+    "articleSha256": {
+      "wikipedia": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d",
+      "streetzim": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88"
+    }
+  },
+  "androidSmoke": {
+    "environment": "same owned API33 ARM64 emulator, offline; no physical phone updates",
+    "passed": [
+      "title Animal results",
+      "first and repeated indexed multicellular full-text results with snippets",
+      "open actual Eukaryote body/images",
+      "process-cold Eukaryote restoration",
+      "actual Hawaii map Honolulu results and selected pin",
+      "actual map zoom and pan"
+    ],
+    "screenshots": [
+      "deferred-wikipedia-title-animal.png",
+      "deferred-wikipedia-first-fulltext.png",
+      "deferred-wikipedia-repeat-fulltext.png",
+      "deferred-wikipedia-eukaryote.png",
+      "deferred-wikipedia-restored-eukaryote.png",
+      "deferred-hawaii-place-results.png",
+      "deferred-hawaii-honolulu.png",
+      "deferred-hawaii-zoom-pan.png"
+    ],
+    "installedApkSha256Matched": true,
+    "signatureV2V3Verified": true,
+    "zipAlignment16KiBVerified": true
+  }
+}

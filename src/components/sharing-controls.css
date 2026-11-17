@@ -1,0 +1,146 @@
+.sharing-controls {
+  min-inline-size: 0;
+}
+.sharing-controls .sharing-web-warning {
+  padding: 12px 14px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--tint);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.sharing-controls button, .sharing-controls summary, .sharing-controls input:not([type="checkbox"]), .sharing-controls select {
+  min-block-size: 44px;
+}
+.sharing-controls button {
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.sharing-controls button:focus-visible, .sharing-controls summary:focus-visible,
+.sharing-controls input:focus-visible, .sharing-controls select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.sharing-controls .field { min-inline-size: 0; }
+.sharing-controls .field input, .sharing-controls .field select { min-inline-size: 0; max-inline-size: 100%; }
+.sharing-controls .check-field { min-block-size: 44px; }
+.sharing-controls .sharing-primary-actions {
+  margin-block: 16px 10px;
+  gap: 10px;
+}
+.sharing-controls .sharing-primary-actions > button {
+  min-inline-size: 140px;
+  min-block-size: 44px;
+  justify-content: center;
+}
+.sharing-controls .sharing-options {
+  border-block-start: 1px solid var(--line);
+  padding-block-start: 8px;
+}
+.sharing-controls .sharing-options > summary {
+  padding-block: 10px;
+  font-size: 14px;
+  color: var(--accent);
+}
+.sharing-controls .sharing-advanced-toggle {
+  margin-block: 12px;
+}
+.sharing-controls .inline-error {
+  overflow-wrap: anywhere;
+}
+.sharing-controls .sharing-auto-port {
+  align-self: flex-start;
+  margin-block-start: 6px;
+  font-size: 12px;
+}
+.sharing-interface-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  align-items: center;
+}
+.sharing-interface-picker > p {
+  grid-column: 1 / -1;
+}
+.sharing-controls .sharing-live-status {
+  border-block-start: 1px solid var(--line);
+  margin-block-start: 12px;
+  padding-block-start: 12px;
+}
+.sharing-controls .sharing-live-status h3,
+.sharing-controls .sharing-book-links h4 {
+  margin-block: 0 10px;
+}
+.sharing-controls .sharing-address {
+  margin-block: 8px;
+}
+.sharing-controls .sharing-address code {
+  direction: ltr;
+  text-align: start;
+  unicode-bidi: isolate;
+}
+.sharing-controls .sharing-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+}
+.sharing-controls .sharing-address code {
+  flex: 1 1 220px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.sharing-controls .sharing-address button {
+  flex-shrink: 1;
+}
+.sharing-controls details {
+  margin-block-start: 12px;
+}
+.sharing-controls summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.sharing-controls .sharing-book-links {
+  border-inline-start: 2px solid var(--line);
+  margin-block-start: 12px;
+  padding-inline-start: 10px;
+}
+.sharing-controls .sharing-qr {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  margin-block: 12px;
+  padding: 12px;
+  min-width: 0;
+}
+.sharing-controls .sharing-qr h4 {
+  margin-block: 0 12px;
+}
+.sharing-controls .sharing-qr .field {
+  margin-block-end: 12px;
+  min-width: 0;
+}
+.sharing-controls .sharing-qr select {
+  width: 100%;
+  min-width: 0;
+  direction: ltr;
+}
+.sharing-controls .sharing-qr-code {
+  display: block;
+  width: 256px;
+  max-width: 100%;
+  height: auto;
+  margin-block-start: 16px;
+  background: #fff;
+  color-scheme: light;
+}
+@media (max-width: 640px) {
+  .sharing-interface-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sharing-interface-picker > button {
+    justify-self: start;
+  }
+}

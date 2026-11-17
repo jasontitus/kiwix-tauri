@@ -1,0 +1,5 @@
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+include ':app'
+// The app's vendored module, by path: exactly what the app packages.
+include ':rustls-platform-verifier'
+project(':rustls-platform-verifier').projectDir = new File(settingsDir, '../../../src-tauri/vendor/rustls-platform-verifier-android-0.2.0')

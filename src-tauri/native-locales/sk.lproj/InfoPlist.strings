@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "O prístup ku kamere môže požiadať iba tento aktívny archív. O povolenie môže požiadať aj váš systém. Prístup môžete kedykoľvek odvolať pod článkom.";
+"NSLocationUsageDescription" = "Váš systém poskytne polohu iba tomuto aktívnemu archívu. Prístup môžete kedykoľvek odvolať pod článkom.";
+"NSLocationWhenInUseUsageDescription" = "Váš systém poskytne polohu iba tomuto aktívnemu archívu. Prístup môžete kedykoľvek odvolať pod článkom.";
+"NSLocalNetworkUsageDescription" = "Objavte blízke zariadenia LocalSwarm a zdieľajte offline archívy vo svojej lokálnej sieti. Povoliť zisťovanie alebo zdieľanie iba v dôveryhodnej sieti.";

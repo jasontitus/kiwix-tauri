@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Hanya arkib aktif ini boleh meminta akses kamera. Sistem anda juga mungkin meminta kebenaran. Anda boleh menarik balik akses di bawah artikel pada bila-bila masa.";
+"NSLocationUsageDescription" = "Sistem anda akan memberikan lokasi anda hanya kepada arkib aktif ini. Anda boleh menarik balik akses di bawah artikel pada bila-bila masa.";
+"NSLocationWhenInUseUsageDescription" = "Sistem anda akan memberikan lokasi anda hanya kepada arkib aktif ini. Anda boleh menarik balik akses di bawah artikel pada bila-bila masa.";
+"NSLocalNetworkUsageDescription" = "Temui peranti LocalSwarm berdekatan dan kongsi arkib luar talian pada rangkaian tempatan anda. Dayakan penemuan atau perkongsian hanya pada rangkaian yang dipercayai.";

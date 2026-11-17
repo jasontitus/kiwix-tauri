@@ -1,0 +1,1233 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "sourceScope": "Reviewed working-tree efficiency changes after 75e3b20; local development-signed artifacts, not a published release",
+  "localEvidenceRoot": "/private/tmp/kiwix-efficiency.z5otfQ8l",
+  "workloads": {
+    "wikipedia": {
+      "url": "https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_2026-08.zim",
+      "bytes": 333429922,
+      "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+      "entries": 9320,
+      "articles": 5056,
+      "titleIndex": true,
+      "fulltextIndex": true,
+      "mainTarget": "index",
+      "article": "Animal",
+      "indexedQuery": "multicellular",
+      "filename": "wikipedia_en_100_2026-08.zim"
+    },
+    "streetzim": {
+      "bytes": 150605015,
+      "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d",
+      "entries": 724178,
+      "articles": 10329,
+      "titleIndex": true,
+      "fulltextIndex": true,
+      "mainTarget": "index.html",
+      "placeQuery": "Honolulu",
+      "filename": "osm_en_hawaii_2026-10-26.zim"
+    }
+  },
+  "android": {
+    "candidate": {
+      "file": "ours-reader-services-android-targeted-arm64.apk",
+      "bytes": 66981931,
+      "sha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+      "native": {
+        "name": "lib/arm64-v8a/libkiwix_app.so",
+        "bytes": 65021160,
+        "sha256": "65c292a0b86b12f2dc54825023c2897a7c65d57e360a41bffcfe9f069cb988bc"
+      },
+      "optimizationLevel": 3,
+      "codegenUnits": 1,
+      "panic": "unwind",
+      "symbolsStripped": true,
+      "debuggable": false,
+      "signing": "Local Android Debug development certificate; v2/v3 verified, not production distribution",
+      "zip16KiBAligned": true,
+      "elfLoadAlignment": "0x4000",
+      "definedDynamicExports": [
+        "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+        "Java_app_tauri_plugin_PluginManager_sendChannelData",
+        "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+        "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+        "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+        "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+        "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+        "Java_org_kiwix_workbench_Rust_handleRequest",
+        "Java_org_kiwix_workbench_Rust_ipc",
+        "Java_org_kiwix_workbench_Rust_onCreate",
+        "Java_org_kiwix_workbench_Rust_onDestroy",
+        "Java_org_kiwix_workbench_Rust_onEval",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+        "Java_org_kiwix_workbench_Rust_onLowMemory",
+        "Java_org_kiwix_workbench_Rust_onNewIntent",
+        "Java_org_kiwix_workbench_Rust_onPageLoaded",
+        "Java_org_kiwix_workbench_Rust_onPageLoading",
+        "Java_org_kiwix_workbench_Rust_onPause",
+        "Java_org_kiwix_workbench_Rust_onResume",
+        "Java_org_kiwix_workbench_Rust_onStart",
+        "Java_org_kiwix_workbench_Rust_onStop",
+        "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+        "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+        "Java_org_kiwix_workbench_Rust_shouldOverride"
+      ],
+      "systemDependencies": [
+        "libm.so",
+        "libdl.so",
+        "liblog.so",
+        "libandroid.so",
+        "libc.so"
+      ],
+      "installedCodeLogicalBytes": 68809287,
+      "installedCodeAllocatedKiB": 67256
+    },
+    "baseline": {
+      "file": "ours-integrated-codegen-clippy-arm64.apk",
+      "bytes": 77029419,
+      "sha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+      "nativeBytes": 75070840,
+      "nativeSha256": "9677f77ad0905708953c7f25811b2efb55db939a8e0443b5b7a8a8dd5fd6cae8",
+      "sourceScope": "468b44f plus reviewed Clippy remediation and codegen-units=1",
+      "signing": "local Android Debug development certificate; optimized non-debuggable; v2/v3 verified; 16KiB ZIP alignment passed"
+    },
+    "official": {
+      "version": "3.14.1 standalone ARM64",
+      "bytes": 70366062,
+      "sha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+      "installedCodeLogicalBytes": 77055894,
+      "installedCodeAllocatedKiB": 75312
+    },
+    "installedCodeScope": "Owned API33 emulator normal push install; selected code root includes APK+ODEX+VDEX; excludes mutable data, public archives, OS/WebView and filesystem overhead",
+    "rejectedCandidate": {
+      "sha256": "f7b32548f0c84f6b4fef260828dbaa413dce41b1d28669d468ffd193b48f2617",
+      "bytes": 66981931,
+      "reason": "Generic desktop frontend omitted compile-time Android document-source capture; native UI correctly refused missing document authority. Excluded, not waived."
+    }
+  },
+  "icuReaderPolicy": {
+    "id": "reader-services-v1",
+    "removedServiceTrees": [
+      "curr",
+      "zone",
+      "unit",
+      "rbnf"
+    ],
+    "retainedMemberCount": 2280,
+    "removedMemberCount": 1641,
+    "sourcePackage": {
+      "bytes": 32029568,
+      "sha256": "9e9263659e630c6a6c8cbcc6d0caa726ecbf7c125e791089f9014543afaf2323"
+    },
+    "filteredPackage": {
+      "bytes": 21957472,
+      "sha256": "765113cd177d0e6ca1a7d83be3337c7a03e3fc79f3f11a375248fc89d21c264a"
+    },
+    "receiptSha256": "19a5d6ab416078ba678b81f84a1d942ffab1144551dbb87dbdb9ee798985c237",
+    "installedArchiveSha256": "72f0fd60ab932f7077cc0c0d1ec18bc6b26fb6bd7546afeac0fe8f17e1367418",
+    "scope": "Android libzim reader/search closure, not a general-purpose ICU formatting SDK; no locale pruning; retained members byte-identical; fresh ARM64 recipe build and real native ABI probe on the owned ARM64 Android emulator",
+    "armv7Rebuilt": false,
+    "iosUsesFilteredPolicy": false
+  },
+  "frontend": {
+    "baselineAndroidEntryBytes": 896336,
+    "candidateAndroidEntryBytes": 688286,
+    "candidateAndroidEntry": "index-BkJeKQQH.js",
+    "lazySurfaces": [
+      "Catalog",
+      "Downloads",
+      "LocalSwarmControls",
+      "Maps",
+      "Settings",
+      "Collections"
+    ],
+    "eagerReaderAndLibrary": true,
+    "nativeSurfacesExercised": true,
+    "surfaceLimits": "Offline Discover/Maps registry warnings and initial Nearby permission UI are retained; this proves module/surface availability, not successful network workflows"
+  },
+  "nativeCompatibility": {
+    "fullAndReaderStdoutExact": true,
+    "normalizationCases": 21,
+    "localeLanguages": 19,
+    "sources": [
+      "pathname",
+      "retained FD after caller closes original"
+    ],
+    "titleAndRepeatedFulltext": true,
+    "articleExpectedBytesAndHashes": {
+      "Animal": {
+        "bytes": 611348,
+        "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d",
+        "fnv1a64": "5676840646971438677"
+      },
+      "wiki-article/Honolulu": {
+        "bytes": 39908,
+        "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88",
+        "fnv1a64": "5984415994334970906"
+      }
+    },
+    "limits": "Returned search totals are estimates; FNV fingerprints are not cryptographic hashes. Independent expected articles also have SHA-256."
+  },
+  "wikipediaBoundedMemory": {
+    "scope": "Restored Animal; two library references and one reader tab; main plus exclusively attributed WebView renderer, 30s settle then ten samples; PSS not unrestricted whole-system memory",
+    "observer": "Command logs rotated before each block; raw histories retained; approximately fixed 10s first-to-last sample-start windows",
+    "blocks": [
+      {
+        "block": 1,
+        "variant": "baseline",
+        "apkSha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+        "medianPssKiB": 205289.5,
+        "pssKiBSamples": [
+          205196,
+          205196,
+          205196,
+          205268,
+          205268,
+          205311,
+          205312,
+          205313,
+          205347,
+          205347
+        ],
+        "swapPssKiBSamples": [
+          1675,
+          1675,
+          1675,
+          1675,
+          1675,
+          1675,
+          1675,
+          1675,
+          1675,
+          1675
+        ],
+        "selectedProcesses": {
+          "26656": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "640543"
+          },
+          "26698": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "640719"
+          }
+        },
+        "sampleStartSpanSeconds": 10.560967041004915,
+        "prePixelScore": 1.0,
+        "postPixelScore": 1.0,
+        "rawReceipt": "ours-memory-efficiency-wiki-bounded-1-baseline.json",
+        "rawReceiptSha256": "8a75d8475841dbf9b5e08f0b97280d29520f25e472fa8f7c76a11e676b6f1627"
+      },
+      {
+        "block": 2,
+        "variant": "candidate",
+        "apkSha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+        "medianPssKiB": 206129.0,
+        "pssKiBSamples": [
+          206079,
+          206079,
+          206115,
+          206115,
+          206114,
+          206143,
+          206143,
+          206146,
+          206194,
+          206194
+        ],
+        "swapPssKiBSamples": [
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810
+        ],
+        "selectedProcesses": {
+          "27396": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "645864"
+          },
+          "27470": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "645982"
+          }
+        },
+        "sampleStartSpanSeconds": 10.216236042004311,
+        "prePixelScore": 1.0,
+        "postPixelScore": 1.0,
+        "rawReceipt": "ours-memory-efficiency-wiki-bounded-2-candidate.json",
+        "rawReceiptSha256": "94d0f6c2b9215362a83712b5183fe214d90ef05e983d175bc83587222313572e"
+      },
+      {
+        "block": 3,
+        "variant": "candidate",
+        "apkSha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+        "medianPssKiB": 206156.0,
+        "pssKiBSamples": [
+          206108,
+          206108,
+          206148,
+          206148,
+          206148,
+          206164,
+          206164,
+          206164,
+          206232,
+          206232
+        ],
+        "swapPssKiBSamples": [
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810,
+          1810
+        ],
+        "selectedProcesses": {
+          "28099": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "651120"
+          },
+          "28142": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "651194"
+          }
+        },
+        "sampleStartSpanSeconds": 9.972337916988181,
+        "prePixelScore": 1.0,
+        "postPixelScore": 1.0,
+        "rawReceipt": "ours-memory-efficiency-wiki-bounded-3-candidate.json",
+        "rawReceiptSha256": "50e23e17ca17313f5fc7e10e7036918973e8fe3755571309d46b9d72e38ea4b0"
+      },
+      {
+        "block": 4,
+        "variant": "baseline",
+        "apkSha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+        "medianPssKiB": 207470.0,
+        "pssKiBSamples": [
+          207408,
+          207408,
+          207408,
+          207448,
+          207448,
+          207492,
+          207492,
+          207492,
+          207543,
+          207543
+        ],
+        "swapPssKiBSamples": [
+          1812,
+          1812,
+          1812,
+          1812,
+          1812,
+          1812,
+          1812,
+          1812,
+          1812,
+          1812
+        ],
+        "selectedProcesses": {
+          "28769": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "656327"
+          },
+          "28811": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "656409"
+          }
+        },
+        "sampleStartSpanSeconds": 10.385769957996672,
+        "prePixelScore": 1.0,
+        "postPixelScore": 1.0,
+        "rawReceipt": "ours-memory-efficiency-wiki-bounded-4-baseline.json",
+        "rawReceiptSha256": "e0a065471c7c8d3f62cda3fdcfed8e823156b077499bd362d4e3aaca83c751e5"
+      }
+    ],
+    "conclusion": "No reliable memory improvement: candidate equal-weight mean block-median PSS 206142.5 KiB versus baseline206379.75; adjacent direction reverses; candidate swap is higher."
+  },
+  "streetBoundedMemory": {
+    "scope": "Two library references and one map tab; Hawaii overview after Home and 30px real user pan; distinct app viewport heights; same attribution/settle/sample method; not restoration or pan latency",
+    "blocks": [
+      {
+        "block": 1,
+        "variant": "baseline",
+        "apkSha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+        "medianPssKiB": 192201.0,
+        "pssKiBSamples": [
+          192133,
+          192125,
+          192125,
+          192189,
+          192189,
+          192213,
+          192213,
+          192213,
+          192288,
+          192288
+        ],
+        "swapPssKiBSamples": [
+          1627,
+          1627,
+          1627,
+          1627,
+          1627,
+          1627,
+          1627,
+          1627,
+          1627,
+          1627
+        ],
+        "selectedProcesses": {
+          "22342": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "590254"
+          },
+          "22383": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "590335"
+          }
+        },
+        "sampleStartSpanSeconds": 10.933711499994388,
+        "prePixelScore": 0.9982093522971452,
+        "postPixelScore": 0.9982093522971452,
+        "rawReceipt": "ours-memory-efficiency-street-1-baseline.json",
+        "rawReceiptSha256": "3122d89a3dd8ae1c3efbf3032b0fcf36f8edcafc5655e8d5d9660dee269aa04e"
+      },
+      {
+        "block": 2,
+        "variant": "candidate",
+        "apkSha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+        "medianPssKiB": 192717.0,
+        "pssKiBSamples": [
+          192717,
+          192717,
+          192737,
+          192789,
+          192789,
+          192825,
+          191913,
+          191917,
+          191961,
+          191961
+        ],
+        "swapPssKiBSamples": [
+          1628,
+          1628,
+          1628,
+          1628,
+          1628,
+          1628,
+          1628,
+          1628,
+          1628,
+          1628
+        ],
+        "selectedProcesses": {
+          "23033": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "596404"
+          },
+          "23076": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "596482"
+          }
+        },
+        "sampleStartSpanSeconds": 10.971708333992865,
+        "prePixelScore": 0.9968572305623364,
+        "postPixelScore": 0.9968572305623364,
+        "rawReceipt": "ours-memory-efficiency-street-2-candidate.json",
+        "rawReceiptSha256": "ba7108eaf8d9b6e4588814ef787a869720cd3d99622fff83dee6644d337ed0fd"
+      },
+      {
+        "block": 3,
+        "variant": "official",
+        "apkSha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+        "medianPssKiB": 194151.0,
+        "pssKiBSamples": [
+          194199,
+          194135,
+          194139,
+          194139,
+          194139,
+          194151,
+          194151,
+          194151,
+          194155,
+          194155
+        ],
+        "swapPssKiBSamples": [
+          1615,
+          1615,
+          1615,
+          1615,
+          1615,
+          1615,
+          1615,
+          1615,
+          1615,
+          1615
+        ],
+        "selectedProcesses": {
+          "23666": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "602438"
+          },
+          "23776": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1",
+            "startTicks": "602625"
+          }
+        },
+        "sampleStartSpanSeconds": 10.264977084007114,
+        "prePixelScore": 0.9936480428261436,
+        "postPixelScore": 0.9936480428261436,
+        "rawReceipt": "upstream-memory-efficiency-street-3-official.json",
+        "rawReceiptSha256": "76f9617d3785d5a2d3b09ad9d7d5ded242dc851f43f27fddeaf03435bfb3fee8"
+      },
+      {
+        "block": 4,
+        "variant": "official",
+        "apkSha256": "62a9910be260030e642465c17d642537e6ee4ee5f2d4596c248267c2766a88b8",
+        "medianPssKiB": 197124.5,
+        "pssKiBSamples": [
+          197118,
+          197119,
+          197123,
+          197123,
+          197123,
+          197127,
+          197127,
+          197127,
+          197126,
+          197127
+        ],
+        "swapPssKiBSamples": [
+          1619,
+          1619,
+          1619,
+          1619,
+          1619,
+          1619,
+          1619,
+          1619,
+          1619,
+          1619
+        ],
+        "selectedProcesses": {
+          "24337": {
+            "name": "org.kiwix.kiwixmobile.standalone",
+            "startTicks": "608415"
+          },
+          "24446": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1",
+            "startTicks": "608600"
+          }
+        },
+        "sampleStartSpanSeconds": 10.354742999974405,
+        "prePixelScore": 1.0,
+        "postPixelScore": 1.0,
+        "rawReceipt": "upstream-memory-efficiency-street-4-official.json",
+        "rawReceiptSha256": "b2afe16ad3fb24cc49747e40f571232630c6855c9d43ce32e1e409f787f19a9b"
+      },
+      {
+        "block": 5,
+        "variant": "candidate",
+        "apkSha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+        "medianPssKiB": 193197.0,
+        "pssKiBSamples": [
+          193139,
+          193135,
+          193135,
+          193183,
+          193183,
+          193211,
+          193211,
+          193211,
+          193286,
+          193287
+        ],
+        "swapPssKiBSamples": [
+          1630,
+          1630,
+          1630,
+          1630,
+          1630,
+          1630,
+          1630,
+          1630,
+          1630,
+          1630
+        ],
+        "selectedProcesses": {
+          "25075": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "614457"
+          },
+          "25117": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "614538"
+          }
+        },
+        "sampleStartSpanSeconds": 10.659934374998556,
+        "prePixelScore": 0.9978987297364459,
+        "postPixelScore": 0.9978987297364459,
+        "rawReceipt": "ours-memory-efficiency-street-5-candidate.json",
+        "rawReceiptSha256": "9c6706bff1a42b4f8aad7cd04e85ed0f5300ea2401ca46b8be289b205bce935c"
+      },
+      {
+        "block": 6,
+        "variant": "baseline",
+        "apkSha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+        "medianPssKiB": 194690.0,
+        "pssKiBSamples": [
+          194632,
+          194624,
+          194624,
+          194668,
+          194668,
+          194712,
+          194712,
+          194715,
+          194759,
+          194759
+        ],
+        "swapPssKiBSamples": [
+          1671,
+          1671,
+          1671,
+          1671,
+          1671,
+          1671,
+          1671,
+          1671,
+          1671,
+          1671
+        ],
+        "selectedProcesses": {
+          "25790": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "620612"
+          },
+          "25831": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "620713"
+          }
+        },
+        "sampleStartSpanSeconds": 10.490550916991197,
+        "prePixelScore": 0.9975844527926795,
+        "postPixelScore": 0.9975844527926795,
+        "rawReceipt": "ours-memory-efficiency-street-6-baseline.json",
+        "rawReceiptSha256": "1638b3ff4c1fd4308cfc3558170fc8a6ac37b38e1ab3aeb788775d705b6cc334"
+      }
+    ],
+    "conclusion": "No robust superiority: candidate192957,baseline193445.5,official195637.75 KiB equal-weight means of block medians; variation exceeds differences."
+  },
+  "renderedReadiness": {
+    "scope": "Distinct two-reference/one-Animal-tab cohort; six blocks, three process-cold starts each; no OS cache purge; non-waiting launch; sampled foreground crop99%perchannel tolerance12 stride2 with two consecutive matches; observer-inclusive bounds, not first-paint or confidence intervals",
+    "blocks": [
+      {
+        "block": 1,
+        "variant": "candidate",
+        "intervalsMs": [
+          [
+            1973.5100000107195,
+            4652.163499995368
+          ],
+          [
+            3557.0047090004664,
+            5775.265208998462
+          ],
+          [
+            3360.389084002236,
+            5679.223374987487
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "block": 2,
+        "variant": "baseline",
+        "intervalsMs": [
+          [
+            2187.000750011066,
+            4342.750290990807
+          ],
+          [
+            2271.4584579807706,
+            4317.918499989901
+          ],
+          [
+            2268.9471670018975,
+            4626.107792020775
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "block": 3,
+        "variant": "official",
+        "intervalsMs": [
+          [
+            2308.0419579928275,
+            5815.038666012697
+          ],
+          [
+            2316.7997499986086,
+            5360.585291986354
+          ],
+          [
+            2413.8500000117347,
+            5968.01916701952
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "block": 4,
+        "variant": "official",
+        "intervalsMs": [
+          [
+            3064.655458991183,
+            6532.070416986244
+          ],
+          [
+            2420.0555410061497,
+            6170.786291011609
+          ],
+          [
+            2792.2539160063025,
+            6124.542915989878
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "block": 5,
+        "variant": "baseline",
+        "intervalsMs": [
+          [
+            2662.4720839899965,
+            5088.922291994095
+          ],
+          [
+            2915.944459004095,
+            5508.701375016244
+          ],
+          [
+            2737.888124975143,
+            5340.447208989644
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "block": 6,
+        "variant": "candidate",
+        "intervalsMs": [
+          [
+            928.0033329850994,
+            4476.574999978766
+          ],
+          [
+            2655.14258298208,
+            5209.494624985382
+          ],
+          [
+            1149.443041998893,
+            4701.032249984564
+          ]
+        ],
+        "firstPositiveScores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "confirmationScores": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "memoryFromThisCohortExcludedFromPrimaryResult": "Growing observer logs caused37\u201368s memory-sampling windows; distinct bounded cohorts supersede those memory summaries without rewriting raw receipts",
+    "conclusion": "No demonstrated rendered-readiness speed win versus baseline"
+  },
+  "nativeWarmSearch": {
+    "scope": "Same original full SDK, same O2 NDK flags, only old/current cached-end bridge differs. One baseline-cached-cached-baseline sequence, two process runs per variant. Per workload: one reference+ten warmups+nine batches of100queries. Timed kz_query/result construction only, excludes opening, result free/validation and UI. Not final reader-SDK performance or whole-app latency.",
+    "blocks": [
+      {
+        "block": 1,
+        "variant": "baseline",
+        "result": {
+          "scope": "Warm native query ABI only; excludes app/UI/opening and result free/content validation; includes query result construction",
+          "workloads": [
+            {
+              "name": "wiki-title",
+              "resultBytes": 1296,
+              "resultFnv1a64": "8943179328246211787",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                398.82,
+                381.045,
+                379.021,
+                388.138,
+                362.6,
+                369.707,
+                354.484,
+                348.014,
+                345.993
+              ]
+            },
+            {
+              "name": "wiki-fulltext",
+              "resultBytes": 5731,
+              "resultFnv1a64": "16210316058345325805",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                29390.3,
+                29452.6,
+                30667.1,
+                30514.7,
+                30586.9,
+                31760.8,
+                31191,
+                29722.5,
+                31207.5
+              ]
+            },
+            {
+              "name": "street-title",
+              "resultBytes": 2043,
+              "resultFnv1a64": "12654362909162356611",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                260.833,
+                255.493,
+                263.809,
+                255.221,
+                259.95,
+                252.029,
+                267.825,
+                267.968,
+                259.344
+              ]
+            },
+            {
+              "name": "street-fulltext",
+              "resultBytes": 17563,
+              "resultFnv1a64": "15803453343369705762",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                2353.1,
+                2405.29,
+                2375.26,
+                2293.35,
+                2414.66,
+                2422.81,
+                2324.06,
+                2275.53,
+                2197.08
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "block": 2,
+        "variant": "cached",
+        "result": {
+          "scope": "Warm native query ABI only; excludes app/UI/opening and result free/content validation; includes query result construction",
+          "workloads": [
+            {
+              "name": "wiki-title",
+              "resultBytes": 1296,
+              "resultFnv1a64": "8943179328246211787",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                339.514,
+                343.461,
+                339.088,
+                344.469,
+                340.71,
+                336.167,
+                341.541,
+                337.94,
+                373.794
+              ]
+            },
+            {
+              "name": "wiki-fulltext",
+              "resultBytes": 5731,
+              "resultFnv1a64": "16210316058345325805",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                32033.5,
+                30503.1,
+                30425,
+                29574.5,
+                34022.8,
+                30752.9,
+                44896.8,
+                34369.8,
+                32516.8
+              ]
+            },
+            {
+              "name": "street-title",
+              "resultBytes": 2043,
+              "resultFnv1a64": "12654362909162356611",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                254.185,
+                271.996,
+                288.563,
+                249.821,
+                274.313,
+                273.821,
+                254.117,
+                269.438,
+                256.005
+              ]
+            },
+            {
+              "name": "street-fulltext",
+              "resultBytes": 17563,
+              "resultFnv1a64": "15803453343369705762",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                2369.79,
+                2342.89,
+                2332.45,
+                2573.97,
+                2529.65,
+                2510.63,
+                2437.1,
+                2285.75,
+                2296.78
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "block": 3,
+        "variant": "cached",
+        "result": {
+          "scope": "Warm native query ABI only; excludes app/UI/opening and result free/content validation; includes query result construction",
+          "workloads": [
+            {
+              "name": "wiki-title",
+              "resultBytes": 1296,
+              "resultFnv1a64": "8943179328246211787",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                393.508,
+                392.56,
+                382.456,
+                379.456,
+                392.415,
+                375.13,
+                385.09,
+                385.326,
+                376.402
+              ]
+            },
+            {
+              "name": "wiki-fulltext",
+              "resultBytes": 5731,
+              "resultFnv1a64": "16210316058345325805",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                31245.5,
+                31992.8,
+                28347.8,
+                31848.1,
+                30306.2,
+                29972.9,
+                31834.5,
+                29839.4,
+                29226
+              ]
+            },
+            {
+              "name": "street-title",
+              "resultBytes": 2043,
+              "resultFnv1a64": "12654362909162356611",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                250.807,
+                239.607,
+                251.505,
+                238.245,
+                236.528,
+                251.68,
+                243.548,
+                259.67,
+                242.414
+              ]
+            },
+            {
+              "name": "street-fulltext",
+              "resultBytes": 17563,
+              "resultFnv1a64": "15803453343369705762",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                2186.18,
+                2184.25,
+                2330.78,
+                2397.14,
+                3114.78,
+                3606.12,
+                3716.73,
+                3306.3,
+                2785.59
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "block": 4,
+        "variant": "baseline",
+        "result": {
+          "scope": "Warm native query ABI only; excludes app/UI/opening and result free/content validation; includes query result construction",
+          "workloads": [
+            {
+              "name": "wiki-title",
+              "resultBytes": 1296,
+              "resultFnv1a64": "8943179328246211787",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                614.993,
+                462.331,
+                455.727,
+                451.258,
+                518.76,
+                399.155,
+                416.645,
+                427.243,
+                415.012
+              ]
+            },
+            {
+              "name": "wiki-fulltext",
+              "resultBytes": 5731,
+              "resultFnv1a64": "16210316058345325805",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                34721,
+                31195.1,
+                30568.8,
+                34447.5,
+                37044.6,
+                32049.2,
+                31574.2,
+                36378.5,
+                33953.2
+              ]
+            },
+            {
+              "name": "street-title",
+              "resultBytes": 2043,
+              "resultFnv1a64": "12654362909162356611",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                302.625,
+                273.047,
+                273.137,
+                283.055,
+                278.554,
+                288.347,
+                283.423,
+                273.879,
+                279.948
+              ]
+            },
+            {
+              "name": "street-fulltext",
+              "resultBytes": 17563,
+              "resultFnv1a64": "15803453343369705762",
+              "warmups": 10,
+              "repetitionsPerBatch": 100,
+              "batchMeanMicroseconds": [
+                2513.99,
+                2517.92,
+                2510.49,
+                2506.49,
+                2370.35,
+                2311.4,
+                2298.49,
+                2333.59,
+                2425.1
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "resultLengthsAndFingerprintsMatch": true,
+    "conclusion": "Workload-dependent changes, including regressions; no consistent search-speed improvement established"
+  },
+  "ios": {
+    "bundleIdentifier": "com.tiltastech.zimreader",
+    "team": "A6G8H8NGAM",
+    "identitySha1": "9076E28652B20D249AC8F8CC50EFFD4AD7AAE9E0",
+    "mainExecutableBytes": 50546592,
+    "mainExecutableSha256": "e3baa5b3109057ce31c0c93faf0efd0a6e65cdd65fd3a6de8e256aa74cf55c95",
+    "strictDeepVerification": true,
+    "entitlementsPreserved": true,
+    "phoneProfileMembershipVerified": true,
+    "signedBundleRegularFileBytes": 51116419,
+    "developmentIpaBytes": 22770533,
+    "developmentIpaSha256": "2c7d3a5deabbef81ed32df26f2e5bcd1725271d83cb54188e7380be52b976b04",
+    "ipaScope": "Actual locally zipped development-signed ARM64 app, ZIP CRCs checked; not App Store compression/thinning or official IPA",
+    "officialIpaOrMatchedRuntimeObtained": false
+  },
+  "phoneDeployment": {
+    "android": {
+      "preserved": true,
+      "differences": [],
+      "books": 12,
+      "tabs": 4,
+      "profileFiles": 31,
+      "nativePreferenceFiles": 7,
+      "persistedUriGrants": 1,
+      "runtimePermissionRecords": 8,
+      "runtimePermissionsExact": true,
+      "debuggableBefore": true,
+      "debuggableAfter": false,
+      "archiveEvidence": "size/mtime only, archive content not hashed",
+      "apkBytes": 66981931,
+      "apkSha256": "c42c1fc678a0cc415b62bd4f6f2cc2719bbe893a0107898eb0716d45824f6c14",
+      "appActivityLaunchedAtPreservationBoundary": false,
+      "subsequentLaunchCommandSucceeded": true,
+      "launchScope": "Activity Manager reported COLD Status ok; screenshot shows notification shade, not foreground reader proof"
+    },
+    "ios": {
+      "installedInPlace": true,
+      "books": 3,
+      "tabs": 2,
+      "smallProfileFilesByteExact": 10,
+      "nativePreferencesByteExact": true,
+      "providerBookmarksAbsentBeforeAndAfter": true,
+      "archiveReportedMetadataExact": true,
+      "archiveBytesHashed": false,
+      "strictIdentityAndMetadataEquality": false,
+      "scopedPreservationAccepted": true,
+      "acceptedDifferences": [
+        "Data-container UUID changed",
+        "Five capturedJSON files gained only OS containermanagerd data-protection attribution xattr"
+      ],
+      "launchCommandSucceeded": true,
+      "postlaunchCapture": "CoreDevice4016; later device inventory unavailable. No updated physical surface/migration acceptance claimed."
+    },
+    "physicalVisualLimits": "Samsung screen capture is notification shade, not reader rendering; iPhone launch succeeded but later disconnected; no phone performance or fresh reader-surface certification",
+    "voiceOver": "Off and untouched",
+    "targetAppUninstalledOrDataCleared": false,
+    "temporaryAndroidProbeRemoved": true
+  },
+  "cleanup": {
+    "ownedComparisonEmulatorExit": 0,
+    "privateAvdAndCompilerProbeScaffoldingRemoved": true,
+    "temporaryInstrumentationRemovedFromBothTargets": true,
+    "reviewedHelperSourcesRetainedAsInertSourceText": true,
+    "frozenArtifactsReceiptsAndInstalledSdkRetained": true,
+    "originalArchiveFilesAndNormalProfilesUntouched": true
+  },
+  "verification": {
+    "hostRustTestsPassed": 946,
+    "hostRustTestsIgnored": 16,
+    "javascriptTestsPassed": 211,
+    "hostStrictAllTargetsClippy": true,
+    "androidProductionStrictClippy": true,
+    "iosProductionStrictClippy": true,
+    "frontendBuilds": [
+      "desktop",
+      "android",
+      "ios"
+    ],
+    "nativeProbesCrosscompiledAndRan": true,
+    "actualNativeWikiAndStreetRendering": true,
+    "browserLazySurfaceSmoke": true,
+    "nativeAndVendoredWarningsRemain": true
+  },
+  "remainingObjectives": [
+    "Reliable settled-memory and content/search-ready speed improvement is not proven",
+    "Mac size reduction and official Apple matched runtime/IPA remain open",
+    "Windows native package/runtime, ARMv7 filtered-SDK rebuild and Raspberry Pi hardware not certified",
+    "This batch does not close broader feature parity, localization, AT/provider/media/routerless or distribution acceptance"
+  ]
+}

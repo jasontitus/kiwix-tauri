@@ -1,0 +1,416 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "status": "Paired physical Wikipedia checkpoints measured; native map measured; our map blocked by archive-document closing failure",
+  "privateRunBasename": "device-comparison-74cd5a3a20da4e8f9956eaff80565904",
+  "platform": "Physical iPhone 17 Pro Max, iOS27.0.1",
+  "order": "BA",
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "appManifestSHA256": "f37b260736d6ebb2ccb11149d0a572701e3a6c42a9db8335fb63236b93ba10b3",
+  "baselineManifestSHA256": "a5b8afdd748e17c43ba0620614379542cb95bc0d3f533b99bd632e13b0da573f",
+  "runnerManifestSHA256": "fb741df23158cf508011368e56a738fb5f23d356f80d3c22fcf8d30421653e75",
+  "scope": "Observed main-executable kernel coalition; median of per-sample sums of process physical-footprint ledgers, not PSS or deduplicated RAM",
+  "protocol": {
+    "settleSecondsPerCheckpoint": 30,
+    "sampleCountPerCheckpoint": 3,
+    "independentSessions": 1,
+    "compression": "Recorded separately, not added again",
+    "order": "Native then ours at each paired workload; Wiki home, Animal, then map"
+  },
+  "checkpoints": {
+    "baseline/wiki-home": {
+      "status": "complete_observed_coalition",
+      "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+      "sample_count": 3,
+      "independent_sessions": 1,
+      "main_identity": [
+        96684,
+        30372249090530,
+        17206
+      ],
+      "member_identity": [
+        [
+          96684,
+          30372249090530
+        ],
+        [
+          96685,
+          30372255937382
+        ],
+        [
+          96687,
+          30372259709654
+        ],
+        [
+          96689,
+          30372520862137
+        ],
+        [
+          96690,
+          30372520957412
+        ],
+        [
+          96691,
+          30372524616875
+        ]
+      ],
+      "median_bytes": {
+        "main": 43698184,
+        "web_content": 101273592,
+        "gpu": 11028248,
+        "networking": 4687400,
+        "other": 14403088,
+        "observed_coalition": 175090512,
+        "compressed": 0
+      },
+      "sampleTotalsBytes": [
+        175090512,
+        175090512,
+        175090512
+      ]
+    },
+    "ours/wiki-home": {
+      "status": "complete_observed_coalition",
+      "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+      "sample_count": 3,
+      "independent_sessions": 1,
+      "main_identity": [
+        96692,
+        30373823309788,
+        17047
+      ],
+      "member_identity": [
+        [
+          96692,
+          30373823309788
+        ],
+        [
+          96694,
+          30373827325242
+        ],
+        [
+          96695,
+          30373827505960
+        ],
+        [
+          96696,
+          30373827822126
+        ],
+        [
+          96697,
+          30373838037439
+        ]
+      ],
+      "median_bytes": {
+        "main": 45418576,
+        "web_content": 167512240,
+        "gpu": 13617184,
+        "networking": 6096472,
+        "other": 1918216,
+        "observed_coalition": 234579072,
+        "compressed": 0
+      },
+      "sampleTotalsBytes": [
+        234579072,
+        234562688,
+        234579072
+      ]
+    },
+    "baseline/animal-body": {
+      "status": "complete_observed_coalition",
+      "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+      "sample_count": 3,
+      "independent_sessions": 1,
+      "main_identity": [
+        96684,
+        30372249090530,
+        17206
+      ],
+      "member_identity": [
+        [
+          96684,
+          30372249090530
+        ],
+        [
+          96685,
+          30372255937382
+        ],
+        [
+          96687,
+          30372259709654
+        ],
+        [
+          96689,
+          30372520862137
+        ],
+        [
+          96690,
+          30372520957412
+        ],
+        [
+          96691,
+          30372524616875
+        ],
+        [
+          96703,
+          30375265153284
+        ]
+      ],
+      "median_bytes": {
+        "main": 127551832,
+        "web_content": 173789320,
+        "gpu": 13813792,
+        "networking": 5228048,
+        "other": 29379544,
+        "observed_coalition": 349762536,
+        "compressed": 44515328
+      },
+      "sampleTotalsBytes": [
+        349762536,
+        349762536,
+        349762536
+      ]
+    },
+    "ours/animal-body": {
+      "status": "complete_observed_coalition",
+      "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+      "sample_count": 3,
+      "independent_sessions": 1,
+      "main_identity": [
+        96692,
+        30373823309788,
+        17047
+      ],
+      "member_identity": [
+        [
+          96692,
+          30373823309788
+        ],
+        [
+          96694,
+          30373827325242
+        ],
+        [
+          96695,
+          30373827505960
+        ],
+        [
+          96696,
+          30373827822126
+        ],
+        [
+          96697,
+          30373838037439
+        ],
+        [
+          96704,
+          30377112810499
+        ]
+      ],
+      "median_bytes": {
+        "main": 56215728,
+        "web_content": 234408232,
+        "gpu": 16664584,
+        "networking": 6882952,
+        "other": 11913912,
+        "observed_coalition": 326085408,
+        "compressed": 7208960
+      },
+      "sampleTotalsBytes": [
+        326085408,
+        326069024,
+        326085408
+      ]
+    },
+    "baseline/map": {
+      "status": "complete_observed_coalition",
+      "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+      "sample_count": 3,
+      "independent_sessions": 1,
+      "main_identity": [
+        96684,
+        30372249090530,
+        17206
+      ],
+      "member_identity": [
+        [
+          96684,
+          30372249090530
+        ],
+        [
+          96685,
+          30372255937382
+        ],
+        [
+          96687,
+          30372259709654
+        ],
+        [
+          96689,
+          30372520862137
+        ],
+        [
+          96690,
+          30372520957412
+        ],
+        [
+          96691,
+          30372524616875
+        ],
+        [
+          96703,
+          30375265153284
+        ],
+        [
+          96708,
+          30379054177409
+        ],
+        [
+          96709,
+          30379350499648
+        ]
+      ],
+      "median_bytes": {
+        "main": 125995376,
+        "web_content": 289331656,
+        "gpu": 21202832,
+        "networking": 5523008,
+        "other": 38310256,
+        "observed_coalition": 480363128,
+        "compressed": 93913088
+      },
+      "sampleTotalsBytes": [
+        480379512,
+        480363128,
+        480363128
+      ]
+    }
+  },
+  "pairedDifferences": {
+    "wiki-home": {
+      "oursMinusNativeBytes": 59488560,
+      "oursMinusNativePercent": 33.975890138467356
+    },
+    "animal-body": {
+      "oursMinusNativeBytes": -23677128,
+      "oursMinusNativePercent": -6.769486598187291
+    }
+  },
+  "fixtures": [
+    {
+      "name": "wikipedia_en_100_2026-08.zim",
+      "bytes": 333429922,
+      "uuid": "dd8a2bd2-c05b-ac6c-8074-6c30e14803fb",
+      "hostSHA256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b"
+    },
+    {
+      "name": "osm_en_hawaii_2026-10-26.zim",
+      "bytes": 150605015,
+      "uuid": "c495a7aa-88f2-5dcc-a7bc-908af8a61cf2",
+      "hostSHA256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d"
+    }
+  ],
+  "profileCounts": {
+    "ours": {
+      "before": {
+        "books": 4,
+        "tabs": 2
+      },
+      "after": null,
+      "last_observed": {
+        "books": 4,
+        "tabs": 2,
+        "checkpoint": "ours/animal-body"
+      }
+    },
+    "baseline": {
+      "before": {
+        "books": 0,
+        "tabs": 1
+      },
+      "after": null,
+      "last_observed": {
+        "books": 2,
+        "tabs": 3,
+        "checkpoint": "baseline/map"
+      }
+    }
+  },
+  "failure": {
+    "stage": "ours/Reader navigation trigger",
+    "runnerError": "ours/Expected exactly one hittable Reader navigation trigger",
+    "actualAppAlert": "The archive could not finish closing its document.",
+    "admission": "Exported failure AX hierarchy contains the app alert and no reader control; this is not evidence of a wrong selector. Screenshot attachment appears to retain the prior Animal rendering. Underlying lifecycle cause not yet established."
+  },
+  "elapsedSeconds": {
+    "wrapperIncludingCleanup": 410.28,
+    "helperIncludingCleanup": 408.413577125
+  },
+  "cleanup": {
+    "cleanup_complete": true,
+    "host_processes_stopped": true,
+    "remote_runner_stopped": true,
+    "phone_released": true
+  },
+  "immediateDeviceReleasedChatDelivered": true,
+  "pairedMapComplete": false,
+  "overallWinner": null,
+  "unmeasured": [
+    "Our map memory",
+    "Calibrated physical launch and search latency",
+    "Final post-workload preservation validation"
+  ],
+  "limits": [
+    "One same-device session, three repeated samples per checkpoint; not independent replication or peak memory.",
+    "Existing own profile had4books/2tabs; native profile began0books/1emptytab. Workload/archive matched, library/history/tab profiles were not identical.",
+    "Observed coalition includes main, WebContent, GPU, Networking and other observed helpers; not proof of every OS-shared service or unique RAM consumption.",
+    "Native baseline is official source-built developer release with approved Apple Pay merchant entitlement omission, not App Store binary.",
+    "Existing own Wikipedia bytes were not reread on phone: admission checked UUID/size/path. Host fixture hashes are exact.",
+    "XCTest observation intervals include unequal AX work and different trigger boundaries; excluded from calibrated launch/search comparisons.",
+    "Pre-install preservation and checkpoint archive validation completed; early failure prevented final whole-workload preservation check.",
+    "Lower Animal total does not offset higher home total into a general winner; profile differences prevent causal attribution of the gap."
+  ],
+  "privateEvidenceSHA256": {
+    "result.json": "78933b45e0c7530af2be2f62439df9dc49e2ed1696e8a48e8d66b07a39cc6262",
+    "fixture-sources.json": "2892443cc73f6d2901422ff1a95bde2a88a34c5e6e2699f6e4fc16d97cfc96b8",
+    "xctest.log": "8586c6636f944d11d3ef30920a1e656c408b246f1d2bb7e6e9f413af03cb2ff8",
+    "attachments/2F000A09-E99E-48B3-BDF4-05B8356F8136.txt": "c21afd8d6b76e94ef81bb8c899f4907cafe12cc2e96ef56d30f293485c642f15",
+    "attachments/A29BCDF8-2B17-4E79-B5B2-59F1540ADB16.png": "41fe09f768bcb01f6c693e974c4aebbe6b191c7e7d87122697d4f6fb3ac1ca76",
+    "attachments/F15EFFDA-1E73-4A16-8F2C-AB4EAFBC5EB9.png": "5f61d3a9631a9837a80801950a580e27d17892a04d70a1224a70083910ddfc27",
+    "baseline-wiki-home-checkpoint.json": "315085754c8d7886e6bf6ddf65db42c0dbc1f442f1c62da37ef1f0562fafc30c",
+    "baseline-wiki-home-before.png": "c17e1c508a442802613b8f620b6d62af581cae8195bafab2f7bdb3e6d0454588",
+    "baseline-wiki-home-after.png": "119398060167f10ac14bdf757de16c590c5ac23ca226ea1947719447ee9df53d",
+    "baseline-wiki-home-sample-1.json": "ac942a6cbe2a28a557c0b964b6978d6ec9010d9bc9d813587de5d72623fe1994",
+    "baseline-wiki-home-sample-2.json": "3755b800e0fa364793113c5c16717210b5c6538503325c3d803aea93b8e73b0e",
+    "baseline-wiki-home-sample-3.json": "8435df9f4a82da21f26ed56dcf90df3f239ece3e0aae13afcc58416acfec223e",
+    "ours-wiki-home-checkpoint.json": "1f953eee38d2c84ef070be7ede79f514245abd47772e9e16cd59d2c90066441b",
+    "ours-wiki-home-before.png": "536a00f9c1e1ee9d3a3e34de52fc8b8204fe54833b258351bd27425fc3e1f142",
+    "ours-wiki-home-after.png": "1e31b07477b11b709e3b50cc2f523b141201c8e7e52ac0ea88a02dc57ba09a83",
+    "ours-wiki-home-sample-1.json": "e2a35927c37798ade5bfa4525e97742271f5b7089a081ca2074622818f806a32",
+    "ours-wiki-home-sample-2.json": "a0813d75d7551bca25554c6fe5a39528827f1ce1a5914dc4e2093f8dd1c0760a",
+    "ours-wiki-home-sample-3.json": "a35837d7bdaf612acc1cd15e86d1a31e161fc4f1b758219dcfd1b6e2f7f7ff3d",
+    "baseline-animal-body-checkpoint.json": "fcc16b345847b9c05fd2f70e07a979d7d8aad6dca35ecea0bc3c10d78d47f432",
+    "baseline-animal-body-before.png": "9b3063f51277a27e22bb88d4d208ceebb04b36c7fc98f066740a03915d2178a2",
+    "baseline-animal-body-after.png": "ec104518f819532c9bdc185bf2f069ec34c3bca99f78819cc2706ed8f91a25d2",
+    "baseline-animal-body-sample-1.json": "9351faa4553223e447e525e7524a1e26d5e8bcf526c457a4b64c11b23b408c70",
+    "baseline-animal-body-sample-2.json": "be9e9a785abc5a46c37c08293e4f9ad13b5f72f20417f402333b27325c7ed3b5",
+    "baseline-animal-body-sample-3.json": "748b8c62ec07bf3255a2fe35ad7fa2f5568efacbeb2fdf62d1e37bf6568c5040",
+    "ours-animal-body-checkpoint.json": "c427c4b80d0ab521725b0a431bf1ba6d2f14348c4e72fb0f24244ce22a5ec8a2",
+    "ours-animal-body-before.png": "4a696861521ea86e6f724b1f297c0a5716fe436c73d92dc8ef89439fd4bcc128",
+    "ours-animal-body-after.png": "0c8d5eb7014fdb96f710c06e66bf73f537aedd2cbffb8821c2039b5986dd9d69",
+    "ours-animal-body-sample-1.json": "18aa4dcbab59cbb5e515010360e598bb293c7a0c1e40bae93e817d78c92b82ba",
+    "ours-animal-body-sample-2.json": "b8cea7cdb98140278f9b1d3065121e6e56df4387fd649bd2c64f08b8e6eee5c3",
+    "ours-animal-body-sample-3.json": "1117eb8fca582c48098c1d077fd3abc64fe128f832ab2a8c674fa88b05a51d06",
+    "baseline-map-checkpoint.json": "7e68d4ad030eb639c64747f1cc2c88dd483006d4ed28a0070ba5b9849ca77dc0",
+    "baseline-map-before.png": "2175826c73de20923841dd1e9249978751dd8f1e2d3b453767b0c03c376b6154",
+    "baseline-map-after.png": "c65c2ca560c55837c3bc6860ac234812eb0ca3eb6ea2a968f7cb6825a8ddf60c",
+    "baseline-map-sample-1.json": "37ae98c5cca3fd618a720dd135755e0321106af9bfef49d1cc7b8dd4de5f2492",
+    "baseline-map-sample-2.json": "0dbab44d58adc67556a169d2dc6ce09778ab08d119b378d962bc738a01fd58cf",
+    "baseline-map-sample-3.json": "6f7baa5d5f18ff372ec9ab013ec529823aa0706ebba6331538d1789ab33c478e"
+  }
+}

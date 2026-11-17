@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.tiltastech.zimreader",
+  "bundle": {
+    "iOS": {
+      "minimumSystemVersion": "16.4"
+    },
+    "fileAssociations": [
+      {
+        "ext": ["zim", "zimaa"],
+        "contentTypes": ["org.openzim.zim"],
+        "mimeType": "application/x-zim",
+        "description": "ZIM offline archive",
+        "role": "Viewer"
+      }
+    ]
+  }
+}

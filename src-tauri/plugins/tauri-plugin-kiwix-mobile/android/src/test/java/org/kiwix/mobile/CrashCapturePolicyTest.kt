@@ -1,0 +1,56 @@
+package org.kiwix.mobile
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+
+class CrashCapturePolicyTest {
+    @Test fun policyStartsDisabledAndCanBeDisabledAgain() {
+        val policy = CrashCapturePolicy()
+        var writes = 0
+        policy.capture { ++writes }
+        assertEquals(0, writes)
+        policy.setEnabled(true)
+        policy.capture { ++writes }
+        policy.setEnabled(false)
+        policy.capture { ++writes }
+        assertEquals(1, writes)
+    }
+
+    @Test fun disableAcknowledgesOnlyAfterAnAlreadyAdmittedWriteCompletes() {
+        val policy = CrashCapturePolicy()
+        policy.setEnabled(true)
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val disabling = CountDownLatch(1)
+        val disabled = CountDownLatch(1)
+        val writes = AtomicInteger()
+        val writer = Thread {
+            policy.capture {
+                entered.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                writes.incrementAndGet()
+            }
+        }
+        val cutover = Thread {
+            disabling.countDown()
+            policy.setEnabled(false)
+            disabled.countDown()
+        }
+        writer.start()
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        cutover.start()
+        assertTrue(disabling.await(5, TimeUnit.SECONDS))
+        assertFalse(disabled.await(50, TimeUnit.MILLISECONDS))
+        release.countDown()
+        writer.join(5000)
+        cutover.join(5000)
+        assertTrue(disabled.await(5, TimeUnit.SECONDS))
+        policy.capture { writes.incrementAndGet() }
+        assertEquals(1, writes.get())
+    }
+}

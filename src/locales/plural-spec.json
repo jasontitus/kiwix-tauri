@@ -1,0 +1,1341 @@
+{
+  "ar": {
+    "name": "العربية",
+    "categories": [
+      "zero",
+      "one",
+      "two",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "zero": [
+        0
+      ],
+      "one": [
+        1
+      ],
+      "two": [
+        2
+      ],
+      "few": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "many": [
+        11,
+        12,
+        14,
+        20,
+        21
+      ],
+      "other": [
+        100,
+        101,
+        102,
+        1000,
+        1000000
+      ]
+    }
+  },
+  "bik": {
+    "name": "Bikol",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "bn": {
+    "name": "বাংলা",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "br": {
+    "name": "Brezhoneg",
+    "categories": [
+      "one",
+      "two",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        21,
+        101
+      ],
+      "two": [
+        2,
+        22,
+        102
+      ],
+      "few": [
+        3,
+        4,
+        9,
+        23,
+        103
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "ca": {
+    "name": "Català",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "cs": {
+    "name": "Čeština",
+    "categories": [
+      "one",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "few": [
+        2,
+        3,
+        4
+      ],
+      "many": [
+        0.1,
+        0.5,
+        1.1,
+        1.5,
+        2.1
+      ],
+      "other": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "da": {
+    "name": "Dansk",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        0.1,
+        0.5,
+        1.1,
+        1.5
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "de": {
+    "name": "Deutsch",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "el": {
+    "name": "Ελληνικά",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "en": {
+    "name": "English",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "eo": {
+    "name": "Esperanto",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "es": {
+    "name": "Español",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "fa": {
+    "name": "فارسی",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "fi": {
+    "name": "suomi",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "fr": {
+    "name": "Français",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5,
+        1.1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "gsw": {
+    "name": "Schwiizerdütsch",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "ha": {
+    "name": "Hausa",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "he": {
+    "name": "עברית",
+    "categories": [
+      "one",
+      "two",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        0.1,
+        0.5
+      ],
+      "two": [
+        2
+      ],
+      "other": [
+        0,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "hi": {
+    "name": "हिन्दी",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "hy": {
+    "name": "Հայերեն",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5,
+        1.1
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "ia": {
+    "name": "Interlingua",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "id": {
+    "name": "Bahasa Indonesia",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "ig": {
+    "name": "Igbo",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "it": {
+    "name": "italiano",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "ja": {
+    "name": "日本語",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "ko": {
+    "name": "한국어",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "ku-Latn": {
+    "name": "Kurdî",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "lb": {
+    "name": "Lëtzebuergesch",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "ln": {
+    "name": "lingála",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "mk": {
+    "name": "македонски",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        21,
+        101,
+        0.1,
+        1.1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "ms": {
+    "name": "Bahasa Melayu",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "my": {
+    "name": "မြန်မာဘာသာ",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "nb": {
+    "name": "norsk bokmål",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "nl": {
+    "name": "Nederlands",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "or": {
+    "name": "ଓଡି଼ଆ",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "pa": {
+    "name": "ਪੰਜਾਬੀ",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "pl": {
+    "name": "Polski",
+    "categories": [
+      "one",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "few": [
+        2,
+        3,
+        4,
+        22,
+        23
+      ],
+      "many": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ],
+      "other": [
+        0.1,
+        0.5,
+        1.1,
+        1.5,
+        2.1
+      ]
+    }
+  },
+  "ps": {
+    "name": "پښتو",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "pt": {
+    "name": "português",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5,
+        1.1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "pt-BR": {
+    "name": "Português do Brasil",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        0,
+        1,
+        0.1,
+        0.5,
+        1.1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "ro": {
+    "name": "Română",
+    "categories": [
+      "one",
+      "few",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "few": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "other": [
+        20,
+        21,
+        22,
+        23,
+        99
+      ]
+    }
+  },
+  "ru": {
+    "name": "русский",
+    "categories": [
+      "one",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        21,
+        101
+      ],
+      "few": [
+        2,
+        3,
+        4,
+        22,
+        23
+      ],
+      "many": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ],
+      "other": [
+        0.1,
+        0.5,
+        1.1,
+        1.5,
+        2.1
+      ]
+    }
+  },
+  "scn": {
+    "name": "Sicilianu",
+    "categories": [
+      "one",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "many": [
+        1000000,
+        2000000
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "se": {
+    "name": "davvisámegillii",
+    "categories": [
+      "one",
+      "two",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "two": [
+        2
+      ],
+      "other": [
+        0,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "sk": {
+    "name": "Slovenčina",
+    "categories": [
+      "one",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "few": [
+        2,
+        3,
+        4
+      ],
+      "many": [
+        0.1,
+        0.5,
+        1.1,
+        1.5,
+        2.1
+      ],
+      "other": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "sl": {
+    "name": "slovenščina",
+    "categories": [
+      "one",
+      "two",
+      "few",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        101
+      ],
+      "two": [
+        2,
+        102
+      ],
+      "few": [
+        3,
+        4,
+        103,
+        0.1,
+        0.5
+      ],
+      "other": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "sq": {
+    "name": "Shqip",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "sr-Cyrl": {
+    "name": "српски",
+    "categories": [
+      "one",
+      "few",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        21,
+        101,
+        0.1,
+        1.1
+      ],
+      "few": [
+        2,
+        3,
+        4,
+        22,
+        23
+      ],
+      "other": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "sv": {
+    "name": "Svenska",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "sw": {
+    "name": "Kiswahili",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "ta": {
+    "name": "தமிழ்",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "te": {
+    "name": "తెలుగు",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "th": {
+    "name": "ภาษาไทย",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "tn": {
+    "name": "Setswana",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "tr": {
+    "name": "Türkçe",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "uk": {
+    "name": "Українська",
+    "categories": [
+      "one",
+      "few",
+      "many",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1,
+        21,
+        101
+      ],
+      "few": [
+        2,
+        3,
+        4,
+        22,
+        23
+      ],
+      "many": [
+        0,
+        5,
+        6,
+        7,
+        8
+      ],
+      "other": [
+        0.1,
+        0.5,
+        1.1,
+        1.5,
+        2.1
+      ]
+    }
+  },
+  "yi": {
+    "name": "ייִדיש",
+    "categories": [
+      "one",
+      "other"
+    ],
+    "samples": {
+      "one": [
+        1
+      ],
+      "other": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  "yo": {
+    "name": "Èdè Yorùbá",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "zh-Hans": {
+    "name": "简体中文",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "zh-Hant": {
+    "name": "繁體中文",
+    "categories": [
+      "other"
+    ],
+    "samples": {
+      "other": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  }
+}

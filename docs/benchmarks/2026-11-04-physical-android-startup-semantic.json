@@ -1,0 +1,691 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-android-startup-posthoc-semantic-adjudication",
+  "publicationReview": "passed-independent-all-nine-semantic-frame-numeric-and-sanitization-review",
+  "analysisAmendment": "Explicit post-hoc uniform semantic adjudication of every original frame in all nine clips. Endpoint is the actual Animal heading, complete visible montage, and visible classification; frozen exact-pixel proxy output retained separately and unchanged. Global pixel-color differences do not imply absent content; cause of replacement appearance difference unestablished.",
+  "captureAmendment": {
+    "description": "One prospective later replacement authorized before capture, solely for original b4 missing-confirmation admission failure, not its numerical timing. Same capture helper, analysis helper, targets and admission rules. Replacement itself fails frozen template scoring. No further retry.",
+    "replacementAttemptOrdinal": 8,
+    "replacementForOriginalBlock": 4,
+    "uninterruptedEightRunABBAABBA": false,
+    "fourValidObservationsPerAppAchievedFrozenClassifier": false,
+    "fourValidObservationsPerAppAchievedPosthocSemantic": true,
+    "fourthAdjacentPairAvailable": false
+  },
+  "plannedOriginalSequence": [
+    "ours",
+    "official",
+    "official",
+    "ours",
+    "ours",
+    "official",
+    "official",
+    "ours"
+  ],
+  "actualChronologicalSequence": [
+    "ours",
+    "official",
+    "official",
+    "ours",
+    "ours",
+    "official",
+    "official",
+    "ours",
+    "ours"
+  ],
+  "capturedCount": 9,
+  "frozenPixelDisposition": {
+    "admittedCount": 7,
+    "rejectedCount": 2,
+    "oursAdmitted": 3,
+    "officialAdmitted": 4,
+    "unchangedHelperSha256": "87479d776fef944687da4f9f0905370bbe4eb235fb9566ea8462563998af5c2c",
+    "parameters": {
+      "perChannelTolerance": 12,
+      "foregroundThreshold": 0.99,
+      "sampleStride": 2,
+      "minimumConfirmationSeconds": "0.100000"
+    },
+    "receipt": "2026-11-04-physical-android-startup-frozen-pixel-amended.json"
+  },
+  "posthocSemanticDisposition": {
+    "admittedCount": 8,
+    "rejectedCount": 1,
+    "oursAdmitted": 4,
+    "officialAdmitted": 4,
+    "rejectedAttemptOrdinal": 4
+  },
+  "endpoint": "Original-video observable first Open-tap pointer marker transition to Animal heading, full visible montage, and visible classification; not physical tap/electrical input, first paint, app-only CPU time, document-load completion, interactivity, or offscreen readiness.",
+  "intervalFormulaMs": "[readyPreviousPTS - markerFirstPTS, readyFirstPTS - markerPreviousPTS] * 1000; these are observable-marker bounds, not physical-input uncertainty.",
+  "geometry": [
+    1080,
+    2340
+  ],
+  "series": [
+    {
+      "actualAttemptOrdinal": 0,
+      "label": "startup-clean-startup-b0-ours",
+      "app": "ours",
+      "originalBlock": 0,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "cbcc10d7ce411e6ea148ef7b88a1914c11dd75902cc142e340cfd03bd3d40971",
+      "videoBytes": 998936,
+      "originalFrameCount": 152,
+      "containerDurationSeconds": "22.552867",
+      "lastOriginalFramePtsSeconds": "19.480633",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 126,
+        "confirmationIndex": 127,
+        "signedLatencyIntervalMs": [
+          "1466.578000",
+          "1713.967000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 25,
+        "markerFirstIndex": 26,
+        "markerIntervalSeconds": [
+          "7.532722",
+          "7.548133"
+        ],
+        "readyPreviousIndex": 125,
+        "readyFirstIndex": 126,
+        "readyIntervalSeconds": [
+          "9.014711",
+          "9.246689"
+        ],
+        "confirmationIndex": 127,
+        "confirmationPtsSeconds": "12.328867",
+        "confirmationSeparationMs": "3082.178000",
+        "observableLatencyIntervalMs": [
+          "1466.578000",
+          "1713.967000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 1,
+      "label": "startup-clean-startup-b1-official",
+      "app": "official",
+      "originalBlock": 1,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "6096cdb27cff7a0bf6773dab36ac98dd5824eeeccb481e39c6ac828efac90bc8",
+      "videoBytes": 989561,
+      "originalFrameCount": 106,
+      "containerDurationSeconds": "18.461333",
+      "lastOriginalFramePtsSeconds": "17.081033",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 91,
+        "confirmationIndex": 97,
+        "signedLatencyIntervalMs": [
+          "1037.288000",
+          "1148.855000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 33,
+        "markerFirstIndex": 34,
+        "markerIntervalSeconds": [
+          "7.740256",
+          "7.766556"
+        ],
+        "readyPreviousIndex": 90,
+        "readyFirstIndex": 91,
+        "readyIntervalSeconds": [
+          "8.803844",
+          "8.889111"
+        ],
+        "confirmationIndex": 97,
+        "confirmationPtsSeconds": "9.012556",
+        "confirmationSeparationMs": "123.445000",
+        "observableLatencyIntervalMs": [
+          "1037.288000",
+          "1148.855000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 2,
+      "label": "startup-clean-startup-b2-official",
+      "app": "official",
+      "originalBlock": 2,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "fcc3d7722dde0a27f612401191b6b5d3a98ee4d28eef6d212345058beffb78a2",
+      "videoBytes": 990783,
+      "originalFrameCount": 123,
+      "containerDurationSeconds": "20.409056",
+      "lastOriginalFramePtsSeconds": "17.672078",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 90,
+        "confirmationIndex": 94,
+        "signedLatencyIntervalMs": [
+          "1145.100000",
+          "1204.066000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 31,
+        "markerFirstIndex": 32,
+        "markerIntervalSeconds": [
+          "7.587756",
+          "7.615500"
+        ],
+        "readyPreviousIndex": 89,
+        "readyFirstIndex": 90,
+        "readyIntervalSeconds": [
+          "8.760600",
+          "8.791822"
+        ],
+        "confirmationIndex": 94,
+        "confirmationPtsSeconds": "8.914211",
+        "confirmationSeparationMs": "122.389000",
+        "observableLatencyIntervalMs": [
+          "1145.100000",
+          "1204.066000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 3,
+      "label": "startup-clean-startup-b3-ours",
+      "app": "ours",
+      "originalBlock": 3,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "7d16de155499813b170c57cc6a9462351f82a11a5e64d3638579e172e475f15b",
+      "videoBytes": 974824,
+      "originalFrameCount": 125,
+      "containerDurationSeconds": "21.851033",
+      "lastOriginalFramePtsSeconds": "17.118100",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 101,
+        "confirmationIndex": 102,
+        "signedLatencyIntervalMs": [
+          "1269.311000",
+          "1496.444000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 27,
+        "markerFirstIndex": 28,
+        "markerIntervalSeconds": [
+          "7.797700",
+          "7.815989"
+        ],
+        "readyPreviousIndex": 100,
+        "readyFirstIndex": 101,
+        "readyIntervalSeconds": [
+          "9.085300",
+          "9.294144"
+        ],
+        "confirmationIndex": 102,
+        "confirmationPtsSeconds": "12.081822",
+        "confirmationSeparationMs": "2787.678000",
+        "observableLatencyIntervalMs": [
+          "1269.311000",
+          "1496.444000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 4,
+      "label": "startup-clean-startup-b4-ours",
+      "app": "ours",
+      "originalBlock": 4,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "517f40699310fca018b89de78f8e363f67f84e3b65fde18367a1f377739d7dc1",
+      "videoBytes": 928195,
+      "originalFrameCount": 75,
+      "containerDurationSeconds": "9.797533",
+      "lastOriginalFramePtsSeconds": "9.417611",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "rejected",
+        "rejectionReasons": [
+          "No uninterrupted positive confirmation at least100ms later"
+        ],
+        "firstMatchingIndex": 74,
+        "confirmationIndex": null,
+        "signedLatencyIntervalMs": [
+          "1153.578000",
+          "1569.600000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "rejected-missing-later-encoded-confirmation",
+        "rejectionReasons": [
+          "Missing later original encoded confirmation at least100ms after first semantic-ready frame."
+        ],
+        "markerBeforeIndex": 7,
+        "markerFirstIndex": 8,
+        "markerIntervalSeconds": [
+          "7.848011",
+          "7.884111"
+        ],
+        "readyPreviousIndex": 73,
+        "readyFirstIndex": 74,
+        "readyIntervalSeconds": [
+          "9.037689",
+          "9.417611"
+        ],
+        "confirmationIndex": null,
+        "confirmationPtsSeconds": null,
+        "confirmationSeparationMs": null,
+        "observableLatencyIntervalMs": null,
+        "unconfirmedObservedIntervalMs": [
+          "1153.578000",
+          "1569.600000"
+        ]
+      }
+    },
+    {
+      "actualAttemptOrdinal": 5,
+      "label": "startup-clean-startup-b5-official",
+      "app": "official",
+      "originalBlock": 5,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "87fdc7a6b367cd1a7b31688492c9293178e1cd95a4b4e2e0baef2860725e92e9",
+      "videoBytes": 1016320,
+      "originalFrameCount": 101,
+      "containerDurationSeconds": "19.840033",
+      "lastOriginalFramePtsSeconds": "17.045322",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 66,
+        "confirmationIndex": 70,
+        "signedLatencyIntervalMs": [
+          "1131.678000",
+          "1195.000000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 9,
+        "markerFirstIndex": 10,
+        "markerIntervalSeconds": [
+          "7.898500",
+          "7.907200"
+        ],
+        "readyPreviousIndex": 65,
+        "readyFirstIndex": 66,
+        "readyIntervalSeconds": [
+          "9.038878",
+          "9.093500"
+        ],
+        "confirmationIndex": 70,
+        "confirmationPtsSeconds": "9.195400",
+        "confirmationSeparationMs": "101.900000",
+        "observableLatencyIntervalMs": [
+          "1131.678000",
+          "1195.000000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 6,
+      "label": "startup-clean-startup-b6-official",
+      "app": "official",
+      "originalBlock": 6,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "898c69c2dde4a4057e9960895849cc6ef3318b5e582e2f248646f90ae42f88c3",
+      "videoBytes": 968199,
+      "originalFrameCount": 96,
+      "containerDurationSeconds": "17.796856",
+      "lastOriginalFramePtsSeconds": "13.437344",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 88,
+        "confirmationIndex": 91,
+        "signedLatencyIntervalMs": [
+          "1090.244000",
+          "1157.500000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 31,
+        "markerFirstIndex": 32,
+        "markerIntervalSeconds": [
+          "7.734000",
+          "7.751567"
+        ],
+        "readyPreviousIndex": 87,
+        "readyFirstIndex": 88,
+        "readyIntervalSeconds": [
+          "8.841811",
+          "8.891500"
+        ],
+        "confirmationIndex": 91,
+        "confirmationPtsSeconds": "8.992956",
+        "confirmationSeparationMs": "101.456000",
+        "observableLatencyIntervalMs": [
+          "1090.244000",
+          "1157.500000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 7,
+      "label": "startup-clean-startup-b7-ours",
+      "app": "ours",
+      "originalBlock": 7,
+      "replacementForOriginalBlock": null,
+      "videoSha256": "f4e7bfce6aa45a282a24e0ec7d04af387ec3f3071722a580f64a0686c65637b6",
+      "videoBytes": 1009709,
+      "originalFrameCount": 104,
+      "containerDurationSeconds": "17.163778",
+      "lastOriginalFramePtsSeconds": "17.154733",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "admitted",
+        "rejectionReasons": [],
+        "firstMatchingIndex": 78,
+        "confirmationIndex": 79,
+        "signedLatencyIntervalMs": [
+          "1277.922000",
+          "1510.255000"
+        ],
+        "contentFrameScores": {
+          "Animal-heading": 1.0,
+          "Animal-montage": 1.0,
+          "Animal-classification": 1.0
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 8,
+        "markerFirstIndex": 9,
+        "markerIntervalSeconds": [
+          "7.892056",
+          "7.919667"
+        ],
+        "readyPreviousIndex": 77,
+        "readyFirstIndex": 78,
+        "readyIntervalSeconds": [
+          "9.197589",
+          "9.402311"
+        ],
+        "confirmationIndex": 79,
+        "confirmationPtsSeconds": "14.889056",
+        "confirmationSeparationMs": "5486.745000",
+        "observableLatencyIntervalMs": [
+          "1277.922000",
+          "1510.255000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    },
+    {
+      "actualAttemptOrdinal": 8,
+      "label": "startup-clean-startup-b4-ours-attempt2",
+      "app": "ours",
+      "originalBlock": 4,
+      "replacementForOriginalBlock": 4,
+      "videoSha256": "3b75a8ddb1cc464dd599eceb2492df13cbcd1310448e2e2b25ddbc010850c896",
+      "videoBytes": 975309,
+      "originalFrameCount": 79,
+      "containerDurationSeconds": "11.995467",
+      "lastOriginalFramePtsSeconds": "10.624156",
+      "captureControls": {
+        "captureComplete": true,
+        "remoteCompletionConfirmed": true,
+        "videoIdentityVerified": true,
+        "normalRecorderWaitStatus": 0,
+        "hostRecorderReaped": true,
+        "pointerKeysRestored": true,
+        "failureCount": 0
+      },
+      "frozenPixelResult": {
+        "independentAdmission": "rejected",
+        "rejectionReasons": [
+          "No complete ready target"
+        ],
+        "firstMatchingIndex": null,
+        "confirmationIndex": null,
+        "signedLatencyIntervalMs": null,
+        "contentFrameScores": {
+          "Animal-heading": 0.9762658227848101,
+          "Animal-montage": 0.6914692936491301,
+          "Animal-classification": 0.6039588027035726
+        }
+      },
+      "posthocSemanticResult": {
+        "independentAdmission": "admitted-posthoc-semantic",
+        "rejectionReasons": [],
+        "markerBeforeIndex": 6,
+        "markerFirstIndex": 7,
+        "markerIntervalSeconds": [
+          "7.651111",
+          "7.661433"
+        ],
+        "readyPreviousIndex": 76,
+        "readyFirstIndex": 77,
+        "readyIntervalSeconds": [
+          "8.918211",
+          "9.252844"
+        ],
+        "confirmationIndex": 78,
+        "confirmationPtsSeconds": "10.624156",
+        "confirmationSeparationMs": "1371.312000",
+        "observableLatencyIntervalMs": [
+          "1256.778000",
+          "1601.733000"
+        ],
+        "unconfirmedObservedIntervalMs": null
+      }
+    }
+  ],
+  "descriptiveSummary": {
+    "ours": {
+      "count": 4,
+      "medianIntervalMs": [
+        "1273.616500",
+        "1555.994000"
+      ],
+      "observedIntervalEnvelopeMs": [
+        "1256.778000",
+        "1713.967000"
+      ]
+    },
+    "official": {
+      "count": 4,
+      "medianIntervalMs": [
+        "1110.961000",
+        "1176.250000"
+      ],
+      "observedIntervalEnvelopeMs": [
+        "1037.288000",
+        "1204.066000"
+      ]
+    }
+  },
+  "oursMinusOfficialMedianIntervalMs": [
+    "97.366500",
+    "445.033000"
+  ],
+  "medianDefinition": "Median lower endpoints and median upper endpoints bound the descriptive median of four interval-censored observations per app. The observed interval envelope is minimum lower bound through maximum upper bound, not a point-valued latency range.",
+  "originalAdjacentPairs": [
+    {
+      "pair": 0,
+      "oursBlock": 0,
+      "officialBlock": 1,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "317.723000",
+        "676.679000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    },
+    {
+      "pair": 1,
+      "oursBlock": 3,
+      "officialBlock": 2,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "65.245000",
+        "351.344000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    },
+    {
+      "pair": 2,
+      "oursBlock": 4,
+      "officialBlock": 5,
+      "status": "unavailable-rejected-member-retained",
+      "oursMinusOfficialIntervalMs": null,
+      "sign": null
+    },
+    {
+      "pair": 3,
+      "oursBlock": 7,
+      "officialBlock": 6,
+      "status": "independently-admitted-original-adjacent-pair",
+      "oursMinusOfficialIntervalMs": [
+        "120.422000",
+        "420.011000"
+      ],
+      "sign": "positive-ours-longer-observable-interval"
+    }
+  ],
+  "limitations": [
+    "This is an explicitly post-hoc semantic analysis of an amended collection with one later replacement; not the original frozen-pixel classifier result and not an uninterrupted eight-run ABBAABBA cohort.",
+    "All nine chronological attempts are retained. Original b4 has visible content in only its final original frame and remains rejected; container hold is not a later encoded confirmation.",
+    "The ninth attempt has visible heading, complete montage and classification in two original frames >=100ms apart, but both fail unchanged exact-pixel template thresholds. This classifier disagreement is retained, not hidden or retuned.",
+    "There are only three original complete adjacent pairs. A later replacement does not create a fourth adjacent pair. Paired signs are descriptive, not a general product ranking.",
+    "Original VFR gaps are retained; no interpolation, fabricated cadence, physical-keystroke/first-paint/CPU timing or unseen continuous-readiness claim.",
+    "Only required visible content is adjudicated; some official ready frames still show chrome progress. Offscreen content/document load/interactivity are not measured.",
+    "Untimed calibrations excluded. No further capture, automatic retry, normalization or threshold/template adjustment.",
+    "No device identifiers, raw screens, ownership/process data, absolute private paths or host clocks are included."
+  ]
+}

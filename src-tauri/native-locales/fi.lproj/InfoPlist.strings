@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Vain tämä aktiivinen arkisto voi pyytää kameran käyttöä. Myös järjestelmäsi voi pyytää lupaa. Voit perua käyttöoikeuden milloin tahansa artikkelin alapuolelta.";
+"NSLocationUsageDescription" = "Järjestelmäsi antaa sijaintisi vain tälle aktiiviselle arkistolle. Voit perua käyttöoikeuden milloin tahansa artikkelin alapuolelta.";
+"NSLocationWhenInUseUsageDescription" = "Järjestelmäsi antaa sijaintisi vain tälle aktiiviselle arkistolle. Voit perua käyttöoikeuden milloin tahansa artikkelin alapuolelta.";
+"NSLocalNetworkUsageDescription" = "Löydä lähellä olevat LocalSwarm-laitteet ja jaa offline-arkistoja paikallisessa verkossasi. Ota etsiminen tai jakaminen käyttöön vain luotetussa verkossa.";

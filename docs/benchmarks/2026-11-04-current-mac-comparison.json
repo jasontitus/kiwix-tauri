@@ -1,0 +1,407 @@
+{
+  "status": "Accepted matched Mac measurement candidate; independent publication review requested",
+  "supersedes": "apple-final-receipt.json (earlier unmatched/inconclusive contexts, not this accepted cohort)",
+  "host": {
+    "model": "Mac14,5",
+    "cpu": "Apple M2 Max",
+    "memoryBytes": 68719476736,
+    "os": "macOS 27.0.1",
+    "osBuild": "26A434",
+    "executionArchitecture": "arm64",
+    "localMeasurementDate": "2026-11-04"
+  },
+  "artifacts": {
+    "ours": {
+      "sourceCommit": "5eec1e43c9101a6f99f47cb28512cee4faa40919",
+      "form": "Exact tracked-source optimized release desktop build; production macOS frontend; unique-ID ad-hoc signed isolated measurement bundle",
+      "executableSHA256": "4ad4d7cae72e38eef2ff829a7a62efb084197d9b321119c3809b0a835b3b1f73",
+      "executableBytes": 47563360,
+      "bundleIdentifier": "org.kiwix.measure.qkn6YWC1.ours",
+      "buildRecipeEvidence": "desktop-build-recipe.json",
+      "isolationRecipeEvidence": "ours-runtime-recipe.json",
+      "sdk": "desktop-retained-v2/aarch64-apple-darwin"
+    },
+    "official": {
+      "version": "3.18.0",
+      "build": "20261031.2304",
+      "form": "Official DMG-derived identity-resigned clone, NOT unmodified shipping identity or shipping-binary certification",
+      "originalDMG": "kiwix-macos_3.18.0.dmg",
+      "originalDMGSHA256": "58744c6301d7ad6cb24c288e04d46c32fa0f032ba66deed1d75f7d2279f946bd",
+      "originalExecutableSHA256": "3c1c41eac18adaddc02579549a2642fe61edf36fbf7af0c95172e1375ec9faf7",
+      "measuredCloneExecutableSHA256": "d4bdc5979c6099299ec956a7704606810367a52d29a7585f660f887f7852251a",
+      "bundleIdentifier": "org.kiwix.measure.qkn6YWC1.fresh",
+      "changes": [
+        "CFBundleIdentifier",
+        "ad-hoc signature and associated signing load-command/LINKEDIT data"
+      ],
+      "sourceRebuilt": false,
+      "sandboxEntitlementsChanged": false,
+      "fileBackedNonLinkeditSectionsMatchingOriginal": 94,
+      "allComparedSectionsMatchAcrossBothArchitectures": true,
+      "originalCloneIdentityEvidence": "official-identity.json",
+      "measuredFreshCloneIdentityEvidence": "2026-11-04-current-mac-official-identity.json"
+    }
+  },
+  "archive": {
+    "filename": "wikipedia_en_100_2026-08.zim",
+    "bytes": 333429922,
+    "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+    "uuid": "dd8a2bd2-c05b-ac6c-8074-6c30e14803fb",
+    "initialPath": "index",
+    "activeArticle": "Animal"
+  },
+  "matchedWorkload": {
+    "actualVisibleReaderTabsPerApp": 1,
+    "history": "Opened real archive index, then followed its actual Animal link through UI; Animal active in both apps",
+    "verifiedWindowSize": [
+      1100,
+      680
+    ],
+    "foregroundSettleSecondsPerAppMinimum": 30,
+    "sampleIntervalSeconds": 2,
+    "actualBodyEvidence": "Animals are multicellular, ",
+    "bodyVerifiedBeforeAndAfterEachCohort": true,
+    "hostMemoryPressureFreePercentAfterEachCohort": 83,
+    "screenUnlockedForAcceptedMeasurements": true,
+    "buildContentionDuringAcceptedCohorts": false
+  },
+  "memory": {
+    "metric": "Median across samples of summed observed per-process physFootprint ledger bytes. Not RSS, not PSS, not a deduplicated unrestricted whole-app physical total.",
+    "ownership": "LaunchServices-launched app main and processes sharing both app coalition IDs; raw PID, executable and startAbsTime retained. Core includes main plus ALL attributed WebContent, GPU, Networking. Additional observed services reported separately and in larger total.",
+    "ours": {
+      "samples": 10,
+      "sampleSpanSeconds": 18.091001125,
+      "mainPID": 8707,
+      "coalitionIDs": [
+        157420,
+        158374
+      ],
+      "mainAndAllOwnedWebKitMedianBytes": 201248584.0,
+      "mainAndAllOwnedWebKitMedianMiB": 191.92560577392578,
+      "allObservedCoalitionMedianBytes": 227629104.0,
+      "allObservedCoalitionMedianMiB": 217.0840301513672,
+      "allObservedCoalitionRangeBytes": [
+        227612720,
+        227678256
+      ],
+      "processes": [
+        {
+          "pid": 8855,
+          "executable": "MTLCompilerService",
+          "startAbsTime": 32216333929131,
+          "samples": 10,
+          "medianFootprintBytes": 10125816.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8718,
+          "executable": "SetStoreUpdateService",
+          "startAbsTime": 32215087743596,
+          "samples": 10,
+          "medianFootprintBytes": 2589032.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8717,
+          "executable": "ThemeWidgetControlViewService",
+          "startAbsTime": 32215085052853,
+          "samples": 10,
+          "medianFootprintBytes": 7782880.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8716,
+          "executable": "com.apple.audio.SandboxHelper",
+          "startAbsTime": 32215082023875,
+          "samples": 10,
+          "medianFootprintBytes": 3359272.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8715,
+          "executable": "com.apple.WebKit.Networking",
+          "startAbsTime": 32215077044781,
+          "samples": 10,
+          "medianFootprintBytes": 6177320.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8714,
+          "executable": "com.apple.WebKit.WebContent",
+          "startAbsTime": 32215076410522,
+          "samples": 10,
+          "medianFootprintBytes": 129942656.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8712,
+          "executable": "com.apple.WebKit.GPU",
+          "startAbsTime": 32215076152773,
+          "samples": 10,
+          "medianFootprintBytes": 18531288.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8711,
+          "executable": "SetStoreUpdateService",
+          "startAbsTime": 32215075769460,
+          "samples": 10,
+          "medianFootprintBytes": 2523520.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8707,
+          "executable": "kiwix-workbench",
+          "startAbsTime": 32215071648890,
+          "samples": 10,
+          "medianFootprintBytes": 46597320.0,
+          "scope": "core"
+        }
+      ]
+    },
+    "official": {
+      "samples": 10,
+      "sampleSpanSeconds": 18.088752375,
+      "mainPID": 8692,
+      "coalitionIDs": [
+        157418,
+        158373
+      ],
+      "mainAndAllOwnedWebKitMedianBytes": 218664392.0,
+      "mainAndAllOwnedWebKitMedianMiB": 208.53461456298828,
+      "allObservedCoalitionMedianBytes": 267352688.0,
+      "allObservedCoalitionMedianMiB": 254.96739196777344,
+      "allObservedCoalitionRangeBytes": [
+        265673328,
+        268966512
+      ],
+      "processes": [
+        {
+          "pid": 8860,
+          "executable": "MTLCompilerService",
+          "startAbsTime": 32216351505945,
+          "samples": 10,
+          "medianFootprintBytes": 14049808.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8858,
+          "executable": "MTLCompilerService",
+          "startAbsTime": 32216347908659,
+          "samples": 10,
+          "medianFootprintBytes": 15303064.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8703,
+          "executable": "SetStoreUpdateService",
+          "startAbsTime": 32215070586785,
+          "samples": 10,
+          "medianFootprintBytes": 2638208.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8702,
+          "executable": "ThemeWidgetControlViewService",
+          "startAbsTime": 32215067881298,
+          "samples": 10,
+          "medianFootprintBytes": 7586248.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8701,
+          "executable": "com.apple.audio.SandboxHelper",
+          "startAbsTime": 32215065679192,
+          "samples": 10,
+          "medianFootprintBytes": 3244560.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8700,
+          "executable": "com.apple.WebKit.Networking",
+          "startAbsTime": 32215059680782,
+          "samples": 10,
+          "medianFootprintBytes": 5997024.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8699,
+          "executable": "com.apple.audio.SandboxHelper",
+          "startAbsTime": 32215058694597,
+          "samples": 10,
+          "medianFootprintBytes": 3359272.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8698,
+          "executable": "com.apple.WebKit.WebContent",
+          "startAbsTime": 32215058566400,
+          "samples": 10,
+          "medianFootprintBytes": 105890704.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8697,
+          "executable": "com.apple.WebKit.GPU",
+          "startAbsTime": 32215058184267,
+          "samples": 10,
+          "medianFootprintBytes": 15434568.0,
+          "scope": "core"
+        },
+        {
+          "pid": 8696,
+          "executable": "SetStoreUpdateService",
+          "startAbsTime": 32215054433569,
+          "samples": 10,
+          "medianFootprintBytes": 2474368.0,
+          "scope": "additionalObservedCoalitionService"
+        },
+        {
+          "pid": 8692,
+          "executable": "Kiwix",
+          "startAbsTime": 32215049463582,
+          "samples": 10,
+          "medianFootprintBytes": 91342096.0,
+          "scope": "core"
+        }
+      ]
+    },
+    "oursCoreReductionPercent": 7.9646291930329465,
+    "oursAllObservedReductionPercent": 14.858120296886634,
+    "interpretation": "Ours uses less summed task footprint in this one matched settled reader cohort; not a universal application or archive claim.",
+    "compressedOrSwapped": {
+      "observationsPerApp": 1,
+      "scope": "main plus all core owned WebKit processes only",
+      "allCoreProcessesReportedSwappedBytes": 0,
+      "bothApps": true,
+      "method": "macOS footprint --swapped; accompanying point samples, not 10-sample medians; not added to physFootprint"
+    }
+  },
+  "startup": {
+    "kind": "Process-cold restored reader; ordinary LaunchServices launch; prior exact owned processes retired; filesystem/OS caches not purged",
+    "order": "official, ours, ours, official",
+    "boundary": "Actual expected Animal paragraph exposed through per-PID Accessibility tree; NOT first paint, complete images, or visual screenshot",
+    "controller": "mac_readiness.py B330 and Swift-interpreted apple_ax.swift 4CCD",
+    "runs": [
+      {
+        "app": "official",
+        "pid": 9917,
+        "lastNegativeProbeStartLowerMs": 79.321458,
+        "firstPositiveProbeEndUpperMs": 1472.870417
+      },
+      {
+        "app": "ours",
+        "pid": 9940,
+        "lastNegativeProbeStartLowerMs": 81.32625,
+        "firstPositiveProbeEndUpperMs": 1264.862042
+      },
+      {
+        "app": "ours",
+        "pid": 9959,
+        "lastNegativeProbeStartLowerMs": 83.836292,
+        "firstPositiveProbeEndUpperMs": 1290.758625
+      },
+      {
+        "app": "official",
+        "pid": 9979,
+        "lastNegativeProbeStartLowerMs": 72.654417,
+        "firstPositiveProbeEndUpperMs": 1441.214417
+      }
+    ],
+    "oursUpperObservedMedianMs": 1277.8103335,
+    "officialUpperObservedMedianMs": 1457.0424170000001,
+    "interpretation": "Two runs per app; wide negative-to-positive bounds overlap and include Swift observer overhead. No precise first-paint or reliable startup speed ranking."
+  },
+  "search": {
+    "query": "Eukaryote",
+    "sameImportedArchive": true,
+    "readerArticleRemainedAnimal": true,
+    "precondition": "Query visibly populated but no matching search result button before explicit submission. Query textfield and existing reader links are NOT treated as ready.",
+    "official": {
+      "mode": "Native default submit search, combined title/full-text implementation",
+      "submit": "Return",
+      "readyRow": {
+        "role": "AXButton",
+        "description": "Eukaryote",
+        "path": [
+          0,
+          0,
+          0,
+          2,
+          1,
+          0
+        ]
+      },
+      "controllerSubmitToObservedResultUpperMs": 1066.756917,
+      "rawBefore": "official-search-eukaryote-ui.json",
+      "rawAfter": "official-search-submitted-ui.json"
+    },
+    "ours": {
+      "mode": "Search books panel; UI options Article titles / All available books; one imported archive",
+      "submit": "Search button",
+      "resultContainerPath": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        1,
+        2
+      ],
+      "readyRow": {
+        "role": "AXButton",
+        "title": "Eukaryote",
+        "path": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4,
+          0,
+          0,
+          1,
+          2,
+          1,
+          0
+        ]
+      },
+      "resultCountText": "About 7 results",
+      "controllerSubmitToObservedResultUpperMs": 1579.754417,
+      "rawBefore": "ours-search-eukaryote-ui.json",
+      "rawAfter": "ours-search-submitted-ui.json"
+    },
+    "interpretation": "Functional actual query-result proof in both apps. Modes differ, single observation each, controller/Swift overhead included: NO comparative query-latency ranking. Supersedes typing-only receipts and the earlier ours receipt with incorrect form-prefix scope."
+  },
+  "evidencePrivateRelativePaths": [
+    "matched-ours-animal-native-cohort.json",
+    "matched-official-animal-native-cohort.json",
+    "matched-mac-memory-summary.json",
+    "matched-ours-compressed.json",
+    "matched-official-compressed.json",
+    "mac-readiness-unlocked-cohort.json",
+    "official-search-eukaryote-ui.json",
+    "official-search-submitted-ui.json",
+    "ours-search-eukaryote-ui.json",
+    "ours-search-submitted-ui.json"
+  ],
+  "exclusions": [
+    "Pre-unlock/locked-screen failures are not application startup failures and are excluded.",
+    "Earlier unmatched direct-article/history/cache cohorts excluded.",
+    "No accepted screenshot/first-paint capture; AX body boundary only.",
+    "No physical-iPhone matched comparison claim.",
+    "No personal phone screenshots, device identifiers, or user library information in this receipt."
+  ],
+  "safety": {
+    "repoEdits": false,
+    "existingUserProfilesReset": false,
+    "voiceOverOrAudioSettingsChanged": false,
+    "screenCapturePermission": "One authorized ordinary request returned false; no bypass/reset/repeated request; accepted measurements use AX only",
+    "privateMeasurementProfilesRetained": true
+  }
+}

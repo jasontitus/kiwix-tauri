@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Executable platform-only instrumentation target, not a reader app. -->
+    <application
+        android:name="org.kiwix.workbench.inventory.InventoryApplication"
+        android:allowBackup="false"
+        android:hasCode="true"
+        android:label="Kiwix hardware inventory"
+        android:usesCleartextTraffic="false" />
+</manifest>

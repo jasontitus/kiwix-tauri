@@ -1,0 +1,444 @@
+name: Native desktop packages
+
+# Cost control: macOS runners bill at 10x and build the SDK from source, so the
+# macOS matrix runs only on manual dispatch/release, never on push, PR or a
+# schedule. Linux (1x) runs clippy/tests on code pushes to main and packages only
+# on manual runs; Windows stays manual on the trusted runner. Use
+# workflow_dispatch for ad-hoc packages.
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: Build on the provisioned trusted Windows libzim SDK runner
+        type: boolean
+        default: false
+      native_tls_tests:
+        description: Run native LocalSwarm TLS tests (requires live Wi-Fi or Ethernet on the macOS runner)
+        type: boolean
+        default: false
+      build_intel:
+        description: Also build the x86_64 macOS app (extra 10x minutes)
+        type: boolean
+        default: false
+      release_version:
+        description: 'Signed draft release version (empty builds development packages only)'
+        type: string
+        default: ''
+  push:
+    branches: [main]
+    paths: ['src-tauri/**', 'scripts/**', 'package*.json', 'index.html', '*config*', '.github/workflows/build.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  KIWIX_RELEASE_VERSION: ${{ inputs.release_version || '' }}
+
+jobs:
+  linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.release_version == '' || (github.ref == 'refs/heads/main' && inputs.build_windows)
+    name: Linux x86_64 AppImage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    environment: ${{ inputs.release_version != '' && 'desktop-release' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential meson ninja-build pkg-config \
+            liblzma-dev libzstd-dev libicu-dev zlib1g-dev libssl-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf file libfuse2t64 xvfb
+      - name: Build matched retained-descriptor desktop SDK
+        run: |
+          python scripts/build-desktop-sdk.py --jobs 6 \
+            --work-dir "$GITHUB_WORKSPACE/.native/desktop-sdk-build" \
+            --prefix "$GITHUB_WORKSPACE/.native/desktop-sdk"
+          echo "KIWIX_DESKTOP_SDK_ROOT=$GITHUB_WORKSPACE/.native/desktop-sdk" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/.native/desktop-sdk/lib" >> "$GITHUB_ENV"
+      - name: Build frontend assets embedded by the native crate
+        run: |
+          npm ci
+          npm run build
+      - name: Clippy with warnings as errors
+        # Check this exact checkout before packaging, including release runs.
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol -- -D warnings
+      - name: Rust tests
+        run: xvfb-run --auto-servernum cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol
+      - name: Configure signed release trust
+        if: inputs.release_version != ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+        run: node scripts/stage-update-release.mjs --configure
+      - name: Build self-contained AppImage
+        # Pushes run SDK build, clippy and tests only; packaging is reserved for
+        # scheduled and manual runs so ordinary commits do not pay for it.
+        if: github.event_name != 'push'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          npm ci
+          npm run build:mcp
+          if [ -n "$KIWIX_RELEASE_VERSION" ]; then
+            npm run tauri -- build --bundles appimage --config .updater-release.json
+          else
+            npm run tauri -- build --bundles appimage
+          fi
+      - name: Require GeoClue-compatible desktop identity
+        if: github.event_name != 'push'
+        run: |
+          for image in src-tauri/target/release/bundle/appimage/*.AppImage; do
+            image=$(realpath "$image")
+            extracted=$(mktemp -d "$RUNNER_TEMP/kiwix-appimage-XXXXXX")
+            (cd "$extracted" && "$image" --appimage-extract > /dev/null)
+            desktop="$extracted/squashfs-root/usr/share/applications/org.kiwix.workbench.desktop"
+            if [ ! -f "$desktop" ]; then
+              printf '%s\n' 'Missing org.kiwix.workbench.desktop: Linux launcher basename must match the GeoClue runtime identifier.' >&2
+              exit 1
+            fi
+          done
+      - name: Stage packages and provenance
+        if: github.event_name != 'push'
+        run: |
+          mkdir -p artifacts
+          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
+          cp .native/desktop-sdk/kiwix-sdk.json artifacts/SDK.json
+          cp -R .native/desktop-sdk/share/licenses artifacts/licenses
+          cp -R .native/desktop-sdk/share/provenance artifacts/provenance
+          cp -R .native/desktop-sdk-build/logs artifacts/sdk-build-logs
+          (cd artifacts && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'push'
+        with:
+          name: kiwix-linux-x86_64
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Sign exact finalized AppImage bytes
+        if: inputs.release_version != ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/stage-update-release.mjs --stage linux-x86_64-appimage src-tauri/target/release/bundle/appimage
+      - uses: actions/upload-artifact@v4
+        if: inputs.release_version != ''
+        with:
+          name: release-linux-x86_64
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    # Manual dispatch/release only: 10x billing and a from-source SDK build make
+    # every automatic run expensive. Both arches build on dispatch; the release
+    # path requires the trusted Windows runner flag.
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.release_version == '' || (github.ref == 'refs/heads/main' && inputs.build_windows))
+    name: macOS ${{ matrix.arch }} app
+    environment: ${{ inputs.release_version != '' && 'desktop-release' || '' }}
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        include: >-
+          ${{ fromJSON((inputs.build_intel || inputs.release_version != '')
+          && '[{"runner":"macos-15","arch":"aarch64"},{"runner":"macos-15-intel","arch":"x86_64"}]'
+          || '[{"runner":"macos-15","arch":"aarch64"}]') }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native dependency build prerequisites
+        run: |
+          brew install pkgconf meson ninja icu4c xz zstd zlib
+          pcdirs=''
+          for formula in icu4c xz zstd zlib; do
+            pcdirs="$(brew --prefix "$formula")/lib/pkgconfig:$pcdirs"
+          done
+          case "$(uname -m)" in
+            arm64) test '${{ matrix.arch }}' = aarch64 ;;
+            x86_64) test '${{ matrix.arch }}' = x86_64 ;;
+            *) exit 1 ;;
+          esac
+          echo "PKG_CONFIG_PATH=$pcdirs" >> "$GITHUB_ENV"
+          echo "NATIVE_ARCH=$(uname -m)" >> "$GITHUB_ENV"
+      - name: Build matched retained-descriptor desktop SDK
+        run: |
+          python scripts/build-desktop-sdk.py --jobs 6 \
+            --work-dir "$GITHUB_WORKSPACE/.native/desktop-sdk-build" \
+            --prefix "$GITHUB_WORKSPACE/.native/desktop-sdk"
+          echo "KIWIX_DESKTOP_SDK_ROOT=$GITHUB_WORKSPACE/.native/desktop-sdk" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$GITHUB_WORKSPACE/.native/desktop-sdk/lib" >> "$GITHUB_ENV"
+      - name: Build frontend assets embedded by the native crate
+        run: |
+          npm ci
+          npm run build
+      - name: Clippy with warnings as errors
+        # Check this exact checkout before packaging, including release runs.
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol -- -D warnings
+      - name: Rust tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol
+      - name: Native LocalSwarm TLS handshakes and application traffic
+        # These tests require an active local interface; failures gate the requested run.
+        if: github.event_name == 'workflow_dispatch' && inputs.native_tls_tests
+        timeout-minutes: 10
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol -- --ignored --test-threads=1 --nocapture apple_transport::native_ apple_sender_to_concurrent_quinn_receivers
+      - name: Build and ad-hoc sign the developer app
+        # Release credentials never reach this branch: with them present Tauri
+        # tries to look up a certificate it has not imported and then notarize
+        # with an empty team. A developer bundle is ad-hoc signed here and
+        # re-signed with the app entitlements by bundle-macos.mjs.
+        if: inputs.release_version == ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          # Explicit ad-hoc identity: an empty one makes Tauri look up the
+          # default keychain identity and fail.
+          APPLE_SIGNING_IDENTITY: "-"
+        run: |
+          npm ci
+          npm run build:mcp
+          npm run tauri -- build --bundles app
+          node scripts/bundle-macos.mjs src-tauri/target/release/bundle/macos/Kiwix.app --identity -
+      - name: Build, sign and notarize the release app
+        if: inputs.release_version != ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          : "${APPLE_CERTIFICATE_P12:?Missing Developer ID certificate}"
+          : "${APPLE_SIGNING_IDENTITY:?Missing Developer ID identity}"
+          : "${APPLE_ID:?Missing notarization Apple ID}"
+          : "${APPLE_PASSWORD:?Missing notarization app-specific password}"
+          : "${APPLE_TEAM_ID:?Missing Apple team ID}"
+          npm ci
+          npm run build:mcp
+          node scripts/stage-update-release.mjs --configure
+          cert="$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 --decode > "$cert"
+          keychain="$RUNNER_TEMP/kiwix-release.keychain-db"
+          password=$(openssl rand -hex 32)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security default-keychain -d user -s "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$cert" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          xcrun notarytool store-credentials kiwix-release --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --keychain "$keychain"
+          npm run tauri -- build --bundles app --config .updater-release.json
+          node scripts/bundle-macos.mjs src-tauri/target/release/bundle/macos/Kiwix.app --identity "$APPLE_SIGNING_IDENTITY" --notarize-profile kiwix-release
+      - name: Archive finalized app and SDK provenance
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            src-tauri/target/release/bundle/macos/Kiwix.app \
+            "artifacts/Kiwix-macos-${NATIVE_ARCH}-adhoc.zip"
+          cp .native/desktop-sdk/kiwix-sdk.json artifacts/SDK.json
+          cp -R .native/desktop-sdk/share/licenses artifacts/licenses
+          cp -R .native/desktop-sdk/share/provenance artifacts/provenance
+          cp -R .native/desktop-sdk-build/logs artifacts/sdk-build-logs
+          (cd artifacts && find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} + > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiwix-macos-${{ env.NATIVE_ARCH }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Sign finalized notarized app archive
+        if: inputs.release_version != ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/stage-update-release.mjs --stage darwin-${{ matrix.arch }}-app src-tauri/target/release/bundle/macos/Kiwix.app
+      - uses: actions/upload-artifact@v4
+        if: inputs.release_version != ''
+        with:
+          name: release-darwin-${{ matrix.arch }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove release keychain
+        if: always() && inputs.release_version != ''
+        run: |
+          security default-keychain -d user -s login.keychain-db
+          security delete-keychain "$RUNNER_TEMP/kiwix-release.keychain-db" || true
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+
+  windows:
+    # Never expose this trusted self-hosted runner to pull-request code. The SDK is
+    # an explicit external prerequisite, not an invented download or MinGW/MSVC mix.
+    if: github.event_name == 'workflow_dispatch' && inputs.build_windows && github.ref == 'refs/heads/main'
+    name: Windows x86_64 NSIS (trusted SDK prerequisite)
+    runs-on: [self-hosted, Windows, X64, kiwix-libzim-9_8]
+    timeout-minutes: 150
+    environment: ${{ inputs.release_version != '' && 'desktop-release' || 'native-windows' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Validate externally provisioned MSVC SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:LIBZIM_SDK_ROOT) { throw 'Runner must provide LIBZIM_SDK_ROOT; see PACKAGING.md.' }
+          $sdk = (Resolve-Path $env:LIBZIM_SDK_ROOT).Path
+          $manifest = Get-Content (Join-Path $sdk 'kiwix-sdk.json') -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 2 -or $manifest.version -ne '9.8.2' -or $manifest.target -ne 'x86_64-pc-windows-msvc' -or $manifest.libzim.commit -ne '26ec526f74e8342a40da5ab14e364546988e0e1a' -or $manifest.libzim.search -ne $true) {
+            throw 'SDK must contain pinned libzim 9.8.2 schema-2 release-mode MSVC x86_64 headers, import library, search, and DLL closure.'
+          }
+          if (-not $manifest.source -or -not $manifest.licenses -or -not $manifest.files) { throw 'SDK manifest needs provenance, licenses, and SHA256 file entries.' }
+          $requiredPatches = @(
+            @{ marker = 'kiwix-split-ranges-v1'; component = 'zim'; file = 'libzim-split-ranges.patch' },
+            @{ marker = 'kiwix-retained-fd-v1'; component = 'zim'; file = 'libzim-retained-fd.patch' }
+          )
+          foreach ($patch in $requiredPatches) {
+            if (@($manifest.patches) -notcontains $patch.marker) { throw "SDK lacks required patch $($patch.marker)" }
+            $records = @($manifest.sourcePatches | Where-Object { $_.marker -eq $patch.marker })
+            if ($records.Count -ne 1) { throw "SDK must declare patch provenance exactly once: $($patch.marker)" }
+            $record = $records[0]
+            $expected = (Get-FileHash -Algorithm SHA256 (Join-Path $env:GITHUB_WORKSPACE ('src-tauri/native/' + $patch.file))).Hash.ToLowerInvariant()
+            $relative = 'share/provenance/' + $patch.file
+            if ($record.component -ne $patch.component -or $record.sha256 -ne $expected -or $record.path -ne $relative -or $manifest.files.PSObject.Properties[$relative].Value -ne $expected) {
+              throw "Stale or missing installed SDK patch provenance: $($patch.marker)"
+            }
+          }
+          foreach ($entry in $manifest.files.PSObject.Properties) {
+            $file = [IO.Path]::GetFullPath((Join-Path $sdk $entry.Name))
+            if (-not $file.StartsWith($sdk + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'SDK manifest path escapes root.' }
+            if ((Get-FileHash -Algorithm SHA256 $file).Hash -ne $entry.Value) { throw "SDK checksum mismatch: $($entry.Name)" }
+          }
+          foreach ($required in @('include/zim/archive.h', 'lib/zim.lib')) {
+            if (-not $manifest.files.PSObject.Properties[$required]) { throw "SDK manifest must cover $required" }
+          }
+          $dlls = @(Get-ChildItem (Join-Path $sdk 'bin') -Filter '*.dll' -File)
+          if (-not $dlls.Count) { throw 'SDK bin directory must contain the complete runtime DLL closure.' }
+          $resources = @{}
+          foreach ($dll in $dlls) {
+            if (-not $manifest.files.PSObject.Properties['bin/' + $dll.Name]) { throw "Unverified runtime DLL: $($dll.Name)" }
+            $resources[$dll.FullName] = $dll.Name
+          }
+          # Tauri resources are installed beside the executable on Windows.
+          @{ bundle = @{ resources = $resources } } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 .native-windows.json
+          "LIBZIM_INCLUDE_DIR=$sdk\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "KIWIX_DESKTOP_SDK_ROOT=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LIBZIM_LIB_DIR=$sdk\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$sdk\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build NSIS installer
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          KIWIX_WINDOWS_CERTIFICATE_THUMBPRINT: ${{ vars.KIWIX_WINDOWS_CERTIFICATE_THUMBPRINT }}
+          KIWIX_WINDOWS_TIMESTAMP_URL: ${{ vars.KIWIX_WINDOWS_TIMESTAMP_URL }}
+        shell: pwsh
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+          $config = Join-Path $env:GITHUB_WORKSPACE '.native-windows.json'
+          if ($env:KIWIX_RELEASE_VERSION) {
+            node scripts/stage-update-release.mjs --configure
+            if ($LASTEXITCODE -ne 0) { throw 'Release trust configuration failed' }
+            $config = Join-Path $env:GITHUB_WORKSPACE '.updater-release.json'
+          }
+          npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --config $config
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri build failed' }
+      - name: Stage installers and checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe artifacts/
+          Copy-Item "$env:LIBZIM_SDK_ROOT/kiwix-sdk.json" artifacts/SDK.json
+          $lines = Get-ChildItem artifacts -File | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant(), $_.Name }
+          $lines | Set-Content -Encoding ascii artifacts/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiwix-windows-x86_64
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Sign exact Authenticode installer bytes
+        if: inputs.release_version != ''
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/stage-update-release.mjs --stage windows-x86_64-nsis src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+      - uses: actions/upload-artifact@v4
+        if: inputs.release_version != ''
+        with:
+          name: release-windows-x86_64
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Assemble verified signed draft release
+    if: github.event_name == 'workflow_dispatch' && inputs.release_version != '' && inputs.build_windows && github.ref == 'refs/heads/main'
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: desktop-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release/
+          merge-multiple: true
+      - name: Verify signatures and version and assemble manifest
+        env:
+          KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}
+        run: node scripts/stage-update-release.mjs --manifest
+      - name: Create immutable draft release for acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The tag must already exist: publishing another commit's binaries is refused.
+          test "$(git rev-list -n 1 "v$KIWIX_RELEASE_VERSION")" = "$GITHUB_SHA"
+          gh release create "v$KIWIX_RELEASE_VERSION" --draft --verify-tag --generate-notes published/*

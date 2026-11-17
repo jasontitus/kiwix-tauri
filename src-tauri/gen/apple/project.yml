@@ -1,0 +1,181 @@
+name: kiwix-workbench
+options:
+  bundleIdPrefix: com.tiltastech.zimreader
+  deploymentTarget:
+    iOS: 16.4
+fileGroups: [../../src]
+configs:
+  debug: debug
+  release: release
+settingGroups:
+  app:
+    base:
+      PRODUCT_NAME: Kiwix
+      PRODUCT_BUNDLE_IDENTIFIER: com.tiltastech.zimreader
+      # Signing must not depend on an Xcode account token: the team is a build
+      # input so device and simulator builds agree in CI and on this machine.
+      DEVELOPMENT_TEAM: A6G8H8NGAM
+      CODE_SIGN_STYLE: Automatic
+      # Now Playing is iOS 27+; weak-link it so the app still launches on 16.4.
+      OTHER_LDFLAGS: "$(inherited) -weak_framework NowPlaying"
+targetTemplates:
+  app:
+    type: application
+    sources:
+      - path: Sources
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      groups: [app]
+targets:
+  # Download Live Activity / Dynamic Island. A widget extension is a separate
+  # process, so it owns the SwiftUI presentation while the app (KiwixMobile
+  # plugin) requests and updates the activity. The attributes model is one file
+  # compiled into both targets. It is embedded into the app below; the app keeps
+  # its own bundle id, entitlements and signing flow.
+  KiwixDownloadActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: DownloadActivity
+      - path: ../../plugins/tauri-plugin-kiwix-mobile/ios/Sources/DownloadActivityAttributes.swift
+      - path: ../../plugins/tauri-plugin-kiwix-mobile/ios/Sources/ReadAloudActivityAttributes.swift
+    info:
+      path: DownloadActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Kiwix
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: KiwixDownloadActivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.tiltastech.zimreader.DownloadActivity
+        DEVELOPMENT_TEAM: A6G8H8NGAM
+        CODE_SIGN_STYLE: Automatic
+        # Must match the application: an extension with a newer deployment
+        # target cannot be embedded, and ActivityKit needs 16.1+.
+        IPHONEOS_DEPLOYMENT_TARGET: "16.4"
+        SKIP_INSTALL: true
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+  kiwix-workbench_iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+      # Exclude built static libs: regenerating with xcodegen after a build
+      # otherwise turns the per-configuration libapp.a copies into colliding
+      # resources ("Multiple commands produce …/libapp.a"). They are linked
+      # via LIBRARY_SEARCH_PATHS, never bundled as resources.
+      - path: Externals
+        excludes: ["**/*.a"]
+      - path: kiwix-workbench_iOS
+      - path: assets
+        buildPhase: resources
+        type: folder
+      - path: ../../native-locales
+        buildPhase: resources
+      - path: ../../PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: LaunchScreen.storyboard
+    info:
+      path: kiwix-workbench_iOS/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        UILaunchStoryboardName: LaunchScreen
+        NSCameraUsageDescription: "Only this active archive can request the camera. Your system may also ask for permission. You can revoke access below the article at any time."
+        NSLocationWhenInUseUsageDescription: "Your system will provide your location only to this active archive. You can revoke access below the article at any time."
+        NSBluetoothAlwaysUsageDescription: "Find nearby libraries and help connect the devices when you choose Share all or receive an archive. Archives transfer over an encrypted local connection, not Bluetooth."
+        NSLocalNetworkUsageDescription: "Discover nearby LocalSwarm devices and share offline archives on your local network. Enable discovery or sharing only on a trusted network."
+        NSBonjourServices: ["_localswarm._tcp"]
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            localhost:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Required for ActivityKit; the download activity is requested by the
+        # KiwixMobile plugin and rendered by KiwixDownloadActivity.appex.
+        NSSupportsLiveActivities: true
+        # Background audio requires the playback category installed at startup.
+        # WebKit owns archive activation; native speech claims its own activation.
+        UIBackgroundModes: [audio]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: ZIM offline archive
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: ["org.openzim.zim"]
+        CFBundleURLTypes:
+          - CFBundleURLName: com.tiltastech.zimreader.zim
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes: ["zim", "kiwix"]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.openzim.zim
+            UTTypeDescription: ZIM offline archive
+            UTTypeConformsTo: ["public.data"]
+            UTTypeTagSpecification:
+              public.filename-extension: ["zim", "zimaa"]
+              public.mime-type: ["application/x-zim"]
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+    entitlements:
+      path: kiwix-workbench_iOS/kiwix-workbench_iOS.entitlements
+      properties:
+        com.apple.developer.networking.HotspotConfiguration: true
+        com.apple.developer.networking.wifi-info: true
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      base:
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64 
+        LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+      groups: [app]
+    dependencies:
+      - target: KiwixDownloadActivity
+        embed: true
+      - framework: libapp.a
+        embed: false
+      # Kokoro inference runtime. The Rust build script copies this pinned
+      # xcframework here; it contains the device and simulator slices.
+      - framework: ../../sherpa-onnx.xcframework
+        embed: true
+      - sdk: CoreGraphics.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: WebKit.framework
+      - sdk: CoreLocation.framework
+    preBuildScripts:
+      - script: |
+          npm run -- tauri ios xcode-script -v --platform "${PLATFORM_DISPLAY_NAME:?}" --sdk-root "${SDKROOT:?}" --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration "${CONFIGURATION:?}" ${FORCE_COLOR} ${ARCHS:?}
+        name: Build Rust Code
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a

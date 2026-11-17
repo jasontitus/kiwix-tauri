@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Nur das aktive Archiv cha Zuegriff uf d Kamera aafrage. Dis System fragt villicht au nach ere Erlaubnis. Du chasch de Zuegriff jedeziit under em Artikel widerrüefe.";
+"NSLocationUsageDescription" = "Dis System git din Standort nur a das aktive Archiv wiiter. Du chasch de Zuegriff jedeziit under em Artikel widerrüefe.";
+"NSLocationWhenInUseUsageDescription" = "Dis System git din Standort nur a das aktive Archiv wiiter. Du chasch de Zuegriff jedeziit under em Artikel widerrüefe.";
+"NSLocalNetworkUsageDescription" = "Entdeck LocalSwarm-Grät i dinere Nöchi und teil Offline-Archiv i dim lokale Netzwerch. Aktivier s Entdecke oder s Teile nume i mene vertrauenswürdige Netzwerch.";

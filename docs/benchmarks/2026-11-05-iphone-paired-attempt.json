@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "status": "Failed first memory sample; no paired result; phone released",
+  "measurementDate": "2026-11-05",
+  "privateRunBasename": "comparison-7e7d0ae27486455094a1a35c916f63f7",
+  "mode": "comparison",
+  "order": "AB",
+  "artifacts": {
+    "ours": {
+      "sourceCommit": "3cce5af5677350996301b6cc335b30a5a00d4938",
+      "manifestSHA256": "cf417df26496c7c4e91311fde669ff202cac1cdbf81371a806ab999848bdb9ae",
+      "mainExecutableSHA256": "e82e339303cfb08224d66dc54750170cfe6921fd6b0fc485b6a3b2957b45e2d9",
+      "installSeconds": 4.474040416,
+      "dirtyOverlaysIncluded": false
+    },
+    "upstream": {
+      "version": "3.18.0",
+      "sourceCommit": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+      "manifestSHA256": "0ef3846d291339a4676c8c1e241917d0b1b360ed72f67023894253adc59c278c",
+      "mainExecutableSHA256": "ec648bceb117133fa89c2c19494c3174a777a007b47a0f2d6c23489f7f9eaafb",
+      "form": "Official source-built release, developer signed with separate identity; not an App Store binary",
+      "capabilityLimitation": "Owner approved omission of unauthorized Apple Pay merchant entitlement; reader and Stripe sources unchanged",
+      "installSeconds": 3.253557333
+    },
+    "runnerManifestSHA256": "fde976fdf0cc7bf87e872019bcc1fda9ba9c7c9b5514e7e0e1d93f5414cc770e"
+  },
+  "completed": [
+    "Installed ours, upstream and runner",
+    "Verified prelaunch preservation within recorded managed-container relocation scope",
+    "Reused our real Wikipedia fixture tab through ordinary UI",
+    "Captured actual Wikipedia home article grid before memory sampling"
+  ],
+  "failure": {
+    "stage": "memory:ours/wiki-home",
+    "command": "pymobiledevice3 developer dvt sysmon process single --userspace --mobdev2 --udid REDACTED --output SAMPLE",
+    "timeoutSeconds": 12,
+    "sampleFileBytes": 0,
+    "rootCause": "Unresolved; timeout output was not retained by the original helper",
+    "staticFinding": "PMD 9.36 userspace selection takes precedence over mobdev2. Its single-snapshot command creates the output after service-provider resolution, then performs sequential executable-name RPC enrichment for all processes before emitting JSON.",
+    "inferenceOnly": "DVT/Sysmontap startup or all-process enrichment over Wi-Fi may exceed the command budget; neither is established as the actual stalled operation.",
+    "retryDuringWindow": false
+  },
+  "timingSeconds": {
+    "wrapperIncludingCleanup": 90.53,
+    "helperIncludingCleanup": 88.8849425,
+    "oursActivationToForegroundObservation": 1.4415914581622928
+  },
+  "timingScope": "Installation/automation observations only; not calibrated startup or search latency",
+  "memory": {
+    "sampleCount": 0,
+    "completedCheckpoints": 0,
+    "pairedComparisonCompleted": false,
+    "winner": null
+  },
+  "notCompleted": [
+    "Upstream Wikipedia intake/rendering",
+    "Animal search in either app",
+    "Hawaii intake/rendering/gestures in either app",
+    "Post-workload preservation verification"
+  ],
+  "cleanup": {
+    "hostProcessesStopped": true,
+    "remoteRunnerStopped": true,
+    "complete": true,
+    "phoneReleased": true,
+    "immediateUserFacingReleaseAndFailureReportDelivered": true
+  },
+  "privateEvidenceSHA256": {
+    "result.json": "b1a53fd0fa2ae1221357fda2ebfd9916156985d202e5c13023669cf7cc445442",
+    "xctest.log": "9fa8d11e9a740652d7fc229d02bd05b952280922704563b0c6c5e43f31677f52",
+    "ours-wiki-home-before.png": "b8fa356805d88913442e7babf29388b8a9fbca23fceb748c56dc19943d53d82d",
+    "ours-wiki-home-sample-1.json": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

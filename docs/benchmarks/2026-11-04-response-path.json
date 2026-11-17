@@ -1,0 +1,2387 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "sourceScope": "Reviewed server.rs response-body sharing and allocation-free head scan after b7012ee; no frontend/native SDK/feature changes",
+  "localEvidenceRoot": "/private/tmp/kiwix-response-efficiency.dpoo72nj",
+  "changes": [
+    "Validated ordinary HTML GET shares the existing Vec allocation as Bytes slices before/after the injected scripts instead of copying the complete article",
+    "HEAD retains read/UTF-8 validation, status and representation length but no longer allocates the discarded response body",
+    "Bounded head search compares ASCII case-insensitively without allocating/lowercasing a64KiBprefix; same first match, cap and legacy semantics",
+    "Oversized HTML streaming keeps its existing behavior and receives the equivalent allocation-free head offset"
+  ],
+  "scopeLimits": [
+    "Allocation requested through Rust GlobalAlloc is not live/peak heap, RSS or PSS",
+    "Optimized constructor timings exclude archive I/O, validation, injection preparation, body consumption, network and UI",
+    "Actual HTTP timings use two debug application processes on warm persistent loopback connections; not shipping/mobile startup, browser-ready latency or superiority over official Kiwix",
+    "Earlier settled-PSS/readiness/search cohorts in2026-11-04-reader-efficiency.json retain their negative/inconclusive conclusions"
+  ],
+  "constructor": {
+    "sourceExtraction": "syn AST extraction of actual current functions plus actual frozen b7012ee scanner (renamed only); copied baseline body matches original branch",
+    "mode": "release opt-level3, one codegen unit",
+    "controlledInjectionBytes": 280,
+    "processOrder": [
+      "copied",
+      "shared",
+      "shared",
+      "copied"
+    ],
+    "processRunsPerVariant": 2,
+    "batchesPerWorkloadPerProcess": 9,
+    "constructionsPerBatch": 100,
+    "measuredBodies": 10800,
+    "completeBodyEqualityPassed": true,
+    "scanEquivalencePreflight": "Mixed-case/no-head/64KiB boundary/legacy header-prefix and100deterministic random byte buffers per process passed",
+    "summary": [
+      {
+        "workload": "wikipedia",
+        "source": {
+          "path": "/private/tmp/kiwix-response-efficiency.dpoo72nj/wikipedia-article.html",
+          "bytes": 611348,
+          "sha256": "1dd4657b8b66d5fa539e52662b15fecc68bd35cf3c38316a069a17697fc5793d",
+          "archiveArticle": "Animal"
+        },
+        "copied": {
+          "medianBatchMeanNanosecondsByProcess": [
+            12048.77,
+            11332.11
+          ],
+          "requestedAllocationBytesPerConstruction": 677196.0,
+          "allocationCallsPerConstruction": 3.0
+        },
+        "shared": {
+          "medianBatchMeanNanosecondsByProcess": [
+            474.22,
+            478.38
+          ],
+          "requestedAllocationBytesPerConstruction": 136.0,
+          "allocationCallsPerConstruction": 2.0
+        }
+      },
+      {
+        "workload": "streetzim-map",
+        "source": {
+          "path": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-map.html",
+          "bytes": 1048576,
+          "sha256": "e185df811d792b6cbfcb6c01c1e76e9ab0aa29a91b487a66e2083d27a07a2d0d",
+          "archiveArticle": "index.html"
+        },
+        "copied": {
+          "medianBatchMeanNanosecondsByProcess": [
+            16762.98,
+            17911.26
+          ],
+          "requestedAllocationBytesPerConstruction": 1114424.0,
+          "allocationCallsPerConstruction": 3.0
+        },
+        "shared": {
+          "medianBatchMeanNanosecondsByProcess": [
+            153.77,
+            180.87
+          ],
+          "requestedAllocationBytesPerConstruction": 136.0,
+          "allocationCallsPerConstruction": 2.0
+        }
+      },
+      {
+        "workload": "streetzim",
+        "source": {
+          "path": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-article.html",
+          "bytes": 39908,
+          "sha256": "6fead7cbcfdce2bd4159501617f1e50c2b7bb95f872ab645a0b0c68ff9f41e88",
+          "archiveArticle": "wiki-article/Honolulu"
+        },
+        "copied": {
+          "medianBatchMeanNanosecondsByProcess": [
+            1853.32,
+            1901.29
+          ],
+          "requestedAllocationBytesPerConstruction": 80128.0,
+          "allocationCallsPerConstruction": 3.0
+        },
+        "shared": {
+          "medianBatchMeanNanosecondsByProcess": [
+            101.75,
+            94.14
+          ],
+          "requestedAllocationBytesPerConstruction": 136.0,
+          "allocationCallsPerConstruction": 2.0
+        }
+      }
+    ],
+    "rawBlocks": [
+      {
+        "block": 1,
+        "variant": "copied",
+        "result": {
+          "scope": "HTML response-body construction only, including head-offset scan and allocation-counter overhead; excludes archive read/UTF-8 validation/injection preparation/body consumption/network/UI. Allocation bytes are requested through Rust GlobalAlloc, not peak heap/RSS/PSS. Every completed body is byte-equal to the preceding constructor.",
+          "variant": "copied",
+          "workloads": [
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12949.97,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12916.26,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12404.97,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12348.74,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12048.77,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12046.66,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11991.23,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11739.99,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11708.79,
+                  "meanRequestedAllocationBytes": 677196.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/wikipedia-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 611348,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 611628
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16959.53,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16792.54,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16592.88,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16683.29,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16740.03,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16772.02,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16762.98,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16656.21,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 16796.7,
+                  "meanRequestedAllocationBytes": 1114424.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-map.html",
+              "injectionBytes": 280,
+              "inputBytes": 1048576,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 1048856
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1899.23,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1841.18,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1861.72,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1862.87,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1842.03,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1853.32,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1832.52,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1902.92,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1842.88,
+                  "meanRequestedAllocationBytes": 80128.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 39908,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 40188
+            }
+          ]
+        }
+      },
+      {
+        "block": 2,
+        "variant": "shared",
+        "result": {
+          "scope": "HTML response-body construction only, including head-offset scan and allocation-counter overhead; excludes archive read/UTF-8 validation/injection preparation/body consumption/network/UI. Allocation bytes are requested through Rust GlobalAlloc, not peak heap/RSS/PSS. Every completed body is byte-equal to the preceding constructor.",
+          "variant": "shared",
+          "workloads": [
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 499.98,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 474.22,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 467.94,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 468.8,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 468.77,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 477.87,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 476.7,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 479.2,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 470.4,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/wikipedia-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 611348,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 611628
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 113.37,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 158.35,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 166.23,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 152.02,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 148.36,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 147.07,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 153.77,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 182.53,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 187.13,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-map.html",
+              "injectionBytes": 280,
+              "inputBytes": 1048576,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 1048856
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 138.29,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 100.43,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 101.28,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 104.95,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 159.21,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 101.75,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 99.97,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 102.46,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 92.54,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 39908,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 40188
+            }
+          ]
+        }
+      },
+      {
+        "block": 3,
+        "variant": "shared",
+        "result": {
+          "scope": "HTML response-body construction only, including head-offset scan and allocation-counter overhead; excludes archive read/UTF-8 validation/injection preparation/body consumption/network/UI. Allocation bytes are requested through Rust GlobalAlloc, not peak heap/RSS/PSS. Every completed body is byte-equal to the preceding constructor.",
+          "variant": "shared",
+          "workloads": [
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 537.9,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 475.85,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 475.45,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 477.09,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 478.38,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 482.03,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 479.58,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 480.4,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 454.95,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/wikipedia-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 611348,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 611628
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 178.76,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 180.87,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 184.97,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 187.96,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 171.22,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 187.13,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 182.99,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 178.32,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 173.33,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-map.html",
+              "injectionBytes": 280,
+              "inputBytes": 1048576,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 1048856
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 92.05,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 93.33,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 95.01,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 95.44,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 95.01,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 91.65,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 97.45,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 94.14,
+                  "meanRequestedAllocationBytes": 136.0
+                },
+                {
+                  "meanAllocationCalls": 2.0,
+                  "meanConstructorNanoseconds": 91.67,
+                  "meanRequestedAllocationBytes": 136.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 39908,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 40188
+            }
+          ]
+        }
+      },
+      {
+        "block": 4,
+        "variant": "copied",
+        "result": {
+          "scope": "HTML response-body construction only, including head-offset scan and allocation-counter overhead; excludes archive read/UTF-8 validation/injection preparation/body consumption/network/UI. Allocation bytes are requested through Rust GlobalAlloc, not peak heap/RSS/PSS. Every completed body is byte-equal to the preceding constructor.",
+          "variant": "copied",
+          "workloads": [
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 12064.98,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 13236.28,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11332.11,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11365.83,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11300.43,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11314.98,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11369.58,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11321.24,
+                  "meanRequestedAllocationBytes": 677196.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 11310.47,
+                  "meanRequestedAllocationBytes": 677196.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/wikipedia-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 611348,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 611628
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17816.7,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17899.14,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17911.26,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17918.83,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17930.42,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 18055.73,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17898.33,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17890.41,
+                  "meanRequestedAllocationBytes": 1114424.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 17931.34,
+                  "meanRequestedAllocationBytes": 1114424.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-map.html",
+              "injectionBytes": 280,
+              "inputBytes": 1048576,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 1048856
+            },
+            {
+              "batches": [
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1899.61,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1887.13,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1902.97,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1895.82,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1911.22,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1901.29,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1922.99,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1920.46,
+                  "meanRequestedAllocationBytes": 80128.0
+                },
+                {
+                  "meanAllocationCalls": 3.0,
+                  "meanConstructorNanoseconds": 1898.33,
+                  "meanRequestedAllocationBytes": 80128.0
+                }
+              ],
+              "file": "/private/tmp/kiwix-response-efficiency.dpoo72nj/streetzim-article.html",
+              "injectionBytes": 280,
+              "inputBytes": 39908,
+              "repetitionsPerBatch": 100,
+              "responseBytes": 40188
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "actualHttpDelivery": {
+    "mode": "Actual debug headless applications, same schema2libzim9.8.2 desktopSDK, source-only delta",
+    "baselineExecutableSha256": "62184a0d1c7fc50a76b448aecd5e97e56eb9885e0477396a6cab9990fcd6f7e1",
+    "sharedExecutableSha256": "43c7ea4e29e58dd067eded6eff73e0ee55bea8fa8622f87722180528bbcfc343",
+    "order": [
+      "copied",
+      "shared",
+      "shared",
+      "copied",
+      "shared",
+      "copied",
+      "copied",
+      "shared"
+    ],
+    "blocksPerVariant": 4,
+    "getRequestsPerWorkloadPerBlock": 50,
+    "timedGets": 1200,
+    "warmupGetsPerVariantAndWorkload": 5,
+    "sourceBytesPreserved": true,
+    "getSecurityHeaderAssertionsPassed": true,
+    "headStatusEmptyBodyAndLengthPassed": true,
+    "headSecurityHeaderParityChecked": false,
+    "noHostBuildsDuringTimedCohort": true,
+    "summary": [
+      {
+        "workload": "wikipedia",
+        "copiedBlockMedianMs": [
+          0.9950625,
+          0.9880835,
+          1.0509165,
+          1.0004170000000001
+        ],
+        "sharedBlockMedianMs": [
+          0.4695415,
+          0.4562915,
+          0.4614165,
+          0.46768750000000003
+        ],
+        "copiedMeanOfBlockMediansMs": 1.008619875,
+        "sharedMeanOfBlockMediansMs": 0.46373425
+      },
+      {
+        "workload": "streetzim-map",
+        "copiedBlockMedianMs": [
+          1.2759995,
+          1.272666,
+          1.2905415,
+          1.2759375
+        ],
+        "sharedBlockMedianMs": [
+          0.745729,
+          0.7432915,
+          0.830875,
+          0.7576039999999999
+        ],
+        "copiedMeanOfBlockMediansMs": 1.2787861249999999,
+        "sharedMeanOfBlockMediansMs": 0.769374875
+      },
+      {
+        "workload": "streetzim",
+        "copiedBlockMedianMs": [
+          0.5564585,
+          0.5643335,
+          0.553479,
+          0.543354
+        ],
+        "sharedBlockMedianMs": [
+          0.2497085,
+          0.2574165,
+          0.2623125,
+          0.248312
+        ],
+        "copiedMeanOfBlockMediansMs": 0.55440625,
+        "sharedMeanOfBlockMediansMs": 0.254437375
+      }
+    ],
+    "rawBlocks": [
+      {
+        "block": 1,
+        "variant": "copied",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              1.297292,
+              1.090125,
+              1.0175,
+              1.056375,
+              0.992459,
+              0.983333,
+              0.97175,
+              1.032375,
+              1.029,
+              0.987083,
+              0.966625,
+              1.006583,
+              0.994959,
+              0.988875,
+              0.997791,
+              0.981458,
+              0.987791,
+              1.0035,
+              0.96875,
+              0.95525,
+              1.006709,
+              1.001625,
+              0.967583,
+              0.966583,
+              0.977625,
+              0.96925,
+              0.959667,
+              1.033083,
+              1.017708,
+              0.984625,
+              1.014666,
+              0.970583,
+              1.048583,
+              1.144792,
+              1.111375,
+              1.012209,
+              1.04125,
+              1.041,
+              1.011292,
+              0.965333,
+              1.0035,
+              0.9925,
+              1.006375,
+              0.982667,
+              0.992708,
+              0.97125,
+              0.995166,
+              1.010792,
+              0.976917,
+              0.946792
+            ],
+            "medianMs": 0.9950625
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              1.530667,
+              1.317417,
+              1.265833,
+              1.255625,
+              1.293792,
+              1.283666,
+              1.243667,
+              1.234291,
+              1.279834,
+              1.244458,
+              1.263042,
+              1.262958,
+              1.415375,
+              1.2925,
+              1.327667,
+              1.297125,
+              1.275167,
+              1.241833,
+              1.328083,
+              1.239167,
+              1.276041,
+              1.293458,
+              1.266959,
+              1.315,
+              1.308417,
+              1.256083,
+              1.247917,
+              1.243209,
+              1.293542,
+              1.213542,
+              1.295083,
+              1.242459,
+              1.275042,
+              1.22125,
+              1.223917,
+              1.406083,
+              1.3945,
+              1.7075,
+              1.39225,
+              1.376292,
+              1.293166,
+              1.27675,
+              1.307208,
+              1.309875,
+              1.252667,
+              1.241208,
+              1.236334,
+              1.23675,
+              1.275958,
+              1.249542
+            ],
+            "medianMs": 1.2759995
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.616375,
+              0.59875,
+              0.584125,
+              0.566625,
+              0.565,
+              0.574792,
+              0.679083,
+              0.623041,
+              0.603,
+              0.760625,
+              0.811,
+              0.602375,
+              0.544375,
+              0.560125,
+              0.546375,
+              0.550708,
+              0.548708,
+              0.556042,
+              0.538958,
+              0.561875,
+              0.554,
+              0.563958,
+              0.560417,
+              0.552041,
+              0.59625,
+              0.547417,
+              0.561458,
+              0.543708,
+              0.545041,
+              0.558541,
+              0.542083,
+              0.542875,
+              0.542208,
+              0.554167,
+              0.556875,
+              0.559541,
+              0.553875,
+              0.557834,
+              0.531041,
+              0.553041,
+              0.55975,
+              0.542625,
+              0.539708,
+              0.577667,
+              0.54925,
+              0.54625,
+              0.530917,
+              0.547,
+              0.568,
+              0.550375
+            ],
+            "medianMs": 0.5564585
+          }
+        ]
+      },
+      {
+        "block": 2,
+        "variant": "shared",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              0.924916,
+              0.540625,
+              0.503792,
+              0.49625,
+              0.607042,
+              0.557042,
+              0.472083,
+              0.462542,
+              0.478166,
+              0.444459,
+              0.462625,
+              0.4905,
+              0.453208,
+              0.524,
+              0.473917,
+              0.479834,
+              0.446375,
+              0.44825,
+              0.457292,
+              0.479417,
+              0.496125,
+              0.458792,
+              0.453916,
+              0.464458,
+              0.431,
+              0.462125,
+              0.449375,
+              0.431167,
+              0.444167,
+              0.536042,
+              0.533166,
+              0.581709,
+              0.580084,
+              0.518292,
+              0.51225,
+              0.446584,
+              0.494458,
+              0.570875,
+              0.454708,
+              0.466167,
+              0.498708,
+              0.458083,
+              0.448167,
+              0.467,
+              0.477125,
+              0.442875,
+              0.455959,
+              0.456167,
+              0.493958,
+              0.452667
+            ],
+            "medianMs": 0.4695415
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              1.063084,
+              0.844583,
+              0.764958,
+              0.775458,
+              0.769083,
+              0.784875,
+              0.725916,
+              0.761834,
+              0.745833,
+              0.728291,
+              0.762584,
+              0.728416,
+              0.798292,
+              0.775583,
+              0.733,
+              0.735042,
+              0.7535,
+              0.738166,
+              0.72625,
+              0.742292,
+              0.741292,
+              0.6985,
+              0.762584,
+              0.711875,
+              0.760958,
+              0.736083,
+              0.762209,
+              0.73525,
+              0.819333,
+              0.747834,
+              0.745625,
+              0.725583,
+              0.739834,
+              0.742125,
+              0.730917,
+              0.778333,
+              0.761,
+              0.743333,
+              0.739084,
+              0.779459,
+              0.756875,
+              0.751458,
+              0.738417,
+              0.717291,
+              0.724542,
+              0.78625,
+              0.714625,
+              0.78425,
+              0.807875,
+              0.731958
+            ],
+            "medianMs": 0.745729
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.343375,
+              0.269583,
+              0.26575,
+              0.268166,
+              0.412959,
+              0.288417,
+              0.262125,
+              0.264292,
+              0.2495,
+              0.266208,
+              0.251667,
+              0.26575,
+              0.254459,
+              0.253084,
+              0.23,
+              0.249542,
+              0.243917,
+              0.265208,
+              0.242916,
+              0.24825,
+              0.248,
+              0.233458,
+              0.2515,
+              0.240834,
+              0.260209,
+              0.251792,
+              0.248542,
+              0.237959,
+              0.251125,
+              0.233959,
+              0.249875,
+              0.229833,
+              0.231417,
+              0.254042,
+              0.258542,
+              0.246917,
+              0.259791,
+              0.247583,
+              0.249084,
+              0.242625,
+              0.243292,
+              0.245459,
+              0.241375,
+              0.276292,
+              0.255209,
+              0.24275,
+              0.248208,
+              0.248209,
+              0.25375,
+              0.244042
+            ],
+            "medianMs": 0.2497085
+          }
+        ]
+      },
+      {
+        "block": 3,
+        "variant": "shared",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              0.50975,
+              0.475833,
+              0.4365,
+              0.476459,
+              0.551375,
+              0.563666,
+              0.541916,
+              0.534959,
+              0.461125,
+              0.449208,
+              0.4465,
+              0.469625,
+              0.433042,
+              0.447708,
+              0.480833,
+              0.47675,
+              0.449584,
+              0.451542,
+              0.459625,
+              0.458625,
+              0.466875,
+              0.478542,
+              0.486875,
+              0.4395,
+              0.441833,
+              0.460167,
+              0.470709,
+              0.454,
+              0.431041,
+              0.453458,
+              0.443333,
+              0.409959,
+              0.44525,
+              0.428291,
+              0.483125,
+              0.466292,
+              0.452,
+              0.453083,
+              0.438167,
+              0.416625,
+              0.441,
+              0.457,
+              0.518167,
+              0.455583,
+              0.460084,
+              0.438,
+              0.475875,
+              0.457,
+              0.439792,
+              0.449458
+            ],
+            "medianMs": 0.4562915
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              0.90975,
+              0.896708,
+              0.766709,
+              0.880709,
+              0.735,
+              0.795583,
+              0.751042,
+              0.7565,
+              0.736584,
+              0.787334,
+              0.732666,
+              0.736,
+              0.737709,
+              0.708875,
+              0.739125,
+              0.742458,
+              0.729459,
+              0.756834,
+              0.733875,
+              0.745917,
+              0.8305,
+              0.733834,
+              0.7435,
+              0.833083,
+              0.782083,
+              0.748,
+              0.730791,
+              0.743083,
+              0.739375,
+              0.740959,
+              0.743583,
+              0.737875,
+              0.736875,
+              0.7215,
+              0.841333,
+              0.740583,
+              0.728375,
+              0.725625,
+              0.780333,
+              0.752292,
+              0.777959,
+              0.745,
+              0.736708,
+              0.71475,
+              0.734125,
+              0.7635,
+              0.711042,
+              0.761166,
+              0.745375,
+              0.747417
+            ],
+            "medianMs": 0.7432915
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.296042,
+              0.2535,
+              0.245875,
+              0.240875,
+              0.261125,
+              0.251333,
+              0.261708,
+              0.24475,
+              0.271458,
+              0.276875,
+              0.274583,
+              0.279,
+              0.30525,
+              0.257333,
+              0.2575,
+              0.303916,
+              0.253875,
+              0.264042,
+              0.480125,
+              0.293792,
+              0.26375,
+              0.251209,
+              0.256875,
+              0.265667,
+              0.253292,
+              0.290125,
+              0.276042,
+              0.293041,
+              0.310041,
+              0.2615,
+              0.257666,
+              0.264042,
+              0.26425,
+              0.2415,
+              0.258208,
+              0.240667,
+              0.233208,
+              0.264792,
+              0.254584,
+              0.249875,
+              0.254209,
+              0.252333,
+              0.254459,
+              0.242375,
+              0.251833,
+              0.231916,
+              0.241458,
+              0.243834,
+              0.240875,
+              0.231417
+            ],
+            "medianMs": 0.2574165
+          }
+        ]
+      },
+      {
+        "block": 4,
+        "variant": "copied",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              1.447541,
+              1.057333,
+              1.001875,
+              1.032375,
+              0.99175,
+              1.0055,
+              1.111916,
+              1.011375,
+              0.944375,
+              0.972584,
+              0.964417,
+              0.993959,
+              0.969625,
+              0.978584,
+              0.964166,
+              0.982791,
+              0.975625,
+              0.982583,
+              0.961792,
+              0.975916,
+              0.989458,
+              0.9375,
+              0.982417,
+              0.968917,
+              0.987042,
+              0.998667,
+              0.983667,
+              0.977958,
+              0.989125,
+              0.999209,
+              1.003542,
+              1.008417,
+              1.017792,
+              0.950666,
+              1.058375,
+              0.983084,
+              0.961458,
+              1.027833,
+              0.979375,
+              0.995833,
+              0.976333,
+              0.976834,
+              0.997542,
+              1.028958,
+              0.998125,
+              0.991583,
+              0.975083,
+              0.963,
+              0.995958,
+              1.040042
+            ],
+            "medianMs": 0.9880835
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              1.582416,
+              1.519292,
+              1.501584,
+              1.364584,
+              1.363792,
+              1.335708,
+              1.307666,
+              1.235625,
+              1.303167,
+              1.275375,
+              1.273791,
+              1.302458,
+              1.293417,
+              1.338083,
+              1.281709,
+              1.253,
+              1.2535,
+              1.247125,
+              1.242209,
+              1.255875,
+              1.268667,
+              1.288334,
+              1.275625,
+              1.308458,
+              1.316833,
+              1.260541,
+              1.261791,
+              1.243583,
+              1.266625,
+              1.257417,
+              1.26375,
+              1.261333,
+              1.281583,
+              1.247875,
+              1.254791,
+              1.284875,
+              1.279625,
+              1.272416,
+              1.274958,
+              1.251583,
+              1.229833,
+              1.251,
+              1.238875,
+              1.246917,
+              1.29075,
+              1.260542,
+              1.299667,
+              1.259541,
+              1.272916,
+              1.260542
+            ],
+            "medianMs": 1.272666
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.631916,
+              0.648833,
+              0.625167,
+              0.680625,
+              0.6075,
+              0.675459,
+              0.673375,
+              0.733833,
+              0.683584,
+              0.632833,
+              0.605583,
+              0.614292,
+              0.634708,
+              0.572208,
+              0.556542,
+              0.571583,
+              0.542667,
+              0.535709,
+              0.558959,
+              0.588125,
+              0.543958,
+              0.546375,
+              0.5525,
+              0.580416,
+              0.538167,
+              0.563334,
+              0.557583,
+              0.559416,
+              0.532875,
+              0.555875,
+              0.553083,
+              0.568584,
+              0.552417,
+              0.541208,
+              0.547125,
+              0.570542,
+              0.575833,
+              0.56775,
+              0.546125,
+              0.565333,
+              0.561125,
+              0.542,
+              0.55575,
+              0.543334,
+              0.570208,
+              0.584916,
+              0.541541,
+              0.528792,
+              0.566584,
+              0.54375
+            ],
+            "medianMs": 0.5643335
+          }
+        ]
+      },
+      {
+        "block": 5,
+        "variant": "shared",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              0.800334,
+              0.565042,
+              0.550667,
+              0.5045,
+              0.500541,
+              0.491584,
+              0.4765,
+              0.478458,
+              0.502459,
+              0.474417,
+              0.459166,
+              0.435458,
+              0.468209,
+              0.459667,
+              0.447125,
+              0.45225,
+              0.45,
+              0.448417,
+              0.442834,
+              0.443584,
+              0.46975,
+              0.440416,
+              0.437375,
+              0.469417,
+              0.489208,
+              0.47375,
+              0.4475,
+              0.467875,
+              0.532625,
+              0.483667,
+              0.446584,
+              0.431667,
+              0.438917,
+              0.43825,
+              0.425834,
+              0.467042,
+              0.463166,
+              0.465208,
+              0.495666,
+              0.447875,
+              0.4455,
+              0.465083,
+              0.459625,
+              0.45425,
+              0.436458,
+              0.465291,
+              0.441042,
+              0.452541,
+              0.456208,
+              0.465292
+            ],
+            "medianMs": 0.4614165
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              0.889834,
+              0.8595,
+              0.871583,
+              0.749833,
+              0.909375,
+              1.138333,
+              1.069875,
+              0.820708,
+              0.878,
+              0.934916,
+              0.874917,
+              0.799833,
+              0.805916,
+              0.818833,
+              0.815625,
+              0.836625,
+              0.799334,
+              0.836916,
+              0.86125,
+              0.927,
+              0.886166,
+              0.880916,
+              0.771375,
+              0.815708,
+              0.759667,
+              0.810375,
+              0.764709,
+              0.785625,
+              0.825125,
+              0.807667,
+              0.843917,
+              1.025083,
+              0.889125,
+              0.883209,
+              0.800292,
+              0.907083,
+              0.788167,
+              0.80675,
+              0.920834,
+              0.813167,
+              0.810667,
+              0.897166,
+              0.846334,
+              0.741958,
+              0.818292,
+              0.867583,
+              0.840625,
+              0.819916,
+              0.818042,
+              0.776625
+            ],
+            "medianMs": 0.830875
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.338458,
+              0.323083,
+              0.316334,
+              0.281125,
+              0.256709,
+              0.254833,
+              0.258375,
+              0.259084,
+              0.247667,
+              0.255208,
+              0.257375,
+              0.257584,
+              0.263334,
+              0.280959,
+              0.264084,
+              0.264208,
+              0.251375,
+              0.2395,
+              0.254334,
+              0.274584,
+              0.266,
+              0.263375,
+              0.250333,
+              0.250459,
+              0.259,
+              0.244583,
+              0.288,
+              0.253208,
+              0.247041,
+              0.272542,
+              0.262417,
+              0.274333,
+              0.279708,
+              0.252167,
+              0.28,
+              0.262625,
+              0.2495,
+              0.262208,
+              0.273917,
+              0.271125,
+              0.265458,
+              0.262,
+              0.267833,
+              0.251375,
+              0.264875,
+              0.275125,
+              0.249792,
+              0.24525,
+              0.245084,
+              0.291292
+            ],
+            "medianMs": 0.2623125
+          }
+        ]
+      },
+      {
+        "block": 6,
+        "variant": "copied",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              1.390167,
+              1.149625,
+              1.109667,
+              1.098834,
+              1.052875,
+              1.051625,
+              1.044833,
+              1.051875,
+              1.033875,
+              1.025083,
+              1.038458,
+              1.05,
+              1.0675,
+              1.127125,
+              1.098375,
+              1.08075,
+              1.135333,
+              1.032875,
+              1.074709,
+              1.061334,
+              1.065625,
+              1.047208,
+              1.062,
+              1.057542,
+              1.053708,
+              1.050208,
+              1.037708,
+              1.002917,
+              1.023042,
+              0.988292,
+              1.049375,
+              1.040125,
+              1.0585,
+              0.986125,
+              1.007083,
+              1.067958,
+              1.056833,
+              1.038917,
+              1.014083,
+              1.068709,
+              1.122584,
+              1.010166,
+              1.003041,
+              1.008291,
+              1.057375,
+              1.030208,
+              1.052833,
+              1.02075,
+              0.982959,
+              1.008584
+            ],
+            "medianMs": 1.0509165
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              1.469959,
+              1.347041,
+              1.249291,
+              1.286083,
+              1.295833,
+              1.282625,
+              1.252792,
+              1.27675,
+              1.26475,
+              1.2535,
+              1.241,
+              1.275042,
+              1.31425,
+              1.333958,
+              1.465833,
+              1.448292,
+              1.301209,
+              1.261083,
+              1.270209,
+              1.303917,
+              1.262292,
+              1.307,
+              1.395583,
+              1.263958,
+              1.3535,
+              1.440291,
+              1.348,
+              1.264708,
+              1.543667,
+              1.330834,
+              1.291125,
+              1.27575,
+              1.240916,
+              1.292709,
+              1.286583,
+              1.287834,
+              1.340083,
+              1.235375,
+              1.289958,
+              1.268333,
+              1.421625,
+              1.308666,
+              1.363041,
+              1.312292,
+              1.40575,
+              1.380333,
+              1.282959,
+              1.251208,
+              1.252458,
+              1.24825
+            ],
+            "medianMs": 1.2905415
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.645375,
+              0.550667,
+              0.564,
+              0.548625,
+              0.532208,
+              0.538,
+              0.545584,
+              0.567083,
+              0.57,
+              0.526667,
+              0.540792,
+              0.573166,
+              0.556583,
+              0.586541,
+              0.553875,
+              0.554542,
+              0.5435,
+              0.559292,
+              0.552334,
+              0.553083,
+              0.544875,
+              0.559416,
+              0.546125,
+              0.53625,
+              0.551042,
+              0.565958,
+              0.576209,
+              0.534959,
+              0.540875,
+              0.577709,
+              0.537542,
+              0.532541,
+              0.583708,
+              0.547958,
+              0.577708,
+              0.548291,
+              0.734416,
+              0.604042,
+              0.5475,
+              0.568041,
+              0.542333,
+              0.560709,
+              0.558583,
+              0.549583,
+              0.543,
+              0.552542,
+              0.554292,
+              0.562209,
+              0.562167,
+              0.554916
+            ],
+            "medianMs": 0.553479
+          }
+        ]
+      },
+      {
+        "block": 7,
+        "variant": "copied",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              1.077208,
+              1.013709,
+              1.049041,
+              1.052125,
+              0.993375,
+              0.982917,
+              0.976833,
+              1.000792,
+              0.979333,
+              1.00425,
+              0.993084,
+              0.983833,
+              1.003459,
+              0.991084,
+              0.971625,
+              1.006458,
+              0.996583,
+              0.996875,
+              1.048542,
+              1.02575,
+              1.032291,
+              1.026042,
+              1.049583,
+              1.045,
+              0.991916,
+              1.007125,
+              0.95325,
+              0.97425,
+              0.98025,
+              0.955,
+              1.016917,
+              0.983,
+              1.000042,
+              0.983916,
+              1.048709,
+              1.118708,
+              1.00775,
+              1.078125,
+              0.972375,
+              0.967083,
+              1.003166,
+              1.00225,
+              0.990375,
+              0.985417,
+              1.040625,
+              0.979416,
+              0.975709,
+              1.007333,
+              1.014209,
+              0.984417
+            ],
+            "medianMs": 1.0004170000000001
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              1.383625,
+              1.272083,
+              1.2945,
+              1.282334,
+              1.342416,
+              1.234667,
+              1.32825,
+              1.311125,
+              1.27125,
+              1.265584,
+              1.300042,
+              1.24725,
+              1.225375,
+              1.397458,
+              1.3885,
+              1.296708,
+              1.310125,
+              1.266833,
+              1.2475,
+              1.297,
+              1.261292,
+              1.275667,
+              1.309791,
+              1.271084,
+              1.284083,
+              1.322375,
+              1.329,
+              1.251833,
+              1.239334,
+              1.257875,
+              1.257583,
+              1.285208,
+              1.269583,
+              1.257875,
+              1.279458,
+              1.246834,
+              1.276208,
+              1.277291,
+              1.26475,
+              1.317042,
+              1.23925,
+              1.273292,
+              1.25075,
+              1.287459,
+              1.35525,
+              1.296667,
+              1.261042,
+              1.402542,
+              1.268917,
+              1.257583
+            ],
+            "medianMs": 1.2759375
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.650375,
+              0.612167,
+              0.55525,
+              0.557291,
+              0.541292,
+              0.554959,
+              0.54525,
+              0.54575,
+              0.547208,
+              0.579,
+              0.544833,
+              0.530958,
+              0.544333,
+              0.558542,
+              0.559333,
+              0.540917,
+              0.552209,
+              0.529667,
+              0.52475,
+              0.529,
+              0.532292,
+              0.539209,
+              0.531083,
+              0.544917,
+              0.542375,
+              0.564709,
+              0.541667,
+              0.576667,
+              0.53075,
+              0.534167,
+              0.530584,
+              0.53,
+              0.539958,
+              0.555792,
+              0.517916,
+              0.517958,
+              0.575959,
+              0.541125,
+              0.531458,
+              0.561667,
+              0.546917,
+              0.534583,
+              0.527625,
+              0.534834,
+              0.547208,
+              0.5555,
+              0.592083,
+              0.577375,
+              0.538875,
+              0.530334
+            ],
+            "medianMs": 0.543354
+          }
+        ]
+      },
+      {
+        "block": 8,
+        "variant": "shared",
+        "workloads": [
+          {
+            "workload": "wikipedia",
+            "milliseconds": [
+              0.953959,
+              0.590542,
+              0.536334,
+              0.492,
+              0.456375,
+              0.435041,
+              0.46575,
+              0.459333,
+              0.4685,
+              0.473292,
+              0.445833,
+              0.484708,
+              0.517583,
+              0.464666,
+              0.446708,
+              0.458583,
+              0.447541,
+              0.445084,
+              0.469125,
+              0.445625,
+              0.471292,
+              0.481833,
+              0.491875,
+              0.450917,
+              0.487208,
+              0.473792,
+              0.442917,
+              0.46675,
+              0.46075,
+              0.476167,
+              0.516041,
+              0.553416,
+              0.459042,
+              0.485208,
+              0.461417,
+              0.455833,
+              0.467708,
+              0.45975,
+              0.50075,
+              0.496,
+              0.472625,
+              0.464584,
+              0.467667,
+              0.459209,
+              0.474958,
+              0.459667,
+              0.456583,
+              0.516791,
+              0.481833,
+              0.449583
+            ],
+            "medianMs": 0.46768750000000003
+          },
+          {
+            "workload": "streetzim-map",
+            "milliseconds": [
+              0.984583,
+              1.245625,
+              1.015791,
+              0.839709,
+              0.7695,
+              0.77775,
+              0.759875,
+              0.75425,
+              0.771791,
+              0.756666,
+              0.758958,
+              0.830333,
+              0.732792,
+              0.77525,
+              0.751,
+              0.739625,
+              0.738542,
+              0.738084,
+              0.758625,
+              0.802167,
+              0.933583,
+              0.8525,
+              0.873375,
+              0.787791,
+              0.748,
+              0.71225,
+              0.748583,
+              0.795083,
+              0.746125,
+              0.800625,
+              0.741875,
+              0.744542,
+              0.737291,
+              0.740042,
+              0.73825,
+              0.758542,
+              0.708417,
+              0.795666,
+              0.774,
+              0.763125,
+              0.736667,
+              0.729917,
+              0.740208,
+              0.765166,
+              0.762208,
+              0.724834,
+              0.72975,
+              0.721709,
+              0.709417,
+              0.7365
+            ],
+            "medianMs": 0.7576039999999999
+          },
+          {
+            "workload": "streetzim",
+            "milliseconds": [
+              0.319208,
+              0.264791,
+              0.265042,
+              0.249875,
+              0.269208,
+              0.277292,
+              0.248667,
+              0.251583,
+              0.240459,
+              0.236708,
+              0.227333,
+              0.230042,
+              0.241292,
+              0.228334,
+              0.246125,
+              0.226208,
+              0.236834,
+              0.235417,
+              0.230083,
+              0.235417,
+              0.232916,
+              0.235375,
+              0.228292,
+              0.24325,
+              0.248458,
+              0.243292,
+              0.255,
+              0.263166,
+              0.262458,
+              0.28775,
+              0.247792,
+              0.244625,
+              0.253542,
+              0.240125,
+              0.228291,
+              0.238666,
+              0.272708,
+              0.248166,
+              0.250291,
+              0.2495,
+              0.23875,
+              0.249084,
+              0.274791,
+              0.246667,
+              0.265459,
+              0.257458,
+              0.263459,
+              0.253167,
+              0.267542,
+              0.271875
+            ],
+            "medianMs": 0.248312
+          }
+        ]
+      }
+    ]
+  },
+  "functionalSmoke": {
+    "actualWikipediaInternalLinkRenderedAnimalAndImages": true,
+    "actualStreetZimMapRendered": true,
+    "mapBrowser": "Explicit owned Chrome process with SwiftShader WebGL, attached through CDP; not physical GPU acceptance",
+    "screenshots": [
+      "shared-animal-reader.jpg",
+      "shared-street-map.jpg"
+    ],
+    "excludedObservations": [
+      "Default managed browser screenshot/click observations timed out",
+      "Dedicated default Chrome had WebGL disabled and rendered the archive capability warning; kept separate, not claimed as source regression or successful map proof"
+    ],
+    "voiceOver": "Off and untouched"
+  },
+  "verification": {
+    "hostRustTestsPassed": 946,
+    "hostRustTestsIgnored": 16,
+    "strictHostAllTargetsClippyPassed": true,
+    "strictAndroidProductionClippyPassed": true,
+    "strictIosProductionClippyPassed": true,
+    "nativeAndVendoredWarningsRemain": true,
+    "frontendChangedInThisFollowOn": false,
+    "frontendEvidence": "Unchanged target-specific frozen bundles from the preceding 211-JavaScript-test/platform-build batch",
+    "excludedInitialHostBuild": "Default SDK path was absent; selecting the existing verified desktop-retained-v2 schema-2 SDK built the matched applications"
+  },
+  "mobileArtifacts": {
+    "android": {
+      "apkBytes": 66981931,
+      "apkSha256": "5d28b3c6c2fdc9d08879e8e0b5b2edf27ae82990f2898dac71ab4cdb5efeaa03",
+      "nativeBytes": 65021912,
+      "nativeSha256": "9e23d700bc4ffe9e7649001c702c029177d8df796c708c2c80b76d52b86dcb52",
+      "signatureV2V3Verified": true,
+      "localDevelopmentSignerMatchesPreviousPhoneBuild": true,
+      "definedExportsUnchanged": 27,
+      "systemDependenciesUnchanged": 5,
+      "symbolsStripped": true,
+      "elfAndZip16KiBAlignmentPassed": true,
+      "optimizationLevel": 3,
+      "unwindingAndFeaturesUnchanged": true,
+      "targetedFrontendAndReaderSdkUnchanged": true,
+      "belowOfficialStandaloneArm64Apk": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.tiltastech.zimreader",
+      "mainExecutableBytes": 50546496,
+      "mainExecutableSha256": "eedde700007207bd969c50aa25de307ed70e233ef2ee19f6403cf7ef3be5cd6b",
+      "signedBundleRegularFileBytes": 51116323,
+      "developmentIpaBytes": 22771864,
+      "developmentIpaSha256": "cccd62ce6d9b5045fe016e93be1fff8a8ca045ab16d7a099a84b3cfdc0045dc1",
+      "mainAndWidgetStrictVerificationPassed": true,
+      "sameValidCertificateProfilesAndEntitlements": true,
+      "officialIpaOrMatchedAppleRuntimeAvailable": false
+    }
+  },
+  "phoneDeployment": {
+    "targetAppUninstalledOrDataCleared": false,
+    "android": {
+      "installedInPlace": true,
+      "installedApkHashMatched": true,
+      "books": 12,
+      "tabs": 4,
+      "profileFiles": 31,
+      "nativePreferenceFiles": 7,
+      "persistedUriGrants": 1,
+      "runtimePermissionRecords": 8,
+      "completeCapturedSnapshotAndRuntimePermissionsExact": true,
+      "archiveEvidence": "size/mtime metadata only; archive bytes not hashed",
+      "temporaryReadOnlySignatureAuthorizedProbeRemoved": true,
+      "normalLaunchSucceeded": true,
+      "physicalReaderVisualInspected": false
+    },
+    "ios": {
+      "installedInPlace": true,
+      "books": 3,
+      "tabs": 2,
+      "prelaunchProfileFilesByteExact": 10,
+      "prelaunchNativePreferencesByteExact": true,
+      "providerBookmarkInventoryUnchangedAbsent": true,
+      "archiveReportedMetadataExact": true,
+      "archiveBytesHashed": false,
+      "strictPrelaunchEquality": false,
+      "prelaunchScopedAcceptance": "Only data-container UUID relocation and the five specifically recorded containermanagerd attribution-xattr additions accepted; no other metadata/content changes",
+      "normalLaunchSucceeded": true,
+      "postlaunchRawSettingsExact": false,
+      "postlaunchWholeStateByteExact": false,
+      "postlaunchScopedAcceptance": "Only three managed book paths, downloadDirectory, corresponding root/pending bookkeeping and one existing history title changed; all other settings, library/tab identities, complete tab/navigation state and history identity/timestamp/scroll/membership/order preserved",
+      "independentPreservationReviewPassed": true,
+      "physicalReaderVisualInspected": false
+    },
+    "voiceOver": "Off and untouched"
+  },
+  "nativeAndroidSmoke": {
+    "apkSha256": "5d28b3c6c2fdc9d08879e8e0b5b2edf27ae82990f2898dac71ab4cdb5efeaa03",
+    "ownedApi33Arm64Emulator": true,
+    "airplaneModeEnabledWifiAndDataDisabled": true,
+    "realWikipediaTitleSearchRendered": true,
+    "realAnimalArticleAndImagesRendered": true,
+    "realHawaiiMapTilesAndLabelsRendered": true,
+    "screenshots": [
+      "native-wikipedia-title-results.png",
+      "native-shared-animal.png",
+      "native-shared-street-map.png"
+    ],
+    "initialUiAutomatorXmlMissing": true,
+    "independentPixelsProvidedSurfaceProof": true
+  },
+  "review": {
+    "source": "FinalEfficiencySourceReview approved shared-buffer lifecycle/empty frames/HEAD and equivalent bounded ASCII head scan",
+    "probesAndClaims": "FinalEfficiencyEvidenceReview approved executable helpers before execution and path-specific findings afterward"
+  },
+  "remainingObjectives": [
+    "Reliable whole-app settled-memory and shipping/mobile rendered-startup/search speed improvements remain open",
+    "Production signing/distribution and broader parity acceptance remain open"
+  ]
+}

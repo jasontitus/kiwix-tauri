@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Yalnızca bu etkin arşiv kamera erişimi isteyebilir. Sisteminiz de izin isteyebilir. Makalenin altından erişimi istediğiniz zaman kaldırabilirsiniz.";
+"NSLocationUsageDescription" = "Sisteminiz konumunuzu yalnızca bu etkin arşivle paylaşacak. Makalenin altından erişimi istediğiniz zaman kaldırabilirsiniz.";
+"NSLocationWhenInUseUsageDescription" = "Sisteminiz konumunuzu yalnızca bu etkin arşivle paylaşacak. Makalenin altından erişimi istediğiniz zaman kaldırabilirsiniz.";
+"NSLocalNetworkUsageDescription" = "Yakındaki LocalSwarm cihazlarını keşfedin ve çevrimdışı arşivleri yerel ağınızda paylaşın. Yalnızca güvenilir bir ağda bulmayı veya paylaşmayı etkinleştirin.";

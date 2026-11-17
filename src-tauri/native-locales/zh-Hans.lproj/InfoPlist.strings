@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "只有当前活动的归档可以请求使用摄像头。系统也可能请求你的许可。你可以随时在文章下方撤销授权。";
+"NSLocationUsageDescription" = "系统只会向当前活动的归档提供你的位置信息。你可以随时在文章下方撤销授权。";
+"NSLocationWhenInUseUsageDescription" = "系统只会向当前活动的归档提供你的位置信息。你可以随时在文章下方撤销授权。";
+"NSLocalNetworkUsageDescription" = "发现附近的 LocalSwarm 设备并在本地网络上共享离线存档。仅在受信任的网络上启用发现或共享。";

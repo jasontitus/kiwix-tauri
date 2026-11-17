@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "只有目前使用中的典藏檔可以請求使用相機。系統也可能詢問您的許可。您隨時可在文章下方撤銷存取權限。";
+"NSLocationUsageDescription" = "系統只會將您的位置提供給目前使用中的典藏檔。您隨時可在文章下方撤銷存取權限。";
+"NSLocationWhenInUseUsageDescription" = "系統只會將您的位置提供給目前使用中的典藏檔。您隨時可在文章下方撤銷存取權限。";
+"NSLocalNetworkUsageDescription" = "發現附近的 LocalSwarm 設備並在本地網路上共用離線存檔。僅在受信任的網路上啟用發現或共用。";

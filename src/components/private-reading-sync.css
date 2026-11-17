@@ -1,0 +1,123 @@
+.private-reading-sync {
+  min-width: 0;
+}
+.private-sync-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+}
+.private-sync-heading > svg {
+  flex: 0 0 auto;
+  margin-top: .2rem;
+  color: var(--accent);
+}
+.private-sync-heading h2,
+.private-sync-heading p {
+  margin-top: 0;
+}
+.private-sync-categories,
+.private-sync-conflict {
+  min-width: 0;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.private-sync-categories legend,
+.private-sync-conflict legend {
+  padding: 0 .35rem;
+  font-weight: 600;
+}
+.private-sync-pairing,
+.private-sync-conflicts {
+  margin-top: 1.5rem;
+}
+.private-sync-pairing form {
+  margin-top: 1rem;
+}
+.private-reading-sync textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 5rem;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+.private-sync-qr {
+  width: fit-content;
+  max-width: 100%;
+  padding: .5rem;
+  margin: 1rem 0;
+  border-radius: 8px;
+  background: #fff;
+}
+.private-sync-qr svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.private-sync-code {
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: .12em;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  border-block: 1px solid var(--line);
+}
+.private-sync-identity {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.private-sync-devices,
+.private-sync-positions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.private-sync-devices > li,
+.private-sync-positions > li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.private-sync-devices h4 {
+  margin-top: 0;
+}
+.private-sync-devices .toolbar {
+  margin-top: 1rem;
+}
+.private-sync-positions > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.private-sync-positions > li > div {
+  flex: 1 1 14rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.private-sync-positions p {
+  margin: .25rem 0 0;
+}
+.private-sync-alternative {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .75rem 0;
+  cursor: pointer;
+}
+.private-sync-alternative input {
+  flex: 0 0 auto;
+  margin-top: .25rem;
+}
+.private-sync-alternative > span {
+  min-width: 0;
+}
+.private-sync-version {
+  display: block;
+  margin-top: .5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 18rem;
+  overflow: auto;
+}

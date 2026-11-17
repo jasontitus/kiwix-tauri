@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "disposition": "Six distinct real-archive desktop HTTP recovery cases passed; no product bug reproduced",
+  "scope": "Actual existing headless desktop binary, fresh owned profiles and download roots, real loopback HTTP transfers and process death; not current-source, mobile or complete recovery-parity certification",
+  "binary": {
+    "name": "kiwix-workbench",
+    "version": "Kiwix Rust 0.1.0",
+    "sha256": "574741423e3649f2852af7319c6776c3dd353a7c2ebb5b76818de9cf59491e11",
+    "matchesCurrentSourceHeadClaimed": false
+  },
+  "archive": {
+    "name": "wikipedia_en_100_2026-08.zim",
+    "bytes": 333429922,
+    "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+    "sourceOpenedReadOnly": true,
+    "sourceHashMatchedBeforeAndAfterEachSuccessfulBatch": true
+  },
+  "method": {
+    "controls": "Authenticated production start_download, pause_download, resume_download, save_settings, downloads, snapshot and open_article commands; owned children terminated by SIGKILL and restarted with the same owned profile",
+    "journalEdits": false,
+    "server": "Ephemeral loopback-only HTTP server, exact source route, bounded throttled streams, Range, strong ETag where selected, Last-Modified and deterministic changed-generation responses",
+    "changedGeneration": "Old responses derive from the read-only real archive with byte 4096 XOR 255; new responses serve the unmodified real archive. The retained old byte is read from the owned partial after process death, before restart",
+    "startupSourceContractInspected": "Desktop headless launch spawns maintenance. Its initial interval tick dispatches downloads; download_jobs initializes the lazy DownloadManager. Initialization resumes eligible paused/interrupted jobs only when saved autoResumeDownloads is true. Direct downloads API reads can also initialize the manager",
+    "startupRuntimeEvidenceBoundary": "The three additional cases observe source requests for two seconds after restart before making any privileged API call or opening a frontend. The original three cases instead read downloads/snapshot before their two-second observation; those cases do not independently establish an API-free startup trigger",
+    "startupContractSourceIdentityBoundary": "Inspected source explains the intended contract; binary identity is fingerprinted separately and is not asserted to match that source",
+    "observationSecondsPerCase": 2,
+    "privateEvidence": "Raw event logs, child logs, journals, archives and retrieved HTML are retained privately. This receipt excludes capability URLs, tokens, loopback ports, process IDs and absolute local paths"
+  },
+  "batches": [
+    {
+      "id": "original-three",
+      "privateEvidenceRunId": "run-20261105T003921-34558",
+      "reviewedHelperSha256": "52f01c5b6b0cde329453d9390683886c8e0a48318b942f64d74475ad7c0c1450",
+      "freeBytesAtStart": 25170558976,
+      "success": true,
+      "survivingRetainedChildren": 0,
+      "sourceServerStopped": true
+    },
+    {
+      "id": "additional-three-only",
+      "privateEvidenceRunId": "run-20261105T005611-44775",
+      "reviewedHelperSha256": "1faf352a627a3a408ef707ddf1d5ec1258cc426a651837ec6868f5453c05537a",
+      "selectedScenarios": ["optin-active-death-restart", "optin-manual-pause-restart", "lastmodified-changed-restart"],
+      "reranOriginalThree": false,
+      "freeBytesAtStart": 24118771712,
+      "success": true,
+      "survivingRetainedChildren": 0,
+      "sourceServerStopped": true
+    }
+  ],
+  "commonSuccessfulCompletion": {
+    "appliesToCases": 6,
+    "status": "complete",
+    "bytes": 333429922,
+    "independentDestinationSha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+    "durablePublication": {
+      "size": 333429922,
+      "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b"
+    },
+    "freshLibraryBookCount": 1,
+    "libraryArticleCount": 5056,
+    "reader": {
+      "title": "Animal",
+      "archivePath": "Animal",
+      "missing": false,
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "htmlBytes": 611641,
+      "htmlRetainedPrivately": true,
+      "htmlHashesArePerResponseNotCrossRunIdentity": "Reader-injected session-specific material means the six HTML response hashes need not match"
+    }
+  },
+  "cases": [
+    {
+      "id": "manual-pause-restart",
+      "batch": "original-three",
+      "autoResumeDownloads": false,
+      "stop": "API pause then SIGKILL",
+      "beforeKillApiDownloadedBytes": 28311552,
+      "restored": {"status": "paused", "interrupted": false, "downloadedBytes": 28311552},
+      "observation": {"apiReadsPrecededWindow": true, "sourceRequestsBefore": 5, "sourceRequestsAfter": 5},
+      "explicitResume": true,
+      "resumeValidator": "\"real-wikipedia-v1\"",
+      "matchingRangeResponseStatus": 206,
+      "animalHtmlSha256": "c08c9a090cd402fcabb2314e515985d0b8d47dfdd1c5a7d391791d174b3a47c9",
+      "passed": true
+    },
+    {
+      "id": "active-death-restart",
+      "batch": "original-three",
+      "autoResumeDownloads": false,
+      "stop": "SIGKILL while downloading",
+      "beforeKillApiDownloadedBytes": 22806528,
+      "restored": {"status": "paused", "interrupted": true, "downloadedBytes": 0},
+      "checkpointBoundary": "Conservative rollback to the durable journal; pre-kill API progress was not retained and is not claimed as retained",
+      "observation": {"apiReadsPrecededWindow": true, "sourceRequestsBefore": 5, "sourceRequestsAfter": 5},
+      "explicitResume": true,
+      "resumeValidator": "\"real-wikipedia-v1\"",
+      "matchingRangeResponseStatus": 206,
+      "animalHtmlSha256": "db3c120d52c3c2b7ecd08a839eda13ba000d3675bb9b8fe984793adeac60092e",
+      "passed": true
+    },
+    {
+      "id": "changed-validator-restart",
+      "batch": "original-three",
+      "autoResumeDownloads": false,
+      "stop": "API pause then SIGKILL",
+      "beforeKillApiDownloadedBytes": 23330816,
+      "restored": {"status": "paused", "interrupted": false, "downloadedBytes": 23330816},
+      "observation": {"apiReadsPrecededWindow": true, "sourceRequestsBefore": 5, "sourceRequestsAfter": 5},
+      "retainedWrongGenerationByte": {"offset": 4096, "retained": 70, "realSource": 185},
+      "explicitResume": true,
+      "staleIfRange": "\"real-wikipedia-v1\"",
+      "changedResponseEtag": "\"real-wikipedia-v2\"",
+      "staleRangeResponseStatus": 200,
+      "wrongGenerationRemovedByFinalRealArchiveHash": true,
+      "animalHtmlSha256": "48205906085669b1025a2c18cac26a9f03d6942653ab16e4a780476dc11e9c4d",
+      "passed": true
+    },
+    {
+      "id": "optin-active-death-restart",
+      "batch": "additional-three-only",
+      "autoResumeDownloads": true,
+      "optInChangedThroughApiInFreshOwnedProfile": true,
+      "stop": "SIGKILL while downloading",
+      "beforeKillApiDownloadedBytes": 22544384,
+      "observation": {"privilegedApiCallsDuringWindow": 0, "frontendOpened": false, "sourceRequestsBefore": 5, "sourceRequestsAfter": 9},
+      "automaticStartupRequestsObserved": true,
+      "firstRestartApiRow": {"status": "complete", "interrupted": false, "downloadedBytes": 333429922},
+      "intermediateRestoredOffset": "Not observed; completion preceded the first restart API read",
+      "explicitResume": false,
+      "resumeValidator": "\"real-wikipedia-v1\"",
+      "matchingRangeResponseStatus": 206,
+      "animalHtmlSha256": "9e492427bf4f4214b8a0f946534de87c452f725e90e3f1defe7cb66ace92929f",
+      "passed": true
+    },
+    {
+      "id": "optin-manual-pause-restart",
+      "batch": "additional-three-only",
+      "autoResumeDownloads": true,
+      "optInChangedThroughApiInFreshOwnedProfile": true,
+      "stop": "API pause then SIGKILL",
+      "beforeKillApiDownloadedBytes": 28311552,
+      "restored": {"status": "paused", "interrupted": false, "downloadedBytes": 28311552},
+      "observation": {"privilegedApiCallsDuringWindow": 0, "frontendOpened": false, "sourceRequestsBefore": 5, "sourceRequestsAfter": 5},
+      "manualPausePrecedenceObserved": true,
+      "explicitResume": true,
+      "resumeValidator": "\"real-wikipedia-v1\"",
+      "matchingRangeResponseStatus": 206,
+      "animalHtmlSha256": "ebc0e564d44fd51f362427fc4d433cf6d0553cc4b0e9cb28781bf9ac4a80fdc9",
+      "passed": true
+    },
+    {
+      "id": "lastmodified-changed-restart",
+      "batch": "additional-three-only",
+      "autoResumeDownloads": false,
+      "stop": "API pause then SIGKILL",
+      "beforeKillApiDownloadedBytes": 27262976,
+      "restored": {"status": "paused", "interrupted": false, "downloadedBytes": 27262976},
+      "observation": {"privilegedApiCallsDuringWindow": 0, "frontendOpened": false, "sourceRequestsBefore": 5, "sourceRequestsAfter": 5},
+      "etagEmitted": false,
+      "retainedWrongGenerationByte": {"offset": 4096, "retained": 70, "realSource": 185},
+      "explicitResume": true,
+      "staleIfRange": "Thu, 05 Nov 2026 00:00:01 GMT",
+      "changedLastModified": "Thu, 05 Nov 2026 00:00:02 GMT",
+      "staleRangeResponseStatus": 200,
+      "staleRangeResponseCount": 4,
+      "freshUnconditionalResponseStatus": 200,
+      "freshIfRange": "Thu, 05 Nov 2026 00:00:02 GMT",
+      "freshRangeResponseStatus": 206,
+      "freshRangeResponseCount": 4,
+      "wrongGenerationRemovedByFinalRealArchiveHash": true,
+      "animalHtmlSha256": "9009c2b5b720495247c219399d49300b43496eba5b1af2f21bce1982fa9ca504",
+      "passed": true
+    }
+  ],
+  "incompleteFirstAttempt": {
+    "privateEvidenceRunId": "run-20261105T003750-33527",
+    "reviewedHelperSha256": "0df3bb410be910e6d23491e1824329e20aac2cd36f75074b9cd041688c89c653",
+    "disposition": "Incomplete helper attempt, not a product checksum failure or passed recovery case",
+    "failure": "Helper incorrectly required the nullable public DownloadJob.sha256 to equal the computed digest",
+    "contractCorrection": "Public sha256 holds an optional expected Metalink checksum. Plain HTTP completion records its computed size and digest in the durable publication receipt. The revised helper independently hashes destination bytes and requires that exact durable receipt",
+    "manualPauseRestartAndFinalDestinationHashHadSucceededBeforeHelperFailure": true,
+    "articleReadNotReached": true,
+    "survivingRetainedChildren": 0,
+    "sourceServerStopped": true
+  },
+  "review": {
+    "executionAdmission": "ReviewAsciiSourceMemory independently approved each exact helper snapshot before its execution",
+    "originalThreeEvidence": "Independently accepted by ReviewAsciiSourceMemory",
+    "additionalThreeEvidence": "Independently accepted by ReviewAsciiSourceMemory",
+    "documentation": "Receipt and Reliability section submitted separately for independent comparison-evidence review"
+  },
+  "notClaimed": [
+    "Current source HEAD runtime verification or rebuilt binary identity",
+    "Android or iOS download recovery",
+    "Indefinite no-resume behavior beyond the observed windows",
+    "Retention of non-durable pre-kill API progress",
+    "Unobserved intermediate state during positive automatic startup recovery",
+    "Provider, native-background, external-network or complete upstream reliability parity",
+    "Build, test, linter, formatter or device execution in this acceptance slice"
+  ]
+}

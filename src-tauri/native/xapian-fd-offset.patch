@@ -1,0 +1,581 @@
+--- a/include/xapian/database.h
++++ b/include/xapian/database.h
+@@ -30,6 +30,7 @@
+ #endif
+ 
+ #include <iosfwd>
++#include <stdint.h>
+ #include <string>
+ #ifdef XAPIAN_MOVE_SEMANTICS
+ # include <utility>
+@@ -118,6 +119,26 @@
+ 	 * @param flags  Bitwise-or of Xapian::DB_* constants.
+ 	 */
+ 	explicit Database(int fd, int flags = 0);
++
++#ifndef __WIN32__
++	/** Open a read-only single-file Glass database at an absolute offset.
++	 *
++	 *  This POSIX-only factory never reads or changes the file's current
++	 *  offset, including when reopen() is called.  It requires native pread
++	 *  support; otherwise FeatureUnavailableError is thrown.
++	 *
++	 *  Ownership of @a owned_fd transfers on entry, even if opening fails
++	 *  (including invalid flags, offsets, and allocation failures).  Pass
++	 *  a duplicate if the caller needs to retain its own descriptor.
++	 *
++	 *  @param owned_fd File descriptor to own; a negative value is invalid.
++	 *  @param read_offset Absolute byte offset of the database in the file.
++	 *  @param flags Must be 0 or DB_BACKEND_GLASS.  Other flags are rejected
++	 *               with InvalidArgumentError, not silently ignored.
++	 */
++	static Database open_fd_at(int owned_fd, uint64_t read_offset,
++				   int flags = 0);
++#endif
+ 
+ 	/** @private @internal Create a Database from its internals.
+ 	 */
+--- a/backends/dbfactory.cc
++++ b/backends/dbfactory.cc
+@@ -32,12 +32,14 @@
+ #include "backends.h"
+ #include "databasehelpers.h"
+ #include "debuglog.h"
++#include "fd.h"
+ #include "filetests.h"
+ #include "fileutils.h"
+ #include "posixy_wrapper.h"
+ #include "str.h"
+ 
+ #include <cerrno>
++#include <limits>
+ 
+ #ifdef XAPIAN_HAS_GLASS_BACKEND
+ # include "glass/glass_database.h"
+@@ -277,6 +279,39 @@
+     (void)::close(fd);
+     throw DatabaseOpeningError("Couldn't detect type of database");
+ }
++
++#ifndef __WIN32__
++Database
++Database::open_fd_at(int owned_fd, uint64_t read_offset, int flags)
++{
++    // This guard precedes everything which could throw, even allocation of
++    // the backend.  GlassVersion releases it only after its members exist.
++    FD close_fd(owned_fd >= 0 ? owned_fd : -1);
++    if (rare(owned_fd < 0))
++	throw InvalidArgumentError("owned_fd < 0");
++    if (rare(flags != 0 && flags != DB_BACKEND_GLASS))
++	throw InvalidArgumentError("open_fd_at requires flags 0 or DB_BACKEND_GLASS");
++
++#if !defined HAVE_PREAD
++    (void)read_offset;
++    throw FeatureUnavailableError("open_fd_at requires native pread support");
++#elif !defined XAPIAN_HAS_GLASS_BACKEND
++    (void)read_offset;
++    throw FeatureUnavailableError("Glass backend disabled");
++#else
++    if (rare(read_offset > uint64_t(numeric_limits<off_t>::max())))
++	throw InvalidArgumentError("open_fd_at offset is out of range");
++
++    // The intrusive owner also covers vector allocation and return-value
++    // copying failures, without ever giving two owners the same raw fd.
++    Xapian::Internal::intrusive_ptr<Database::Internal> backend(
++	new GlassDatabase(close_fd, off_t(read_offset)));
++    Database result;
++    result.internal.push_back(backend);
++    return result;
++#endif
++}
++#endif
+ 
+ #if defined XAPIAN_HAS_CHERT_BACKEND || \
+     defined XAPIAN_HAS_GLASS_BACKEND
+--- a/backends/glass/glass_database.h
++++ b/backends/glass/glass_database.h
+@@ -231,6 +231,10 @@
+ 
+     explicit GlassDatabase(int fd);
+ 
++#if !defined __WIN32__ && defined HAVE_PREAD
++    GlassDatabase(FD& owned_fd, off_t read_offset);
++#endif
++
+     ~GlassDatabase();
+ 
+     /// Get a postlist table cursor (used by GlassValueList).
+--- a/backends/glass/glass_database.cc
++++ b/backends/glass/glass_database.cc
+@@ -178,6 +178,26 @@
+     open_tables(Xapian::DB_READONLY_);
+ }
+ 
++#if !defined __WIN32__ && defined HAVE_PREAD
++GlassDatabase::GlassDatabase(FD& owned_fd, off_t read_offset)
++	: db_dir(),
++	  readonly(true),
++	  version_file(owned_fd, read_offset),
++	  postlist_table(version_file.get_fd(), read_offset, readonly),
++	  position_table(version_file.get_fd(), read_offset, readonly),
++	  termlist_table(version_file.get_fd(), read_offset, readonly, true),
++	  value_manager(&postlist_table, &termlist_table),
++	  synonym_table(version_file.get_fd(), read_offset, readonly),
++	  spelling_table(version_file.get_fd(), read_offset, readonly),
++	  docdata_table(version_file.get_fd(), read_offset, readonly),
++	  lock(),
++	  changes(string())
++{
++    LOGCALL_CTOR(DB, "GlassDatabase", version_file.get_fd() | read_offset);
++    open_tables(Xapian::DB_READONLY_);
++}
++#endif
++
+ GlassDatabase::~GlassDatabase()
+ {
+     LOGCALL_DTOR(DB, "GlassDatabase");
+--- a/backends/glass/glass_version.h
++++ b/backends/glass/glass_version.h
+@@ -35,6 +35,8 @@
+ #include "internaltypes.h"
+ #include "min_non_zero.h"
+ #include "xapian/types.h"
++
++class FD;
+ 
+ namespace Glass {
+ 
+@@ -116,6 +118,9 @@
+      */
+     off_t offset;
+ 
++    /// Use native positional I/O, never the shared file cursor.
++    bool positional;
++
+     /// The database directory.
+     std::string db_dir;
+ 
+@@ -156,13 +161,17 @@
+ 
+   public:
+     explicit GlassVersion(const std::string & db_dir_)
+-	: rev(0), fd(-1), offset(0), db_dir(db_dir_), changes(NULL),
++	: rev(0), fd(-1), offset(0), positional(false), db_dir(db_dir_), changes(NULL),
+ 	  doccount(0), total_doclen(0), last_docid(0),
+ 	  doclen_lbound(0), doclen_ubound(0),
+ 	  wdf_ubound(0), spelling_wordfreq_ubound(0),
+ 	  oldest_changeset(0) { }
+ 
+     explicit GlassVersion(int fd_);
++
++#if !defined __WIN32__ && defined HAVE_PREAD
++    GlassVersion(FD& owned_fd, off_t read_offset);
++#endif
+ 
+     ~GlassVersion();
+ 
+@@ -272,6 +281,8 @@
+     bool single_file() const { return db_dir.empty(); }
+ 
+     off_t get_offset() const { return offset; }
++
++    int get_fd() const { return fd; }
+ };
+ 
+ #endif // XAPIAN_INCLUDED_GLASS_VERSION_H
+--- a/backends/glass/glass_version.cc
++++ b/backends/glass/glass_version.cc
+@@ -70,7 +70,7 @@
+ };
+ 
+ GlassVersion::GlassVersion(int fd_)
+-    : rev(0), fd(fd_), offset(0), db_dir(), changes(NULL),
++    : rev(0), fd(fd_), offset(0), positional(false), db_dir(), changes(NULL),
+       doccount(0), total_doclen(0), last_docid(0),
+       doclen_lbound(0), doclen_ubound(0),
+       wdf_ubound(0), spelling_wordfreq_ubound(0),
+@@ -84,6 +84,20 @@
+     }
+ }
+ 
++#if !defined __WIN32__ && defined HAVE_PREAD
++GlassVersion::GlassVersion(FD& owned_fd, off_t read_offset)
++    : rev(0), fd(-1), offset(read_offset), positional(true), db_dir(),
++      changes(NULL), doccount(0), total_doclen(0), last_docid(0),
++      doclen_lbound(0), doclen_ubound(0),
++      wdf_ubound(0), spelling_wordfreq_ubound(0),
++      oldest_changeset(0)
++{
++    // No earlier member construction may leave an unguarded descriptor.
++    // Once this constructor completes, our destructor handles later failures.
++    fd = owned_fd.release();
++}
++#endif
++
+ GlassVersion::~GlassVersion()
+ {
+     // Either this is a single-file database, or this fd is from opening a new
+@@ -99,7 +113,7 @@
+     FD close_fd(-1);
+     int fd_in;
+     if (single_file()) {
+-	if (rare(lseek(fd, offset, SEEK_SET) < 0)) {
++	if (!positional && rare(lseek(fd, offset, SEEK_SET) < 0)) {
+ 	    string msg = "Failed to rewind file descriptor ";
+ 	    msg += str(fd);
+ 	    throw Xapian::DatabaseOpeningError(msg, errno);
+@@ -123,7 +137,16 @@
+     char buf[256];
+ 
+     const char * p = buf;
+-    const char * end = p + io_read(fd_in, buf, sizeof(buf), 33);
++    size_t bytes_read;
++#ifdef HAVE_PREAD
++    if (positional) {
++	bytes_read = io_pread(fd_in, buf, sizeof(buf), offset, 33);
++    } else
++#endif
++    {
++	bytes_read = io_read(fd_in, buf, sizeof(buf), 33);
++    }
++    const char * end = p + bytes_read;
+ 
+     if (memcmp(buf, GLASS_VERSION_MAGIC, GLASS_VERSION_MAGIC_LEN) != 0)
+ 	throw Xapian::DatabaseCorruptError("Rev file magic incorrect");
+--- a/common/fd.h
++++ b/common/fd.h
+@@ -51,6 +51,13 @@
+ 
+     operator int() const { return fd; }
+ 
++    /// Transfer ownership without closing the descriptor.
++    int release() {
++	int result = fd;
++	fd = -1;
++	return result;
++    }
++
+     int close() {
+ 	// Don't check for -1 here, so that close(FD) sets errno as close(int)
+ 	// would.
+--- a/common/io_utils.h
++++ b/common/io_utils.h
+@@ -116,6 +116,15 @@
+  */
+ size_t io_read(int fd, char * p, size_t n, size_t min = 0);
+ 
++#ifdef HAVE_PREAD
++/** Positional io_read(), with the same minimum-length and EOF semantics.
++ *
++ *  This never falls back to seek/read emulation.  The entire requested range
++ *  must fit in off_t before any physical-offset arithmetic is performed.
++ */
++size_t io_pread(int fd, char * p, size_t n, off_t offset, size_t min = 0);
++#endif
++
+ /** Write n bytes from block pointed to by p to file descriptor fd. */
+ void io_write(int fd, const char * p, size_t n);
+ 
+--- a/common/io_utils.cc
++++ b/common/io_utils.cc
+@@ -28,6 +28,8 @@
+ 
+ #include <cerrno>
+ #include <cstring>
++#include <limits>
++#include <stdint.h>
+ #include <string>
+ 
+ #include <xapian/error.h>
+@@ -140,6 +142,34 @@
+     return total;
+ }
+ 
++#ifdef HAVE_PREAD
++size_t
++io_pread(int fd, char * p, size_t n, off_t offset, size_t min)
++{
++    if (rare(offset < 0 ||
++	     uintmax_t(n) > uintmax_t(std::numeric_limits<off_t>::max()) -
++			    uintmax_t(offset)))
++	throw Xapian::DatabaseCorruptError("Positional read offset out of range");
++    size_t total = 0;
++    while (n) {
++	ssize_t c = pread(fd, p, n, offset);
++	if (c <= 0) {
++	    if (c == 0) {
++		if (total >= min) break;
++		throw Xapian::DatabaseCorruptError("Couldn't read enough (EOF)");
++	    }
++	    if (errno == EINTR) continue;
++	    throw Xapian::DatabaseError("Error reading from file", errno);
++	}
++	p += c;
++	total += c;
++	n -= c;
++	offset += c;
++    }
++    return total;
++}
++#endif
++
+ /** Write n bytes from block pointed to by p to file descriptor fd. */
+ void
+ io_write(int fd, const char * p, size_t n)
+@@ -165,11 +195,32 @@
+     throw Xapian::DatabaseError(m, e);
+ }
+ 
++// Check multiplication, addition, and the complete read range before
++// converting the database-relative block number into a physical offset.
++static bool
++block_read_offset(size_t n, off_t b, off_t& o)
++{
++    if (rare(b < 0 || o < 0))
++	return false;
++    if (n == 0)
++	return true;
++    uintmax_t available = uintmax_t(std::numeric_limits<off_t>::max()) -
++			  uintmax_t(o);
++    if (rare(uintmax_t(b) > available / n))
++	return false;
++    uintmax_t relative = uintmax_t(b) * n;
++    if (rare(uintmax_t(n) > available - relative))
++	return false;
++    o += off_t(relative);
++    return true;
++}
++
+ #ifdef HAVE_POSIX_FADVISE
+ bool
+ io_readahead_block(int fd, size_t n, off_t b, off_t o)
+ {
+-    o += b * n;
++    if (!block_read_offset(n, b, o))
++	return false;
+     // Assume that any failure is likely to also happen for another call with
+     // the same fd.
+     return posix_fadvise(fd, o, n, POSIX_FADV_WILLNEED) == 0;
+@@ -179,7 +230,8 @@
+ void
+ io_read_block(int fd, char * p, size_t n, off_t b, off_t o)
+ {
+-    o += b * n;
++    if (rare(!block_read_offset(n, b, o)))
++	throw_block_error("Invalid offset reading block ", b);
+     // Prefer pread if available since it's typically implemented as a
+     // separate syscall, and that eliminates the overhead of an extra syscall
+     // per block read.
+--- a/tests/api_backend.cc
++++ b/tests/api_backend.cc
+@@ -29,6 +29,7 @@
+ 
+ #include "backendmanager.h"
+ #include "errno_to_string.h"
++#include "fd.h"
+ #include "filetests.h"
+ #include "str.h"
+ #include "testrunner.h"
+@@ -50,6 +51,7 @@
+ #include <cerrno>
+ #include <fstream>
+ #include <iterator>
++#include <limits>
+ 
+ using namespace std;
+ 
+@@ -1520,6 +1522,194 @@
+     }
+ }
+ 
++/// Explicit offsets must be independent of every alias's shared cursor.
++DEFINE_TESTCASE(embeddedfd1, singlefile) {
++#if !defined __WIN32__ && defined HAVE_PREAD
++    Xapian::Database expected = get_database("apitest_simpledata");
++    string path = get_database_path("apitest_simpledata");
++    Xapian::Database expected2 = get_database("apitest_simpledata2");
++    string path2 = get_database_path("apitest_simpledata2");
++    string embedded_path = path + "-explicit-offset";
++    uint64_t offset = 1234;
++    ofstream out(embedded_path, fstream::trunc|fstream::binary);
++    out.seekp(offset);
++    out << ifstream(path, fstream::binary).rdbuf();
++    uint64_t offset2 = uint64_t(out.tellp()) + 97;
++    out.seekp(offset2);
++    out << ifstream(path2, fstream::binary).rdbuf();
++    out.close();
++    TEST(out.good());
++
++    FD caller(open(embedded_path.c_str(), O_RDONLY|O_BINARY));
++    TEST(caller >= 0);
++    FD observer(dup(caller));
++    TEST(observer >= 0);
++    TEST_EQUAL(lseek(caller, 17, SEEK_SET), 17);
++    int reused_fd = caller;
++    FD replacement;
++    {
++	Xapian::Database first =
++	    Xapian::Database::open_fd_at(dup(caller), offset);
++	Xapian::Database second =
++	    Xapian::Database::open_fd_at(dup(caller), offset2,
++					 Xapian::DB_BACKEND_GLASS);
++	TEST_EQUAL(lseek(observer, 0, SEEK_CUR), 17);
++	TEST_EQUAL(first.get_doccount(), expected.get_doccount());
++	TEST_EQUAL(second.get_doccount(), expected2.get_doccount());
++	TEST_EQUAL(first.get_document(1).get_data(),
++		   expected.get_document(1).get_data());
++	TEST_EQUAL(second.get_document(1).get_data(),
++		   expected2.get_document(1).get_data());
++	TEST(!first.reopen());
++	TEST(!second.reopen());
++	TEST_EQUAL(lseek(observer, 0, SEEK_CUR), 17);
++
++#if defined HAVE_FORK && defined HAVE_SOCKETPAIR
++	// Processes also share the open-file description, without requiring a
++	// threaded test harness.  Open different embedded databases concurrently.
++	pid_t child = fork();
++	TEST(child >= 0);
++	if (child == 0) {
++	    try {
++		for (int i = 0; i != 50; ++i) {
++		    Xapian::Database db =
++			Xapian::Database::open_fd_at(dup(caller), offset2);
++		    if (db.get_doccount() != expected2.get_doccount() ||
++			db.get_document(1).get_data() !=
++			    expected2.get_document(1).get_data() || db.reopen())
++			_exit(1);
++		}
++	    } catch (...) {
++		_exit(1);
++	    }
++	    _exit(0);
++	}
++	try {
++	    for (int i = 0; i != 50; ++i) {
++		Xapian::Database db =
++		    Xapian::Database::open_fd_at(dup(caller), offset);
++		TEST_EQUAL(db.get_doccount(), expected.get_doccount());
++		TEST_EQUAL(db.get_document(1).get_data(),
++			   expected.get_document(1).get_data());
++		TEST(!db.reopen());
++	    }
++	} catch (...) {
++	    int status;
++	    while (waitpid(child, &status, 0) < 0 && errno == EINTR) { }
++	    throw;
++	}
++	int status;
++	pid_t waited;
++	do {
++	    waited = waitpid(child, &status, 0);
++	} while (waited < 0 && errno == EINTR);
++	TEST_EQUAL(waited, child);
++	TEST(WIFEXITED(status));
++	TEST_EQUAL(WEXITSTATUS(status), 0);
++	TEST_EQUAL(lseek(observer, 0, SEEK_CUR), 17);
++#endif
++
++	// Close and deliberately reuse the caller's number for another file.
++	// Lazy table reads and reopen must still use Xapian's owned duplicates.
++	caller.close();
++	replacement = open(path2.c_str(), O_RDONLY|O_BINARY);
++	TEST(replacement >= 0);
++	if (replacement != reused_fd) {
++	    TEST_EQUAL(dup2(replacement, reused_fd), reused_fd);
++	    replacement.close();
++	    replacement = reused_fd;
++	}
++	TEST_EQUAL(lseek(replacement, 29, SEEK_SET), 29);
++	TEST_EQUAL(first.get_termfreq("test"), expected.get_termfreq("test"));
++	TEST_EQUAL(second.get_termfreq("test"), expected2.get_termfreq("test"));
++	TEST(!first.reopen());
++	TEST(!second.reopen());
++	TEST_EQUAL(lseek(observer, 0, SEEK_CUR), 17);
++	TEST_EQUAL(lseek(replacement, 0, SEEK_CUR), 29);
++    }
++    TEST(fcntl(replacement, F_GETFD) >= 0);
++    TEST_EQUAL(lseek(replacement, 0, SEEK_CUR), 29);
++#endif
++}
++
++/// Every rejected open owns and closes its input, not the caller's alias.
++DEFINE_TESTCASE(embeddedfderrors1, singlefile) {
++#ifndef __WIN32__
++    string path = get_database_path("apitest_simpledata");
++    FD caller(open(path.c_str(), O_RDONLY|O_BINARY));
++    TEST(caller >= 0);
++    TEST_EXCEPTION(Xapian::InvalidArgumentError,
++		   Xapian::Database::open_fd_at(-1, 0));
++    const int invalid_flags[] = {
++	Xapian::DB_BACKEND_CHERT,
++	Xapian::DB_BACKEND_GLASS | Xapian::DB_CREATE,
++	Xapian::DB_BACKEND_GLASS | Xapian::DB_NO_SYNC,
++	-1
++    };
++    for (unsigned i = 0; i != sizeof(invalid_flags) / sizeof(*invalid_flags);
++	 ++i) {
++	int fd = dup(caller);
++	TEST(fd >= 0);
++	TEST_EXCEPTION(Xapian::InvalidArgumentError,
++		       Xapian::Database::open_fd_at(fd, 0, invalid_flags[i]));
++	TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++	TEST_EQUAL(errno, EBADF);
++    }
++#ifdef HAVE_PREAD
++    int fd = dup(caller);
++    TEST(fd >= 0);
++    TEST_EXCEPTION(Xapian::InvalidArgumentError,
++		   Xapian::Database::open_fd_at(fd, uint64_t(-1)));
++    TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++    TEST_EQUAL(errno, EBADF);
++
++    // Header-range rejection happens after the backend has taken ownership.
++    fd = dup(caller);
++    TEST(fd >= 0);
++    TEST_EXCEPTION(Xapian::DatabaseCorruptError,
++		   Xapian::Database::open_fd_at(
++		       fd, uint64_t(numeric_limits<off_t>::max()) - 1));
++    TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++    TEST_EQUAL(errno, EBADF);
++
++    struct stat st;
++    TEST_EQUAL(fstat(caller, &st), 0);
++    fd = dup(caller);
++    TEST(fd >= 0);
++    TEST_EXCEPTION(Xapian::DatabaseCorruptError,
++		   Xapian::Database::open_fd_at(fd, uint64_t(st.st_size)));
++    TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++    TEST_EQUAL(errno, EBADF);
++
++    // A valid magic/version and UUID without a revision must fail before
++    // the metadata decoder reads outside the bytes actually returned.
++    string short_path = path + "-short-header";
++    ifstream in(path, fstream::binary);
++    char header[32];
++    in.read(header, sizeof(header));
++    TEST_EQUAL(in.gcount(), streamsize(sizeof(header)));
++    ofstream out(short_path, fstream::trunc|fstream::binary);
++    out.write(header, sizeof(header));
++    out.close();
++    TEST(out.good());
++    fd = open(short_path.c_str(), O_RDONLY|O_BINARY);
++    TEST(fd >= 0);
++    TEST_EXCEPTION(Xapian::DatabaseCorruptError,
++		   Xapian::Database::open_fd_at(fd, 0));
++    TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++    TEST_EQUAL(errno, EBADF);
++#else
++    int fd = dup(caller);
++    TEST(fd >= 0);
++    TEST_EXCEPTION(Xapian::FeatureUnavailableError,
++		   Xapian::Database::open_fd_at(fd, 0));
++    TEST_EQUAL(fcntl(fd, F_GETFD), -1);
++    TEST_EQUAL(errno, EBADF);
++#endif
++    TEST(fcntl(caller, F_GETFD) >= 0);
++#endif
++}
++
+ /// Regression test for bug fixed in 1.3.7.
+ DEFINE_TESTCASE(exactxor1, backend) {
+     Xapian::Database db = get_database("apitest_simpledata");

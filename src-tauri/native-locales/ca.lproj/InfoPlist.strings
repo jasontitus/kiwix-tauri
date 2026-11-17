@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Només aquest arxiu actiu pot sol·licitar la càmera. El sistema també et pot demanar permís. Pots revocar l'accés sota l'article en qualsevol moment.";
+"NSLocationUsageDescription" = "El sistema proporcionarà la teva ubicació només a aquest arxiu actiu. Pots revocar l'accés sota l'article en qualsevol moment.";
+"NSLocationWhenInUseUsageDescription" = "El sistema proporcionarà la teva ubicació només a aquest arxiu actiu. Pots revocar l'accés sota l'article en qualsevol moment.";
+"NSLocalNetworkUsageDescription" = "Descobriu els dispositius LocalSwarm propers i compartiu arxius fora de línia a la vostra xarxa local. Activa la descoberta o la compartició només en una xarxa de confiança.";

@@ -1,0 +1,94 @@
+{
+  "baseCommit": "cbb13b31c59a2bc9d1f17aad90fe9e5510441de6",
+  "patches": {
+    "src/reader-bridge.js": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+    "scripts/test-reader-theme-boot.mjs": "93cf07f860f4b225a53e8e7bb3ba4b80008bc02c50fb4b81d9cd6dc302bc81fa"
+  },
+  "excluded": [
+    "unpublished src/components/Library.tsx changes",
+    "unreviewed scripts/test-library-suggestion-focus.mjs"
+  ],
+  "rustVersion": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "jdk": "21.0.10 bundled Android Studio",
+  "ndk": "28.2.13676358",
+  "sdkManifestSha256": "b8a66f627391d085ca54e6b5a0ae4ae4658715816a4e3c84142dffd6e6d97f5c",
+  "frontendPlatform": "android",
+  "apk": {
+    "path": "annotation-android-arm64.apk",
+    "bytes": 66986027,
+    "sha256": "8ccbe6298cda9ec062a18c5544eb0fdfd62f0d8d80ac387c5a043893f03bd267",
+    "signerCertificateSha256": "b2a7c3e842f1afe0483890e6cf0360440c5eae08ce378175765615cf4598f4f3"
+  },
+  "nativeLibrary": {
+    "bytes": 65028104,
+    "sha256": "3aafe5c6bb441cbe5aa986686b07c11b0f31c9f04e690b266d5391022df84011",
+    "exports": [
+      "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+      "Java_app_tauri_plugin_PluginManager_sendChannelData",
+      "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+      "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+      "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+      "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+      "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+      "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+      "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+      "Java_org_kiwix_workbench_Rust_handleRequest",
+      "Java_org_kiwix_workbench_Rust_ipc",
+      "Java_org_kiwix_workbench_Rust_onCreate",
+      "Java_org_kiwix_workbench_Rust_onDestroy",
+      "Java_org_kiwix_workbench_Rust_onEval",
+      "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+      "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+      "Java_org_kiwix_workbench_Rust_onLowMemory",
+      "Java_org_kiwix_workbench_Rust_onNewIntent",
+      "Java_org_kiwix_workbench_Rust_onPageLoaded",
+      "Java_org_kiwix_workbench_Rust_onPageLoading",
+      "Java_org_kiwix_workbench_Rust_onPause",
+      "Java_org_kiwix_workbench_Rust_onResume",
+      "Java_org_kiwix_workbench_Rust_onStart",
+      "Java_org_kiwix_workbench_Rust_onStop",
+      "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+      "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+      "Java_org_kiwix_workbench_Rust_shouldOverride"
+    ],
+    "loadAlignments": [
+      "0x4000",
+      "0x4000",
+      "0x4000",
+      "0x4000"
+    ]
+  },
+  "exportedComponents": [
+    {
+      "type": "activity",
+      "name": "org.kiwix.workbench.MainActivity",
+      "permission": null
+    },
+    {
+      "type": "receiver",
+      "name": "androidx.profileinstaller.ProfileInstallReceiver",
+      "permission": "android.permission.DUMP"
+    }
+  ],
+  "frontendManifestSha256": "10414466950c8308b6f07eb3e71fc519b9c4f258dfe90d09d6880cd80dd18202",
+  "frontendFileCount": 93,
+  "embeddedProductionBridge": {
+    "approvedBridgeSha256": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+    "exactProductionBridgeEmbedded": true,
+    "temporaryProbeMarkerPresent": false,
+    "stagedBridgeBytes": 124299,
+    "nativeLibraryBytes": 65028104
+  },
+  "gates": {
+    "signatureVerified": true,
+    "apkZipalign16KiB": true,
+    "elfLoadAlignment16KiB": true,
+    "onlyArm64NativeLibrary": true,
+    "requiredOriginalJNIExportsRetained": true,
+    "debuggable": false,
+    "allowBackup": false,
+    "instrumentation": false
+  },
+  "buildRecovery": "First packaging failed because cached official Tauri codegen skipped generated TauriActivity.kt for the new private project. Cleaned only tauri in owned Cargo target and reran canonical packaging; no manual Kotlin shim, frontend/source edits, or device operations.",
+  "claimBoundary": "Build identity and packaging gates only. On-device installed-app acceptance and matched physical memory repeat are separate requirements; response override evidence is not a physical APK gain."
+}

@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Alleen dit actieve archief kan toegang tot de camera vragen. Je systeem kan ook om toestemming vragen. Je kunt de toegang op elk moment onder het artikel intrekken.";
+"NSLocationUsageDescription" = "Je systeem geeft je locatie alleen door aan dit actieve archief. Je kunt de toegang op elk moment onder het artikel intrekken.";
+"NSLocationWhenInUseUsageDescription" = "Je systeem geeft je locatie alleen door aan dit actieve archief. Je kunt de toegang op elk moment onder het artikel intrekken.";
+"NSLocalNetworkUsageDescription" = "Ontdek LocalSwarm-apparaten in de buurt en deel offline archieven op uw lokale netwerk. Schakel detectie of delen alleen in op een vertrouwd netwerk.";

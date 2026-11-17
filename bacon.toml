@@ -1,0 +1,9 @@
+default_job = "check"
+
+[jobs.check]
+command = ["cargo", "check", "--lib"]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test", "--lib"]
+need_stdout = true

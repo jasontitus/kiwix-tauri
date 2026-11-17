@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<!-- macOS App Sandbox. Files outside the container are reachable only through
+     user grants (open/save panels, drag and drop, Open With), kept across
+     launches as app-scoped security bookmarks (src/sandbox.rs). -->
+<key>com.apple.security.app-sandbox</key><true/>
+<key>com.apple.security.files.user-selected.read-write</key><true/>
+<key>com.apple.security.files.bookmarks.app-scope</key><true/>
+<!-- Default download folder. -->
+<key>com.apple.security.files.downloads.read-write</key><true/>
+<!-- Catalogs, downloads, BitTorrent, LAN sharing and the loopback reader server. -->
+<key>com.apple.security.network.client</key><true/>
+<key>com.apple.security.network.server</key><true/>
+<!-- Archive pages may request these after an explicit in-app consent. -->
+<key>com.apple.security.device.camera</key><true/>
+<key>com.apple.security.personal-information.location</key><true/>
+<key>com.apple.security.print</key><true/>
+</dict></plist>

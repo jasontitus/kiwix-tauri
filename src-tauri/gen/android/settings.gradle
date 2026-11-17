@@ -1,0 +1,12 @@
+include ':app'
+
+apply from: 'tauri.settings.gradle'
+
+// Pinned application-owned Android lifetime fixes; never patch Cargo's cache.
+project(':tauri-android').projectDir = new File(settingsDir, '../../vendor/tauri-android-2.12.5')
+
+// JVM half of rustls-platform-verifier for librqbit's HTTPS tracker client.
+// Built from pinned upstream source (see its upstream-provenance.json), never
+// from the upstream GitHub-hosted Maven archive.
+include ':rustls-platform-verifier'
+project(':rustls-platform-verifier').projectDir = new File(settingsDir, '../../vendor/rustls-platform-verifier-android-0.2.0')

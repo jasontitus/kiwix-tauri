@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Wannan ma'ajiyar da ake amfani da ita kaɗai za ta iya neman kyamara. Tsarinka ma zai iya neman izini. Za ka iya janye izinin a ƙarƙashin maƙalar a kowane lokaci.";
+"NSLocationUsageDescription" = "Tsarinka zai ba da wurin da kake ga wannan ma'ajiyar da ake amfani da ita kaɗai. Za ka iya janye izinin a ƙarƙashin maƙalar a kowane lokaci.";
+"NSLocationWhenInUseUsageDescription" = "Tsarinka zai ba da wurin da kake ga wannan ma'ajiyar da ake amfani da ita kaɗai. Za ka iya janye izinin a ƙarƙashin maƙalar a kowane lokaci.";
+"NSLocalNetworkUsageDescription" = "Gano na'urorin LocalSwarm na kusa kuma raba wuraren adana bayanan layi akan hanyar sadarwar ku ta gida. Kunna ganowa ko rabawa akan amintaccen cibiyar sadarwa kawai.";

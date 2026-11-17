@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>NSAppTransportSecurity</key><dict>
+  <key>NSExceptionDomains</key><dict>
+    <key>localhost</key><dict>
+      <key>NSIncludesSubdomains</key><true/>
+      <key>NSExceptionAllowsInsecureHTTPLoads</key><true/>
+    </dict>
+  </dict>
+</dict>
+<key>NSCameraUsageDescription</key><string>Only this active archive can request the camera. Your system may also ask for permission. You can revoke access below the article at any time.</string>
+<key>NSLocationUsageDescription</key><string>Your system will provide your location only to this active archive. You can revoke access below the article at any time.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>Your system will provide your location only to this active archive. You can revoke access below the article at any time.</string>
+<key>NSLocalNetworkUsageDescription</key><string>Discover nearby LocalSwarm devices and share offline archives on your local network. Enable discovery or sharing only on a trusted network.</string>
+<key>NSBluetoothAlwaysUsageDescription</key><string>Find nearby libraries and help connect the devices when you choose Share all or receive an archive. Archives transfer over an encrypted local connection, not Bluetooth.</string>
+<key>NSBonjourServices</key><array><string>_localswarm._tcp</string></array>
+<key>LSSupportsOpeningDocumentsInPlace</key><true/>
+<key>CFBundleURLTypes</key><array><dict>
+  <key>CFBundleURLName</key><string>com.tiltastech.zimreader.zim</string>
+  <key>CFBundleTypeRole</key><string>Viewer</string>
+  <key>CFBundleURLSchemes</key><array><string>zim</string></array>
+</dict><dict>
+  <key>CFBundleURLName</key><string>com.tiltastech.zimreader.search</string>
+  <key>CFBundleTypeRole</key><string>Viewer</string>
+  <key>CFBundleURLSchemes</key><array><string>kiwix</string></array>
+</dict></array>
+</dict></plist>

@@ -1,0 +1,246 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "baselineCommit": "468b44f",
+  "isolatedChange": "profile.release.codegen-units = 1",
+  "isolatedArtifact": {
+    "file": "ours-single-codegen-unit-arm64.apk",
+    "bytes": 77041707,
+    "sha256": "cb41c64ed15aa79e81f3e124296406cb700eedfdcd0840a7ed1677f36b10aa52",
+    "nativeBytes": 75082184,
+    "nativeSha256": "1bc5f6041c9671a421501e6a6d417b33b8ff7afb15316400848f2173f24b2737",
+    "sourceRevision": "468b44f",
+    "onlySourceDelta": "profile.release.codegen-units = 1",
+    "baselineApkSha256": "f285a5244a8095ec8d9501ecda05b0f0335b2d28d37bfffe99fde30ee921259c",
+    "baselineApkBytes": 83808299,
+    "apkSavingBytes": 6766592,
+    "baselineNativeBytes": 81849928,
+    "baselineNativeSha256": "45aa76deda9e6f0fa2e71f7ffc1881f1973cf068db1d5832817e52c03d20387e"
+  },
+  "elfChecks": [
+    {
+      "variant": "baseline",
+      "architecture": "aarch64",
+      "exports": [
+        "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+        "Java_app_tauri_plugin_PluginManager_sendChannelData",
+        "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+        "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+        "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+        "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+        "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+        "Java_org_kiwix_workbench_Rust_handleRequest",
+        "Java_org_kiwix_workbench_Rust_ipc",
+        "Java_org_kiwix_workbench_Rust_onCreate",
+        "Java_org_kiwix_workbench_Rust_onDestroy",
+        "Java_org_kiwix_workbench_Rust_onEval",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+        "Java_org_kiwix_workbench_Rust_onLowMemory",
+        "Java_org_kiwix_workbench_Rust_onNewIntent",
+        "Java_org_kiwix_workbench_Rust_onPageLoaded",
+        "Java_org_kiwix_workbench_Rust_onPageLoading",
+        "Java_org_kiwix_workbench_Rust_onPause",
+        "Java_org_kiwix_workbench_Rust_onResume",
+        "Java_org_kiwix_workbench_Rust_onStart",
+        "Java_org_kiwix_workbench_Rust_onStop",
+        "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+        "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+        "Java_org_kiwix_workbench_Rust_shouldOverride"
+      ],
+      "neededLibraries": [
+        "libandroid.so",
+        "libc.so",
+        "libdl.so",
+        "liblog.so",
+        "libm.so"
+      ],
+      "loadSegments": [
+        {
+          "offset": 0,
+          "virtualAddress": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 53656256,
+          "virtualAddress": 53672640,
+          "alignment": 16384
+        },
+        {
+          "offset": 80296224,
+          "virtualAddress": 80328992,
+          "alignment": 16384
+        },
+        {
+          "offset": 81808256,
+          "virtualAddress": 81857408,
+          "alignment": 16384
+        }
+      ],
+      "regularSymbolTablesAbsent": true
+    },
+    {
+      "variant": "single-codegen-unit",
+      "architecture": "aarch64",
+      "exports": [
+        "Java_app_tauri_plugin_PluginManager_handlePluginResponse",
+        "Java_app_tauri_plugin_PluginManager_sendChannelData",
+        "Java_org_kiwix_mobile_KiwixMobilePlugin_installServiceEndpoint",
+        "Java_org_kiwix_mobile_NativeArticlePdf_authorityCurrent",
+        "Java_org_kiwix_mobile_NativeArticlePdf_commitHandoff",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onGeolocationPermissionRequestNative",
+        "Java_org_kiwix_workbench_RustWebChromeClient_onPermissionRequestNative",
+        "Java_org_kiwix_workbench_Rust_assetLoaderDomain",
+        "Java_org_kiwix_workbench_Rust_handleReceivedTitle",
+        "Java_org_kiwix_workbench_Rust_handleRequest",
+        "Java_org_kiwix_workbench_Rust_ipc",
+        "Java_org_kiwix_workbench_Rust_onCreate",
+        "Java_org_kiwix_workbench_Rust_onDestroy",
+        "Java_org_kiwix_workbench_Rust_onEval",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreate",
+        "Java_org_kiwix_workbench_Rust_onFirstActivityCreateWry",
+        "Java_org_kiwix_workbench_Rust_onLowMemory",
+        "Java_org_kiwix_workbench_Rust_onNewIntent",
+        "Java_org_kiwix_workbench_Rust_onPageLoaded",
+        "Java_org_kiwix_workbench_Rust_onPageLoading",
+        "Java_org_kiwix_workbench_Rust_onPause",
+        "Java_org_kiwix_workbench_Rust_onResume",
+        "Java_org_kiwix_workbench_Rust_onStart",
+        "Java_org_kiwix_workbench_Rust_onStop",
+        "Java_org_kiwix_workbench_Rust_onWebviewDestroy",
+        "Java_org_kiwix_workbench_Rust_onWindowFocusChanged",
+        "Java_org_kiwix_workbench_Rust_shouldOverride"
+      ],
+      "neededLibraries": [
+        "libandroid.so",
+        "libc.so",
+        "libdl.so",
+        "liblog.so",
+        "libm.so"
+      ],
+      "loadSegments": [
+        {
+          "offset": 0,
+          "virtualAddress": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 51543168,
+          "virtualAddress": 51559552,
+          "alignment": 16384
+        },
+        {
+          "offset": 73701152,
+          "virtualAddress": 73733920,
+          "alignment": 16384
+        },
+        {
+          "offset": 75039440,
+          "virtualAddress": 75088592,
+          "alignment": 16384
+        }
+      ],
+      "regularSymbolTablesAbsent": true
+    }
+  ],
+  "method": {
+    "rootRustcFlagObserved": "-C codegen-units=1",
+    "frozenFrontendFiles": 79,
+    "signing": "local Android Debug development certificate; optimized non-debuggable release",
+    "apkSignature": "v2/v3 verified",
+    "zipAlignmentBytes": 16384,
+    "environment": "owned API33 Google APIs ARM64 emulator; Pixel6; 2 cores; 2048MiB; SwiftShader; offline"
+  },
+  "realArchives": [
+    {
+      "file": "wikipedia_en_100_2026-08.zim",
+      "bytes": 333429922,
+      "sha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b"
+    },
+    {
+      "file": "osm_en_hawaii_2026-10-26.zim",
+      "bytes": 150605015,
+      "sha256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d"
+    }
+  ],
+  "isolatedRuntimeAcceptance": [
+    "Wikipedia title Animal",
+    "First/repeated multicellular full-text with snippets",
+    "Eukaryote article rendering",
+    "Native Back to Animal",
+    "Actual Animal Eukaryota internal link",
+    "Five cold Animal tab restorations",
+    "Hawaii overview with tiles/labels",
+    "Honolulu place search/selection",
+    "Map zoom and pan"
+  ],
+  "evidenceRoot": "/private/tmp/kiwix-optimization-smoke.fJ7JQgzk",
+  "teardown": {
+    "ownedEmulatorExitCode": 0,
+    "privateAvdRemoved": true,
+    "privateBuildCloneRemoved": true,
+    "completedAcquisitionProfileAndPayloadRemoved": true,
+    "reviewedHelperSourcesRetainedInert": true,
+    "originalArchivesAndNormalProfilesUntouched": true,
+    "voiceOverTouched": false,
+    "rawReceipt": "teardown.json"
+  },
+  "limits": [
+    "Isolated candidate predates integrated Clippy source remediation",
+    "No causal startup or memory gain: grouped order, overlapping baseline host load, differing swap",
+    "No new macOS/iOS package-size measurement",
+    "No physical-phone update or assistive technology mutation",
+    "Whole feature parity remains open"
+  ],
+  "integratedArtifact": {
+    "file": "ours-integrated-codegen-clippy-arm64.apk",
+    "bytes": 77029419,
+    "sha256": "911ee1ebbf82388cdc99f0ab8b0319cc5069fa0da08fcc8a2d15c27338ff1e33",
+    "nativeBytes": 75070840,
+    "nativeSha256": "9677f77ad0905708953c7f25811b2efb55db939a8e0443b5b7a8a8dd5fd6cae8",
+    "sourceScope": "468b44f plus reviewed Clippy remediation and codegen-units=1",
+    "signing": "local Android Debug development certificate; optimized non-debuggable release; v2/v3 verified",
+    "zipAlignmentBytes": 16384,
+    "definedExportsMatchBaseline": 27,
+    "neededLibrariesMatchBaseline": 5,
+    "elfLoadAlignmentPassed": true,
+    "regularSymbolTablesAbsent": true,
+    "installedApkSha256Matched": true,
+    "installedCodeLogicalBytes": 78856775,
+    "installedCodeAllocatedKiB": 77068,
+    "storageScope": "selected data/app code root: APK plus ODEX/VDEX; excludes mutable data, shared OS/WebView, public archives and other system accounting",
+    "rawReceipts": ["integrated-installed-identity.json", "integrated-elf-checks.json", "ours-storage-integrated-accepted.json", "artifact://26966"],
+    "runtimeAcceptance": ["Title query Animal: about 40 results", "First/repeated full-text multicellular: about 10 results with snippets", "Eukaryote rendering", "Native Back to Animal", "Cold Animal tab restoration", "Hawaii Honolulu city selection", "Rendered map tiles/labels with zoom and pan"],
+    "screenshots": ["021-integrated-title-search-ready.png", "025-integrated-fulltext-multicellular.png", "026-integrated-fulltext-repeat.png", "027-integrated-eukaryote.png", "028-integrated-back-animal.png", "029-integrated-restored-animal.png", "035-integrated-honolulu-city-selected.png", "036-integrated-honolulu-city-zoom-pan.png"],
+    "limits": ["No startup/memory ranking from integrated smoke", "Three reader tabs during Wikipedia acceptance and four during final map acceptance; not the earlier one-tab upstream comparison", "Isolated codegen experiment establishes attribution; integrated source contains additional Clippy changes", "No physical-phone installation"]
+  },
+  "rustVerification": {
+    "configuration": "development checks; --locked; schema-2 native SDKs; -D warnings",
+    "hostAllTargetsFeatures": "custom-protocol,localswarm-profiling",
+    "hostStrictPassed": true,
+    "iosProductionStrictPassed": true,
+    "androidProductionStrictPassed": true,
+    "androidEvaluationStrictPassed": true,
+    "rustTests": {"passed": 943, "ignored": 16, "features": "custom-protocol,localswarm-profiling"},
+    "receipts": {"host": "artifact://26945", "ios": "artifact://26950", "android": "artifact://26946", "androidEvaluation": "artifact://26960", "tests": "artifact://26949", "nativeBuild": "artifact://26952", "acquisitionSmoke": "/private/tmp/kiwix-optimization-smoke.fJ7JQgzk/acquisition-result.json"},
+    "remainingWarnings": ["vendored Wry unexpected cfg macos_12_unavailable", "native notifications.mm unused parameters and potential strong-capture retain cycle"],
+    "unexercisedTargets": ["Windows native", "Linux native", "physical mobile lifecycle/provider/media"]
+  },
+  "realAcquisitionSmoke": {
+    "sourceBytes": 333429922,
+    "pausedDownloaded": 30146560,
+    "restoredDownloaded": 30146560,
+    "finalSha256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+    "applicationExitCodes": [0, 0],
+    "rangeRequests": 8,
+    "scope": "real headless app; private profile; owned loopback range server; final byte integrity, not throughput or exact network-byte reuse",
+    "rawReceipt": "acquisition-result.json"
+  },
+  "rejectedExperiment": {
+    "setting": "lto = thin",
+    "reason": "Mixed staticlib/cdylib/rlib root compiler invocation omitted LTO; no benefit attributed",
+    "reference": "https://github.com/rust-lang/cargo/issues/14612"
+  }
+}

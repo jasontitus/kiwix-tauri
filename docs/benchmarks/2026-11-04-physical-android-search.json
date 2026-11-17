@@ -1,0 +1,634 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-android-prepared-session-title-autocomplete",
+  "publicationReview": "passed-independent-four-clip-frame-numeric-and-sanitization-review",
+  "method": "Prospectively approved uniform manual semantic adjudication of original native frames; no RGB classifier, OCR, threshold adjustment, normalization or debounce subtraction.",
+  "sequence": [
+    "official",
+    "ours",
+    "ours",
+    "official"
+  ],
+  "capturedCount": 4,
+  "admittedCount": 4,
+  "pendingCount": 0,
+  "rejectedCount": 0,
+  "retryCount": 0,
+  "warmupsExcluded": true,
+  "endpoint": "First complete visible exact Animal query to both actual autocomplete title rows Animal and Animal Characteristics legible above the visible keyboard. Ambiguous native animation onset is bounded by last-definitely-non-ready and first-definitely-ready original frames, not assigned a fabricated exact onset.",
+  "latencyFormula": "[(rowsLastDefinitelyNonReadyPTS-queryFirstCompletePTS),(rowsFirstDefinitelyReadyPTS-queryLastIncompletePTS)] *1000; signed bounds retained, no clamping.",
+  "arithmetic": "Integer original best-effort PTS multiplied by native stream time_base is authoritative; exact millisecond rational bounds retained. Decimal approximations are presentation only, not additional timing precision.",
+  "surfaces": {
+    "ours": "Library Search inside your archives, one selected archive, Search articles combobox and title-autocomplete dropdown with Wikipedia 100 row labels. Separate visible full-text submit controls are not exercised.",
+    "official": "SearchFragment incremental title search for current Wikipedia 100 archive.",
+    "scopeEvidence": "Wiki-only archive scope is established by Main setup evidence. Ours video shows one selected archive but its selected name is offscreen; returned rows show Wikipedia 100 labels."
+  },
+  "debounceInterpretation": "No debounce was subtracted; input processing and debounce may begin before the complete query becomes visible.",
+  "geometry": [
+    1080,
+    2340
+  ],
+  "series": [
+    {
+      "block": 0,
+      "app": "official",
+      "label": "clean-search-b0-official",
+      "videoSha256": "c1fbb5d0ddcf914b9ed29d448873fad7478873ea474db4b920e4b74f2751efe3",
+      "videoBytes": 1092379,
+      "recordingReceiptSha256Matches": true,
+      "recordingReceiptBytesMatches": true,
+      "recorderExitStatus": 0,
+      "geometry": [
+        1080,
+        2340
+      ],
+      "containerDurationSeconds": "20.414178",
+      "audioTrackCount": 0,
+      "colorMetadata": {
+        "pix_fmt": "yuv420p",
+        "color_range": "tv",
+        "color_space": "bt709",
+        "color_transfer": "bt709",
+        "color_primaries": "bt709"
+      },
+      "independentAdmission": "admitted",
+      "originalFrameCount": 92,
+      "nativeTimeBase": "1/90000",
+      "precondition": {
+        "firstFrameIndex": 0,
+        "query": "zzzzqx",
+        "targetRowsAbsent": true,
+        "noResultsVisible": true,
+        "keyboardVisible": true
+      },
+      "queryTransition": {
+        "lastIncompleteIndex": 36,
+        "firstCompleteIndex": 37,
+        "ptsTicks": [
+          208587,
+          210032
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.317633",
+          "2.333689"
+        ],
+        "exactQuery": "Animal"
+      },
+      "rowsTransition": {
+        "lastDefinitelyNonReadyIndex": 41,
+        "firstDefinitelyReadyIndex": 46,
+        "ambiguousOnsetIndices": [
+          42,
+          43,
+          44,
+          45
+        ],
+        "exactFirstReadyFrameResolved": false,
+        "ptsTicks": [
+          216085,
+          223742
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.400944",
+          "2.486022"
+        ],
+        "titles": [
+          "Animal",
+          "Animal Characteristics"
+        ],
+        "ambiguity": "Old first-row Animak glyph and other old text crossfade into intended Animal result; interval widened over transition."
+      },
+      "confirmation": {
+        "index": 53,
+        "ptsTicks": 234308,
+        "ffprobePtsTimeSeconds": "2.603422",
+        "separationExactMs": "587/5",
+        "noObservedInterveningRegression": true
+      },
+      "signedLatencyIntervalExactMs": [
+        "6053/90",
+        "3031/18"
+      ],
+      "signedLatencyIntervalApproxMs": [
+        67.25555555555556,
+        168.38888888888889
+      ],
+      "clampingApplied": false,
+      "debounceSubtractedMs": 0,
+      "boundaryFrameProof": [
+        {
+          "index": 0,
+          "ptsTicks": 0,
+          "ffprobePtsTimeSeconds": "0.000000",
+          "fullFrameSha256": "cfad30401df1af4520424f8bae41ca7cc817780223e900e11819f6517582ff93"
+        },
+        {
+          "index": 36,
+          "ptsTicks": 208587,
+          "ffprobePtsTimeSeconds": "2.317633",
+          "fullFrameSha256": "e4ce5a461c8a06eb34e2122728ee57742266cdd3523553a0e5962bcf320b41d6"
+        },
+        {
+          "index": 37,
+          "ptsTicks": 210032,
+          "ffprobePtsTimeSeconds": "2.333689",
+          "fullFrameSha256": "8d1fb5cdf309bc4de70b5837aa7a8099655c565b4504d1484098ca3a5747ae93"
+        },
+        {
+          "index": 41,
+          "ptsTicks": 216085,
+          "ffprobePtsTimeSeconds": "2.400944",
+          "fullFrameSha256": "0a4983fb4f764c48f97c0d173ac0920b267fbdacbf4076023a8665f63100d041"
+        },
+        {
+          "index": 42,
+          "ptsTicks": 217638,
+          "ffprobePtsTimeSeconds": "2.418200",
+          "fullFrameSha256": "481fa39dd3f937b3fe3103e9bc6e142587683193be70e53694d9880d348d6182"
+        },
+        {
+          "index": 43,
+          "ptsTicks": 219171,
+          "ffprobePtsTimeSeconds": "2.435233",
+          "fullFrameSha256": "a51659d31509699b8a7d83a3bd9a18d897470bd3e0f5d3cda029d68710a73b56"
+        },
+        {
+          "index": 44,
+          "ptsTicks": 220702,
+          "ffprobePtsTimeSeconds": "2.452244",
+          "fullFrameSha256": "b0ac9029673fa472f4d5848866b7846e94dd26d8b1227ab29625b3a90a58a254"
+        },
+        {
+          "index": 45,
+          "ptsTicks": 222192,
+          "ffprobePtsTimeSeconds": "2.468800",
+          "fullFrameSha256": "9fc384820733bfe2628336f6d4d3ec4bf94f4522ba49e41b784e69ed57a8651a"
+        },
+        {
+          "index": 46,
+          "ptsTicks": 223742,
+          "ffprobePtsTimeSeconds": "2.486022",
+          "fullFrameSha256": "4ee1113a0d17640399905ee638c3460dd36dedadbca359c7a3a451a6a2d4f717"
+        },
+        {
+          "index": 53,
+          "ptsTicks": 234308,
+          "ffprobePtsTimeSeconds": "2.603422",
+          "fullFrameSha256": "4002341e03f28a916851d1882d229f7065c788c782d5e3b4582b376ea5400ffc"
+        }
+      ]
+    },
+    {
+      "block": 1,
+      "app": "ours",
+      "label": "clean-search-b1-ours",
+      "videoSha256": "836b68bf8564c01012fcc90c6ba057c98580bc5bca9671f2211b9366615da7c3",
+      "videoBytes": 321065,
+      "recordingReceiptSha256Matches": true,
+      "recordingReceiptBytesMatches": true,
+      "recorderExitStatus": 0,
+      "geometry": [
+        1080,
+        2340
+      ],
+      "containerDurationSeconds": "20.476967",
+      "audioTrackCount": 0,
+      "colorMetadata": {
+        "pix_fmt": "yuv420p",
+        "color_range": "tv",
+        "color_space": "bt709",
+        "color_transfer": "bt709",
+        "color_primaries": "bt709"
+      },
+      "independentAdmission": "admitted",
+      "originalFrameCount": 54,
+      "nativeTimeBase": "1/90000",
+      "precondition": {
+        "firstFrameIndex": 0,
+        "query": "zzzzqx",
+        "targetRowsAbsent": true,
+        "noResultsVisible": false,
+        "keyboardVisible": true
+      },
+      "queryTransition": {
+        "lastIncompleteIndex": 16,
+        "firstCompleteIndex": 17,
+        "ptsTicks": [
+          216550,
+          219532
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.406111",
+          "2.439244"
+        ],
+        "exactQuery": "Animal"
+      },
+      "rowsTransition": {
+        "lastDefinitelyNonReadyIndex": 17,
+        "firstDefinitelyReadyIndex": 18,
+        "ambiguousOnsetIndices": [],
+        "exactFirstReadyFrameResolved": true,
+        "ptsTicks": [
+          219532,
+          245336
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.439244",
+          "2.725956"
+        ],
+        "titles": [
+          "Animal",
+          "Animal Characteristics"
+        ],
+        "ambiguity": null
+      },
+      "confirmation": {
+        "index": 19,
+        "ptsTicks": 267899,
+        "ffprobePtsTimeSeconds": "2.976656",
+        "separationExactMs": "2507/10",
+        "noObservedInterveningRegression": true
+      },
+      "signedLatencyIntervalExactMs": [
+        "0",
+        "14393/45"
+      ],
+      "signedLatencyIntervalApproxMs": [
+        0.0,
+        319.84444444444443
+      ],
+      "clampingApplied": false,
+      "debounceSubtractedMs": 0,
+      "boundaryFrameProof": [
+        {
+          "index": 0,
+          "ptsTicks": 0,
+          "ffprobePtsTimeSeconds": "0.000000",
+          "fullFrameSha256": "30fcb48b3c30191b5ed14c1b35c5ac992826cc453a8675524efda3ad0a79af94"
+        },
+        {
+          "index": 16,
+          "ptsTicks": 216550,
+          "ffprobePtsTimeSeconds": "2.406111",
+          "fullFrameSha256": "63ebbc3bc095944616a89e333f9800c1139ef3e034c7e3fe1e1ed61d3c5a884a"
+        },
+        {
+          "index": 17,
+          "ptsTicks": 219532,
+          "ffprobePtsTimeSeconds": "2.439244",
+          "fullFrameSha256": "6caa768c6c512a4464a257a879f5dfee50e529fcd377536b19bf4a45b5e66a95"
+        },
+        {
+          "index": 18,
+          "ptsTicks": 245336,
+          "ffprobePtsTimeSeconds": "2.725956",
+          "fullFrameSha256": "9f3f5b254b95064f38622417c8e6522666ce6f12737560d7959e80edb009f2b5"
+        },
+        {
+          "index": 19,
+          "ptsTicks": 267899,
+          "ffprobePtsTimeSeconds": "2.976656",
+          "fullFrameSha256": "a0fe504e57906947cee56955402a54f4f1f97fdc256d06630854e6f8c68d87a1"
+        }
+      ]
+    },
+    {
+      "block": 2,
+      "app": "ours",
+      "label": "clean-search-b2-ours",
+      "videoSha256": "103c23d026df4c07f921ab8ddf492d0e2577c51264ce66692a1ac9fd5232a4e2",
+      "videoBytes": 332952,
+      "recordingReceiptSha256Matches": true,
+      "recordingReceiptBytesMatches": true,
+      "recorderExitStatus": 0,
+      "geometry": [
+        1080,
+        2340
+      ],
+      "containerDurationSeconds": "20.257767",
+      "audioTrackCount": 0,
+      "colorMetadata": {
+        "pix_fmt": "yuv420p",
+        "color_range": "tv",
+        "color_space": "bt709",
+        "color_transfer": "bt709",
+        "color_primaries": "bt709"
+      },
+      "independentAdmission": "admitted",
+      "originalFrameCount": 77,
+      "nativeTimeBase": "1/90000",
+      "precondition": {
+        "firstFrameIndex": 0,
+        "query": "zzzzqx",
+        "targetRowsAbsent": true,
+        "noResultsVisible": false,
+        "keyboardVisible": true
+      },
+      "queryTransition": {
+        "lastIncompleteIndex": 24,
+        "firstCompleteIndex": 25,
+        "ptsTicks": [
+          202083,
+          204986
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.245367",
+          "2.277622"
+        ],
+        "exactQuery": "Animal"
+      },
+      "rowsTransition": {
+        "lastDefinitelyNonReadyIndex": 25,
+        "firstDefinitelyReadyIndex": 26,
+        "ambiguousOnsetIndices": [],
+        "exactFirstReadyFrameResolved": true,
+        "ptsTicks": [
+          204986,
+          221853
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.277622",
+          "2.465033"
+        ],
+        "titles": [
+          "Animal",
+          "Animal Characteristics"
+        ],
+        "ambiguity": null
+      },
+      "confirmation": {
+        "index": 27,
+        "ptsTicks": 253495,
+        "ffprobePtsTimeSeconds": "2.816611",
+        "separationExactMs": "15821/45",
+        "noObservedInterveningRegression": true
+      },
+      "signedLatencyIntervalExactMs": [
+        "0",
+        "659/3"
+      ],
+      "signedLatencyIntervalApproxMs": [
+        0.0,
+        219.66666666666666
+      ],
+      "clampingApplied": false,
+      "debounceSubtractedMs": 0,
+      "boundaryFrameProof": [
+        {
+          "index": 0,
+          "ptsTicks": 0,
+          "ffprobePtsTimeSeconds": "0.000000",
+          "fullFrameSha256": "eb304128c2e55023f7bb6a0316d2aa27e5f31bfd2216aae100ea1768bdc49ca1"
+        },
+        {
+          "index": 24,
+          "ptsTicks": 202083,
+          "ffprobePtsTimeSeconds": "2.245367",
+          "fullFrameSha256": "6fd7303bc1fa0c10daae1b71ab63c1c077cde8a8bbfe35148f9021f8a1acd213"
+        },
+        {
+          "index": 25,
+          "ptsTicks": 204986,
+          "ffprobePtsTimeSeconds": "2.277622",
+          "fullFrameSha256": "4f76050a1cfdbb546f308f25883e9e6318db91795664421a9e1851a5fdea7b1d"
+        },
+        {
+          "index": 26,
+          "ptsTicks": 221853,
+          "ffprobePtsTimeSeconds": "2.465033",
+          "fullFrameSha256": "5520c4dc976b4808ea6d505a7ff48a7102d46cbf640d31944e6dc9fdcc01e598"
+        },
+        {
+          "index": 27,
+          "ptsTicks": 253495,
+          "ffprobePtsTimeSeconds": "2.816611",
+          "fullFrameSha256": "74af46d08e5214594ee2c5ed5236acfe0b0f60c2f0e1738cffee012c722f0b54"
+        }
+      ]
+    },
+    {
+      "block": 3,
+      "app": "official",
+      "label": "clean-search-b3-official",
+      "videoSha256": "d2d6e326621fd90ad7a49e1fa63089e55055d5d3947514b3e577e3a858ef3f6e",
+      "videoBytes": 1173480,
+      "recordingReceiptSha256Matches": true,
+      "recordingReceiptBytesMatches": true,
+      "recorderExitStatus": 0,
+      "geometry": [
+        1080,
+        2340
+      ],
+      "containerDurationSeconds": "20.060111",
+      "audioTrackCount": 0,
+      "colorMetadata": {
+        "pix_fmt": "yuv420p",
+        "color_range": "tv",
+        "color_space": "bt709",
+        "color_transfer": "bt709",
+        "color_primaries": "bt709"
+      },
+      "independentAdmission": "admitted",
+      "originalFrameCount": 127,
+      "nativeTimeBase": "1/90000",
+      "precondition": {
+        "firstFrameIndex": 0,
+        "query": "zzzzqx",
+        "targetRowsAbsent": true,
+        "noResultsVisible": true,
+        "keyboardVisible": true
+      },
+      "queryTransition": {
+        "lastIncompleteIndex": 38,
+        "firstCompleteIndex": 39,
+        "ptsTicks": [
+          224187,
+          225715
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.490967",
+          "2.507944"
+        ],
+        "exactQuery": "Animal"
+      },
+      "rowsTransition": {
+        "lastDefinitelyNonReadyIndex": 50,
+        "firstDefinitelyReadyIndex": 55,
+        "ambiguousOnsetIndices": [
+          51,
+          52,
+          53,
+          54
+        ],
+        "exactFirstReadyFrameResolved": false,
+        "ptsTicks": [
+          242236,
+          249827
+        ],
+        "ffprobePtsTimeSeconds": [
+          "2.691511",
+          "2.775856"
+        ],
+        "titles": [
+          "Animal",
+          "Animal Characteristics"
+        ],
+        "ambiguity": "Old first-row Animak glyph and other old text crossfade into intended Animal result; interval widened over transition."
+      },
+      "confirmation": {
+        "index": 61,
+        "ptsTicks": 258904,
+        "ffprobePtsTimeSeconds": "2.876711",
+        "separationExactMs": "9077/90",
+        "noObservedInterveningRegression": true
+      },
+      "signedLatencyIntervalExactMs": [
+        "5507/30",
+        "2564/9"
+      ],
+      "signedLatencyIntervalApproxMs": [
+        183.56666666666666,
+        284.8888888888889
+      ],
+      "clampingApplied": false,
+      "debounceSubtractedMs": 0,
+      "boundaryFrameProof": [
+        {
+          "index": 0,
+          "ptsTicks": 0,
+          "ffprobePtsTimeSeconds": "0.000000",
+          "fullFrameSha256": "e41a22684c2e9fd0ec5ad7ceb89c20d5932d9252db4e6ce6148816bc11e94bf0"
+        },
+        {
+          "index": 38,
+          "ptsTicks": 224187,
+          "ffprobePtsTimeSeconds": "2.490967",
+          "fullFrameSha256": "569a4234fc442a666eb5d34373ad187327e3a22b655e3ebb87d9499c263f9af7"
+        },
+        {
+          "index": 39,
+          "ptsTicks": 225715,
+          "ffprobePtsTimeSeconds": "2.507944",
+          "fullFrameSha256": "74878d45b54beaa9d7e18915727785a3c156dd67190cf045bd25b86ab0e4724a"
+        },
+        {
+          "index": 50,
+          "ptsTicks": 242236,
+          "ffprobePtsTimeSeconds": "2.691511",
+          "fullFrameSha256": "8d6681ff15d4f2f9a595c96747c1eb42ad108d87f628afafcf894836d5a16e7d"
+        },
+        {
+          "index": 51,
+          "ptsTicks": 243740,
+          "ffprobePtsTimeSeconds": "2.708222",
+          "fullFrameSha256": "e5b3b2c8e0231f13de7b0acb96f3f0875066b9de3244e93ab50660a7c99c4415"
+        },
+        {
+          "index": 52,
+          "ptsTicks": 245263,
+          "ffprobePtsTimeSeconds": "2.725144",
+          "fullFrameSha256": "f944e91c729676ff178956bf51365292333a54761e4aa87d40786edf953d59f6"
+        },
+        {
+          "index": 53,
+          "ptsTicks": 246707,
+          "ffprobePtsTimeSeconds": "2.741189",
+          "fullFrameSha256": "e48f611b70cf39e5785f210a11e5ca9e9f9851c309d0ca9adc9274f92edb2ea8"
+        },
+        {
+          "index": 54,
+          "ptsTicks": 248291,
+          "ffprobePtsTimeSeconds": "2.758789",
+          "fullFrameSha256": "4febc7dfec6aab5ab11acf2f307f3731efa9aa69393902b3b1dd9edf3a429efc"
+        },
+        {
+          "index": 55,
+          "ptsTicks": 249827,
+          "ffprobePtsTimeSeconds": "2.775856",
+          "fullFrameSha256": "f2c6317f00af85c21e8f2c9a052e344fdbc8cc6843134b1269034e972c8282a9"
+        },
+        {
+          "index": 61,
+          "ptsTicks": 258904,
+          "ffprobePtsTimeSeconds": "2.876711",
+          "fullFrameSha256": "871da59fd74fe028141afa1c824d8ce7ee385ae652d9742af4f0f99318554d8e"
+        }
+      ]
+    }
+  ],
+  "descriptiveSummary": {
+    "ours": {
+      "medianIntervalExactMs": [
+        "0",
+        "12139/45"
+      ],
+      "medianIntervalApproxMs": [
+        0.0,
+        269.75555555555553
+      ],
+      "observedIntervalEnvelopeExactMs": [
+        "0",
+        "14393/45"
+      ]
+    },
+    "official": {
+      "medianIntervalExactMs": [
+        "11287/90",
+        "8159/36"
+      ],
+      "medianIntervalApproxMs": [
+        125.41111111111111,
+        226.63888888888889
+      ],
+      "observedIntervalEnvelopeExactMs": [
+        "6053/90",
+        "2564/9"
+      ]
+    }
+  },
+  "adjacentPairs": [
+    {
+      "oursBlock": 1,
+      "officialBlock": 0,
+      "differenceExactMs": [
+        "-3031/18",
+        "22733/90"
+      ],
+      "differenceApproxMs": [
+        -168.38888888888889,
+        252.5888888888889
+      ],
+      "sign": "overlaps-zero-no-direction-resolved"
+    },
+    {
+      "oursBlock": 2,
+      "officialBlock": 3,
+      "differenceExactMs": [
+        "-2564/9",
+        "361/10"
+      ],
+      "differenceApproxMs": [
+        -284.8888888888889,
+        36.1
+      ],
+      "sign": "overlaps-zero-no-direction-resolved"
+    }
+  ],
+  "oursMinusOfficialMedianIntervalExactMs": [
+    "-8159/36",
+    "12991/90"
+  ],
+  "oursMinusOfficialMedianIntervalApproxMs": [
+    -226.63888888888889,
+    144.34444444444443
+  ],
+  "comparisonConclusion": "Both adjacent-pair difference intervals and the descriptive median-difference interval cross zero. These observations do not resolve a faster app.",
+  "limitations": [
+    "Prepared-session warmed title autocomplete, not cold search, submitted full-text search, title-reader navigation, CPU timing or physical-keystroke latency.",
+    "Only two observations per app and two adjacent comparisons; descriptive evidence only, not a percentile or general product performance claim.",
+    "Original VFR observations are sparse. Zero lower bounds in ours clips reflect overlapping observation intervals, not instantaneous query processing. Negative difference bounds are retained, not clamped.",
+    "Native list animations overlap old and new text; uncertainty intervals retain the ambiguous intermediate original frames. Confirmation is >=100ms after the first definitely-ready frame, not after a favorable ambiguous frame.",
+    "No Enter/Search submission, debounce subtraction, command-clock substitution, FPS resampling, interpolation, new capture or retry.",
+    "Nonmatching-query/absent-target-row first-frame preconditions, original PTS, fullframes and hashes are retained privately. No raw frames, device identifiers, absolute private paths, ownership/process data or host clocks are included here."
+  ]
+}

@@ -1,0 +1,328 @@
+{
+  "conditions": {
+    "baseline": {
+      "medianKiB": 208389.0,
+      "rangeKiB": [
+        207930,
+        208851
+      ],
+      "medianSwapPssKiB": 1695.0,
+      "rangeSwapPssKiB": [
+        1672,
+        1718
+      ]
+    },
+    "candidate": {
+      "medianKiB": 199050.0,
+      "rangeKiB": [
+        198234,
+        199815
+      ],
+      "medianSwapPssKiB": 1644.0,
+      "rangeSwapPssKiB": [
+        1634,
+        1718
+      ]
+    }
+  },
+  "blocks": [
+    {
+      "block": 0,
+      "condition": "baseline",
+      "label": "annotation-restored-r2-b0-baseline",
+      "samplesKiB": [
+        207930,
+        208211,
+        208525,
+        208845
+      ],
+      "medianKiB": 208368.0,
+      "processes": {
+        "10298": {
+          "identity": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "466549"
+          },
+          "medianKiB": 105959.5
+        },
+        "10348": {
+          "identity": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "466591"
+          },
+          "medianKiB": 102408.5
+        }
+      },
+      "articleState": {
+        "title": "Animal",
+        "marker": "baseline",
+        "font": "18px",
+        "zoom": "1",
+        "x": 0,
+        "y": 0,
+        "annotationPaintNodes": 1
+      },
+      "articleScore": 1.0,
+      "beforeFetch": {
+        "appShell": true,
+        "iframes": 0
+      },
+      "exactlyOneFulfillment": true,
+      "fulfillmentAckSucceeded": true
+    },
+    {
+      "block": 1,
+      "condition": "candidate",
+      "label": "annotation-restored-r2-b1-candidate",
+      "samplesKiB": [
+        198305,
+        198545,
+        198884,
+        199219
+      ],
+      "medianKiB": 198714.5,
+      "processes": {
+        "10827": {
+          "identity": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "483285"
+          },
+          "medianKiB": 104016.5
+        },
+        "10889": {
+          "identity": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "483340"
+          },
+          "medianKiB": 94698.0
+        }
+      },
+      "articleState": {
+        "title": "Animal",
+        "marker": "candidate",
+        "font": "18px",
+        "zoom": "1",
+        "x": 0,
+        "y": 0,
+        "annotationPaintNodes": 0
+      },
+      "articleScore": 1.0,
+      "beforeFetch": {
+        "appShell": true,
+        "iframes": 0
+      },
+      "exactlyOneFulfillment": true,
+      "fulfillmentAckSucceeded": true
+    },
+    {
+      "block": 2,
+      "condition": "candidate",
+      "label": "annotation-restored-r2-b2-candidate",
+      "samplesKiB": [
+        198234,
+        199216,
+        199499,
+        199815
+      ],
+      "medianKiB": 199357.5,
+      "processes": {
+        "11235": {
+          "identity": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "498297"
+          },
+          "medianKiB": 104846.5
+        },
+        "11289": {
+          "identity": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "498348"
+          },
+          "medianKiB": 94511.0
+        }
+      },
+      "articleState": {
+        "title": "Animal",
+        "marker": "candidate",
+        "font": "18px",
+        "zoom": "1",
+        "x": 0,
+        "y": 0,
+        "annotationPaintNodes": 0
+      },
+      "articleScore": 1.0,
+      "beforeFetch": {
+        "appShell": true,
+        "iframes": 0
+      },
+      "exactlyOneFulfillment": true,
+      "fulfillmentAckSucceeded": true
+    },
+    {
+      "block": 3,
+      "condition": "baseline",
+      "label": "annotation-restored-r3-b3-baseline",
+      "samplesKiB": [
+        207965,
+        208253,
+        208573,
+        208851
+      ],
+      "medianKiB": 208413.0,
+      "processes": {
+        "11870": {
+          "identity": {
+            "name": "org.kiwix.workbench",
+            "startTicks": "522843"
+          },
+          "medianKiB": 106612.0
+        },
+        "11922": {
+          "identity": {
+            "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+            "startTicks": "522885"
+          },
+          "medianKiB": 101801.5
+        }
+      },
+      "articleState": {
+        "title": "Animal",
+        "marker": "baseline",
+        "font": "18px",
+        "zoom": "1",
+        "x": 0,
+        "y": 0,
+        "annotationPaintNodes": 1
+      },
+      "articleScore": 1.0,
+      "beforeFetch": {
+        "appShell": true,
+        "iframes": 0
+      },
+      "exactlyOneFulfillment": true,
+      "fulfillmentAckSucceeded": true
+    }
+  ],
+  "pairs": [
+    {
+      "candidateBlock": 1,
+      "baselineBlock": 0,
+      "differenceKiB": -9653.5,
+      "percent": -4.632909083928438
+    },
+    {
+      "candidateBlock": 2,
+      "baselineBlock": 3,
+      "differenceKiB": -9055.5,
+      "percent": -4.344978480229155
+    }
+  ],
+  "allocator": {
+    "candidate": {
+      "blink_gc/main/heap": {
+        "allocated_objects_size": 10316688,
+        "committed_size": 22675584,
+        "effective_size": 20164736,
+        "fragmentation": 48,
+        "size": 20164736
+      },
+      "cc/tile_memory": {
+        "effective_size": 21725184,
+        "size": 21725184
+      },
+      "v8": {
+        "effective_size": 3346508,
+        "size": 3346508
+      },
+      "partition_alloc": {
+        "effective_size": 4026818,
+        "size": 4308992
+      },
+      "blink_gc/main/heap/NormalPageSpace0": {
+        "allocated_objects_size": 472064,
+        "committed_size": 786432,
+        "effective_size": 700416,
+        "fragmentation": 32,
+        "size": 700416
+      },
+      "blink_gc/main/heap/NormalPageSpace1": {
+        "allocated_objects_size": 1252288,
+        "committed_size": 4063232,
+        "effective_size": 3375104,
+        "fragmentation": 62,
+        "size": 3375104
+      },
+      "blink_gc/main/heap/NormalPageSpace2": {
+        "allocated_objects_size": 1281576,
+        "committed_size": 5767168,
+        "effective_size": 5238784,
+        "fragmentation": 75,
+        "size": 5238784
+      },
+      "blink_gc/main/heap/NormalPageSpace3": {
+        "allocated_objects_size": 2191856,
+        "committed_size": 5898240,
+        "effective_size": 5017600,
+        "fragmentation": 56,
+        "size": 5017600
+      }
+    },
+    "baseline": {
+      "blink_gc/main/heap": {
+        "allocated_objects_size": 10440600,
+        "committed_size": 24510592,
+        "effective_size": 20516992,
+        "fragmentation": 49,
+        "size": 20516992
+      },
+      "cc/tile_memory": {
+        "effective_size": 21725184,
+        "size": 21725184
+      },
+      "v8": {
+        "effective_size": 3635276,
+        "size": 3635276
+      },
+      "partition_alloc": {
+        "effective_size": 4891073,
+        "size": 5173248
+      },
+      "blink_gc/main/heap/NormalPageSpace0": {
+        "allocated_objects_size": 472400,
+        "committed_size": 786432,
+        "effective_size": 688128,
+        "fragmentation": 31,
+        "size": 688128
+      },
+      "blink_gc/main/heap/NormalPageSpace1": {
+        "allocated_objects_size": 1332024,
+        "committed_size": 4456448,
+        "effective_size": 3534848,
+        "fragmentation": 62,
+        "size": 3534848
+      },
+      "blink_gc/main/heap/NormalPageSpace2": {
+        "allocated_objects_size": 1282408,
+        "committed_size": 6029312,
+        "effective_size": 5275648,
+        "fragmentation": 75,
+        "size": 5275648
+      },
+      "blink_gc/main/heap/NormalPageSpace3": {
+        "allocated_objects_size": 2194536,
+        "committed_size": 7208960,
+        "effective_size": 5218304,
+        "fragmentation": 57,
+        "size": 5218304
+      }
+    }
+  },
+  "method": "One accepted ABBA on same frozen APK with original/candidate bridge response fulfilled through identical owned CDP Fetch transport; actual process-cold restored Animal, strict pre-Fetch zero iframe, current document marker and successful exactly-one fulfillment ack,30ssettle4samples. Fonts18px/zoom1/body+montage unchanged.",
+  "exclusions": [
+    "Initial attachment using growing Bench log missed zero-iframe admission; rejected before PSS.",
+    "First final-baseline attachment under corrected fast transport missed admission; rejected before PSS; a new fully process-cold baseline trial was admitted, not a warmed replacement."
+  ],
+  "limitations": "Controlled response override on frozen5eec APK, not rebuilt-APK proof. Real stored-highlight creation/mutation/recovery/removal passed on owned Android; actual fallback via temporary constructor-compatibility shadow passed; genuine BFCache passed in isolated Chrome156, not Android109 certification. Allocator categories overlap; allocated-object bytes are not proven reachable live bytes.",
+  "sourceBridgeSha256": "aab918c94f16ebe8ac924886ec35ba732d4ed0cea9e0f2cc5ab1c3e7ce5a491c",
+  "frozenApkSha256": "5d28b3c6c2fdc9d08879e8e0b5b2edf27ae82990f2898dac71ab4cdb5efeaa03"
+}

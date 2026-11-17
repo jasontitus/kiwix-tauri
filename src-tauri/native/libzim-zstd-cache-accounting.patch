@@ -1,0 +1,92 @@
+--- a/src/compression.cpp
++++ b/src/compression.cpp
+@@ -179,7 +179,7 @@
+ size_t ZSTD_INFO::state_size(const stream_t& stream) {
+   if (stream.decoder_stream) {
+-    return ZSTD_sizeof_CStream(stream.encoder_stream);
++    return ZSTD_sizeof_DStream(stream.decoder_stream);
+   } else {
+-    return ZSTD_sizeof_DStream(stream.decoder_stream);
++    return ZSTD_sizeof_CStream(stream.encoder_stream);
+   }
+ }
+--- a/test/compression.cpp
++++ b/test/compression.cpp
+@@ -128,3 +128,22 @@
+ }
+ 
++TEST(CompressionTest, zstdStreamMemoryAccounting) {
++  ZSTD_INFO::stream_t empty;
++  EXPECT_EQ(ZSTD_INFO::state_size(empty), 0U);
++
++  ZSTD_INFO::stream_t encoder;
++  ZSTD_INFO::init_stream_encoder(&encoder, nullptr);
++  ASSERT_NE(encoder.encoder_stream, nullptr);
++  ASSERT_GT(ZSTD_sizeof_CStream(encoder.encoder_stream), 0U);
++  EXPECT_EQ(ZSTD_INFO::state_size(encoder),
++            ZSTD_sizeof_CStream(encoder.encoder_stream));
++
++  ZSTD_INFO::stream_t decoder;
++  ZSTD_INFO::init_stream_decoder(&decoder, nullptr);
++  ASSERT_NE(decoder.decoder_stream, nullptr);
++  ASSERT_GT(ZSTD_sizeof_DStream(decoder.decoder_stream), 0U);
++  EXPECT_EQ(ZSTD_INFO::state_size(decoder),
++            ZSTD_sizeof_DStream(decoder.decoder_stream));
++}
++
+ }  // namespace
+--- a/test/decoderstreamreader.cpp
++++ b/test/decoderstreamreader.cpp
+@@ -19,6 +19,9 @@
+ 
+ #include "decoderstreamreader.h"
+ #include "buffer_reader.h"
++#include "cluster.h"
++#include "concurrent_cache.h"
++#include "endian_tools.h"
+ 
+ #include "gtest/gtest.h"
+ 
+@@ -99,3 +102,42 @@
+ }
+ 
++TEST(DecoderStreamReaderTest, zstdClusterCostIncludesDecoderBeforeBlobRead) {
++  const std::string payload(256 * 1024, 'a');
++  std::string decoded(2 * sizeof(uint32_t), '\0');
++  zim::toLittleEndian(uint32_t(decoded.size()), &decoded[0]);
++  zim::toLittleEndian(uint32_t(decoded.size() + payload.size()),
++                      &decoded[sizeof(uint32_t)]);
++  decoded += payload;
++  const auto compressed = compress<ZSTD_INFO>(decoded);
++  const std::string encoded = std::string(1, '\5') + compressed;
++  auto buffer = zim::Buffer::makeBuffer(encoded.data(), zim::zsize_t(encoded.size()));
++  const auto readCluster = [&]() {
++    return zim::Cluster::read(zim::BufferReader(buffer), zim::offset_t(0));
++  };
++
++  // FileImpl caches a cluster immediately after its offset table is decoded,
++  // before any getBlob(). Decoder window allocation must count at that point.
++  auto first = readCluster();
++  const auto cost = first->getMemorySize();
++  const auto costWithoutDecoder = 2 * sizeof(zim::offset_t) + decoded.size() / 2
++      + compressed.size() + std::min<size_t>(1024, compressed.size());
++  ASSERT_LT(compressed.size() + std::min<size_t>(1024, compressed.size()), decoded.size());
++  ASSERT_GT(cost, costWithoutDecoder);
++
++  // Keep the ordinary ConcurrentCache admission/eviction contract, including
++  // live readers retaining their cluster after its cache entry is evicted.
++  zim::ConcurrentCache<int, std::shared_ptr<zim::Cluster>, zim::ClusterMemorySize>
++      cache(cost);
++  std::weak_ptr<zim::Cluster> retired = first;
++  cache.getOrPut(1, [&]() { return std::move(first); });
++  ASSERT_FALSE(retired.expired());
++  auto second = cache.getOrPut(2, readCluster);
++  EXPECT_TRUE(retired.expired());
++  EXPECT_EQ(cache.getCurrentCost(), cost);
++  EXPECT_EQ(std::string(second->getBlob(zim::blob_index_t(0))), payload);
++  cache.setMaxCost(0);
++  EXPECT_EQ(cache.getCurrentCost(), 0U);
++  EXPECT_EQ(std::string(second->getBlob(zim::blob_index_t(0))), payload);
++}
++
+ } // unnamed namespace

@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Only this active archive can request the camera. Your system may also ask for permission. איר קענען אָפּרופן אַקסעס אונטער דעם אַרטיקל אין קיין צייט.";
+"NSLocationUsageDescription" = "דיין סיסטעם וועט צושטעלן דיין אָרט בלויז צו דעם אַקטיוו אַרקייוו. איר קענען אָפּרופן אַקסעס אונטער דעם אַרטיקל אין קיין צייט.";
+"NSLocationWhenInUseUsageDescription" = "דיין סיסטעם וועט צושטעלן דיין אָרט בלויז צו דעם אַקטיוו אַרקייוו. איר קענען אָפּרופן אַקסעס אונטער דעם אַרטיקל אין קיין צייט.";
+"NSLocalNetworkUsageDescription" = "אַנטדעקן נירביי LocalSwarm דעוויסעס און ייַנטיילן אָפפלינע אַרקייווז אויף דיין היגע נעץ. געבן ופדעקונג אָדער ייַנטיילונג בלויז אויף אַ טראַסטיד נעץ.";

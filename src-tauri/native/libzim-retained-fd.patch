@@ -1,0 +1,1081 @@
+--- a/include/zim/archive.h
++++ b/include/zim/archive.h
+@@ -254,6 +254,19 @@
+        *  @param openConfig The open configuration to use.
+        */
+       Archive(const std::vector<FdInput>& fds, OpenConfig openConfig);
++#else
++      /** Open exactly the given ZIM parts, in order (Windows).
++       *
++       *  Unlike opening the first part by name, no further `.zimXX` parts
++       *  are discovered: name discovery only recognizes a lower-case
++       *  `.zimaa` suffix and greedily adds every following sibling, so it
++       *  is not bound to the caller's proven part set. This is the
++       *  Windows counterpart of the FdInput constructors.
++       *
++       *  @param partPaths The UTF-8 path of every part, in archive order.
++       *  @param openConfig The open configuration to use.
++       */
++      Archive(const std::vector<std::string>& partPaths, OpenConfig openConfig);
+ #endif
+ 
+       /** Return the real path of the file(s) underlying this ZIM archive.
+--- a/src/archive.cpp
++++ b/src/archive.cpp
+@@ -79,6 +79,10 @@
+   Archive::Archive(const std::vector<FdInput>& fds, OpenConfig openConfig)
+     : m_impl(new FileImpl(fds, openConfig))
+     { }
++#else
++  Archive::Archive(const std::vector<std::string>& partPaths, OpenConfig openConfig)
++    : m_impl(new FileImpl(partPaths, openConfig))
++    { }
+ #endif
+ 
+   const std::string& Archive::getFilename() const
+@@ -393,7 +397,8 @@
+     }
+     auto entry = Entry(m_impl, entry_index_type(r.second));
+     auto item = entry.getItem(true);
+-    auto accessInfo = item.getDirectAccessInformation();
++    auto accessInfo = m_impl->getNativeAccessInformation(cluster_index_t(item.getClusterIndex()),
++                                                        blob_index_t(item.getBlobIndex()));
+     return accessInfo.isValid();
+   }
+ 
+@@ -404,7 +409,8 @@
+     }
+     auto entry = Entry(m_impl, entry_index_type(r.second));
+     auto item = entry.getItem(true);
+-    auto accessInfo = item.getDirectAccessInformation();
++    auto accessInfo = m_impl->getNativeAccessInformation(cluster_index_t(item.getClusterIndex()),
++                                                        blob_index_t(item.getBlobIndex()));
+     return accessInfo.isValid();
+   }
+ 
+--- a/src/file_compound.cpp
++++ b/src/file_compound.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <errno.h>
+ #include <stdexcept>
++#include <limits>
+ #include <string.h>
+ #include <sys/stat.h>
+ #include <zim/tools.h>
+@@ -45,11 +46,21 @@
+ 
+ } // unnamed namespace
+ 
+-void FileCompound::addPart(FilePart* fpart)
++void FileCompound::addPart(std::unique_ptr<FilePart> fpart)
+ {
+-  const Range newRange(offset_t(_fsize.v), offset_t((_fsize+fpart->size()).v));
+-  emplace(newRange, fpart);
+-  _fsize += fpart->size();
++  const auto size = fpart->size();
++  // Parts are keyed by their start offset. A lone empty piece is kept so an
++  // empty archive still fails as ZimFileFormatError, but an empty piece can
++  // never share a compound with another part.
++  if ((!empty() && (!size || !_fsize.v))
++      || size.v > std::numeric_limits<offset_type>::max() - _fsize.v) {
++    throw std::runtime_error("Invalid compound file size");
++  }
++  const Range newRange(offset_t(_fsize.v), offset_t(_fsize.v + size.v));
++  if (!emplace(newRange, std::move(fpart)).second) {
++    throw std::runtime_error("Invalid compound file size");
++  }
++  _fsize += size;
+ }
+ 
+ std::shared_ptr<FileCompound> FileCompound::openSinglePieceOrSplitZimFile(const std::string& filename) {
+@@ -78,7 +89,7 @@
+   _filename(filename),
+   _fsize(0)
+ {
+-  addPart(new FilePart(filename));
++  addPart(std::unique_ptr<FilePart>(new FilePart(filename)));
+ }
+ 
+ FileCompound::FileCompound(const std::string& filename, MultiPartToken _token):
+@@ -90,17 +101,24 @@
+ 
+   _filename = base_filename + "aa";
+ 
+-  try {
+-    for (char ch0 = 'a'; ch0 <= 'z'; ++ch0)
++  for (char ch0 = 'a'; ch0 <= 'z'; ++ch0)
++  {
++    const std::string fname0 = base_filename + ch0;
++    for (char ch1 = 'a'; ch1 <= 'z'; ++ch1)
+     {
+-      const std::string fname0 = base_filename + ch0;
+-      for (char ch1 = 'a'; ch1 <= 'z'; ++ch1)
+-      {
+-        addPart(new FilePart(fname0 + ch1));
++      std::unique_ptr<FilePart> part;
++      try {
++        part.reset(new FilePart(fname0 + ch1));
++      } catch (std::runtime_error&) {
++        // The first part that cannot be opened ends the split set.
++        return;
+       }
++      // An empty discovered part (such as a stray zero-length sibling)
++      // ends the set, as before; an overflowing or colliding part is a
++      // damaged set and is reported instead of silently truncating it.
++      if (!part->size()) return;
++      addPart(std::move(part));
+     }
+-  } catch (std::runtime_error& e) {
+-    // This catch acts as a break for the double loop.
+   }
+ }
+ 
+@@ -109,53 +127,43 @@
+   _filename(),
+   _fsize(0)
+ {
+-  addPart(new FilePart(fd));
++  addPart(std::unique_ptr<FilePart>(new FilePart(fd)));
+ }
+ 
+ FileCompound::FileCompound(FdInput fd):
+   _filename(),
+   _fsize(0)
+ {
+-  addPart(new FilePart(fd));
++  addPart(std::unique_ptr<FilePart>(new FilePart(fd)));
+ }
+ 
+ FileCompound::FileCompound(const std::vector<FdInput>& fds):
+   _filename(),
+   _fsize(0)
+ {
++  if (fds.empty()) throw std::runtime_error("Empty file descriptor input");
+   for (auto& fd: fds) {
+-    addPart(new FilePart(fd));
++    addPart(std::unique_ptr<FilePart>(new FilePart(fd)));
++  }
++}
++#else
++FileCompound::FileCompound(const std::vector<std::string>& partPaths):
++  _filename(partPaths.empty() ? std::string() : partPaths.front()),
++  _fsize(0)
++{
++  if (partPaths.empty()) throw std::runtime_error("Empty split part list");
++  for (const auto& path: partPaths) {
++    addPart(std::unique_ptr<FilePart>(new FilePart(path)));
+   }
+ }
+ #endif
+ 
+-FileCompound::~FileCompound() {
+-  for(auto it=begin(); it!=end(); it++) {
+-    auto filepart = it->second;
+-    delete filepart;
+-  }
+-}
++
++FileCompound::~FileCompound() = default;
+ 
+ time_t FileCompound::getMTime() const {
+-  if (mtime || empty())
+-    return mtime;
+-
+-  const char* fname = begin()->second->filename().c_str();
+-
+-  #if defined(HAVE_STAT64) && ! defined(__APPLE__)
+-    struct stat64 st;
+-    int ret = ::stat64(fname, &st);
+-  #else
+-    struct stat st;
+-    int ret = ::stat(fname, &st);
+-  #endif
+-  if (ret != 0)
+-    throw std::runtime_error(Formatter() << "stat failed with errno " << errno
+-                                          << " : " << strerror(errno));
+-
+-  mtime = st.st_mtime;
+-
+-  return mtime;
++  if (empty()) return 0;
++  return begin()->second->fhandle().getMTime();
+ }
+ 
+ } // zim
+--- a/src/file_compound.h
++++ b/src/file_compound.h
+@@ -50,8 +50,11 @@
+   }
+ };
+ 
+-class LIBZIM_PRIVATE_API FileCompound : private std::map<Range, FilePart*, less_range> {
+-    typedef std::map<Range, FilePart*, less_range> ImplType;
++// Only out-of-line members are exported: exporting the class itself would
++// make MSVC instantiate every member of the std::map base, including the
++// copying insert that cannot copy std::unique_ptr (C2280).
++class FileCompound : private std::map<Range, std::unique_ptr<FilePart>, less_range> {
++    typedef std::map<Range, std::unique_ptr<FilePart>, less_range> ImplType;
+ 
+   public: // types
+     typedef const_iterator PartIterator;
+@@ -59,24 +62,26 @@
+     enum class MultiPartToken { Multi };
+ 
+   public: // functions
+-    static std::shared_ptr<FileCompound> openSinglePieceOrSplitZimFile(const std::string& filename);
+-    explicit FileCompound(const std::string& filename);
+-    explicit FileCompound(const std::string& filename, MultiPartToken token);
++    LIBZIM_PRIVATE_API static std::shared_ptr<FileCompound> openSinglePieceOrSplitZimFile(const std::string& filename);
++    LIBZIM_PRIVATE_API explicit FileCompound(const std::string& filename);
++    LIBZIM_PRIVATE_API explicit FileCompound(const std::string& filename, MultiPartToken token);
+ 
+ #ifndef _WIN32
+-    explicit FileCompound(int fd);
+-    explicit FileCompound(FdInput fd);
+-    explicit FileCompound(const std::vector<FdInput>& fds);
++    LIBZIM_PRIVATE_API explicit FileCompound(int fd);
++    LIBZIM_PRIVATE_API explicit FileCompound(FdInput fd);
++    LIBZIM_PRIVATE_API explicit FileCompound(const std::vector<FdInput>& fds);
++#else
++    LIBZIM_PRIVATE_API explicit FileCompound(const std::vector<std::string>& partPaths);
+ #endif
+ 
+-    ~FileCompound();
++    LIBZIM_PRIVATE_API ~FileCompound();
+ 
+     using ImplType::begin;
+     using ImplType::end;
+ 
+     const std::string& filename() const { return _filename; }
+     zsize_t fsize() const { return _fsize; };
+-    time_t getMTime() const;
++    LIBZIM_PRIVATE_API time_t getMTime() const;
+     bool fail() const { return empty(); };
+     bool is_multiPart() const { return size() > 1; };
+ 
+@@ -98,12 +103,11 @@
+     }
+ 
+   private: // functions
+-    void addPart(FilePart* fpart);
++    LIBZIM_PRIVATE_API void addPart(std::unique_ptr<FilePart> fpart);
+ 
+   private: // data
+     std::string _filename;
+     zsize_t _fsize;
+-    mutable time_t mtime;
+ };
+ 
+ 
+--- a/src/file_part.h
++++ b/src/file_part.h
+@@ -23,6 +23,8 @@
+ 
+ #include <string>
+ #include <memory>
++#include <limits>
++#include <stdexcept>
+ 
+ #include <zim/zim.h>
+ 
+@@ -54,13 +56,14 @@
+ 
+ #ifndef _WIN32
+     explicit FilePart(int fd) :
+-        FilePart(getFilePathFromFD(fd)) {}
++        m_fhandle(std::make_shared<FS::FD>(FS::duplicateFile(fd))),
++        m_offset(0),
++        m_size(m_fhandle->getSize()) { validateExtent(m_size); }
+ 
+     explicit FilePart(FdInput fdInput):
+-        m_filename(getFilePathFromFD(fdInput.fd)),
+-        m_fhandle(std::make_shared<FS::FD>(FS::openFile(m_filename))),
++        m_fhandle(std::make_shared<FS::FD>(FS::duplicateFile(fdInput.fd))),
+         m_offset(fdInput.offset),
+-        m_size(fdInput.size) {}
++        m_size(fdInput.size) { validateExtent(m_fhandle->getSize()); }
+ #endif
+ 
+     ~FilePart() = default;
+@@ -74,12 +77,34 @@
+     bool good() const { return bool(m_size); };
+ 
+   private:
++#ifndef _WIN32
++    void validateExtent(zsize_t physicalSize) const {
++      const auto fileSize = physicalSize.v;
++      // The end is exclusive; keep all positional offsets in signed range.
++      const auto maxOffset = uint64_t(std::numeric_limits<off_t>::max());
++      if (m_size.v == 0 || m_offset.v > fileSize ||
++          m_size.v > fileSize - m_offset.v ||
++          m_offset.v > maxOffset || m_size.v > maxOffset - m_offset.v) {
++        throw std::runtime_error("Invalid file descriptor extent");
++      }
++    }
++#endif
++
+     const std::string m_filename;
+     FDSharedPtr m_fhandle;
+     offset_t m_offset;
+     zsize_t m_size; // The total size of the (starting at m_offset) of the part
+ };
+ 
++// Private native location for a contiguous, uncompressed item.  Unlike the
++// public filename direct-access API, this retains descriptor authority.
++struct NativeAccessInfo {
++  FilePart::FDSharedPtr handle;
++  offset_t physicalOffset{0};
++  zsize_t length{0};
++  bool isValid() const { return handle && length.v != 0; }
++};
++
+ };
+ 
+ #endif //ZIM_FILE_PART_H_
+--- a/src/file_reader.cpp
++++ b/src/file_reader.cpp
+@@ -104,7 +104,7 @@
+   offset += _offset;
+   auto found_range = source->locate(offset, size);
+   for(auto current = found_range.first; current!=found_range.second; current++){
+-    auto part = current->second;
++    const auto& part = current->second;
+     Range partRange = current->first;
+     offset_t logical_local_offset = offset - partRange.min;
+     ASSERT(size.v, >, 0U);
+@@ -218,7 +218,7 @@
+ 
+   // The range is in only one part
+   auto range = found_range.first->first;
+-  auto part = found_range.first->second;
++  const auto& part = found_range.first->second;
+   auto logical_local_offset = offset + _offset - range.min;
+   ASSERT(size, <=, part->size());
+   int fd = part->fhandle().getNativeHandle();
+--- a/src/fileimpl.cpp
++++ b/src/fileimpl.cpp
+@@ -39,7 +39,6 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <cstring>
+-#include <fstream>
+ #include <numeric>
+ #include "config.h"
+ #include "log.h"
+@@ -191,6 +190,10 @@
+ 
+   FileImpl::FileImpl(const std::vector<FdInput>& fds, OpenConfig openConfig)
+     : FileImpl(std::make_shared<FileCompound>(fds), openConfig)
++  {}
++#else
++  FileImpl::FileImpl(const std::vector<std::string>& partPaths, OpenConfig openConfig)
++    : FileImpl(std::make_shared<FileCompound>(partPaths), openConfig)
+   {}
+ #endif
+ 
+@@ -611,43 +614,19 @@
+     zim_MD5Init(&md5ctx);
+ 
+     unsigned char ch[CHUNK_SIZE];
+-    offset_type checksumPos = header.getChecksumPos();
+-    offset_type toRead = checksumPos;
+-
+-    for(auto part = zimFile->begin();
+-        part != zimFile->end();
+-        part++) {
+-      std::ifstream stream(part->second->filename(), std::ios_base::in|std::ios_base::binary);
+-
+-      while(toRead>=CHUNK_SIZE && stream.read(reinterpret_cast<char*>(ch),CHUNK_SIZE).good()) {
+-        zim_MD5Update(&md5ctx, ch, CHUNK_SIZE);
+-        toRead-=CHUNK_SIZE;
+-      }
+-
+-      // Previous read was good, so we have exited the previous `while` because
+-      // `toRead<CHUNK_SIZE`. Let's try to read `toRead` chars and process them later.
+-      // Else, the previous `while` exited because we didn't succeed to read
+-      // `CHUNK_SIZE`, and we still have some data to process before changing part.
+-      // It reads the remaining amount of part when we reach the end of the file
+-      if(stream.good()){
+-        stream.read(reinterpret_cast<char*>(ch),toRead);
+-      }
+-
+-      // It updates the checksum with the remaining amount of data when we
+-      // reach the end of the file or part
+-      zim_MD5Update(&md5ctx, ch, stream.gcount());
+-      toRead-=stream.gcount();
+-
+-      if (stream.bad()) {
+-        perror("error while reading file");
+-        return false;
+-      }
+-      if (!toRead) {
+-        break;
+-      }
+-    }
+-
+-    if (toRead) {
++    const offset_type checksumPos = header.getChecksumPos();
++    const auto logicalSize = zimReader->size().v;
++    if (checksumPos > logicalSize || 16 > logicalSize - checksumPos) {
++      return false;
++    }
++    try {
++      for (offset_type pos = 0; pos < checksumPos;) {
++        const auto size = std::min<offset_type>(CHUNK_SIZE, checksumPos - pos);
++        zimReader->read(reinterpret_cast<char*>(ch), offset_t(pos), zsize_t(size));
++        zim_MD5Update(&md5ctx, ch, size);
++        pos += size;
++      }
++    } catch (const std::runtime_error&) {
+       return false;
+     }
+ 
+@@ -845,25 +824,31 @@
+ 
+   ItemDataDirectAccessInfo FileImpl::getDirectAccessInformation(cluster_index_t clusterIdx, blob_index_t blobIdx) const
+   {
+-    auto cluster = getCluster(clusterIdx);
+-    if (cluster->isCompressed()) {
+-      return ItemDataDirectAccessInfo();
+-    }
+-
+-    auto full_offset = getBlobOffset(clusterIdx, blobIdx);
+-
+-    auto part_its = getFileParts(full_offset, zsize_t(cluster->getBlobSize(blobIdx)));
+-    if (part_its.first == part_its.second) return ItemDataDirectAccessInfo();
+-    auto first_part = part_its.first;
+-    if (++part_its.first != part_its.second) {
+-     // The content is split on two parts. We cannot have direct access
+-      return ItemDataDirectAccessInfo();
+-    }
+-    auto range = first_part->first;
+-    auto part = first_part->second;
+-    const offset_type logical_local_offset(full_offset - range.min);
+-    const auto physical_local_offset = logical_local_offset + part->offset().v;
+-    return ItemDataDirectAccessInfo(part->filename(), physical_local_offset);
++    // FD-only archives have no filename that public callers may reopen.
++    if (zimFile->filename().empty()) return ItemDataDirectAccessInfo();
++    const auto accessInfo = getNativeAccessInformation(clusterIdx, blobIdx);
++    if (!accessInfo.isValid()) return ItemDataDirectAccessInfo();
++    const auto part = zimFile->locate(getBlobOffset(clusterIdx, blobIdx));
++    return ItemDataDirectAccessInfo(part->second->filename(), accessInfo.physicalOffset.v);
++  }
++
++  NativeAccessInfo FileImpl::getNativeAccessInformation(cluster_index_t clusterIdx, blob_index_t blobIdx) const
++  {
++    const auto cluster = getCluster(clusterIdx);
++    if (cluster->isCompressed()) return {};
++    const auto fullOffset = getBlobOffset(clusterIdx, blobIdx);
++    const auto length = zsize_t(cluster->getBlobSize(blobIdx));
++    auto parts = getFileParts(fullOffset, length);
++    if (parts.first == parts.second) return {};
++    const auto first = parts.first;
++    // Xapian's single-file backend cannot represent a cross-part index.
++    if (++parts.first != parts.second) return {};
++    const auto& part = first->second;
++    NativeAccessInfo info;
++    info.handle = part->shareable_fhandle();
++    info.physicalOffset = fullOffset - first->first.min + part->offset();
++    info.length = length;
++    return info;
+   }
+ 
+   Blob FileImpl::getBlob(const Dirent& dirent, offset_t offset) const
+@@ -894,7 +879,7 @@
+     if (xapianDirent->isRedirect()) {
+       return nullptr;
+     }
+-    auto accessInfo = getDirectAccessInformation(xapianDirent->getClusterNumber(), xapianDirent->getBlobNumber());
++    auto accessInfo = getNativeAccessInformation(xapianDirent->getClusterNumber(), xapianDirent->getBlobNumber());
+     if (!accessInfo.isValid()) {
+       return nullptr;
+     }
+@@ -930,7 +915,7 @@
+     if (!m_xapianDbCreated.load(std::memory_order_acquire)) {
+       std::lock_guard<std::mutex> lock(m_xapianDbCreationMutex);
+       if (!m_xapianDbCreated.load(std::memory_order_acquire)) {
+-        loadXapianDb();
++        mp_xapianDb = loadXapianDb();
+         m_xapianDbCreated.store(true, std::memory_order_release);
+       }
+     }
+--- a/src/fileimpl.h
++++ b/src/fileimpl.h
+@@ -115,6 +115,8 @@
+       FileImpl(int fd, OpenConfig openConfig);
+       FileImpl(FdInput fd, OpenConfig openConfig);
+       FileImpl(const std::vector<FdInput>& fds, OpenConfig openConfig);
++#else
++      FileImpl(const std::vector<std::string>& partPaths, OpenConfig openConfig);
+ #endif
+       ~FileImpl();
+ 
+@@ -146,6 +148,7 @@
+       offset_t getClusterOffset(cluster_index_t idx) const;
+       offset_t getBlobOffset(cluster_index_t clusterIdx, blob_index_t blobIdx) const;
+       ItemDataDirectAccessInfo getDirectAccessInformation(cluster_index_t clusterIdx, blob_index_t blobIdx) const;
++      NativeAccessInfo LIBZIM_PRIVATE_API getNativeAccessInformation(cluster_index_t clusterIdx, blob_index_t blobIdx) const;
+ 
+       entry_index_t getNamespaceBeginOffset(char ch) const;
+       entry_index_t getNamespaceEndOffset(char ch) const;
+--- a/src/fs_unix.cpp
++++ b/src/fs_unix.cpp
+@@ -67,8 +67,22 @@
+ zsize_t FD::getSize() const
+ {
+   struct stat sb;
+-  fstat(m_fd, &sb);
++  if (fstat(m_fd, &sb) != 0) {
++    throw std::runtime_error("Cannot stat file descriptor");
++  }
++  if (!S_ISREG(sb.st_mode) || sb.st_size < 0) {
++    throw std::runtime_error("File descriptor is not a regular file");
++  }
+   return zsize_t(sb.st_size);
++}
++
++time_t FD::getMTime() const
++{
++  struct stat sb;
++  if (fstat(m_fd, &sb) != 0) {
++    throw std::runtime_error("Cannot stat file descriptor");
++  }
++  return sb.st_mtime;
+ }
+ 
+ bool FD::seek(offset_t offset)
+@@ -77,10 +91,8 @@
+ }
+ 
+ bool FD::close() {
+-  if (m_fd != -1) {
+-    return ::close(m_fd);
+-  }
+-  return -1;
++  const int fd = release();
++  return fd != -1 && ::close(fd) == 0;
+ }
+ 
+ FD FS::openFile(path_t filepath)
+@@ -89,6 +101,15 @@
+   if (fd == -1) {
+     const std::string errorStr = strerror(errno);
+     throw std::runtime_error("Error opening file: " + filepath + ": " + errorStr);
++  }
++  return FD(fd);
++}
++
++FD FS::duplicateFile(int borrowedFd)
++{
++  const int fd = fcntl(borrowedFd, F_DUPFD_CLOEXEC, 0);
++  if (fd == -1) {
++    throw std::runtime_error("Cannot duplicate file descriptor: " + std::string(strerror(errno)));
+   }
+   return FD(fd);
+ }
+@@ -142,10 +163,6 @@
+ 
+ }; // unix namespace
+ 
+-std::string getFilePathFromFD(int fd)
+-{
+-  return Formatter()  << "/dev/fd/" << fd;
+-}
+ 
+ }; // zim namespace
+ 
+--- a/src/fs_unix.h
++++ b/src/fs_unix.h
+@@ -49,13 +49,16 @@
+     FD(FD&& o) :
+       m_fd(o.m_fd) { o.m_fd = -1; }
+     FD& operator=(FD&& o) {
+-      m_fd = o.m_fd;
+-      o.m_fd = -1;
++      if (this != &o) {
++        close();
++        m_fd = o.release();
++      }
+       return *this;
+     }
+     ~FD() { close(); }
+     zsize_t readAt(char* dest, zsize_t size, offset_t offset) const;
+     zsize_t getSize() const;
++    time_t  getMTime() const;
+     fd_t    getNativeHandle() const
+     {
+         return m_fd;
+@@ -74,6 +77,7 @@
+     using FD = zim::unix::FD;
+     static std::string join(path_t base, path_t name);
+     static FD    openFile(path_t filepath);
++    static FD    duplicateFile(int borrowedFd);
+     static bool  makeDirectory(path_t path);
+     static void  rename(path_t old_path, path_t new_path);
+     static bool  remove(path_t path);
+@@ -83,7 +87,6 @@
+ 
+ }; // unix namespace
+ 
+-std::string getFilePathFromFD(int fd);
+ 
+ }; // zim namespace
+ 
+--- a/src/fs_windows.cpp
++++ b/src/fs_windows.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include "fs_windows.h"
+ #include <stdexcept>
++#include <limits>
+ 
+ #include <windows.h>
+ #include <winbase.h>
+@@ -126,6 +127,28 @@
+   return zsize_t(size.QuadPart);
+ }
+ 
++time_t FD::getMTime() const
++{
++  FILETIME modified;
++  if (!mp_impl || !GetFileTime(mp_impl->m_handle, nullptr, nullptr, &modified)) {
++    throw std::runtime_error("Cannot get file modification time");
++  }
++  ULARGE_INTEGER ticks;
++  ticks.LowPart = modified.dwLowDateTime;
++  ticks.HighPart = modified.dwHighDateTime;
++  const int64_t seconds = int64_t(ticks.QuadPart / 10000000ULL) - 11644473600LL;
++  if (seconds < (std::numeric_limits<time_t>::min)() ||
++      seconds > (std::numeric_limits<time_t>::max)()) {
++    throw std::runtime_error("File modification time is out of range");
++  }
++  return time_t(seconds);
++}
++
++FD::fd_t FD::getNativeHandle() const
++{
++  return mp_impl ? mp_impl->m_handle : INVALID_HANDLE_VALUE;
++}
++
+ int FD::release()
+ {
+   if(!mp_impl)
+@@ -161,9 +184,11 @@
+ {
+   auto wpath = toWideChar(filepath);
+   FD::fd_t handle;
++  // FILE_SHARE_DELETE matches POSIX: an archive that is open for reading
++  // can still be deleted, renamed or moved; open readers keep their bytes.
+   handle = CreateFileW(wpath.get(),
+              GENERIC_READ,
+-             FILE_SHARE_READ,
++             FILE_SHARE_READ | FILE_SHARE_DELETE,
+              NULL,
+              OPEN_EXISTING,
+              FILE_ATTRIBUTE_READONLY|FILE_FLAG_RANDOM_ACCESS,
+--- a/src/fs_windows.h
++++ b/src/fs_windows.h
+@@ -24,6 +24,7 @@
+ #include "config.h"
+ 
+ #include <memory>
++#include <ctime>
+ 
+ typedef void* HANDLE;
+ 
+@@ -51,9 +52,11 @@
+     ~FD();
+     zsize_t readAt(char* dest, zsize_t size, offset_t offset) const;
+     zsize_t getSize() const;
++    time_t  getMTime() const;
+     int     release();
+     bool    seek(offset_t offset);
+     bool    close();
++    fd_t    getNativeHandle() const;
+ };
+ 
+ struct LIBZIM_PRIVATE_API FS {
+--- a/src/suggestion.cpp
++++ b/src/suggestion.cpp
+@@ -57,8 +57,10 @@
+     return;
+   }
+ 
+-  auto xapianEntry = Entry(impl, entry_index_type(r.second));
+-  auto accessInfo = xapianEntry.getItem().getDirectAccessInformation();
++  const auto xapianDirent = impl->getDirent(r.second);
++  if (xapianDirent->isRedirect()) return;
++  auto accessInfo = impl->getNativeAccessInformation(xapianDirent->getClusterNumber(),
++                                                    xapianDirent->getBlobNumber());
+   if (!accessInfo.isValid()) {
+       return;
+   }
+--- a/src/tools.cpp
++++ b/src/tools.cpp
+@@ -23,6 +23,7 @@
+ #include "zim/tools.h"
+ #include "zim/illustration.h"
+ #include "fs.h"
++#include "file_part.h"
+ 
+ #include <sys/types.h>
+ #include <string.h>
+@@ -317,32 +318,34 @@
+   return unaccentedText;
+ }
+ 
+-bool zim::getDbFromAccessInfo(zim::ItemDataDirectAccessInfo accessInfo, Xapian::Database& database) {
+-  zim::DEFAULTFS::FD databasefd;
++bool zim::getDbFromAccessInfo(const NativeAccessInfo& accessInfo, Xapian::Database& database) {
++  if (!accessInfo.isValid()) return false;
+   try {
+-      databasefd = zim::DEFAULTFS::openFile(accessInfo.filename);
+-  } catch (...) {
+-      std::cerr << "Impossible to open " << accessInfo.filename << std::endl;
+-      std::cerr << strerror(errno) << std::endl;
+-      return false;
+-  }
+-  if (!databasefd.seek(zim::offset_t(accessInfo.offset))) {
+-      std::cerr << "Something went wrong seeking databasedb "
+-                << accessInfo.filename << std::endl;
+-      std::cerr << "dbOffest = " << accessInfo.offset << std::endl;
+-      return false;
+-  }
+-
+-  try {
+-      database = Xapian::Database(databasefd.release());
+-  } catch( Xapian::DatabaseError& e) {
+-      std::cerr << "Something went wrong opening xapian database for zimfile "
+-                << accessInfo.filename << std::endl;
+-      std::cerr << "dbOffest = " << accessInfo.offset << std::endl;
+-      std::cerr << "error = " << e.get_msg() << std::endl;
+-      return false;
+-  }
+-
++#ifndef _WIN32
++    // Xapian owns its input on entry, including every failure path.  Keep
++    // the part's own handle, and never seek the shared open-file description.
++    auto databasefd = zim::DEFAULTFS::duplicateFile(accessInfo.handle->getNativeHandle());
++    database = Xapian::Database::open_fd_at(databasefd.release(), accessInfo.physicalOffset.v);
++#else
++    // Reopen through the part's own handle, never its path: archives are
++    // opened with FILE_SHARE_DELETE, so the path may since name another
++    // file. ReOpenFile yields a new file object (an independent position
++    // for Xapian) bound to the same file.
++    const HANDLE reopened = ReOpenFile(accessInfo.handle->getNativeHandle(), GENERIC_READ,
++                                       FILE_SHARE_READ | FILE_SHARE_DELETE, FILE_FLAG_RANDOM_ACCESS);
++    if (reopened == INVALID_HANDLE_VALUE) return false;
++    zim::DEFAULTFS::FD databasefd(reopened);
++    if (!databasefd.seek(accessInfo.physicalOffset)) return false;
++    database = Xapian::Database(databasefd.release());
++#endif
++  } catch (const Xapian::DatabaseError& e) {
++    std::cerr << "Cannot open embedded Xapian database at "
++              << accessInfo.physicalOffset.v << ": " << e.get_msg() << std::endl;
++    return false;
++  } catch (const std::runtime_error& e) {
++    std::cerr << "Cannot access embedded Xapian database: " << e.what() << std::endl;
++    return false;
++  }
+   return true;
+ }
+ 
+--- a/src/tools.h
++++ b/src/tools.h
+@@ -37,6 +37,7 @@
+ }
+ #endif  // ENABLE_XAPIAN
+ namespace zim {
++  struct NativeAccessInfo;
+   bool isCompressibleMimetype(const std::string& mimetype);
+   uint32_t LIBZIM_PRIVATE_API countWords(const std::string& text);
+   void LIBZIM_PRIVATE_API microsleep(int microseconds);
+@@ -76,7 +77,7 @@
+ // Xapian based tools
+ #if defined(ENABLE_XAPIAN)
+   std::string LIBZIM_PRIVATE_API removeAccents(const std::string& text);
+-  bool LIBZIM_PRIVATE_API getDbFromAccessInfo(zim::ItemDataDirectAccessInfo accessInfo, Xapian::Database& database);
++  bool LIBZIM_PRIVATE_API getDbFromAccessInfo(const NativeAccessInfo& accessInfo, Xapian::Database& database);
+   Xapian::Stem getXapianStemmer(const std::string& iso639LangCode);
+ #endif
+ }
+--- a/test/archive.cpp
++++ b/test/archive.cpp
+@@ -22,9 +22,7 @@
+ #include <zim/archive.h>
+ #include <zim/illustration.h>
+ #include <zim/item.h>
+-#if defined(ENABLE_XAPIAN)
+ #include <zim/search.h>
+-#endif
+ #include <zim/suggestion.h>
+ #include <zim/error.h>
+ 
+@@ -32,6 +30,8 @@
+ 
+ #include "tools.h"
+ #include "../src/fs.h"
++#include "../src/file_compound.h"
++#include <limits>
+ 
+ #include "gtest/gtest.h"
+ 
+@@ -264,6 +264,117 @@
+   ASSERT_THROW(archive.getEntryByPathWithNamespace('C', "non/existent/path"), zim::EntryNotFound);
+ }
+ 
++#ifndef _WIN32
++TEST_F(ZimArchive, retainedFdExtentsSurviveRenameUnlinkAndCallerReuse)
++{
++  const auto content = emptyZimArchiveContent();
++  const size_t split = 49;
++  const auto file = makeTempFile("retained_extents",
++      "prefix" + content.substr(0, split) + "gap" + content.substr(split) + "suffix");
++  const int fd = open(file->path().c_str(), O_RDONLY);
++  ASSERT_NE(fd, -1);
++  const std::vector<zim::FdInput> parts{
++      {fd, 6, split}, {fd, 6 + split + 3, content.size() - split}};
++  ASSERT_EQ(lseek(fd, 2, SEEK_SET), 2);
++  const zim::Archive archive(parts);
++  const zim::FileCompound compound(parts);
++  struct stat metadata;
++  ASSERT_EQ(fstat(fd, &metadata), 0);
++  ASSERT_EQ(lseek(fd, 0, SEEK_CUR), 2);
++  const auto moved = file->path() + ".moved";
++  ASSERT_EQ(rename(file->path().c_str(), moved.c_str()), 0);
++  ASSERT_EQ(unlink(moved.c_str()), 0);
++  zim::DEFAULTFS::FD unrelated(open("/dev/null", O_RDONLY));
++  ASSERT_NE(unrelated.getNativeHandle(), -1);
++  close(fd);
++  ASSERT_EQ(dup2(unrelated.getNativeHandle(), fd), fd);
++  zim::DEFAULTFS::FD reused(fd);
++  EXPECT_TRUE(archive.check());
++  EXPECT_EQ(archive.getFilesize(), content.size());
++  EXPECT_EQ(compound.getMTime(), metadata.st_mtime);
++  EXPECT_EQ(lseek(reused.getNativeHandle(), 0, SEEK_CUR), 0);
++}
++
++TEST_F(ZimArchive, invalidLaterFdExtentReleasesEveryOwnedDuplicate)
++{
++  const auto file = makeTempFile("invalid_extent", emptyZimArchiveContent());
++  const auto size = emptyZimArchiveContent().size();
++  auto probe = zim::DEFAULTFS::duplicateFile(file->fd());
++  const int firstFree = probe.getNativeHandle();
++  probe.close();
++  const std::vector<zim::FdInput> invalid{
++      {file->fd(), 0, 0},
++      {file->fd(), size + 1, 1},
++      {file->fd(), size, 1},
++      {file->fd(), 1, std::numeric_limits<uint64_t>::max()},
++      {file->fd(), std::numeric_limits<uint64_t>::max(), 1},
++      {-1, 0, size}};
++  for (const auto& bad : invalid) {
++    const std::vector<zim::FdInput> parts{{file->fd(), 0, size}, bad};
++    EXPECT_THROW(zim::FileCompound{parts}, std::runtime_error);
++    auto next = zim::DEFAULTFS::duplicateFile(file->fd());
++    EXPECT_EQ(next.getNativeHandle(), firstFree);
++    EXPECT_NE(fcntl(file->fd(), F_GETFD), -1);
++  }
++  EXPECT_THROW(zim::FileCompound{std::vector<zim::FdInput>{}}, std::runtime_error);
++}
++
++#if defined(ENABLE_XAPIAN)
++TEST_F(ZimArchive, deferredFdIndexesUseExplicitOffsetsWithoutMovingCallerCursor)
++{
++  TempFile original("retained_index_source");
++  zim::writer::Creator creator;
++  creator.configIndexing(true, "eng");
++  creator.startZimCreation(original.path());
++  creator.addItem(std::make_shared<TestItem>("en/orchard.html", "text/html",
++      "Knowledge orchard", "<html><body>orchardevaluation</body></html>", IsFrontArticle::YES));
++  creator.finishZimCreation();
++  auto input = zim::DEFAULTFS::openFile(original.path());
++  std::string content(input.getSize().v, '\0');
++  input.readAt(&content[0], zim::zsize_t(content.size()), zim::offset_t(0));
++  for (bool multipart : {false, true}) {
++    const size_t split = multipart ? 32 : content.size();
++    const auto file = makeTempFile("retained_index_embedded",
++        "prefix00" + content.substr(0, split) + "gap" + content.substr(split));
++    const int fd = open(file->path().c_str(), O_RDONLY);
++    ASSERT_NE(fd, -1);
++    zim::DEFAULTFS::FD caller(fd);
++    std::vector<zim::FdInput> parts{{fd, 8, split}};
++    if (multipart) parts.push_back({fd, 8 + split + 3, content.size() - split});
++    ASSERT_EQ(lseek(fd, 5, SEEK_SET), 5);
++    const zim::Archive archive(parts, zim::OpenConfig().preloadXapianDb(false));
++    const zim::Archive delayed(parts, zim::OpenConfig().preloadXapianDb(false));
++    ASSERT_EQ(unlink(file->path().c_str()), 0);
++    ASSERT_TRUE(archive.hasTitleIndex());
++    ASSERT_TRUE(archive.hasFulltextIndex());
++    ASSERT_EQ(lseek(fd, 0, SEEK_CUR), 5);
++    // Non-prefix title query cannot pass via the title-prefix fallback.
++    zim::SuggestionSearcher suggestions(archive);
++    auto titles = suggestions.suggest("orchard").getResults(0, 10);
++    ASSERT_EQ(titles.size(), 1U);
++    EXPECT_EQ(titles.begin().getEntry().getPath(), "en/orchard.html");
++    zim::Searcher searcher(archive);
++    auto results = searcher.search(zim::Query().setQuery("orchardevaluation")).getResults(0, 10);
++    ASSERT_EQ(results.size(), 1U);
++    EXPECT_EQ(results.begin().getPath(), "en/orchard.html");
++    EXPECT_EQ(lseek(fd, 0, SEEK_CUR), 5);
++    caller.close();
++    EXPECT_TRUE(archive.check());
++    EXPECT_EQ(suggestions.suggest("orchard").getResults(0, 10).size(), 1U);
++    EXPECT_EQ(searcher.search(zim::Query().setQuery("orchardevaluation")).getResults(0, 10).size(), 1U);
++    zim::SuggestionSearcher delayedSuggestions(delayed);
++    auto delayedTitles = delayedSuggestions.suggest("orchard").getResults(0, 10);
++    ASSERT_EQ(delayedTitles.size(), 1U);
++    EXPECT_EQ(delayedTitles.begin().getEntry().getPath(), "en/orchard.html");
++    zim::Searcher delayedSearcher(delayed);
++    auto delayedResults = delayedSearcher.search(zim::Query().setQuery("orchardevaluation")).getResults(0, 10);
++    ASSERT_EQ(delayedResults.size(), 1U);
++    EXPECT_EQ(delayedResults.begin().getPath(), "en/orchard.html");
++  }
++}
++#endif
++#endif
++
+ #if WITH_TEST_DATA
+ TEST_F(ZimArchive, openRealZimArchive)
+ {
+@@ -969,8 +1080,15 @@
+     const zim::Archive archive1(testfile.path);
+     const int fd = OPEN_READ_ONLY(testfile.path);
+     const zim::Archive archive2(fd);
++    close(fd);
++    // Reuse the exact caller number for an unrelated file before any reads.
++    zim::DEFAULTFS::FD unrelated(open("/dev/null", O_RDONLY));
++    ASSERT_NE(unrelated.getNativeHandle(), -1);
++    ASSERT_EQ(dup2(unrelated.getNativeHandle(), fd), fd);
++    EXPECT_TRUE(archive2.check());
+ 
+     checkEquivalence(archive1, archive2);
++    if (unrelated.getNativeHandle() != fd) close(fd);
+   }
+ }
+ 
+@@ -983,10 +1101,13 @@
+   for(auto i=0UL; i < normalZims.size(); i++) {
+     const zim::Archive archive1(normalZims[i].path);
+     const int fd = OPEN_READ_ONLY(embeddedZims[i].path);
++    ASSERT_EQ(lseek(fd, 3, SEEK_SET), 3);
+     const zim::Archive archive2(zim::FdInput(fd, 8, archive1.getFilesize()));
++    ASSERT_EQ(lseek(fd, 0, SEEK_CUR), 3);
+     close(fd);
+ 
+     checkEquivalence(archive1, archive2);
++    EXPECT_TRUE(archive2.check());
+   }
+ }
+ 
+@@ -1001,23 +1122,24 @@
+     auto archive_size = archive1.getFilesize();
+ 
+     std::vector<zim::FdInput> fds;
++    const int fd = OPEN_READ_ONLY(embeddedZims[i].path);
++    ASSERT_NE(fd, -1);
++    ASSERT_EQ(lseek(fd, 3, SEEK_SET), 3);
+     zim::offset_type start_offset = std::string("BEGINZIMMULTIPART").size();
+     while (archive_size > 2048) {
+-      int fd = OPEN_READ_ONLY(embeddedZims[i].path);
+       fds.push_back(zim::FdInput(fd, start_offset, 2048));
+       start_offset += 2048 + std::string("NEWSECTIONZIMMULTI").size();
+       archive_size -= 2048;
+     }
+-    int fd = OPEN_READ_ONLY(embeddedZims[i].path);
+     fds.push_back(zim::FdInput(fd, start_offset, archive_size));
+ 
+     const zim::Archive archive2(fds);
+ 
+-    for(auto &fd: fds) {
+-      close(fd.fd);
+-    }
++    EXPECT_EQ(lseek(fd, 0, SEEK_CUR), 3);
++    close(fd);
+ 
+     checkEquivalence(archive1, archive2);
++    EXPECT_TRUE(archive2.check());
+   }
+ }
+ #endif // not _WIN32
+@@ -1054,50 +1176,18 @@
+ }
+ 
+ #ifndef _WIN32
+-TEST_F(ZimArchive, getDirectAccessInformationInAnArchiveOpenedByFD)
+-{
+-  for(auto& testfile:getDataFilePath("small.zim")) {
++TEST_F(ZimArchive, fdOnlyArchivesDoNotAdvertiseFilenameDirectAccess)
++{
++  for (auto& testfile : getDataFilePath("small.zim")) {
+     const int fd = OPEN_READ_ONLY(testfile.path);
+     const zim::Archive archive(fd);
+-    zim::entry_index_type checkedItemCount = 0;
+-    for ( auto entry : archive.iterEfficient() ) {
++    close(fd);
++    EXPECT_TRUE(archive.getFilename().empty());
++    for (auto entry : archive.iterEfficient()) {
+       if (!entry.isRedirect()) {
+-        const TestContext ctx{ {"entry", entry.getPath() } };
+-        const auto item = entry.getItem();
+-        const auto dai = item.getDirectAccessInformation();
+-        if ( dai.isValid() ) {
+-          ++checkedItemCount;
+-          EXPECT_EQ(item.getData(), readItemData(dai, item.getSize())) << ctx;
+-        }
++        EXPECT_FALSE(entry.getItem().getDirectAccessInformation().isValid());
+       }
+     }
+-    ASSERT_NE(0U, checkedItemCount);
+-  }
+-}
+-
+-TEST_F(ZimArchive, getDirectAccessInformationFromEmbeddedArchive)
+-{
+-  auto normalZims = getDataFilePath("small.zim");
+-  auto embeddedZims = getDataFilePath("small.zim.embedded");
+-
+-  ASSERT_EQ(normalZims.size(), embeddedZims.size()) << "We must have same number of zim files. (This is a test data issue)";
+-  for(auto i=0UL; i < normalZims.size(); i++) {
+-    const int fd = OPEN_READ_ONLY(embeddedZims[i].path);
+-    const auto size = zim::DEFAULTFS::openFile(normalZims[i].path).getSize();
+-    const zim::Archive archive(zim::FdInput(fd, 8, size.v));
+-    zim::entry_index_type checkedItemCount = 0;
+-    for ( auto entry : archive.iterEfficient() ) {
+-      if (!entry.isRedirect()) {
+-        const TestContext ctx{ {"entry", entry.getPath() } };
+-        const auto item = entry.getItem();
+-        const auto dai = item.getDirectAccessInformation();
+-        if ( dai.isValid() ) {
+-          ++checkedItemCount;
+-          EXPECT_EQ(item.getData(), readItemData(dai, item.getSize())) << ctx;
+-        }
+-      }
+-    }
+-    ASSERT_NE(0U, checkedItemCount);
+   }
+ }
+ #endif // not _WIN32
+--- a/test/suggestion.cpp
++++ b/test/suggestion.cpp
+@@ -29,6 +29,7 @@
+ #include "tools.h"
+ #include "../src/tools.h"
+ #include "../src/constants.h"
++#include "../src/fileimpl.h"
+ 
+ #include "gtest/gtest.h"
+ 
+@@ -832,7 +833,10 @@
+ 
+   zim::Archive archive(tza.getPath());
+   const zim::Entry titleIndexEntry = getTitleIndexEntry(archive);
+-  const auto dai = titleIndexEntry.getItem().getDirectAccessInformation();
++  const auto titleIndexItem = titleIndexEntry.getItem();
++  const auto dai = archive.getImpl()->getNativeAccessInformation(
++      zim::cluster_index_t(titleIndexItem.getClusterIndex()),
++      zim::blob_index_t(titleIndexItem.getBlobIndex()));
+ 
+   ASSERT_TRUE(dai.isValid());
+ 

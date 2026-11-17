@@ -1,0 +1,129 @@
+From 972ca66c87341e351d5b94424f3faa3f35c86aa7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 5 Nov 2026 18:49:11 +0000
+Subject: [PATCH] Don't skip oversized uncompressed blobs in
+ Cluster::getReader()
+
+On platforms where `size_t` is 32 bits, `Cluster::getReader()` replaces
+the reader of any blob bigger than `SIZE_MAX` by an empty `BufferReader`,
+without calling `m_reader->sub_reader()`. For a compressed cluster this
+is required (such a blob cannot be decompressed in memory), but for an
+uncompressed cluster the blob reader is only a range of the file, and
+not creating it means that the `RawStreamReader` is not advanced past
+the blob. As a result:
+
+- every blob following an oversized blob in the same uncompressed
+  cluster is read from the wrong offset (it returns the beginning of the
+  oversized blob instead of its own content);
+- partial reads (`Cluster::getBlob(n, offset, size)`) of the oversized
+  blob fail, although the requested range fits in memory.
+
+Keep the file range reader for uncompressed clusters. `getBlob(n)` still
+returns an empty blob for a blob bigger than `SIZE_MAX`.
+
+The new test uses a sparse file so it needs neither 4GiB of disk nor of
+memory. It fails on a 32-bit build without this fix.
+---
+ src/cluster.cpp  |  6 ++++-
+ test/cluster.cpp | 69 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 74 insertions(+), 1 deletion(-)
+
+diff --git a/src/cluster.cpp b/src/cluster.cpp
+index b91fcf7..5793fed 100644
+--- a/src/cluster.cpp
++++ b/src/cluster.cpp
+@@ -161,7 +161,11 @@ getClusterReader(const Reader& zimReader, offset_t offset, Cluster::Compression*
+     std::lock_guard<std::mutex> lock(m_readerAccessMutex);
+     for(blob_index_type current(m_blobReaders.size()); current<=n.v; ++current) {
+       auto blobSize = getBlobSize(blob_index_t(current));
+-      if (blobSize.v > SIZE_MAX) {
++      // A compressed blob bigger than SIZE_MAX cannot be decompressed in
++      // memory. Uncompressed blobs are only ranges of the file: their reader
++      // can be created whatever their size, and it must be created to advance
++      // the stream to the following blobs.
++      if (blobSize.v > SIZE_MAX && isCompressed()) {
+         m_blobReaders.push_back(std::unique_ptr<Reader>(new BufferReader(Buffer::makeBuffer(zsize_t(0)))));
+       } else {
+         m_blobReaders.push_back(m_reader->sub_reader(blobSize));
+diff --git a/test/cluster.cpp b/test/cluster.cpp
+index 26a1256..8968d8a 100644
+--- a/test/cluster.cpp
++++ b/test/cluster.cpp
+@@ -336,5 +336,74 @@ TEST(ClusterTest, read_extended_cluster)
+   }
+ }
+ 
++// An uncompressed blob bigger than SIZE_MAX (possible on 32-bit platforms)
++// must not prevent reading the blobs following it in the cluster, nor
++// reading parts of it. The file is sparse so it doesn't need much space.
++TEST(ClusterTest, read_extended_cluster_oversized_blob_not_last)
++{
++  TempFile tmpfile("extended_cluster");
++  int fd = tmpfile.fd();
++
++  const std::string blob0("123456789012345678901234567890");
++  const std::string blob2("abcdefghijklmnopqrstuvwxyz");
++  const zim::size_type bigger_than_4g = 1024LL*1024LL*1024LL*4LL+1024LL;
++  const zim::offset_type high_offset = 1024LL*1024LL*1024LL*4LL+16LL;
++
++  const char clusterInfo = 0x11; // Uncompressed extended cluster
++  ASSERT_EQ(write(fd, &clusterInfo, 1), 1);
++
++  const zim::offset_type offsets[] = {
++    4*sizeof(uint64_t),
++    4*sizeof(uint64_t) + blob0.size(),
++    4*sizeof(uint64_t) + blob0.size() + bigger_than_4g,
++    4*sizeof(uint64_t) + blob0.size() + bigger_than_4g + blob2.size()
++  };
++  for (const auto offset : offsets) {
++    char out_buf[sizeof(uint64_t)];
++    zim::toLittleEndian(offset, out_buf);
++    ASSERT_EQ(write(fd, out_buf, sizeof(uint64_t)), (ssize_t)sizeof(uint64_t));
++  }
++
++  ASSERT_EQ(write(fd, blob0.c_str(), blob0.size()), (ssize_t)blob0.size());
++
++#ifdef _WIN32
++# define LSEEK _lseeki64
++#else
++# define LSEEK lseek
++#endif
++  // Content of the big blob: "head" at its start, "high" above the 4GiB
++  // boundary and "tail" at its end. The rest is a hole.
++  ASSERT_EQ(write(fd, "head", 4), 4);
++  ASSERT_NE(LSEEK(fd, high_offset-4, SEEK_CUR), -1);
++  ASSERT_EQ(write(fd, "high", 4), 4);
++  ASSERT_NE(LSEEK(fd, bigger_than_4g-high_offset-8, SEEK_CUR), -1);
++  ASSERT_EQ(write(fd, "tail", 4), 4);
++#undef LSEEK
++
++  ASSERT_EQ(write(fd, blob2.c_str(), blob2.size()), (ssize_t)blob2.size());
++  tmpfile.close();
++
++  auto fileCompound = std::make_shared<zim::FileCompound>(tmpfile.path());
++  const auto cluster = zim::Cluster::read(zim::MultiPartFileReader(fileCompound), zim::offset_t(0));
++  ASSERT_EQ(cluster->getCompression(), zim::Cluster::Compression::None);
++  ASSERT_EQ(cluster->count().v, 3U);
++  ASSERT_EQ(cluster->getBlobSize(zim::blob_index_t(1)).v, bigger_than_4g);
++
++  ASSERT_EQ(blob0, std::string(cluster->getBlob(zim::blob_index_t(0))));
++  ASSERT_EQ(blob2, std::string(cluster->getBlob(zim::blob_index_t(2))));
++
++  const zim::blob_index_t bigBlob(1);
++  ASSERT_EQ("head", std::string(cluster->getBlob(bigBlob, zim::offset_t(0), zim::zsize_t(4))));
++  ASSERT_EQ("high", std::string(cluster->getBlob(bigBlob, zim::offset_t(high_offset), zim::zsize_t(4))));
++  ASSERT_EQ("tail", std::string(cluster->getBlob(bigBlob, zim::offset_t(bigger_than_4g-4), zim::zsize_t(4))));
++
++  if (SIZE_MAX == UINT32_MAX) {
++    // The whole blob still cannot be returned in a single buffer.
++    const zim::Blob b = cluster->getBlob(bigBlob);
++    ASSERT_EQ(b.data(), nullptr);
++    ASSERT_EQ(b.size(), 0U);
++  }
++}
++
+ 
+ }  // namespace
+-- 
+2.43.0
+

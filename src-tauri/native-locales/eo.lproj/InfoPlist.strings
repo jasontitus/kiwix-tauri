@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Nur ĉi tiu aktiva arkivo povas peti aliron al la kamerao. Ankaŭ via sistemo eble petos permeson. Vi povas revoki la aliron sub la artikolo iam ajn.";
+"NSLocationUsageDescription" = "Via sistemo provizos vian pozicion nur al ĉi tiu aktiva arkivo. Vi povas revoki la aliron sub la artikolo iam ajn.";
+"NSLocationWhenInUseUsageDescription" = "Via sistemo provizos vian pozicion nur al ĉi tiu aktiva arkivo. Vi povas revoki la aliron sub la artikolo iam ajn.";
+"NSLocalNetworkUsageDescription" = "Malkovru proksimajn LocalSwarm-aparatojn kaj dividu eksterretajn arkivojn en via loka reto. Ebligu malkovron aŭ kundividon nur en fidinda reto.";

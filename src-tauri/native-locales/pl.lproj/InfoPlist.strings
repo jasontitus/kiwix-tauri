@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Tylko to aktywne archiwum może poprosić o dostęp do aparatu. System może również poprosić o zgodę. Dostęp możesz cofnąć w dowolnym momencie pod artykułem.";
+"NSLocationUsageDescription" = "System udostępni Twoją lokalizację tylko temu aktywnemu archiwum. Dostęp możesz cofnąć w dowolnym momencie pod artykułem.";
+"NSLocationWhenInUseUsageDescription" = "System udostępni Twoją lokalizację tylko temu aktywnemu archiwum. Dostęp możesz cofnąć w dowolnym momencie pod artykułem.";
+"NSLocalNetworkUsageDescription" = "Odkryj pobliskie urządzenia LocalSwarm i udostępniaj archiwa offline w swojej sieci lokalnej. Włącz wykrywanie i udostępnianie tylko w zaufanej sieci.";

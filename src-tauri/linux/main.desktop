@@ -1,0 +1,16 @@
+[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}} %U
+StartupWMClass=org.kiwix.workbench
+Icon={{icon}}
+Name=Kiwix
+Terminal=false
+Type=Application
+{{#if mime_type}}
+MimeType={{mime_type}};x-scheme-handler/kiwix;
+{{else}}
+MimeType=x-scheme-handler/kiwix;
+{{/if}}

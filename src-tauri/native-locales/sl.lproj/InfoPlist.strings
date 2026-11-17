@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Samo ta aktivni arhiv lahko zahteva dostop do kamere. Tudi sistem vas lahko vpraša za dovoljenje. Dostop lahko kadar koli prekličete pod člankom.";
+"NSLocationUsageDescription" = "Sistem bo vašo lokacijo posredoval samo temu aktivnemu arhivu. Dostop lahko kadar koli prekličete pod člankom.";
+"NSLocationWhenInUseUsageDescription" = "Sistem bo vašo lokacijo posredoval samo temu aktivnemu arhivu. Dostop lahko kadar koli prekličete pod člankom.";
+"NSLocalNetworkUsageDescription" = "Odkrijte bližnje naprave LocalSwarm in delite arhive brez povezave v vašem lokalnem omrežju. Omogočite odkrivanje ali skupno rabo samo v zaupanja vrednem omrežju.";

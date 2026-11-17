@@ -1,0 +1,47 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/gen/*
+!src-tauri/gen/apple/
+!src-tauri/gen/android/
+.DS_Store
+.native/
+.native-windows.json
+
+# Generated caches and mobile build products.
+__pycache__/
+*.py[cod]
+target/
+build/
+.gradle/
+.kotlin/
+.tauri/
+
+# Local environment and publisher signing material.
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+*.p12
+# Public protocol compatibility identity, not a publisher signing credential.
+!src-tauri/native/localswarm.p12
+
+# Environment-provided dependency tree (may be a symlink)
+node_modules
+
+# Swift Package Manager build products.
+src-tauri/plugins/tauri-plugin-kiwix-mobile/ios/.build/
+
+# sherpa-onnx's Rust build script copies its pinned iOS runtime here.
+src-tauri/sherpa-onnx.xcframework/
+src-tauri/.sherpa-onnx-xcframework-version
+
+# Generated native inference libraries copied by the sherpa-onnx build script.
+src-tauri/gen/android/app/src/main/jniLibs/
+
+# Local release upload staging
+release-artifacts/

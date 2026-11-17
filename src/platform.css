@@ -1,0 +1,1210 @@
+/* Per-platform interface skins, selected by `data-platform` on <html>
+   (src/platform.ts). Palettes use `:root[data-platform]` so the dark-theme
+   selectors stay one step more specific. Component rules repeat the base
+   selector behind `:where(...)`, keeping its specificity: this file loads
+   last, so it replaces only the properties it names, and narrow-layout
+   overrides sit in the same breakpoints as the rules they restyle. Archive
+   content in the reader frame is never restyled here.
+
+   Properties that base class rules never reset (shadows, label weight,
+   padding, text colour) apply only to standard push buttons, selected with
+   `button:where(...)` so their specificity still equals the base `button`. */
+
+/* Shared native conventions ------------------------------------------- */
+
+/* Native accessibility size is ephemeral shell state, never the article-size
+   preference. UIFontMetrics supplies the scale, including accessibility sizes. */
+:root {
+  --system-text-scale: 1;
+}
+
+/* Application chrome is not selectable text; editable fields stay selectable
+   because WebKit cannot edit an input inside an unselectable ancestor. */
+:where(:root[data-platform]) :is(button, summary, label, nav, .sidebar, .workspace-bar, .tab-strip, .status-bar, .rw-toolbar, .rw-mobile-bar, .page-heading) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+:where(:root[data-platform]) :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* Desktop toolkits use the arrow cursor for controls; links keep the hand. */
+:where(:root[data-platform="macos"], :root[data-platform="windows"], :root[data-platform="linux"]) :is(button, summary, select, label, input[type="checkbox"]) {
+  cursor: default;
+}
+:where(:root[data-platform="macos"], :root[data-platform="windows"], :root[data-platform="linux"]) .reader-workspace button {
+  cursor: default;
+}
+/* Touch platforms: no long-press callout or rubber-banding of the shell. */
+:where(:root[data-platform="ios"], :root[data-platform="android"]) body {
+  overscroll-behavior: none;
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) :is(button, a, img, summary) {
+  -webkit-touch-callout: none;
+}
+
+/* Phones present content panels as bottom sheets. A confirmation is a question
+   with two answers, so it keeps the centred dialog every platform shows above
+   540pt: the answer buttons must not land on the edge a thumb rests against,
+   where they read as part of the page behind them. */
+@keyframes platform-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (max-width: 540px) {
+  :where(:root[data-platform="ios"], :root[data-platform="android"]) .modal:not(.modal-confirmation) {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+    padding-block-end: calc(18px + env(safe-area-inset-bottom));
+    border-width: 0;
+    border-radius: var(--modal-radius) var(--modal-radius) 0 0;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+    animation: platform-sheet-in 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+  /* A centred question on a phone still needs breathing room; the base dialog
+     width leaves only 12pt gutters at this size. */
+  :where(:root[data-platform="ios"], :root[data-platform="android"]) .modal.modal-confirmation {
+    width: min(360px, calc(100vw - 48px));
+    max-height: calc(100dvh - env(safe-area-inset-top) - 48px);
+  }
+  :where(:root[data-platform="ios"], :root[data-platform="android"]) .modal::backdrop {
+    background: #00000052;
+  }
+}
+
+/* Settings checkboxes render as switches on phones and tablets. */
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field {
+  justify-content: space-between;
+  flex-direction: row-reverse;
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field > input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  margin: 0;
+  border: var(--switch-border) solid var(--switch-off-border);
+  border-radius: 999px;
+  background: var(--switch-off);
+  transition: background 0.2s, border-color 0.2s;
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field > input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: var(--switch-inset);
+  width: var(--thumb-off);
+  height: var(--thumb-off);
+  border-radius: 50%;
+  background: var(--thumb-off-color);
+  box-shadow: var(--thumb-shadow);
+  transform: translateY(-50%);
+  transition: inset-inline-start 0.2s, width 0.2s, height 0.2s, background 0.2s;
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field > input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field > input[type="checkbox"]:checked::before {
+  inset-inline-start: calc(100% - var(--thumb-on) - var(--switch-inset));
+  width: var(--thumb-on);
+  height: var(--thumb-on);
+  background: var(--thumb-on-color);
+}
+:where(:root[data-platform="ios"], :root[data-platform="android"]) .check-field > input[type="checkbox"]:disabled {
+  opacity: 0.4;
+}
+
+/* Thin scrollbars where the webview would otherwise draw classic ones. */
+:where(:root[data-platform="windows"], :root[data-platform="linux"]) ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+:where(:root[data-platform="windows"], :root[data-platform="linux"]) ::-webkit-scrollbar-track {
+  background: transparent;
+}
+:where(:root[data-platform="windows"], :root[data-platform="linux"]) ::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 32%, transparent) padding-box;
+}
+:where(:root[data-platform="windows"], :root[data-platform="linux"]) ::-webkit-scrollbar-thumb:hover {
+  border-width: 3px;
+  background-color: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+:where(:root[data-platform="windows"], :root[data-platform="linux"]) ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* iOS / iPadOS: Human Interface Guidelines ---------------------------- */
+
+:root[data-platform="ios"] {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-size-ui: calc(15px * var(--system-text-scale));
+  --control-height: max(36px, calc(36px * var(--system-text-scale)));
+  --control-radius: 10px;
+  --field-height: max(38px, calc(38px * var(--system-text-scale)));
+  --field-radius: 10px;
+  --search-radius: 10px;
+  --panel-radius: 12px;
+  --modal-radius: 14px;
+  --switch-width: 51px;
+  --switch-height: 31px;
+  --switch-border: 0px;
+  --switch-inset: 2px;
+  --thumb-off: 27px;
+  --thumb-on: 27px;
+  --thumb-off-color: #ffffff;
+  --thumb-on-color: #ffffff;
+  --thumb-shadow: 0 3px 8px #00000026, 0 1px 1px #00000029;
+  --paper: #f2f2f7;
+  --surface: #ffffff;
+  --ink: #000000;
+  --muted: #6c6c70;
+  --line: #c6c6c8;
+  --accent: #0066cc;
+  --accent-hover: #0054a8;
+  --primary-background: #0066cc;
+  --primary-hover: #0054a8;
+  --primary-foreground: #ffffff;
+  --tint: #007aff1f;
+  --danger: #ff3b30;
+  --sidebar: #f2f2f7;
+  --fill: #7676801f;
+  --tab-inactive: var(--muted);
+  --bar: var(--paper);
+  --switch-off: #78788029;
+  --switch-off-border: transparent;
+}
+:root[data-platform="ios"][data-theme="dark"] {
+  --paper: #000000;
+  --surface: #1c1c1e;
+  --ink: #ffffff;
+  --muted: #98989f;
+  --line: #38383a;
+  --accent: #409cff;
+  --accent-hover: #409cff;
+  --tint: #0a84ff33;
+  --danger: #ff453a;
+  --sidebar: #1c1c1e;
+  --fill: #7676803d;
+  --switch-off: #78788052;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="ios"][data-theme="system"] {
+    --paper: #000000;
+    --surface: #1c1c1e;
+    --ink: #ffffff;
+    --muted: #98989f;
+    --line: #38383a;
+    --accent: #409cff;
+    --accent-hover: #409cff;
+    --tint: #0a84ff33;
+    --danger: #ff453a;
+    --sidebar: #1c1c1e;
+    --fill: #7676803d;
+    --switch-off: #78788052;
+  }
+}
+/* Borderless filled buttons; every control dims while pressed. */
+:where(:root[data-platform="ios"]) button {
+  border-color: transparent;
+  background: var(--fill);
+  transition: opacity 0.1s;
+}
+:where(:root[data-platform="ios"]) button:active:not(:disabled) {
+  opacity: 0.55;
+}
+:where(:root[data-platform="ios"]) button:where(:not([class]), .primary, .danger:not(.icon-button)) {
+  color: var(--accent);
+}
+:where(:root[data-platform="ios"]) button:where(:not([class]), .primary, .danger:not(.icon-button)):active:not(:disabled) {
+  background: var(--fill);
+}
+:where(:root[data-platform="ios"]) button.primary {
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+:where(:root[data-platform="ios"]) button.primary:active:not(:disabled) {
+  background: var(--primary-hover);
+  /* Keep the label legible; the darker fill supplies pressed feedback. */
+  opacity: 1;
+}
+:where(:root[data-platform="ios"]) :is(button.subtle, button.icon-button, button.text-button) {
+  background: transparent;
+}
+:where(:root[data-platform="ios"]) :is(button.icon-button, button.subtle) {
+  color: var(--accent);
+}
+:where(:root[data-platform="ios"]) button.danger {
+  color: var(--danger);
+}
+:where(:root[data-platform="ios"]) :is(input, select, textarea) {
+  border-color: transparent;
+  background: var(--fill);
+}
+:where(:root[data-platform="ios"]) .search-field {
+  border-color: transparent;
+  background: var(--fill);
+}
+:where(:root[data-platform="ios"]) .search-field:focus-within {
+  outline: 0;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+/* The viewport covers the screen; each edge is reserved once by its owner.
+   Native safe-area left/right values are physical, including in RTL layouts. */
+:where(:root[data-platform="ios"]) .app-shell {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+:where(:root[data-platform="ios"]) .workspace-bar {
+  height: auto;
+  min-height: calc(44px + env(safe-area-inset-top));
+  border-block-end-color: transparent;
+  padding-block-start: env(safe-area-inset-top);
+}
+@media (max-width: 760px) {
+  :where(:root[data-platform="ios"]) .workspace-bar {
+    min-height: calc(48px + env(safe-area-inset-top));
+  }
+  :where(:root[data-platform="ios"]) .rw-mobile-bar {
+    padding-inline: 4px;
+  }
+}
+@media (min-width: 541px) {
+  :where(:root[data-platform="ios"]) .sidebar {
+    padding-block-start: calc(12px + env(safe-area-inset-top));
+    padding-block-end: calc(12px + env(safe-area-inset-bottom));
+  }
+  :where(:root[data-platform="ios"]) .main-shell {
+    padding-block-end: env(safe-area-inset-bottom);
+  }
+}
+:where(:root[data-platform="ios"]) .page-heading h1 {
+  font-size: calc(30px * var(--system-text-scale));
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+:where(:root[data-platform="ios"]) .main-nav button.active,
+:where(:root[data-platform="ios"]) .sidebar-settings.active {
+  background: var(--primary-background);
+  color: var(--primary-foreground);
+}
+@media (min-width: 541px) {
+  :where(:root[data-platform="ios"]) .main-nav button.active:active:not(:disabled),
+  :where(:root[data-platform="ios"]) .sidebar-settings.active:active:not(:disabled) {
+    background: var(--primary-hover);
+    opacity: 1;
+  }
+}
+:where(:root[data-platform="ios"]) .main-nav button,
+:where(:root[data-platform="ios"]) .sidebar-settings {
+  color: var(--ink);
+}
+:where(:root[data-platform="ios"]) .main-nav button svg,
+:where(:root[data-platform="ios"]) .sidebar-settings svg {
+  color: var(--accent);
+}
+:where(:root[data-platform="ios"]) .main-nav button.active svg,
+:where(:root[data-platform="ios"]) .sidebar-settings.active svg {
+  color: inherit;
+}
+@media (max-width: 540px) {
+  :where(:root[data-platform="ios"]) :is(.main-nav button > span, .sidebar-settings > span) {
+    line-height: calc(13px * var(--system-text-scale));
+  }
+  /* Tab bar: translucent material, tinted glyphs, no selection pill. */
+  :where(:root[data-platform="ios"]) .sidebar {
+    padding-left: calc(4px + env(safe-area-inset-left));
+    padding-right: calc(4px + env(safe-area-inset-right));
+    border-block-start: 0.5px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  :where(:root[data-platform="ios"]) .main-nav button,
+  :where(:root[data-platform="ios"]) .sidebar-settings,
+  :where(:root[data-platform="ios"]) .main-nav button svg,
+  :where(:root[data-platform="ios"]) .sidebar-settings svg {
+    background: transparent;
+    color: var(--tab-inactive);
+  }
+  :where(:root[data-platform="ios"]) .main-nav button.active,
+  :where(:root[data-platform="ios"]) .sidebar-settings.active,
+  :where(:root[data-platform="ios"]) .main-nav button.active svg,
+  :where(:root[data-platform="ios"]) .sidebar-settings.active svg {
+    background: transparent;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  :where(:root[data-platform="ios"]) .sidebar-settings {
+    border-block-start: 0;
+  }
+}
+
+/* Android: Material 3 ------------------------------------------------- */
+
+:root[data-platform="android"] {
+  --font-ui: Roboto, "Noto Sans", system-ui, sans-serif;
+  --font-size-ui: 14px;
+  --control-height: 40px;
+  --control-radius: 20px;
+  --field-height: 48px;
+  --field-radius: 4px;
+  --search-radius: 28px;
+  --panel-radius: 12px;
+  --modal-radius: 28px;
+  --switch-width: 52px;
+  --switch-height: 32px;
+  --switch-border: 2px;
+  --switch-inset: 6px;
+  --thumb-off: 16px;
+  --thumb-on: 24px;
+  --thumb-shadow: none;
+  --paper: #f8fafd;
+  --surface: #ffffff;
+  --ink: #1f1f1f;
+  --muted: #444746;
+  --line: #c4c7c5;
+  --outline: #747775;
+  --accent: #0b57d0;
+  --accent-hover: #0842a0;
+  --tint: #d3e3fd;
+  --danger: #b3261e;
+  --sidebar: #f0f4f9;
+  --container: #e9eef6;
+  --indicator: #c2e7ff;
+  --on-indicator: #001d35;
+  --bar: var(--paper);
+  --switch-off: #e1e3e1;
+  --switch-off-border: #747775;
+  --thumb-off-color: #747775;
+  --thumb-on-color: #ffffff;
+}
+:root[data-platform="android"][data-theme="dark"] {
+  --paper: #131314;
+  --surface: #1e1f20;
+  --ink: #e3e3e3;
+  --muted: #c4c7c5;
+  --line: #444746;
+  --outline: #8e918f;
+  --accent: #a8c7fa;
+  --accent-hover: #d3e3fd;
+  --tint: #0842a0;
+  --danger: #f2b8b5;
+  --sidebar: #1e1f20;
+  --container: #282a2c;
+  --indicator: #004a77;
+  --on-indicator: #c2e7ff;
+  --switch-off: #333537;
+  --switch-off-border: #8e918f;
+  --thumb-off-color: #8e918f;
+  --thumb-on-color: #062e6f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="android"][data-theme="system"] {
+    --paper: #131314;
+    --surface: #1e1f20;
+    --ink: #e3e3e3;
+    --muted: #c4c7c5;
+    --line: #444746;
+    --outline: #8e918f;
+    --accent: #a8c7fa;
+    --accent-hover: #d3e3fd;
+    --tint: #0842a0;
+    --danger: #f2b8b5;
+    --sidebar: #1e1f20;
+    --container: #282a2c;
+    --indicator: #004a77;
+    --on-indicator: #c2e7ff;
+    --switch-off: #333537;
+    --switch-off-border: #8e918f;
+    --thumb-off-color: #8e918f;
+    --thumb-on-color: #062e6f;
+  }
+}
+/* Outlined pill buttons with a pressed state layer. */
+:where(:root[data-platform="android"]) button {
+  border-color: var(--outline);
+  background: transparent;
+}
+:where(:root[data-platform="android"]) button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+:where(:root[data-platform="android"]) button:where(:not([class]), .primary, .danger:not(.icon-button)) {
+  padding-inline: 16px;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+:where(:root[data-platform="android"]) button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+:where(:root[data-platform="android"]) button.primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent), var(--surface) 12%);
+}
+:where(:root[data-platform="android"]) :is(button.subtle, button.icon-button, button.text-button) {
+  border-color: transparent;
+}
+:where(:root[data-platform="android"]) button.icon-button {
+  border-radius: 50%;
+  color: var(--muted);
+}
+:where(:root[data-platform="android"]) button.danger {
+  color: var(--danger);
+}
+:where(:root[data-platform="android"]) :is(input, select, textarea) {
+  border-color: var(--outline);
+  background: transparent;
+}
+:where(:root[data-platform="android"]) :is(input, select, textarea):focus-visible {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+:where(:root[data-platform="android"]) .search-field {
+  border-color: transparent;
+  background: var(--container);
+  padding-inline: 16px;
+}
+:where(:root[data-platform="android"]) .search-field:focus-within {
+  outline: 0;
+}
+:where(:root[data-platform="android"]) :is(.workspace-bar, .tab-strip) {
+  border-block-end-color: transparent;
+}
+:where(:root[data-platform="android"]) .panel {
+  background: var(--surface);
+}
+:where(:root[data-platform="android"]) .page-heading h1 {
+  font-size: 28px;
+  font-weight: 400;
+}
+:where(:root[data-platform="android"]) .sidebar {
+  border-inline-end-color: transparent;
+}
+:where(:root[data-platform="android"]) .main-nav button,
+:where(:root[data-platform="android"]) .sidebar-settings {
+  border-radius: 999px;
+  color: var(--muted);
+}
+:where(:root[data-platform="android"]) .main-nav button.active,
+:where(:root[data-platform="android"]) .sidebar-settings.active {
+  background: var(--indicator);
+  color: var(--on-indicator);
+}
+@media (max-width: 540px) {
+  /* Navigation bar: the active indicator is a pill behind the icon only. */
+  :where(:root[data-platform="android"]) .sidebar {
+    height: calc(64px + env(safe-area-inset-bottom));
+    overflow: visible;
+    border-block-start-color: transparent;
+    background: var(--sidebar);
+  }
+  :where(:root[data-platform="android"]) .main-shell {
+    padding-block-end: calc(64px + env(safe-area-inset-bottom));
+  }
+  :where(:root[data-platform="android"]) .main-nav button,
+  :where(:root[data-platform="android"]) .sidebar-settings {
+    gap: 4px;
+    min-height: 56px;
+    background: transparent;
+    color: var(--muted);
+  }
+  :where(:root[data-platform="android"]) .main-nav button.active,
+  :where(:root[data-platform="android"]) .sidebar-settings.active {
+    background: transparent;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  :where(:root[data-platform="android"]) .main-nav button svg,
+  :where(:root[data-platform="android"]) .sidebar-settings svg {
+    box-sizing: content-box;
+    padding: 4px 12px;
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+  :where(:root[data-platform="android"]) .main-nav button.active svg,
+  :where(:root[data-platform="android"]) .sidebar-settings.active svg {
+    background: var(--indicator);
+    color: var(--on-indicator);
+  }
+  :where(:root[data-platform="android"]) .sidebar-settings {
+    border-block-start: 0;
+  }
+}
+
+/* macOS: AppKit controls --------------------------------------------- */
+
+:root[data-platform="macos"] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --font-size-ui: 13px;
+  --control-height: 26px;
+  --control-radius: 6px;
+  --field-height: 26px;
+  --field-radius: 6px;
+  --search-radius: 7px;
+  --panel-radius: 10px;
+  --modal-radius: 12px;
+  --focus-width: 3px;
+  --focus-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  --focus-offset: 0px;
+  --paper: #f6f6f6;
+  --surface: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #d9d9d9;
+  --accent: #0066cc;
+  --accent-hover: #0054a8;
+  --primary-background: #0066cc;
+  --primary-hover: #0054a8;
+  --primary-foreground: #ffffff;
+  --tint: #007aff1a;
+  --danger: #d70015;
+  --sidebar: #e8e8ea;
+  --selection: #0000001a;
+  --control: #ffffff;
+  --control-edge: 0 0 0 0.5px #0000002e, 0 0.5px 1.5px #00000033;
+}
+:root[data-platform="macos"][data-theme="dark"] {
+  --paper: #1e1e1e;
+  --surface: #2a2a2c;
+  --ink: #f5f5f7;
+  --muted: #98989d;
+  --line: #3d3d3f;
+  --accent: #409cff;
+  --accent-hover: #409cff;
+  --tint: #0a84ff2e;
+  --danger: #ff453a;
+  --sidebar: #282828;
+  --selection: #ffffff1f;
+  --control: #5b5b5e;
+  --control-edge: 0 0 0 0.5px #00000080, inset 0 0.5px #ffffff26;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="macos"][data-theme="system"] {
+    --paper: #1e1e1e;
+    --surface: #2a2a2c;
+    --ink: #f5f5f7;
+    --muted: #98989d;
+    --line: #3d3d3f;
+    --accent: #409cff;
+    --accent-hover: #409cff;
+    --tint: #0a84ff2e;
+    --danger: #ff453a;
+    --sidebar: #282828;
+    --selection: #ffffff1f;
+    --control: #5b5b5e;
+    --control-edge: 0 0 0 0.5px #00000080, inset 0 0.5px #ffffff26;
+  }
+}
+/* WebKit reports the user's chosen System Settings accent colour; the
+   theme-qualified selector outranks both palettes above. */
+@supports (color: AccentColor) {
+  /* The user's System Settings accent tints selections only. Filled controls
+     and text keep the palette accent: a fixed white label on a yellow or
+     graphite fill would be unreadable, and CSS cannot pick a label colour. */
+  :root[data-platform="macos"][data-theme] {
+    --tint: color-mix(in srgb, AccentColor 12%, transparent);
+  }
+}
+/* Push buttons: raised, no hover highlight, darken while pressed. */
+:where(:root[data-platform="macos"]) button {
+  padding: 2px 10px;
+  border-color: transparent;
+  background: var(--control);
+  font-weight: 400;
+  transition: none;
+}
+:where(:root[data-platform="macos"]) button:where(:not([class]), .primary, .danger:not(.icon-button)) {
+  box-shadow: var(--control-edge);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="macos"]) button:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--control);
+  }
+}
+:where(:root[data-platform="macos"]) button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--control), var(--ink) 10%);
+}
+:where(:root[data-platform="macos"]) button.primary {
+  color: var(--primary-foreground);
+  background: var(--primary-background);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="macos"]) button.primary:hover:not(:disabled) {
+    background: var(--primary-background);
+  }
+}
+:where(:root[data-platform="macos"]) button.primary:active:not(:disabled) {
+  background: var(--primary-hover);
+}
+/* Toolbar-style buttons are flat and gain a rounded hover backdrop. */
+:where(:root[data-platform="macos"]) :is(button.subtle, button.icon-button, button.text-button) {
+  background: transparent;
+}
+@media (hover: hover) {
+  :where(:root[data-platform="macos"]) :is(button.subtle, button.icon-button):hover:not(:disabled) {
+    background: var(--selection);
+  }
+}
+@media (hover: hover) {
+  :where(:root[data-platform="macos"]) button.text-button:hover:not(:disabled) {
+    background: none;
+  }
+}
+:where(:root[data-platform="macos"]) :is(input, select, textarea) {
+  padding: 3px 7px;
+  border-color: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+:where(:root[data-platform="macos"]) .search-field {
+  min-height: 28px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+:where(:root[data-platform="macos"]) .search-field:focus-within {
+  outline-width: 3px;
+  outline-offset: 0;
+  outline-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+:where(:root[data-platform="macos"]) .workspace-bar {
+  height: 38px;
+}
+/* Source list: neutral rounded selection with tinted glyphs. */
+:where(:root[data-platform="macos"]) .sidebar {
+  border-inline-end-color: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+:where(:root[data-platform="macos"]) .main-nav button,
+:where(:root[data-platform="macos"]) .sidebar-settings {
+  min-height: 28px;
+  padding-block: 4px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="macos"]) .main-nav button:hover:not(:disabled),
+  :where(:root[data-platform="macos"]) .sidebar-settings:hover:not(:disabled) {
+    background: transparent;
+  }
+}
+:where(:root[data-platform="macos"]) .main-nav button svg,
+:where(:root[data-platform="macos"]) .sidebar-settings svg {
+  color: var(--accent);
+}
+:where(:root[data-platform="macos"]) .main-nav button.active,
+:where(:root[data-platform="macos"]) .sidebar-settings.active {
+  background: var(--selection);
+  color: var(--ink);
+  font-weight: 500;
+}
+:where(:root[data-platform="macos"]) .sidebar-settings {
+  border-radius: 6px;
+}
+@media (max-width: 540px) {
+  :where(:root[data-platform="macos"]) .main-nav button,
+  :where(:root[data-platform="macos"]) .sidebar-settings {
+    min-height: 48px;
+    padding-block: 6px;
+  }
+}
+:where(:root[data-platform="macos"]) .library-page .grid .book-card,
+:where(:root[data-platform="macos"]) .catalog-grid:not(.catalog-list) .catalog-card {
+  border-color: var(--line);
+}
+:where(:root[data-platform="macos"]) .modal {
+  box-shadow: 0 20px 60px #00000052, 0 0 0 0.5px #00000040;
+}
+
+/* Windows 11: Fluent 2 / WinUI --------------------------------------- */
+
+:root[data-platform="windows"] {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-size-ui: 14px;
+  --control-height: 32px;
+  --control-radius: 4px;
+  --field-height: 32px;
+  --field-radius: 4px;
+  --search-radius: 4px;
+  --panel-radius: 8px;
+  --modal-radius: 8px;
+  --focus-color: var(--ink);
+  --focus-offset: 1px;
+  --paper: #f3f3f3;
+  --surface: #fbfbfb;
+  --ink: #1a1a1a;
+  --muted: #5d5d5d;
+  --line: #e5e5e5;
+  --accent: #005fb8;
+  --accent-hover: #196ebf;
+  --tint: #0000000a;
+  --danger: #c42b1c;
+  --sidebar: #f3f3f3;
+  --bar: #f3f3f3;
+  --control: #fbfbfb;
+  --control-hover: #f6f6f6;
+  --stroke: #0000000f;
+  --stroke-bottom: #00000029;
+  --field-bottom: #00000072;
+  --nav-selected: #0000000f;
+}
+:root[data-platform="windows"][data-theme="dark"] {
+  --paper: #202020;
+  --surface: #2b2b2b;
+  --ink: #ffffff;
+  --muted: #c5c5c5;
+  --line: #1d1d1d;
+  --accent: #60cdff;
+  --accent-hover: #5bbae8;
+  --tint: #ffffff0f;
+  --danger: #ff99a4;
+  --sidebar: #202020;
+  --bar: #202020;
+  --control: #2d2d2d;
+  --control-hover: #323232;
+  --stroke: #ffffff12;
+  --stroke-bottom: #ffffff12;
+  --field-bottom: #ffffff8b;
+  --nav-selected: #ffffff0f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="windows"][data-theme="system"] {
+    --paper: #202020;
+    --surface: #2b2b2b;
+    --ink: #ffffff;
+    --muted: #c5c5c5;
+    --line: #1d1d1d;
+    --accent: #60cdff;
+    --accent-hover: #5bbae8;
+    --tint: #ffffff0f;
+    --danger: #ff99a4;
+    --sidebar: #202020;
+    --bar: #202020;
+    --control: #2d2d2d;
+    --control-hover: #323232;
+    --stroke: #ffffff12;
+    --stroke-bottom: #ffffff12;
+    --field-bottom: #ffffff8b;
+    --nav-selected: #ffffff0f;
+  }
+}
+/* Standard buttons carry an elevation edge on the bottom border. */
+:where(:root[data-platform="windows"]) button {
+  padding: 4px 11px;
+  border-color: var(--stroke);
+  border-block-end-color: var(--stroke-bottom);
+  background: var(--control);
+  font-weight: 400;
+  transition: background 0.08s;
+}
+@media (hover: hover) {
+  :where(:root[data-platform="windows"]) button:hover:not(:disabled) {
+    border-color: var(--stroke);
+    border-block-end-color: var(--stroke-bottom);
+    background: var(--control-hover);
+  }
+}
+:where(:root[data-platform="windows"]) button:active:not(:disabled) {
+  border-block-end-color: var(--stroke);
+  background: var(--control-hover);
+  color: var(--muted);
+}
+:where(:root[data-platform="windows"]) button.primary {
+  border-color: color-mix(in srgb, var(--accent), #ffffff 8%);
+  border-block-end-color: color-mix(in srgb, var(--accent), #000000 40%);
+  background: var(--accent);
+  color: var(--surface);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="windows"]) button.primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+}
+:where(:root[data-platform="windows"]) button.primary:active:not(:disabled) {
+  color: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+:where(:root[data-platform="windows"]) :is(button.subtle, button.icon-button, button.text-button) {
+  border-color: transparent;
+  background: transparent;
+}
+@media (hover: hover) {
+  :where(:root[data-platform="windows"]) :is(button.subtle, button.icon-button):hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--tint);
+  }
+}
+@media (hover: hover) {
+  :where(:root[data-platform="windows"]) button.text-button:hover:not(:disabled) {
+    border-color: transparent;
+    background: none;
+  }
+}
+/* Text boxes underline in the accent colour when focused. */
+:where(:root[data-platform="windows"]) :is(input, select, textarea) {
+  border-color: var(--stroke);
+  border-block-end-color: var(--field-bottom);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+:where(:root[data-platform="windows"]) :is(input, select, textarea):focus-visible {
+  outline: 0;
+  border-block-end-color: var(--accent);
+  box-shadow: inset 0 -1px var(--accent);
+  background: var(--surface);
+}
+:where(:root[data-platform="windows"]) .search-field {
+  border-color: var(--stroke);
+  border-block-end-color: var(--field-bottom);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+:where(:root[data-platform="windows"]) .search-field:focus-within {
+  outline: 0;
+  border-block-end-color: var(--accent);
+  box-shadow: inset 0 -1px var(--accent);
+}
+/* Mica-style shell: the pane and title area share the window backdrop. */
+:where(:root[data-platform="windows"]) :is(.workspace-bar, .tab-strip, .status-bar) {
+  border-color: transparent;
+  background: var(--bar);
+}
+:where(:root[data-platform="windows"]) .sidebar {
+  border-inline-end-color: transparent;
+}
+:where(:root[data-platform="windows"]) .main-content {
+  border-start-start-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 50%, var(--paper));
+  box-shadow: inset 1px 1px var(--stroke);
+}
+:where(:root[data-platform="windows"]) .library-page .grid .book-card,
+:where(:root[data-platform="windows"]) .catalog-grid:not(.catalog-list) .catalog-card {
+  border-color: var(--stroke);
+}
+/* NavigationView: subtle selection with an accent pill at the leading edge. */
+:where(:root[data-platform="windows"]) .main-nav button,
+:where(:root[data-platform="windows"]) .sidebar-settings {
+  border-radius: 4px;
+  color: var(--ink);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="windows"]) .main-nav button:hover:not(:disabled),
+  :where(:root[data-platform="windows"]) .sidebar-settings:hover:not(:disabled) {
+    background: var(--tint);
+  }
+}
+:where(:root[data-platform="windows"]) .main-nav button.active,
+:where(:root[data-platform="windows"]) .sidebar-settings.active {
+  background: var(--nav-selected);
+  color: var(--ink);
+  font-weight: 400;
+}
+:where(:root[data-platform="windows"]) .main-nav button.active::before,
+:where(:root[data-platform="windows"]) .sidebar-settings.active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: calc(50% - 8px);
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+:where(:root[data-platform="windows"]) .sidebar-settings {
+  border-block-start-color: transparent;
+}
+:where(:root[data-platform="windows"]) .modal {
+  border-color: var(--stroke);
+  box-shadow: 0 32px 64px #00000047, 0 2px 21px #00000038;
+}
+
+/* Linux: GNOME / libadwaita ------------------------------------------- */
+
+:root[data-platform="linux"] {
+  --font-ui: "Adwaita Sans", Cantarell, Inter, "Noto Sans", Ubuntu, system-ui, sans-serif;
+  --font-size-ui: 14px;
+  --control-height: 34px;
+  --control-radius: 6px;
+  --field-height: 34px;
+  --field-radius: 6px;
+  --search-radius: 6px;
+  --panel-radius: 12px;
+  --modal-radius: 14px;
+  --focus-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  --focus-offset: -2px;
+  --paper: #fafafb;
+  --surface: #ffffff;
+  --ink: #000000cc;
+  --muted: #00000099;
+  --line: #00000017;
+  --accent: #1c71d8;
+  --primary-background: #1c71d8;
+  --primary-hover: #1a5fb4;
+  --primary-foreground: #ffffff;
+  --accent-hover: #1a5fb4;
+  --tint: #3584e41f;
+  --danger: #c01c28;
+  --sidebar: #ebebed;
+  --control: #0000001a;
+  --card-edge: 0 0 0 1px #00000008, 0 1px 3px 1px #00000012, 0 2px 6px 2px #00000008;
+}
+:root[data-platform="linux"][data-theme="dark"] {
+  --paper: #222226;
+  --surface: #2e2e32;
+  --ink: #ffffff;
+  --muted: #ffffff99;
+  --line: #ffffff17;
+  --accent: #78aeed;
+  --primary-background: #1c71d8;
+  --accent-hover: #99c1f1;
+  --tint: #3584e433;
+  --danger: #ff7b63;
+  --sidebar: #2e2e32;
+  --control: #ffffff1a;
+  --card-edge: 0 0 0 1px #00000024, 0 1px 3px 1px #00000030, 0 2px 6px 2px #00000020;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="linux"][data-theme="system"] {
+    --paper: #222226;
+    --surface: #2e2e32;
+    --ink: #ffffff;
+    --muted: #ffffff99;
+    --line: #ffffff17;
+    --accent: #78aeed;
+    --primary-background: #1c71d8;
+    --accent-hover: #99c1f1;
+    --tint: #3584e433;
+    --danger: #ff7b63;
+    --sidebar: #2e2e32;
+    --control: #ffffff1a;
+    --card-edge: 0 0 0 1px #00000024, 0 1px 3px 1px #00000030, 0 2px 6px 2px #00000020;
+  }
+}
+/* Flat translucent buttons with bold labels; suggested action is filled. */
+:where(:root[data-platform="linux"]) button {
+  padding-inline: 12px;
+  border-color: transparent;
+  background: var(--control);
+  transition: background 0.15s;
+}
+:where(:root[data-platform="linux"]) button:where(:not([class]), .primary, .danger:not(.icon-button)) {
+  font-weight: 700;
+}
+@media (hover: hover) {
+  :where(:root[data-platform="linux"]) button:hover:not(:disabled) {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--control), var(--ink) 5%);
+  }
+}
+:where(:root[data-platform="linux"]) button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--control), var(--ink) 15%);
+}
+:where(:root[data-platform="linux"]) button.primary {
+  background: var(--primary-background);
+  color: var(--primary-foreground);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="linux"]) button.primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+}
+:where(:root[data-platform="linux"]) button.primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-background), #000000 15%);
+}
+:where(:root[data-platform="linux"]) button.danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+:where(:root[data-platform="linux"]) :is(button.subtle, button.icon-button, button.text-button) {
+  background: transparent;
+}
+@media (hover: hover) {
+  :where(:root[data-platform="linux"]) :is(button.subtle, button.icon-button):hover:not(:disabled) {
+    background: var(--control);
+  }
+}
+@media (hover: hover) {
+  :where(:root[data-platform="linux"]) button.text-button:hover:not(:disabled) {
+    background: none;
+  }
+}
+:where(:root[data-platform="linux"]) :is(input, select, textarea) {
+  border-color: transparent;
+  background: var(--control);
+}
+:where(:root[data-platform="linux"]) .search-field {
+  border-color: transparent;
+  background: var(--control);
+}
+:where(:root[data-platform="linux"]) .search-field:focus-within {
+  outline-offset: -2px;
+  outline-color: var(--focus-color);
+}
+/* Boxed lists and cards float on the window with a soft edge. */
+:where(:root[data-platform="linux"]) .panel,
+:where(:root[data-platform="linux"]) .library-page .grid .book-card,
+:where(:root[data-platform="linux"]) .catalog-grid:not(.catalog-list) .catalog-card {
+  border-color: transparent;
+  box-shadow: var(--card-edge);
+}
+:where(:root[data-platform="linux"]) .workspace-bar {
+  height: 47px;
+}
+/* Sidebar rows: neutral selection, rounded. */
+:where(:root[data-platform="linux"]) .sidebar {
+  border-inline-end-color: var(--line);
+}
+:where(:root[data-platform="linux"]) .main-nav button,
+:where(:root[data-platform="linux"]) .sidebar-settings {
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+}
+@media (hover: hover) {
+  :where(:root[data-platform="linux"]) .main-nav button:hover:not(:disabled),
+  :where(:root[data-platform="linux"]) .sidebar-settings:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
+}
+:where(:root[data-platform="linux"]) .main-nav button.active,
+:where(:root[data-platform="linux"]) .sidebar-settings.active {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font-weight: 700;
+}
+:where(:root[data-platform="linux"]) .sidebar-settings {
+  border-block-start-color: transparent;
+}
+:where(:root[data-platform="linux"]) .modal {
+  border-color: transparent;
+  box-shadow: 0 0 0 1px #00000017, 0 8px 32px #00000040;
+}
+
+/* macOS overlay title bar --------------------------------------------- */
+
+/* The traffic lights float over the top-left 38px of the window. LTR keeps
+   that strip of the sidebar empty and draggable; RTL moves the sidebar to the
+   right, so the workspace bar leaves room at its end instead. Full screen
+   hides the lights and sets data-titlebar="fullscreen" (src/platform.ts). */
+.titlebar-drag {
+  display: none;
+}
+:where(:root[data-titlebar="overlay"]:not([dir="rtl"])) .titlebar-drag {
+  display: block;
+  flex-shrink: 0;
+  height: 38px;
+  margin: -12px -8px 0;
+}
+:where(:root[data-titlebar="overlay"][dir="rtl"]) :is(.workspace-bar, .rw-mobile-bar) {
+  padding-inline-end: 84px;
+}
+/* The traffic lights occupy the top-left corner; move the first Tab target
+   below them so native controls cannot cover its label. */
+:where(:root[data-titlebar="overlay"]:not([dir="rtl"])) .skip-link:focus {
+  inset-block-start: 46px;
+}
+@media (max-width: 760px) {
+  :where(:root[data-titlebar="overlay"]:not([dir="rtl"])) .titlebar-drag {
+    margin: -8px -4px 0;
+  }
+  /* The 56px rail is narrower than the lights. */
+  :where(:root[data-titlebar="overlay"]:not([dir="rtl"])) :is(.workspace-bar, .rw-mobile-bar) {
+    padding-inline-start: 24px;
+  }
+  /* Reading mode hides the workspace bar, and RTL hides the LTR strip; the rail
+     must keep one draggable region or the window cannot be moved. */
+  :where(:root[data-titlebar="overlay"][dir="rtl"]) .titlebar-drag {
+    display: block;
+    flex-shrink: 0;
+    height: 38px;
+    margin: -8px -4px 0;
+  }
+}
+
+/* Reflow chrome instead of clipping larger native text into fixed-height rows.
+   These selectors never cross the article iframe or touch reader font settings. */
+:root[data-platform="ios"][data-large-text="true"] :is(.workspace-bar, .status-bar, .rw-toolbar, .rw-statusbar, .rw-mobile-bar) {
+  height: auto;
+  min-height: var(--control-height);
+  flex-wrap: wrap;
+}
+:root[data-platform="ios"][data-large-text="true"] .rw-mobile-bar {
+  flex-basis: auto;
+}
+:root[data-platform="ios"][data-large-text="true"] :is(button, summary, label, .page-description, .rw-document-title, .rw-document-book, .rw-mobile-identity strong) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+:root[data-platform="ios"][data-large-text="true"] :is(.page-heading, .heading-actions, .toolbar, .input-action, .rw-action-row, .rw-dialog-actions) {
+  flex-wrap: wrap;
+}
+:root[data-platform="ios"][data-large-text="true"] :is(.settings-layout, .form-grid, .facts, .rw-theme-options, .rw-shortcut-list > div) {
+  grid-template-columns: minmax(0, 1fr);
+}
+:root[data-platform="ios"][data-large-text="true"] :is(.book-collection.grid, .catalog-grid, .map-grid) {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+:root[data-platform="ios"][data-large-text="true"] :is(.book-description, .catalog-description) {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+:root[data-platform="ios"][data-large-text="true"] :is(.rw-mobile-controls, .rw-panel, .modal) {
+  overflow-y: auto;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
+}
+@media (max-width: 540px) {
+  /* The compact native tab bar remains a bounded horizontal scroller; labels
+     can wrap and every destination stays reachable at accessibility sizes. */
+  :root[data-platform="ios"][data-large-text="true"] .sidebar {
+    height: auto;
+    min-height: calc(56px + env(safe-area-inset-bottom));
+    max-height: 35dvh;
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    align-items: stretch;
+  }
+  :root[data-platform="ios"][data-large-text="true"] .main-nav {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    width: max-content;
+    align-items: stretch;
+  }
+  :root[data-platform="ios"][data-large-text="true"] .main-nav button {
+    flex: 0 0 auto;
+    max-width: min(9rem, calc(100vw - 48px));
+    padding-inline: 8px;
+  }
+  :root[data-platform="ios"][data-large-text="true"] :is(.main-nav button > span, .sidebar-settings > span) {
+    font-size: calc(10px * var(--system-text-scale));
+    line-height: 1.3;
+    white-space: normal;
+    overflow: visible;
+  }
+  :root[data-platform="ios"][data-large-text="true"] :is(.sidebar-bottom, .sidebar-settings) {
+    width: auto;
+    min-width: 44px;
+    max-width: min(9rem, calc(100vw - 48px));
+    flex: 0 0 auto;
+  }
+  :root[data-platform="ios"][data-large-text="true"] .main-shell {
+    /* Keep the native bar in flow so its larger labels cannot cover content. */
+    padding-block-end: 0;
+    min-height: 0;
+  }
+  :root[data-platform="ios"][data-large-text="true"] .app-shell {
+    flex-direction: column;
+  }
+  :root[data-platform="ios"][data-large-text="true"] .sidebar {
+    position: static;
+    order: 1;
+    flex-shrink: 0;
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "platform": "iOS Simulator on Apple Silicon macOS; not physical iPhone",
+  "privateRunBasename": "simulator-comparison-b93d7052a1464336a67429b70f0fcc53",
+  "status": "Automated paired UI/state/preservation checks passed; matched map geography visually admitted",
+  "deviceModel": "iPhone 17 Pro Max simulator",
+  "runtime": "iOS 26.5",
+  "buildSDK": "iOS Simulator 27.2",
+  "order": "AB",
+  "elapsedSeconds": {
+    "helperIncludingCleanup": 267.21709275,
+    "wrapperIncludingCleanup": 268.61
+  },
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "bindings": {
+    "appManifestSHA256": "8c688296b024ad254ef9289821860b3d1f1e5c1bb8576b92c73239e145eb6392",
+    "baselineManifestSHA256": "09d42f403afa3aa3c8c5551791ea9b94a88fc671786085008820c3c36993116c",
+    "runnerManifestSHA256": "67ed64a5b53f4dee9fb10e78a73922efd0caaf5b177da7c8f1b0990be75a088a",
+    "preparedReceiptSHA256": "d01effb0088532c7a8a4365ad3a13cb17e554ddda42be7dc7522e82649c71256",
+    "swiftSHA256": "c1944a6067f9923ff475b91862ce69031d03aa188b216850d958e1190efdbd2a",
+    "windowHelperSHA256": "f56a1dd9180e3a47003e9b08c553d03d014da35aa143285ec3a0e6ae3f77f3ff"
+  },
+  "workload": [
+    "Both Wikipedia home checkpoints before either search",
+    "Actual Animal input, result activation, exact Animal text and both real introduction fragments",
+    "Actual Hawaii archive Show the whole map control, Zoom in, matched up-left pan",
+    "Final preexisting archives/settings/bookmarks/unrelated-tab preservation checks"
+  ],
+  "mapVisualAdmission": {
+    "bothProducts": "Home shows Hawaiian islands at 50 mi scale; zoom shows enlarged Oahu at 30 mi; pan moves Oahu upward and reveals corresponding island geography. Actual screenshots inspected.",
+    "cameraReset": "Archive Home button resets configured camera; page reload alone restores persisted position."
+  },
+  "profileCounts": {
+    "ours": {
+      "before": {
+        "books": 2,
+        "tabs": 2
+      },
+      "after": {
+        "books": 2,
+        "tabs": 2
+      },
+      "last_observed": {
+        "books": 2,
+        "tabs": 2,
+        "checkpoint": "ours/map"
+      }
+    },
+    "baseline": {
+      "before": {
+        "books": 2,
+        "tabs": 3
+      },
+      "after": {
+        "books": 2,
+        "tabs": 3
+      },
+      "last_observed": {
+        "books": 2,
+        "tabs": 3,
+        "checkpoint": "baseline/map"
+      }
+    }
+  },
+  "physicalDeviceContact": false,
+  "physicalMemorySamples": 0,
+  "phonePerformanceWinner": null,
+  "performanceLimit": "Recorded XCTest times include AX query overhead and different search-trigger intervals; not calibrated cold-launch/search benchmarks. No app speed gain inferred.",
+  "cleanup": {
+    "cleanup_complete": true,
+    "host_processes_stopped": true,
+    "remote_runner_stopped": true,
+    "simulator_runner_stopped": true,
+    "physical_device_contact": false
+  },
+  "privateEvidenceSHA256": {
+    "result.json": "7fccc5048e733f58f4d658e17811c9fcff516ba9056158da549b0ee7864ed22b",
+    "xctest.log": "767b2c315e0563fea79b38f482b47082d8f199edadac65e765b90a54dfaa1cab",
+    "attachment-manifest.json": "8371c72b0683eab43f0f0dcf70848e5baf11bb500c246d8ab4d60a423ee495fb",
+    "ours / home": "7ecfb9a7274a46823015f1902437173de5b60e5e2a680aa6eb4199313887853f",
+    "ours / zoom": "60c934d606255f51e02b51af40ce8d75813ebfb3e47305fb99484e4d20693344",
+    "ours / pan": "e868a34339d6bf3acab89528c9d41c46deeab7cbd8db872dbbb00b3cdb632303",
+    "upstream / home": "f4414227e37b3835629a4e65a4da61614379e1d8bdeda172c5366f0e09ece2f3",
+    "upstream / zoom": "fafed75b41cbf2e18657b5afc6f1927efa94929e0e59052ca42917bd969990bc",
+    "upstream / pan": "aea56c1bc47e6d9e6444f2ea3e86d5b9034ff7574148b0f0bfbb65dfc5a02206",
+    "ours / wiki": "21c3ba26f1eb0976bc8945834f4c347dba31b8fd3af70192f1562eb3ffccb94e",
+    "upstream / wiki": "0bc9cc6bbb5df0e4b23a3d9f2663652f972dd88ffec38c3e5c06949c9f9c7d56",
+    "ours / animal": "4d0d702e926e1a651bca13c3a264d0f452f5a23c65c66b8a54e42b0235fcedb1",
+    "upstream / animal": "71cf95cc781fae933ad989be9744c6a51e4cb2409761b28c756d4e76a53879c0"
+  },
+  "exclusions": [
+    "Earlier failed runs are not memory or performance samples.",
+    "Earlier passing simulator runs without archive Home camera reset are not admitted as matched map comparisons.",
+    "Simulator proof does not establish physical DVT transport, iPhone memory, App Store size or phone launch/search latency."
+  ]
+}

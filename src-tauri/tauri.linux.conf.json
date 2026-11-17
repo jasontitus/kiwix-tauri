@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "org.kiwix.workbench",
+  "bundle": {
+    "externalBin": ["binaries/kiwix-mcp"],
+    "linux": {
+      "deb": { "desktopTemplate": "linux/main.desktop" },
+      "rpm": { "desktopTemplate": "linux/main.desktop" }
+    }
+  }
+}

@@ -1,0 +1,99 @@
+From 6e6f263d9dcf0bf71d4cd10a301d223bb2bca44b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 5 Nov 2026 18:55:28 +0000
+Subject: [PATCH 2/2] Fix the memory size of zstd streams
+
+The branches of `ZSTD_INFO::state_size()` are swapped: when the stream
+is a decoder, it returns `ZSTD_sizeof_CStream()` of the (null) encoder
+stream, and vice versa. Both calls return 0 for a null pointer, so the
+size of a zstd stream is always 0.
+
+As a result, the memory used by the zstd decoder of a cluster is not
+taken into account by the cluster cache, which is limited by memory
+since 9.4.0. A zstd decoder takes about 96KiB when created and,
+after decoding a frame, holds a buffer as large as the frame window
+(clamped to the decompressed size of the cluster by
+`Cluster::getMemorySize()`).
+
+This relies on the previous commit: `getMemorySize()` now reads the live
+zstd decoder state, which must not be done while another thread is
+decompressing the cluster.
+---
+ src/compression.cpp  |  4 ++--
+ test/cluster.cpp     | 23 +++++++++++++++++++++++
+ test/compression.cpp | 12 ++++++++++++
+ 3 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/src/compression.cpp b/src/compression.cpp
+index c3359b9..67458e7 100644
+--- a/src/compression.cpp
++++ b/src/compression.cpp
+@@ -178,8 +178,8 @@ void ZSTD_INFO::stream_end_encode(stream_t* stream)
+ 
+ size_t ZSTD_INFO::state_size(const stream_t& stream) {
+   if (stream.decoder_stream) {
+-    return ZSTD_sizeof_CStream(stream.encoder_stream);
+-  } else {
+     return ZSTD_sizeof_DStream(stream.decoder_stream);
++  } else {
++    return ZSTD_sizeof_CStream(stream.encoder_stream);
+   }
+ }
+diff --git a/test/cluster.cpp b/test/cluster.cpp
+index 0cb2ab6..8551304 100644
+--- a/test/cluster.cpp
++++ b/test/cluster.cpp
+@@ -174,6 +174,29 @@ TEST(ClusterTest, read_write_clusterZstd)
+   ASSERT_EQ(blob2, std::string(cluster2.getBlob(zim::blob_index_t(2))));
+ }
+ 
++TEST(ClusterTest, zstdClusterMemorySizeIncludesDecoderState)
++{
++  // Big enough for the decoder state not to be clamped to the content size.
++  const std::string blob(256*1024, 'a');
++  zim::writer::Cluster cluster(zim::Compression::Zstd);
++  cluster.addContent(blob);
++  cluster.close();
++  const auto buffer = write_to_buffer(cluster);
++
++  const auto cluster2 = zim::Cluster::read(zim::BufferReader(buffer), zim::offset_t(0));
++
++  // Upper bound of the memory size of everything but the decoder state (see
++  // Cluster::getMemorySize() and DecoderStreamReader::getMemorySize()): blob
++  // offsets, half of the decompressed data, the compressed data and the
++  // input chunk of the decoder.
++  const size_t decompressedSize = 2*sizeof(uint32_t) + blob.size();
++  const size_t sizeWithoutDecoderState = 2*sizeof(zim::offset_t)
++                                       + decompressedSize/2
++                                       + buffer.size().v
++                                       + 1024;
++  ASSERT_GT(cluster2->getMemorySize(), sizeWithoutDecoderState);
++}
++
+ // The cluster cache computes the cost of a cluster after having made it
+ // available to other threads, so getMemorySize() may be called while another
+ // thread decompresses the cluster. This test is mostly useful when run under
+diff --git a/test/compression.cpp b/test/compression.cpp
+index b6c7921..1a35f8c 100644
+--- a/test/compression.cpp
++++ b/test/compression.cpp
+@@ -127,4 +127,16 @@ TEST(CompressionTest, zstdCompressionOutputExactlyFillsTheBuffer) {
+   const auto out2 = compressor.get_data(&compressedDataSize2);
+ }
+ 
++TEST(CompressionTest, zstdStreamStateSize) {
++  ZSTD_INFO::stream_t encoder;
++  ZSTD_INFO::init_stream_encoder(&encoder, nullptr);
++  ASSERT_GT(ZSTD_sizeof_CStream(encoder.encoder_stream), 0U);
++  EXPECT_EQ(ZSTD_INFO::state_size(encoder), ZSTD_sizeof_CStream(encoder.encoder_stream));
++
++  ZSTD_INFO::stream_t decoder;
++  ZSTD_INFO::init_stream_decoder(&decoder, nullptr);
++  ASSERT_GT(ZSTD_sizeof_DStream(decoder.decoder_stream), 0U);
++  EXPECT_EQ(ZSTD_INFO::state_size(decoder), ZSTD_sizeof_DStream(decoder.decoder_stream));
++}
++
+ }  // namespace
+-- 
+2.43.0
+

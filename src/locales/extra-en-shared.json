@@ -1,0 +1,23 @@
+{
+  "Shared library · Kiwix": "Shared library · Kiwix",
+  "Kiwix · Shared collection": "Kiwix · Shared collection",
+  "Knowledge, within reach.": "Knowledge, within reach.",
+  "Read and search the archives selected by this library’s owner.": "Read and search the archives selected by this library’s owner.",
+  "Search this collection": "Search this collection",
+  "A subject, a place, an idea…": "A subject, a place, an idea…",
+  "Archive": "Archive",
+  "All shared items": "All shared items",
+  "Search": "Search",
+  "Full-text search where available; otherwise title-prefix search. Up to 20 results per archive, 100 per search.": "Full-text search where available; otherwise title-prefix search. Up to 20 results per archive, 100 per search.",
+  "Results for “{query}”": "Results for “{query}”",
+  "No matching articles.": "No matching articles.",
+  "More matches are available. Select this archive above to see its results within the collection’s display limit.": "More matches are available. Select this archive above to see its results within the collection’s display limit.",
+  "This archive could not be searched.": "This archive could not be searched.",
+  "Browse the collection": "Browse the collection",
+  "Read-only sharing. This page has no access to the owner’s application controls.": "Read-only sharing. This page has no access to the owner’s application controls.",
+  "Showing {shown} of approximately {count} matches.": "Showing {shown} of approximately {count} matches.",
+  "Showing {shown} of approximately {count} matches by title prefix.": "Showing {shown} of approximately {count} matches by title prefix.",
+  "Open shared item": "Open shared item",
+  "Continue to the shared item.": "Continue to the shared item.",
+  "Continue": "Continue"
+}

@@ -1,0 +1,167 @@
+{
+  "scope": "Controlled hypothesis probe only, not rebuilt release proof",
+  "payloads": {
+    "baseline": {
+      "bytes": 123461,
+      "sha256": "38a81b2c34760f9b89f3e3ba9da83ae757bf3b067d8ea06e80c3c4f40a1698e0"
+    },
+    "candidate": {
+      "bytes": 123649,
+      "sha256": "81cbdcbd25f2c66e7934e52245537489805ee3813e5979c6a8c19b04c86b604b"
+    }
+  },
+  "conditions": {
+    "baseline": {
+      "medianPssKiB": 270493.0,
+      "rangePssKiB": [
+        267925,
+        273218
+      ],
+      "medianSwapPssKiB": 1740.5
+    },
+    "candidate": {
+      "medianPssKiB": 272398.5,
+      "rangePssKiB": [
+        270383,
+        274755
+      ],
+      "medianSwapPssKiB": 1758.5
+    }
+  },
+  "blocks": [
+    {
+      "block": 0,
+      "condition": "baseline",
+      "medianKiB": 268187.0,
+      "pssSamplesKiB": [
+        267925,
+        268093,
+        268281,
+        268449
+      ],
+      "ownedProcesses": {
+        "26794": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "458019"
+        },
+        "26835": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "458109"
+        }
+      },
+      "readinessScore": 1.0,
+      "overrides": 1,
+      "pendingAcknowledgements": {
+        "3": {
+          "id": 3,
+          "result": {}
+        }
+      }
+    },
+    {
+      "block": 1,
+      "condition": "candidate",
+      "medianKiB": 274356.5,
+      "pssSamplesKiB": [
+        273867,
+        274075,
+        274638,
+        274755
+      ],
+      "ownedProcesses": {
+        "27332": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "472114"
+        },
+        "27372": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "472141"
+        }
+      },
+      "readinessScore": 1.0,
+      "overrides": 1,
+      "pendingAcknowledgements": {
+        "3": {
+          "id": 3,
+          "result": {}
+        }
+      }
+    },
+    {
+      "block": 2,
+      "condition": "candidate",
+      "medianKiB": 270660.0,
+      "pssSamplesKiB": [
+        270383,
+        270570,
+        270750,
+        270930
+      ],
+      "ownedProcesses": {
+        "28028": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "486771"
+        },
+        "28079": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "486803"
+        }
+      },
+      "readinessScore": 1.0,
+      "overrides": 1,
+      "pendingAcknowledgements": {
+        "3": {
+          "id": 3,
+          "result": {}
+        }
+      }
+    },
+    {
+      "block": 3,
+      "condition": "baseline",
+      "medianKiB": 272867.0,
+      "pssSamplesKiB": [
+        272537,
+        272745,
+        272989,
+        273218
+      ],
+      "ownedProcesses": {
+        "28627": {
+          "name": "org.kiwix.workbench",
+          "startTicks": "502036"
+        },
+        "28670": {
+          "name": "com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0",
+          "startTicks": "502110"
+        }
+      },
+      "readinessScore": 1.0,
+      "overrides": 1,
+      "pendingAcknowledgements": {
+        "3": {
+          "id": 3,
+          "result": {}
+        }
+      }
+    }
+  ],
+  "pairs": [
+    {
+      "candidateBlock": 1,
+      "baselineBlock": 0,
+      "differenceKiB": 6169.5,
+      "percent": 2.300447076107348
+    },
+    {
+      "candidateBlock": 2,
+      "baselineBlock": 3,
+      "differenceKiB": -2207.0,
+      "percent": -0.8088189484254271
+    }
+  ],
+  "conclusion": "No demonstrated memory reduction; adjacent paired differences reverse sign. Do not claim or publish an optimization gain from this probe.",
+  "limitation": "The controlled cold-Library-to-Animal plus attached CDP/Fetch workload is about 60 MiB above the earlier unintercepted cold-reader workload. This experiment does not isolate which instrumentation or workload difference causes that shift; comparisons are paired within this experiment only, not APK-level gain proof. Four blocks collected; controller cell interrupted after fourth memory/readiness evidence, all raw blocks preserved and interception closed.",
+  "review": "ReviewMobileSpeechBootstrap independently approved helper833A and exact payload integration before execution",
+  "audio": "No audio starts or spoken text performed"
+}

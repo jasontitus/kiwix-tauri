@@ -1,0 +1,118 @@
+From 93c978df791a3b6345074c9dd4e93d4874278a0d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 5 Nov 2026 18:53:54 +0000
+Subject: [PATCH 1/2] Lock the reader in Cluster::getMemorySize()
+
+`ConcurrentCache::getOrPut()` computes the cost of a new entry after
+having made the value available to other threads (this is intentional
+and covered by test/concurrentcache.cpp). So `Cluster::getMemorySize()`
+may be called while another thread decompresses the same cluster in
+`Cluster::getReader()`.
+
+`getMemorySize()` reads the state of the decompressor stream
+(`DecoderStreamReader::getMemorySize()` reads the current input chunk
+and the decoder state) without holding `m_readerAccessMutex`, which
+`getReader()` holds while advancing that same stream. This is a data
+race, reported by ThreadSanitizer with the new test.
+
+Take `m_readerAccessMutex` in `getMemorySize()`. This is the only mutex
+protecting `m_reader` after construction. No caller holds it when
+calling `getMemorySize()` (it is only called from
+`ConcurrentCache::materializeValue()`, which holds no lock), and nothing
+done under it takes another lock, so there is no lock-order issue.
+---
+ src/cluster.cpp  | 11 ++++++++---
+ test/cluster.cpp | 41 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/src/cluster.cpp b/src/cluster.cpp
+index b91fcf7..18b600b 100644
+--- a/src/cluster.cpp
++++ b/src/cluster.cpp
+@@ -210,10 +210,15 @@ getClusterReader(const Reader& zimReader, offset_t offset, Cluster::Compression*
+   // Our approach is to return the average memory consumption by this cluster
+   // under the assumption that half of its data is decompressed.
+   // Note:
+-  //  - No need to protect this method from concurrent access (as well
+-  //    as memoize its result) as it is intended to be called by ConcurentCache
+-  //    which should invoke this method exactly once per cluster object
++  //  - No need to memoize the result of this method as it is intended to be
++  //    called by ConcurrentCache which should invoke this method exactly once
++  //    per cluster object.
++  //  - However, ConcurrentCache calls it after having made the cluster
++  //    available to other threads, which may already be decompressing it
++  //    (see `getReader()`). So the state of the decompressor stream must be
++  //    accessed under `m_readerAccessMutex`.
+   size_t Cluster::getMemorySize() const {
++    std::lock_guard<std::mutex> lock(m_readerAccessMutex);
+     const auto blobOffsetsSize = sizeof(offset_t) * m_blobOffsets.size();
+     const auto decompressedDataSize = m_blobOffsets.back().v;
+ 
+diff --git a/test/cluster.cpp b/test/cluster.cpp
+index 26a1256..0cb2ab6 100644
+--- a/test/cluster.cpp
++++ b/test/cluster.cpp
+@@ -18,12 +18,16 @@
+  */
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cstdio>
+ #include <cstring>
+ #include <fstream>
+ #include <memory>
++#include <random>
+ #include <sstream>
+ #include <stdexcept>
++#include <thread>
++#include <vector>
+ #if defined(_MSC_VER)
+ # include <BaseTsd.h>
+   typedef SSIZE_T ssize_t;
+@@ -170,6 +174,43 @@ TEST(ClusterTest, read_write_clusterZstd)
+   ASSERT_EQ(blob2, std::string(cluster2.getBlob(zim::blob_index_t(2))));
+ }
+ 
++// The cluster cache computes the cost of a cluster after having made it
++// available to other threads, so getMemorySize() may be called while another
++// thread decompresses the cluster. This test is mostly useful when run under
++// ThreadSanitizer.
++TEST(ClusterTest, getMemorySizeDuringDecompression)
++{
++  zim::writer::Cluster cluster(zim::Compression::Zstd);
++  // Poorly compressible content, so that decompression keeps consuming input.
++  std::mt19937 randomGenerator(42);
++  std::vector<std::string> blobs(64, std::string(16*1024, '\0'));
++  for (auto& blob : blobs) {
++    for (auto& c : blob) {
++      c = char(randomGenerator());
++    }
++  }
++  for (const auto& blob : blobs) {
++    cluster.addContent(blob);
++  }
++  cluster.close();
++  const auto buffer = write_to_buffer(cluster);
++
++  for (int run = 0; run < 10; ++run) {
++    const auto cluster2 = zim::Cluster::read(zim::BufferReader(buffer), zim::offset_t(0));
++    std::atomic<bool> done(false);
++    std::thread decompressor([&]() {
++      for (size_t i = 0; i < blobs.size(); ++i) {
++        EXPECT_EQ(blobs[i], std::string(cluster2->getBlob(zim::blob_index_t(i))));
++      }
++      done = true;
++    });
++    do {
++      EXPECT_GT(cluster2->getMemorySize(), 0U);
++    } while (!done);
++    decompressor.join();
++  }
++}
++
+ class FakeProvider : public zim::writer::ContentProvider
+ {
+   public:
+-- 
+2.43.0
+

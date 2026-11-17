@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "measurementDate": "2026-11-05",
+  "status": "Our physical Wikipedia checkpoint measured; native archive transfer failed; paired comparison incomplete",
+  "privateRunBasename": "device-comparison-abe781abb7a84a5ea5562d3d0974ebf4",
+  "platform": "Physical iPhone 17 Pro Max, iOS27.0.1",
+  "order": "AB",
+  "sources": {
+    "ours": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "upstream": "09a5ff1c9c3ffeda258ad593bbe16da612cfb149",
+    "upstreamVersion": "3.18.0",
+    "upstreamForm": "Official source-built developer baseline, not App Store binary"
+  },
+  "appManifestSHA256": "f37b260736d6ebb2ccb11149d0a572701e3a6c42a9db8335fb63236b93ba10b3",
+  "baselineManifestSHA256": "a5b8afdd748e17c43ba0620614379542cb95bc0d3f533b99bd632e13b0da573f",
+  "runnerManifestSHA256": "91d4da1912d885a9a6174ac8f52960dd04d6fd3e1718678463652b148d9bbcb8",
+  "samplerReadiness": {
+    "status": "ready",
+    "scope": "Transport/schema probe only; not a reader-memory sample",
+    "transport": "PMD userspace tunnel: USB-first with Bonjour fallback, not forced Wi-Fi"
+  },
+  "oursWikipediaHome": {
+    "status": "complete_observed_coalition",
+    "scope": "Observed main-executable kernel coalition; per-process footprint ledger sum, not PSS or deduplicated RAM",
+    "sampleCount": 3,
+    "independentSessions": 1,
+    "mainIdentity": [
+      96409,
+      30306741889395,
+      17047
+    ],
+    "memberIdentities": [
+      [
+        96409,
+        30306741889395
+      ],
+      [
+        96411,
+        30306746698789
+      ],
+      [
+        96412,
+        30306746977822
+      ],
+      [
+        96413,
+        30306747347118
+      ],
+      [
+        96414,
+        30306757659963
+      ]
+    ],
+    "medianBytes": {
+      "main": 60115048,
+      "web_content": 160876696,
+      "gpu": 16091240,
+      "networking": 7259784,
+      "other": 2180360,
+      "observed_coalition": 246523128,
+      "compressed": 62324736
+    },
+    "settleSeconds": 30,
+    "compression": "Recorded separately, not added to footprint ledger sum",
+    "visualAdmission": "Saved physical screenshot shows actual Wikipedia100 home article grid; archive UUID/path checked before and after checkpoint"
+  },
+  "profileCounts": {
+    "ours": {
+      "before": {
+        "books": 4,
+        "tabs": 2
+      },
+      "after": null,
+      "last_observed": {
+        "books": 4,
+        "tabs": 2,
+        "checkpoint": "ours/wiki-home"
+      }
+    },
+    "baseline": {
+      "before": {
+        "books": 0,
+        "tabs": 0
+      },
+      "after": null
+    }
+  },
+  "failure": {
+    "stage": "baseline-wiki-file-stage",
+    "operation": "CoreDevice copy of 333429922-byte Wikipedia fixture into isolated upstream app Documents",
+    "connectionTransport": "localNetwork",
+    "commandTimeoutSeconds": 35,
+    "progressEvidence": "No transfer progress or throughput was retained; slow transfer versus stall is unresolved",
+    "retryDuringWindow": false
+  },
+  "elapsedSeconds": {
+    "wrapperIncludingCleanup": 147.0,
+    "helperIncludingCleanup": 144.980217917
+  },
+  "cleanup": {
+    "cleanup_complete": true,
+    "host_processes_stopped": true,
+    "remote_runner_stopped": true,
+    "phone_released": true
+  },
+  "immediateDeviceReleasedChatDelivered": true,
+  "pairedComparisonComplete": false,
+  "winner": null,
+  "unmeasured": [
+    "Native Wikipedia memory",
+    "Animal/search in either app",
+    "Hawaii/map checkpoints",
+    "Calibrated phone launch/search performance",
+    "Post-workload preservation check"
+  ],
+  "privateEvidenceSHA256": {
+    "result.json": "dcca04da6697a39de71ba2a3fe17cb6a367d87cb59b492b34030aed147217979",
+    "ours-wiki-home-checkpoint.json": "bcd4c3b44a4d7a6f61187fdf34744c26bf55f7c59d4e3021fe6b56e0d559fa5b",
+    "ours-wiki-home-before.png": "7872ada7605b2aac52ad4880026c4732de22377b7da3aec3b3e0729be3dbed5e",
+    "ours-wiki-home-after.png": "ca7da417a9533f95d04420736c60daf1c78c40c21555e26233fee26523a007ea",
+    "ours-wiki-home-sample-1.json": "e6a0f55bb226a7ee8132f7e7a836e4ea5301a9ef9abeec68be77f0444e841fde",
+    "ours-wiki-home-sample-2.json": "badeb047d6095972351c4e686e1d6d63c47e8a7d6a20af79995f1e6e9dedfb4e",
+    "ours-wiki-home-sample-3.json": "48badcaf327668d62be052028ecba1b8c2102fb2345b0f92be9b38b870d43bca",
+    "sampler-readiness.json": "d94fc22681391eb5a1adae6a68d4c71c9eaa26e206d55d07d9cc41b7f17b2f21",
+    "baseline-wiki-file-stage.log": "519b6d6b539f02f954334ff01a6de86d31df58a13a5de8af72ecf0f70dea36cf"
+  },
+  "limits": [
+    "Observed kernel coalition footprint-ledger sum, not PSS, deduplicated RAM or proof of every shared OS service.",
+    "Our existing profile has4books/2tabs; isolated native has0books before import. No identical-history or paired winner is claimed.",
+    "Apps and runner installed with pre-workload preservation validation; failure prevented final post-workload validation."
+  ]
+}

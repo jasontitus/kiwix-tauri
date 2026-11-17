@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "status": "Failed UI automation attempt; device released; no paired performance result",
+  "measurementDate": "2026-11-05",
+  "privateRunBasename": "acceptance-4840eec9f24d477c9640ef2ddd2e4e59",
+  "artifact": {
+    "form": "Exact committed-source optimized ARM64 release, locally development-signed; no dirty overlays",
+    "sourceCommit": "3cce5af5677350996301b6cc335b30a5a00d4938",
+    "manifestSHA256": "aace4f1252095c3646bc674c2e2274a112cae3cbbd5618d874befec38a2844da",
+    "mainExecutableSHA256": "d2948ecb419b37a9495892d600df4c70b002d4545c90c95958d8ada5ebd3050b",
+    "mainExecutableBytes": 50710848,
+    "expandedBundleRegularFileLogicalBytes": 51280691,
+    "expandedBundleRegularFiles": 95,
+    "sizeScope": "Host signed .app regular files; excludes symlinks, filesystem overhead, app-created data, test archives and OS WebKit. Not a device installed-storage or App Store download measurement."
+  },
+  "runnerManifestSHA256": "33e733a5ebce4f08a0ebc4cf94ed6889fb2b89a543ffb17cc73c51542258fbba",
+  "command": "npm run iphone -- --prepared .native/iphone-tool/prepared.json --start-device-window",
+  "timingSeconds": {
+    "wrapperInvocation": 71.67,
+    "helperIncludingCleanup": 70.238177333,
+    "inPlaceAppInstallCommand": 2.686753167,
+    "activationToLibraryButtonObservation": 5.0254341249819845
+  },
+  "timingScope": "Install command duration and instrumented UI observation upper bound; not calibrated cold-launch/search latency or a matched comparison.",
+  "wikipedia": {
+    "filename": "wikipedia_en_100_2026-08.zim",
+    "sourceBytes": 333429922,
+    "sourceSHA256": "2eb7fd115bfb8644a08a9482f01f52b507428b1b8a30129fead92f7b6715440b",
+    "uuid": "dd8a2bd2-c05b-ac6c-8074-6c30e14803fb",
+    "openedViaOrdinaryLibraryUI": true,
+    "homeRenderedVisualEvidence": "Recovered raw recording at 30 seconds shows actual Wikipedia article grid including Animal, Bird and White House",
+    "animalSearchCompleted": false
+  },
+  "map": {
+    "filename": "osm_en_hawaii_2026-10-26.zim",
+    "sourceBytes": 150605015,
+    "sourceSHA256": "d2fe53fc134651433c2b174ff8a683aeacf9529eea45111d4e599b0b9f95b18d",
+    "uuid": "c495a7aa-88f2-5dcc-a7bc-908af8a61cf2",
+    "sourceStaged": true,
+    "admissionCompleted": false,
+    "renderingVerified": false
+  },
+  "failure": {
+    "stage": "Search books UI lookup after Wikipedia home opened",
+    "observed": "Role-restricted XCTest .buttons exact-label query returned no Search books match; actual reader recording shows a search icon",
+    "rootCause": "Unknown; neither manual search failure nor accessibility success is established",
+    "retryDuringWindow": false,
+    "xctestBundleComplete": false,
+    "diagnosticLimitation": "Early interruption left xcresult without Info.plist; complete attachment export failed. Raw recording was recovered off-phone."
+  },
+  "preservation": {
+    "prelaunchVerificationCompleted": true,
+    "normalization": "Only managed non-provider book paths and designated filesystem settings under verified old/new app-profile roots",
+    "postWorkloadExactStateVerificationCompleted": false,
+    "archivesDeleted": false
+  },
+  "cleanup": {
+    "hostProcessesStopped": true,
+    "remoteRunnerStopped": true,
+    "complete": true,
+    "phoneReleased": true
+  },
+  "memory": {
+    "sampleCount": 0,
+    "pairedComparisonCompleted": false,
+    "winner": null
+  },
+  "privateEvidenceSHA256": {
+    "result.json": "12f311e854d6b834ed9b7b1793998528c13d0d47a377901a8a72ee768fc5a6fe",
+    "xctest.log": "5b8df0e13d3d0751c23fd9b59c954b2af4f23e7597fab6336eefd669f649aa43",
+    "failure-recording.mp4": "9afcee64c7967cecfb458c8fddc96075c3eb737105849ce37dd8729d9cb4c2fe"
+  },
+  "exclusions": [
+    "No upstream app was installed or exercised by this window",
+    "No memory sample, Animal search result, map render or gesture measurement completed",
+    "No new matched iPhone startup/search-time or official IPA/installed-size comparison",
+    "Fixture source hashes do not imply a new on-device archive-byte readback hash",
+    "No VoiceOver, speech, media or audio testing"
+  ]
+}

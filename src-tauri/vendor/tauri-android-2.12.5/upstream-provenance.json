@@ -1,0 +1,42 @@
+{
+  "crate": "tauri",
+  "version": "2.12.5",
+  "source": "Cargo registry tauri-2.12.5/mobile/android",
+  "upstreamModuleSha256": {
+    "consumer-rules.pro": "07ae2ffe37f0f484c46401f510ef003e1bbe9f708d1d2597546c729eb9956cca",
+    ".gitignore": "5c3174b74edc6f2b9e0743594b8bd3c7f31e4f4405758cc9872b3fe1de1d28b4",
+    "build.gradle.kts": "7cd902e29c3d5e495600f98669fb67a2b7983d58e69e627fc7d8778be58802d4",
+    "src/androidTest/java/app/tauri/ExampleInstrumentedTest.kt": "1e7c0c6f613431962750a2f80dcf8a0c231c4b5fb2f569bfd55b5fa0e80f2e7d",
+    "src/test/java/app/tauri/ExampleUnitTest.kt": "c0b0b313769a0e3f519c203bf0862f35bd6128a6eeef67ca4965c12b4ef0ac4b",
+    "src/main/AndroidManifest.xml": "8ef94a6aec2218c5fd02408d018f6d52602c0ef4473dd1c115c5c6964f1e63e1",
+    "src/main/java/app/tauri/PathPlugin.kt": "fe5a98a6ed0ca6e34aa1ea0ee190c16e8e07766e59938f5fb22cf1b5e8f8ed41",
+    "src/main/java/app/tauri/PermissionState.kt": "c38e1f200db71faf05f8d7acf643b2f1d6dd8970b8ae51a6a7c842743a596be2",
+    "src/main/java/app/tauri/PermissionHelper.kt": "7df0ea86bfa5159a5fbbf7660687c36d15d7cf2cd167d051144e4447a650cb8e",
+    "src/main/java/app/tauri/AppPlugin.kt": "087ae5fb739031d886365aeed1c27bde043c5f7d00f892050662bc602e7451b4",
+    "src/main/java/app/tauri/FsUtils.kt": "217851c9539c6171c46354fb24c8af9501babd045a122e239f01009794d122c9",
+    "src/main/java/app/tauri/Logger.kt": "771fa4822dec7cc95aab726ee1c176c17970c4ffee737ad53959fea1fa26ef7d",
+    "src/main/java/app/tauri/JniMethod.kt": "ece2f2b7179edeb9cf0a62acb116390f53c23a32e51520b6e4c2d7601a581a88",
+    "src/main/java/app/tauri/plugin/PluginManager.kt": "053958be1e83d8633d26348ded26bbd6d4ab21121e662985194fa3342eef1e95",
+    "src/main/java/app/tauri/plugin/Plugin.kt": "c5dc0d1b59ac2024399afd0893f1182ae583b4d4f2cc88a5ba7864d365f77f7c",
+    "src/main/java/app/tauri/plugin/Invoke.kt": "05cadb94907dbd3979d8c7eaad7bd8f540c38cc9d988a5513777eadd18330028",
+    "src/main/java/app/tauri/plugin/PluginHandle.kt": "628b69f19d03b861765a2f7f3140e5b6a79bd991966019bb250bf7ae79bfd301",
+    "src/main/java/app/tauri/plugin/JSArray.kt": "fca8b72a6bf357b6cc57aa21ac787dbe3d69fca27f927b0c3f598567dc17f52f",
+    "src/main/java/app/tauri/plugin/JSObject.kt": "234a9afa4da858b3dbd8d5a688209a640984166482e040ab908b34ed577726b5",
+    "src/main/java/app/tauri/plugin/PluginResult.kt": "437f44a6ccf5354a5ec1a3a3c894609f6df90999f397e52dfaafb6e74d30c006",
+    "src/main/java/app/tauri/plugin/PluginMethodData.kt": "c3024eb23b038fdd1566e69db725c8c5d39fb66909baf45d258ccfe8449daedf",
+    "src/main/java/app/tauri/plugin/Channel.kt": "f6f5c2dcc442b9e81165f55f80d363129bc91b130586abb8489cd3006af00011",
+    "src/main/java/app/tauri/plugin/InvalidPluginMethodException.kt": "90d2dddfb918447ed8fd35c44be7f00e41b89fcd586eeca995e0ead56c38b6c4",
+    "src/main/java/app/tauri/annotation/InvokeArg.kt": "6b747509a75a7c8f1c31c03a23a80b4f83cd226f87033a318db1782505b2aeab",
+    "src/main/java/app/tauri/annotation/TauriPlugin.kt": "361783a7baf30a33192c22f922f50fb2c97d8a7d9ae9dc774d8b637f9eeea04a",
+    "src/main/java/app/tauri/annotation/ActivityCallback.kt": "aec0ebccfe66d7b857606a9244e717d5aa3b02324f50fbdfe4b4ee1a67ad8637",
+    "src/main/java/app/tauri/annotation/PluginMethod.kt": "aee7aef7a3f59ad67ca3a2cfbcb2a2c2cacfa28bddf4b2f565ed6e930f92c8c1",
+    "src/main/java/app/tauri/annotation/Permission.kt": "bca04adb46a3de1c36da755fb62a5efb40481a7a529dd0f727eadd95466ecbd7",
+    "src/main/java/app/tauri/annotation/PermissionCallback.kt": "d0a63179ca048629d37e9efe696d2c6554095b7de64bbbc1450a8f07d3888d8e"
+  },
+  "localChanges": [
+    "Plugin.kt retains application Context rather than initial Activity",
+    "PathPlugin.kt uses application Context for directory and URI operations",
+    "AppPlugin.kt weak current Activity/WebView and replacement Back callback binding",
+    "PluginManager.kt guarded per-Activity WebView binding and result-launcher ownership"
+  ]
+}

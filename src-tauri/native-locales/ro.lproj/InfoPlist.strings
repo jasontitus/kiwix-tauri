@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Doar această arhivă activă poate solicita accesul la cameră. Este posibil ca și sistemul să îți ceară permisiunea. Poți revoca accesul oricând, de sub articol.";
+"NSLocationUsageDescription" = "Sistemul tău va furniza locația doar acestei arhive active. Poți revoca accesul oricând, de sub articol.";
+"NSLocationWhenInUseUsageDescription" = "Sistemul tău va furniza locația doar acestei arhive active. Poți revoca accesul oricând, de sub articol.";
+"NSLocalNetworkUsageDescription" = "Descoperiți dispozitivele LocalSwarm din apropiere și partajați arhive offline în rețeaua locală. Activați descoperirea sau partajarea numai într-o rețea de încredere.";

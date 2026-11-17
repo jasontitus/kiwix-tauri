@@ -1,0 +1,523 @@
+{
+  "schema": 1,
+  "scope": "Bounded silent physical Android Settings provider/export diagnostic; not TalkBack acceptance or unperturbed accessibility proof",
+  "productApkSha256": "0f04390127c81e9d8ce23965fa595876298fbb2ac722daa3f88a154485932a33",
+  "device": {
+    "model": "SM-A356U",
+    "api": 36,
+    "webview": "156.0.8078.49"
+  },
+  "helperApkSha256": "fca6a0ab102ac5d7f7bbae930ebc88544088aed57fe4f371c0a9a55a158179a8",
+  "helperJavaSha256": "d00d952e48a690c61a6912316fd7fb49f5bb3a65071b073a510291f0125be3f4",
+  "helperDeadlineSeconds": 25,
+  "feedbackType": 16,
+  "serviceFlags": 65554,
+  "touchExplorationBefore": false,
+  "baselineBeforeCdp": [
+    {
+      "elapsedMs": 856,
+      "providerPresent": false,
+      "hostPresent": null,
+      "hostChildren": null,
+      "exportedSampleNodeCount": 7,
+      "sampleTruncatedAt64": false,
+      "ancestors": [
+        {
+          "class": "org.kiwix.workbench.RustWebView",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.ContentFrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.FitWindowsLinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.FrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.LinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "com.android.internal.policy.DecorView",
+          "importance": 1,
+          "visibility": 0,
+          "shown": true
+        }
+      ],
+      "namedNodes": []
+    },
+    {
+      "elapsedMs": 1133,
+      "providerPresent": true,
+      "hostPresent": true,
+      "hostChildren": 1,
+      "exportedSampleNodeCount": 64,
+      "sampleTruncatedAt64": true,
+      "ancestors": [
+        {
+          "class": "org.kiwix.workbench.RustWebView",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.ContentFrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.FitWindowsLinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.FrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.LinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "com.android.internal.policy.DecorView",
+          "importance": 1,
+          "visibility": 0,
+          "shown": true
+        }
+      ],
+      "namedNodes": [
+        {
+          "class": "android.view.View",
+          "text": "null",
+          "description": "Skip to content"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Skip to content",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Library"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Discover"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Maps"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Downloads"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Nearby"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Reading list"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Settings"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Search tabs, reading list and history"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Open reader tabs"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Add files"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Changes are saved automatically.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Settings",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "Help & about",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Connect my devices",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Web sharing (browsers and OPDS) \u00b7 Sharing is off",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Updates",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Android apps update through Google Play or the installer that supplied Kiwix. This build cannot update itself.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Current version: 0.1.0",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Google Play",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Privacy, transfer & advanced preferences",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Do not persist reading history, positions or sessions. Existing history is not removed.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Prevent library, download and reading-data changes. Private mode and read-only mode are separate controls.",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "ZIM archive integrity",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Crash reports",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Import library XML",
+          "description": "null"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 1922,
+      "providerPresent": true,
+      "hostPresent": true,
+      "hostChildren": 1,
+      "exportedSampleNodeCount": 64,
+      "sampleTruncatedAt64": true,
+      "ancestors": [
+        {
+          "class": "org.kiwix.workbench.RustWebView",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.ContentFrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "androidx.appcompat.widget.FitWindowsLinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.FrameLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "android.widget.LinearLayout",
+          "importance": 0,
+          "visibility": 0,
+          "shown": true
+        },
+        {
+          "class": "com.android.internal.policy.DecorView",
+          "importance": 1,
+          "visibility": 0,
+          "shown": true
+        }
+      ],
+      "namedNodes": [
+        {
+          "class": "android.view.View",
+          "text": "null",
+          "description": "Skip to content"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Skip to content",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Library"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Discover"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Maps"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Downloads"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Nearby"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Reading list"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Settings"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Search tabs, reading list and history"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Open reader tabs"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "",
+          "description": "Add files"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Changes are saved automatically.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Settings",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.Button",
+          "text": "Help & about",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Connect my devices",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Web sharing (browsers and OPDS) \u00b7 Sharing is off",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Updates",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Android apps update through Google Play or the installer that supplied Kiwix. This build cannot update itself.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Current version: 0.1.0",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Google Play",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Privacy, transfer & advanced preferences",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Do not persist reading history, positions or sessions. Existing history is not removed.",
+          "description": "null"
+        },
+        {
+          "class": "android.widget.TextView",
+          "text": "Prevent library, download and reading-data changes. Private mode and read-only mode are separate controls.",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "ZIM archive integrity",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Crash reports",
+          "description": "null"
+        },
+        {
+          "class": "android.view.View",
+          "text": "Import library XML",
+          "description": "null"
+        }
+      ]
+    }
+  ],
+  "cdpAXNodeCount": 358,
+  "selectedCdpControls": [
+    {
+      "role": "button",
+      "name": "Library"
+    },
+    {
+      "role": "button",
+      "name": "Discover"
+    },
+    {
+      "role": "button",
+      "name": "Maps"
+    },
+    {
+      "role": "button",
+      "name": "Downloads"
+    },
+    {
+      "role": "button",
+      "name": "Nearby"
+    },
+    {
+      "role": "button",
+      "name": "Reading list"
+    },
+    {
+      "role": "button",
+      "name": "Settings"
+    },
+    {
+      "role": "heading",
+      "name": "Settings"
+    },
+    {
+      "role": "combobox",
+      "name": "Application theme"
+    },
+    {
+      "role": "combobox",
+      "name": "Interface language"
+    },
+    {
+      "role": "combobox",
+      "name": "Reader appearance"
+    },
+    {
+      "role": "combobox",
+      "name": "Reader font"
+    },
+    {
+      "role": "spinbutton",
+      "name": "Font size"
+    },
+    {
+      "role": "spinbutton",
+      "name": "Page zoom (%)"
+    }
+  ],
+  "incompleteStages": [
+    {
+      "attempt": 1,
+      "error": "Owned WebView missing: helper checked before asynchronous attachment; fixed helper prerequisite, not a product finding"
+    },
+    {
+      "attempt": 2,
+      "error": "java.lang.IllegalStateException: Host AX activation marker not received",
+      "missing": "Native after-CDP observation stage; CDP tree captured, host marker handshake failed after bounded wait. Native population already observed before CDP."
+    }
+  ],
+  "interpretation": "The same continuous silent connection initially exports only native wrappers, then populated virtual HTML controls before CDP activation. A one-shot empty dump does not prove missing application semantics. Provider queries can initialize accessibility, so this is not an unperturbed baseline or physical screen-reader certification. No product accessibility forcing was added.",
+  "cleanup": {
+    "productSha256": "0f04390127c81e9d8ce23965fa595876298fbb2ac722daa3f88a154485932a33",
+    "helperUninstalled": true,
+    "forwardCleanupErrors": [],
+    "unrelatedForwardPreserved": true,
+    "sameAccessibilityUserAttributes": true,
+    "touchExplorationEnabled": false,
+    "audioPlayback": false,
+    "voiceOverOrTalkBackEnabled": false,
+    "readerRestored": "Animal one tab English",
+    "benchmarkAppsStopped": true,
+    "screenReturnedHome": true
+  },
+  "evidence": {
+    "firstAttemptLogSha256": "7d1a6690972a27993f9cd2ea9ffbd2c0dffdb7ced8b4fad314667e7032768bd5",
+    "secondAttemptLogSha256": "5dbb50c6130fb6d850ee50b9804a87208057435a0cc8c22a324c9b89272944a1",
+    "cdpTreeSha256": "2bddf620c0e0377e25e18cf7d3dd1fe3d8dd5e8fb7bf78132f8d4f5fcfedfa34",
+    "accessibilityBeforeSha256": "5b25e6c65c72a2ee784325194723e4baebd81bad5a26e96ba2fd7d78801f8f9c",
+    "accessibilityAfterSha256": "e616f1c3d427529f4d31438d719a315db7b05dd465edd687fef19d36301c00da",
+    "cleanupSha256": "6a466386d210096acb7b971f07cacfdf856c7a346112fbd9847bde0cc28c8be4"
+  }
+}

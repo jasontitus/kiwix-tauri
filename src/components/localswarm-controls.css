@@ -1,0 +1,201 @@
+.localswarm {
+  inline-size: 100%;
+  max-inline-size: 840px;
+  min-inline-size: 0;
+}
+.localswarm-heading { margin-block-end: 14px; }
+.localswarm-heading h1 {
+  margin: 0;
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.localswarm .muted { font-size: 13px; line-height: 1.5; }
+.localswarm h2 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
+.localswarm p, .localswarm-library p, .localswarm-connection p { overflow-wrap: anywhere; }
+.localswarm > .inline-error { margin-block: 0 14px; }
+.localswarm-notice {
+  margin-block: 0 14px;
+  padding: 12px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--tint);
+}
+.localswarm button, .localswarm-library button, .localswarm-connection button, .localswarm-seed-confirm button {
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  padding: 9px 14px;
+  border-radius: var(--control-radius);
+  font-size: 14px;
+  white-space: normal;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.localswarm button svg, .localswarm-library button svg, .localswarm-connection button svg { flex-shrink: 0; }
+.localswarm button:focus-visible, .localswarm summary:focus-visible,
+.localswarm input:focus-visible, .localswarm select:focus-visible,
+.localswarm-library button:focus-visible, .localswarm-connection button:focus-visible,
+.localswarm-seed-confirm input:focus-visible, .localswarm-seed-confirm button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.localswarm-share-card {
+  min-inline-size: 0;
+  margin-block-end: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--panel-radius);
+  background: var(--surface);
+}
+.localswarm-share-card .localswarm-row-copy { flex-basis: 320px; gap: 8px; }
+.localswarm-share-card button { min-inline-size: 132px; justify-content: center; }
+.localswarm-share-card > p { margin-block: 10px 0; }
+.localswarm-share-status { font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.localswarm-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-inline-size: 0; }
+.localswarm-row-copy { display: grid; gap: 4px; flex: 1 1 140px; min-inline-size: 0; overflow-wrap: anywhere; }
+.localswarm-row-copy strong { font-size: 15px; font-weight: 600; }
+.localswarm-row-copy h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.localswarm-receive {
+  min-inline-size: 0;
+  padding: 18px;
+  border-radius: var(--panel-radius);
+  background: var(--surface);
+}
+.localswarm-receive > p { margin-block: 10px 0; }
+.localswarm-peers { margin-block-start: 12px; }
+.localswarm-empty { padding-block: 16px 8px; margin: 0; }
+.localswarm-peer-group + .localswarm-peer-group, .localswarm-peer + .localswarm-peer { border-block-start: 1px solid var(--line); }
+.localswarm-peer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  inline-size: 100%;
+  gap: 10px;
+  padding-block: 14px;
+}
+.localswarm-peer > svg:first-child, .localswarm-seed > .localswarm-toolbar > svg { color: var(--accent); flex-shrink: 0; }
+.localswarm-peer > .localswarm-row-copy { flex-basis: 100px; }
+.localswarm-peer[aria-busy="true"] { opacity: .8; }
+.localswarm-secondary { min-inline-size: 0; font-size: 13px; }
+.localswarm-secondary > summary {
+  min-block-size: 44px;
+  padding-block: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.localswarm-secondary[open] > summary { color: var(--ink); }
+.localswarm-secondary > p { margin-block: 4px 10px; }
+.localswarm-book-offer { margin-block-start: 12px; }
+.localswarm .field, .localswarm-seed-confirm .field {
+  display: grid;
+  gap: 6px;
+  margin-block: 12px;
+  min-inline-size: 0;
+  font-size: 13px;
+}
+.localswarm .field input, .localswarm .field select, .localswarm-seed-confirm .field input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  border-radius: var(--field-radius);
+  font-size: 16px;
+}
+.localswarm-offer-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+.localswarm-offer-controls .field { flex: 1 1 240px; margin: 0; }
+.localswarm-seeds { margin-block: 20px 8px; }
+.localswarm-seeds > h2 { margin-block-end: 10px; font-size: 15px; }
+.localswarm-seed { padding: 14px 16px; margin-block: 8px; border-radius: var(--panel-radius); background: var(--surface); }
+.localswarm-footer { margin-block-start: 16px; padding-block-start: 16px; border-block-start: 1px solid var(--line); }
+.localswarm-footer > .localswarm-toolbar { margin-block-end: 12px; }
+.localswarm-footer > .localswarm-toolbar > span { flex: 1 1 200px; }
+.localswarm-footer > p { margin: 0; }
+.localswarm-library { min-inline-size: 0; }
+.localswarm-library .inline-error, .localswarm-connection .inline-error { overflow-wrap: anywhere; }
+.localswarm-library-batch {
+  min-inline-size: 0;
+  padding: 16px;
+  margin-block: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  background: var(--surface);
+}
+.localswarm-library-batch h2 { margin: 0; font-size: 16px; line-height: 1.35; }
+.localswarm-library-batch p { margin-block: 8px; font-size: 13px; line-height: 1.5; }
+.localswarm-library-batch-progress { margin-block-start: 12px; font-variant-numeric: tabular-nums; }
+.localswarm-library-batch-progress progress { display: block; inline-size: 100%; max-inline-size: 100%; accent-color: var(--accent); }
+.localswarm-library-book {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-block: 14px;
+  border-block-end: 1px solid var(--line);
+}
+.localswarm-library-selection { margin-block: 16px; }
+.localswarm-library-select {
+  display: flex;
+  flex: 1 1 180px;
+  align-items: center;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  gap: 12px;
+  cursor: pointer;
+}
+.localswarm-library-select input { flex: 0 0 auto; inline-size: 18px; block-size: 18px; accent-color: var(--accent); }
+.localswarm-library-select input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.localswarm-seed-confirm p, .localswarm-connection p { line-height: 1.5; }
+@media (max-width: 520px) {
+  .localswarm-share-card { padding: 16px; }
+  .localswarm-receive { padding: 14px; }
+  .localswarm-share-card .localswarm-row-copy { flex-basis: 100%; }
+  .localswarm-seed { padding-inline: 14px; }
+  .localswarm-library-batch { padding: 12px; }
+}
+@media (max-width: 540px) {
+  .localswarm-receive > .localswarm-toolbar,
+  .localswarm-footer > .localswarm-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .localswarm-receive > .localswarm-toolbar > button,
+  .localswarm-footer > .localswarm-toolbar > button {
+    inline-size: 100%;
+    justify-content: center;
+  }
+  .localswarm-footer > .localswarm-toolbar > span { flex-basis: auto; }
+  .localswarm-receive > .localswarm-toolbar .localswarm-row-copy { flex: 0 0 auto; }
+}
+.localswarm-empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.localswarm-empty::before {
+  content: "";
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent), transparent 40%);
+  animation: localswarm-scan-pulse 1.6s ease-out infinite;
+  flex-shrink: 0;
+}
+@keyframes localswarm-scan-pulse {
+  70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent), transparent 100%); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent), transparent 100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .localswarm-empty::before { animation: none; }
+}
+.localswarm-footer > .localswarm-toolbar > button.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger), transparent 55%);
+  background: color-mix(in srgb, var(--danger), transparent 94%);
+}
+.localswarm-hotspot { display: grid; gap: 8px; padding: 18px; border-radius: var(--panel-radius); background: var(--surface); }
+.localswarm-hotspot h2 { margin: 0; font-size: 18px; }
+.localswarm-hotspot p { margin: 0; overflow-wrap: anywhere; }
+.localswarm-hotspot-qr { width: max-content; padding: 8px; border-radius: 8px; background: #fff; }

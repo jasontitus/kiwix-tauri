@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Only this active archive can request the camera. Your system may also ask for permission. You can revoke access below the article at any time.";
+"NSLocationUsageDescription" = "Your system will provide your location only to this active archive. You can revoke access below the article at any time.";
+"NSLocationWhenInUseUsageDescription" = "Your system will provide your location only to this active archive. You can revoke access below the article at any time.";
+"NSLocalNetworkUsageDescription" = "Discover nearby LocalSwarm devices and share offline archives on your local network. Enable discovery or sharing only on a trusted network.";
