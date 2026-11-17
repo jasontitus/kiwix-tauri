@@ -113,6 +113,8 @@ pub(crate) fn bind(path: &Path) -> io::Result<(UnixListener, SocketEntry)> {
         use std::os::fd::AsRawFd;
         PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()))
     };
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let route = directory.to_path_buf();
     let check_route = || {
         let named = std::fs::symlink_metadata(directory)?;
         use std::os::unix::fs::MetadataExt as _;

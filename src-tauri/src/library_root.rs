@@ -544,14 +544,10 @@ fn selection_state(store: &Store, journal: &Journal) -> Result<Option<bool>, Str
 fn root_can_rollback(store: &Store, journal: &Journal) -> Result<bool, String> {
     if journal.phase == Phase::Committed { return Ok(false); }
     let books = store.books()?;
-    let paths: std::collections::HashMap<_, _> = books.iter().map(|book| (&book.metadata.id, book)).collect();
     let installed: std::collections::HashSet<_> = books.iter().map(|book| Path::new(&book.path)).collect();
     Ok(journal.entries.iter().all(|entry| {
-        let relative = relative_path(&entry.relative);
-        let old = Path::new(&journal.old_root).join(&relative).join(&entry.primary);
-        let new = Path::new(&journal.new_root).join(relative);
-        paths.get(&entry.book_id).is_some_and(|book| Path::new(&book.path) == old && book.managed)
-            && !entry.parts.iter().any(|part| installed.contains(new.join(&part.name).as_path()))
+        let new = Path::new(&journal.new_root).join(relative_path(&entry.relative));
+        !entry.parts.iter().any(|part| installed.contains(new.join(&part.name).as_path()))
     }))
 }
 
@@ -2304,6 +2300,26 @@ mod tests {
             assert_eq!(store.settings().unwrap().download_directory, journal.old_root);
             assert!(!has_pending_operation(&store).unwrap());
         }
+    }
+
+    #[test]
+    fn recovery_rolls_back_a_copy_when_the_planned_book_was_removed() {
+        let (_profile, store, target) = profile_with_book();
+        let new_root = target.join("archives");
+        let mut journal = committed_cleanup_journal(&store, &new_root);
+        journal.phase = Phase::Copying;
+        write_journal(&store, &journal).unwrap();
+        store.update(|state| {
+            state.books.clear();
+            state.settings.download_directory.clone_from(&journal.old_root);
+            Ok(())
+        }).unwrap();
+        let notice = recover(&store).unwrap().unwrap();
+        assert!(notice.contains("rolled back"), "{notice}");
+        assert!(!new_root.join("small.zim").exists());
+        assert!(Path::new(&journal.old_root).join("small.zim").exists());
+        assert!(!journal_path(&store).exists());
+        assert!(!has_pending_operation(&store).unwrap());
     }
 
     #[test]

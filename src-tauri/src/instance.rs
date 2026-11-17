@@ -328,8 +328,9 @@ pub(crate) fn request_activation(
 
 /// A simultaneous launch can lose the lock a moment before the owner binds the
 /// endpoint, and a starting owner accepts only after its windows exist. Retry
-/// only the two errors that mean "not there yet"; a real permission or path
-/// failure is reported immediately.
+/// only errors that mean "not there yet" (including a live listener whose
+/// accept queue is momentarily full); a real permission or path failure is
+/// reported immediately.
 #[cfg(unix)]
 fn connect_with_grace(path: &Path) -> std::io::Result<std::os::unix::net::UnixStream> {
     use std::os::unix::net::UnixStream;
@@ -343,7 +344,9 @@ fn connect_with_grace(path: &Path) -> std::io::Result<std::os::unix::net::UnixSt
             Err(error)
                 if matches!(
                     error.kind(),
-                    std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                    std::io::ErrorKind::NotFound
+                        | std::io::ErrorKind::ConnectionRefused
+                        | std::io::ErrorKind::TimedOut
                 ) =>
             {
                 last = Some(error);
