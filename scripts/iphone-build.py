@@ -485,6 +485,35 @@ class Build:
         require(binaries, 'Simulator app has no Mach-O binaries')
         return binaries
 
+    def thin_simulator_binaries(self, app):
+        """Thin universal simulator frameworks before ad-hoc signing.
+
+        The pinned sherpa-onnx xcframework ships a fat x86_64+arm64 simulator
+        slice. This host runs arm64 simulators, and the simulator verifier
+        requires a single arm64 Mach-O. Thinning an unsigned copy is safe; the
+        caller ad-hoc signs every nested bundle immediately afterwards.
+        """
+        for path in sorted(app.rglob('*')):
+            if not path.is_file() or path.is_symlink():
+                continue
+            with path.open('rb') as stream:
+                magic = stream.read(4)
+            if magic not in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca'):
+                continue
+            archs = self.capture(['/usr/bin/lipo', '-archs', str(path)]).split()
+            if archs == ['arm64']:
+                continue
+            require('arm64' in archs, f'Simulator binary has no arm64 slice: {path}')
+            temporary = path.with_name(path.name + '.arm64-thin')
+            require(not temporary.exists() and not temporary.is_symlink(), f'Refusing stale thinning output: {temporary}')
+            try:
+                self.run(['/usr/bin/lipo', '-thin', 'arm64', '-output', str(temporary), str(path)])
+                os.chmod(temporary, path.stat().st_mode)
+                os.replace(temporary, path)
+            finally:
+                if temporary.exists() or temporary.is_symlink():
+                    temporary.unlink(missing_ok=True)
+
     def sign_simulator(self, manifest):
         if manifest['status'] == 'ready':
             self.verify(manifest)
@@ -492,10 +521,11 @@ class Build:
         require(manifest['status'] == 'unsigned', 'Simulator signing requires a real unsigned build')
         unsigned = Path(manifest['unsigned_app_path'])
         require(object_hash(tree(unsigned)) == manifest['unsigned_artifact_sha256'], 'Unsigned simulator app changed')
-        self.simulator_binaries(unsigned)
         app = self.work / 'Kiwix.app'
         require(not app.exists(), 'Simulator signing output already exists')
         shutil.copytree(unsigned, app, symlinks=True)
+        self.thin_simulator_binaries(app)
+        self.simulator_binaries(app)
         require(not list(app.rglob('embedded.mobileprovision')), 'Simulator app contains physical provisioning')
         nested = sorted([*app.glob('Frameworks/**/*.framework'), *app.glob('Frameworks/**/*.dylib'),
                          *app.glob('PlugIns/*.appex')], key=lambda path: len(path.parts), reverse=True)

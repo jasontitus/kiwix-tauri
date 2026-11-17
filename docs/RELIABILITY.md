@@ -5,6 +5,43 @@ The newest exercised scope is recorded first below. Dated sections retain their
 own build, platform and hardware boundaries; none constitutes release,
 blanket hardware or complete-upstream-parity certification.
 
+## Mobile verification — 2026-11-17
+
+This records the public tree at `39102a9` plus the simulator-thinning
+harness fix in this batch; it is verification evidence, not release
+certification.
+
+- **Host and CI:** full Rust suite **1153 passed, 0 failed, 20 ignored**;
+  `npm run build` passed; GitHub `Checks` and `Native desktop packages` passed
+  at `39102a9`. `cargo-deny` passes all seven shipping targets.
+- **Android physical device (Samsung SM-A356U):** the universal arm64 debug APK
+  from `39102a9` installed and cold-launched. The actual Library/reader surface
+  rendered StreetZim content with no crash entry in `logcat -b crash`.
+- **Android emulator (API 33 arm64):** `:app:testArmDebugUnitTest` and
+  `:tauri-plugin-kiwix-mobile:testDebugUnitTest` passed. After generating the
+  smoke fixtures with `scripts/generate-android-evaluation.py --tiers smoke`
+  and rebuilding the app with the `android-evaluation` feature,
+  `:app:connectedArm64DebugAndroidTest` passed **1/1** on the emulator. The
+  standard debug APK without that feature fails the same test because its
+  `AndroidEvaluationBridge` JNI symbol is absent; that is a test-harness
+  feature gate, not an app crash.
+- **iOS physical device (iPhone 13 Pro):** the current app installed, launched,
+  and rendered its Library. The `iphone.py` acceptance window could not complete
+  because the test fixture admission path did not import Wikipedia 100; the
+  runner then reported `Expected Open Wikipedia 100 in the library`. The app
+  itself remained running and was released. This is an acceptance-harness
+  fixture/rendezvous gap, not a reproduced reader crash.
+- **iOS simulator:** the simulator app build required thinning the pinned
+  universal `SherpaOnnxC` framework to arm64 before ad-hoc signing. That build
+  step is now implemented in `iphone-build.py`; the simulator app built and
+  signed, but the current acceptance runner still stops at the same fixture
+  admission/rendezvous path. A packaged-WebView Zimit fixture and the full
+  acceptance scenario remain gates.
+- **Zimit/WARC:** synthetic and real Zimit2 fixtures served their main page and
+  both Wombat scripts; the `.warc` entry served as `application/warc`. Raw WARC
+  archives remain unsupported; `.warc` entries inside a ZIM are saveable via
+  the reader’s Save original file action.
+
 ## Runtime suite and real-archive checks — 2026-11-12
 
 This batch records exercised verification of the integrated parity work at
