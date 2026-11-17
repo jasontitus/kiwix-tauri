@@ -8,7 +8,7 @@ No account is required. Your library, reading history, notes, and downloads stay
 
 ## Download
 
-Release binaries are being republished after the move to this public repository. Until they are available, build from source with the instructions below.
+Get the latest build from the **[releases page](https://github.com/jasontitus/kiwix-tauri/releases)**.
 
 | Platform | Package |
 |---|---|
@@ -16,10 +16,10 @@ Release binaries are being republished after the move to this public repository.
 | Windows 10/11 on Intel or AMD (x64) | `Kiwix_…_x64-setup.exe` |
 | Windows 11 on ARM (Snapdragon and other ARM64 PCs) | `Kiwix_…_arm64-setup.exe` (test build) |
 | Linux (x86_64) | `.AppImage` or `.flatpak` |
-| iPhone / iPad | `.ipa` (development-signed) |
+| iPhone / iPad | Source build; sign with your own Apple developer account |
 | Android (ARM64 / 32-bit ARM) | `.apk` |
 
-Packages are development builds unless explicitly marked otherwise. Windows, macOS, and iOS packages are not App Store/notarized distribution builds; Android packages are development-signed. The Windows installers are unsigned, so Windows SmartScreen asks you to confirm before running them. Check the release notes for the exact signing and runtime limits.
+Packages are development builds unless explicitly marked otherwise. Windows, macOS, and iOS packages are not App Store/notarized distribution builds; Android packages are development-signed. The development-signed iOS IPA is not published because it is tied to specific registered devices; build from source and sign with your own Apple developer account. The Windows installers are unsigned, so Windows SmartScreen asks you to confirm before running them. Check the release notes for the exact signing and runtime limits.
 
 ## What it does
 
