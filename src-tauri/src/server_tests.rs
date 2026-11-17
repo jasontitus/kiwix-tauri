@@ -708,13 +708,25 @@ struct ReaderFixture {
 
 impl ReaderFixture {
     async fn start() -> Self {
-        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/media.zim");
+        Self::start_with("media.zim").await
+    }
+
+    async fn start_with(name: &str) -> Self {
+        Self::start_path(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures")
+                .join(name),
+        )
+        .await
+    }
+
+    async fn start_path(fixture: PathBuf) -> Self {
         let archive = crate::archive::Archive::open(&fixture).unwrap();
-        let directory = std::env::temp_dir().join(format!("kiwix-media-test-{}", Uuid::new_v4()));
+        let directory = std::env::temp_dir().join(format!("kiwix-reader-test-{}", Uuid::new_v4()));
         let store = Arc::new(Store::new(directory.clone()).unwrap());
         let server = super::ReaderServer::start(
             archive.clone(),
-            "media-fixture".into(),
+            "reader-fixture".into(),
             "installation".into(),
             "http://shell.example".into(),
             store,
@@ -801,6 +813,74 @@ async fn fetch(
 }
 
 const MEDIA_PATH: &str = "media/probe.mp4";
+
+#[tokio::test]
+async fn zimit2_static_replay_and_warc_asset_are_served() {
+    let fixture = ReaderFixture::start_with("zimit_warc.zim").await;
+    let article = fetch(
+        fixture.port,
+        &fixture.host,
+        "GET",
+        "/example.org/guide/index.html",
+        &[],
+    )
+    .await;
+    assert_eq!(article.status, 200);
+    let html = String::from_utf8(article.body).unwrap();
+    assert!(html.contains("Zimit2 static replay"));
+    assert!(html.contains("No service worker is required."));
+    assert!(html.contains("wombatSetup.js"));
+    assert!(html.contains("bridge.js"), "archive HTML was not instrumented");
+
+    for (path, expected) in [
+        ("/_zim_static/wombat.js", b"window.__kiwixZimitWombat = true;\n".as_slice()),
+        ("/_zim_static/wombatSetup.js", b"window.__kiwixWombatSetup = true;\n".as_slice()),
+    ] {
+        let script = fetch(fixture.port, &fixture.host, "GET", path, &[]).await;
+        assert_eq!(script.status, 200);
+        assert_eq!(script.header("content-type"), Some("text/javascript; charset=utf-8"));
+        assert_eq!(script.body.as_slice(), expected);
+    }
+
+    let warc = fetch(fixture.port, &fixture.host, "GET", "/capture.warc", &[]).await;
+    assert_eq!(warc.status, 200);
+    assert_eq!(warc.header("content-type"), Some("application/warc"));
+    assert_eq!(warc.header("content-length"), Some("104"));
+    assert_eq!(
+        warc.body,
+        b"WARC/1.0\r\nWARC-Type: response\r\nWARC-Target-URI: https://example.org/\r\nContent-Length: 12\r\n\r\nhello world\n"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires KIWIX_ZIMIT2_FIXTURE set to a real Zimit2 ZIM"]
+async fn real_zimit2_fixture_serves_main_page_and_wombat() {
+    let path = std::env::var_os("KIWIX_ZIMIT2_FIXTURE")
+        .expect("set KIWIX_ZIMIT2_FIXTURE to a real Zimit2 ZIM");
+    let fixture = ReaderFixture::start_path(PathBuf::from(path)).await;
+    let main = fixture.archive.main_entry().unwrap();
+    let article = fetch(
+        fixture.port,
+        &fixture.host,
+        "GET",
+        &format!("/{}", main.path),
+        &[],
+    )
+    .await;
+    assert_eq!(article.status, 200);
+    let html = String::from_utf8_lossy(&article.body);
+    assert!(html.contains("wombat.js"));
+    assert!(html.contains("bridge.js"), "archive HTML was not instrumented");
+
+    for path in ["/_zim_static/wombat.js", "/_zim_static/wombatSetup.js"] {
+        let script = fetch(fixture.port, &fixture.host, "GET", path, &[]).await;
+        assert_eq!(script.status, 200);
+        assert!(script
+            .header("content-type")
+            .is_some_and(|value| value.starts_with("text/javascript")));
+        assert!(!script.body.is_empty());
+    }
+}
 
 #[tokio::test]
 async fn ranged_media_request_returns_exact_bytes_and_headers() {

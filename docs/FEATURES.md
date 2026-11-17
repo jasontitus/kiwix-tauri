@@ -288,7 +288,7 @@ Release gates beyond those platform rows:
 - Complete the 15 partial locales: `dag`, `gsw`, `ie`, `igl`, `io`, `kab`,
   `nqo`, `sc`, `sdc`, `skr-Arab`, `sms`, `sro`, `zgh`, `zza`, `roa-Tara`.
   Only 59/74 catalogs are string-complete; all still require native-speaker review.
-- Finish platform signing/distribution, clean-machine installation and accessibility coverage. Service-worker-dependent archives remain unsupported.
+- Finish platform signing/distribution, clean-machine installation and accessibility coverage. Zimit2 archives are served through the shared reader path; real Zimit fixtures on packaged WKWebView/WebView2/WebKitGTK remain a release gate. Zimit1 service-worker replay remains unsupported. Raw `.warc` files are not a library format; `.warc` entries inside a ZIM can be saved with the reader's Save original file action.
 - Historical issue/PR censuses are complete, but Windows, macOS notifications and iOS background transfer gates prevent blanket historical-fix certification.
 
 The merged native-look, map-resume/replacement and swipe-cleanup batch passes the integrated frontend build and **477 host Rust tests** (three ignored). Production builds from `d53ba1a` are installed on both phones (iOS `93563e65…`, Android `e61e4866…`), and macOS (`f3c5cb14…`) and Linux ARM64 (`928716db…`) ran native acceptance on the same source. These platform runs do not establish physical phone-to-phone transfer speed, physical hardware-keyboard focus, provable macOS title-bar dragging or Windows behaviour. Private GitHub Actions run 41088865723 did not start its macOS/Linux jobs because of the account Actions budget; no source compilation failure was observed there.

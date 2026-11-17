@@ -17,6 +17,9 @@ These fixtures cover archive shapes that stock Kiwix downloads rarely have:
   concurrent reads are exercised against the real archive reader instead of a
   whole-entry buffer. The payload repeats, so the committed fixture stays
   small while the item size stays large.
+* zimit_warc.zim    - a nested Zimit2-shaped replay with Wombat scripts and a
+  `.warc` entry, proving the shared server serves the replay scripts and
+  `application/warc` assets without a service worker.
 * preview.zim       - redirected and encoded thumbnail paths, safe local bases,
   external sources, unsupported/oversized images and text-only fallback, plus
   a hostile deeply nested page and a Wikipedia-sized article whose excerpt is
@@ -63,7 +66,7 @@ class TextItem(Item):
         return {Hint.FRONT_ARTICLE: self._front_article, Hint.COMPRESS: self._compress}
 
 
-def build(name, items, main_path=None, redirects=()):
+def build(name, items, main_path=None, redirects=(), metadata=()):
     if os.path.exists(name):
         os.remove(name)
     with Creator(name).config_compression(Compression.zstd) as creator:
@@ -76,6 +79,7 @@ def build(name, items, main_path=None, redirects=()):
             ("Publisher", "kiwix-workbench tests"),
             ("Date", "2026-01-01"),
             ("Description", "Reader-path regression fixture"),
+            *metadata,
         ):
             creator.add_metadata(key, value)
         for item in items:
@@ -188,6 +192,50 @@ def main():
             TextItem("media/probe.mp4", "Probe video", "video/mp4", media, compress=True),
         ],
         main_path="index.html",
+    )
+
+
+    build(
+        os.path.join(output, "zimit_warc.zim"),
+        [
+            TextItem(
+                "example.org/guide/index.html",
+                "Zimit fixture",
+                "text/html",
+                "<!doctype html><html><head><title>Zimit fixture</title>"
+                '<script src="../../_zim_static/wombat.js"></script>'
+                '<script src="../../_zim_static/wombatSetup.js"></script></head>'
+                '<body><h1>Zimit2 static replay</h1>'
+                '<p>No service worker is required.</p>'
+                '<a href="../../capture.warc">WARC capture</a></body></html>',
+                True,
+            ),
+            TextItem(
+                "_zim_static/wombat.js",
+                "Wombat",
+                "text/javascript",
+                'window.__kiwixZimitWombat = true;\n',
+            ),
+            TextItem(
+                "_zim_static/wombatSetup.js",
+                "Wombat setup",
+                "text/javascript",
+                'window.__kiwixWombatSetup = true;\n',
+            ),
+            TextItem(
+                "capture.warc",
+                "WARC capture",
+                "application/warc",
+                "WARC/1.0\r\nWARC-Type: response\r\n"
+                "WARC-Target-URI: https://example.org/\r\n"
+                "Content-Length: 12\r\n\r\nhello world\n",
+            ),
+        ],
+        main_path="example.org/guide/index.html",
+        metadata=(
+            ("Scraper", "warc2zim fixture"),
+            ("Tags", "_ftindex:yes;_category:other"),
+        ),
     )
 
 
