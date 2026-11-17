@@ -590,7 +590,7 @@ impl Reconciliation {
     /// A signal (lifecycle transition, pending native transfer event, retry
     /// flag) must be observed on this tick, not on the idle cadence.
     fn due(&mut self, signaled: bool) -> bool {
-        let due = self.busy || signaled || self.tick % IDLE_RECONCILE_TICKS == 0;
+        let due = self.busy || signaled || self.tick.is_multiple_of(IDLE_RECONCILE_TICKS);
         self.tick = self.tick.wrapping_add(1);
         due
     }

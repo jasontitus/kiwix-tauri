@@ -156,7 +156,7 @@ impl State {
 }
 /// A started read-aloud session keeps its source across background sensor
 /// suspension; only a session without a live capability is retired.
-#[cfg_attr(not(mobile), allow(dead_code))]
+#[cfg_attr(any(not(mobile), target_os = "android"), allow(dead_code))]
 pub(crate) fn background_retires_speech(retained: bool) -> bool { !retained }
 
 #[derive(Clone, Default)]
@@ -248,12 +248,15 @@ mod transport {
         /// Mirror the Kokoro player onto the read-aloud Live Activity. This is
         /// housekeeping like Now Playing: a refused or disabled system surface
         /// must never become a reader error.
-        fn read_aloud_activity(&self, mut payload: Value) {
+        fn read_aloud_activity(&self, payload: Value) {
+            #[cfg(target_os = "ios")]
+            let payload = if self.store.private_mode().unwrap_or(true) {
+                json!({"state": "clear"})
+            } else {
+                payload
+            };
             #[cfg(target_os = "ios")]
             {
-                if self.store.private_mode().unwrap_or(true) {
-                    payload = json!({"state": "clear"});
-                }
                 let app = match self.speech_app() {
                     Ok(app) => app,
                     Err(error) => { eprintln!("Kiwix read-aloud activity: {error}"); return; }
@@ -500,7 +503,7 @@ mod transport {
                         "mobile_speech_forward" => crate::service::kokoro::Command::Forward(seconds.unwrap_or(15.0)),
                         _ => crate::service::kokoro::Command::Seek(position.unwrap_or(0)),
                     };
-                    if !self.kokoro.command(&native_id, &token, transport) {
+                    if !self.kokoro.command(&native_id, token, transport) {
                         return Err("SPEECH_SESSION_RETIRED".into());
                     }
                     let paused = command == "mobile_speech_pause";
@@ -519,11 +522,11 @@ mod transport {
                             "state": "active", "sessionId": native_id,
                             "status": if paused { "paused" } else { "reading" },
                             "statusLabel": status_label,
-                            "offset": self.kokoro.active_offset(&native_id, &token).unwrap_or(0),
+                            "offset": self.kokoro.active_offset(&native_id, token).unwrap_or(0),
                             "total": text_length,
                         }));
                     }
-                    let offset = self.kokoro.active_offset(&native_id, &token).unwrap_or(0);
+                    let offset = self.kokoro.active_offset(&native_id, token).unwrap_or(0);
                     return Ok(json!({"id":id,"paused":command == "mobile_speech_pause","offset":offset}));
                 }
                 let native: &'static str = match command {

@@ -65,7 +65,7 @@ This adds `Xapian::Database::open_fd_at(fd, offset)`, which opens a single-file 
 
 ## Replacing libzim with zimru
 
-[zimru](https://github.com/jasontitus/zimru) is a clean-room, MIT-licensed Rust ZIM reader/writer. [libzim-shim](https://github.com/jasontitus/libzim-shim) (GPL) exposes libzim's C++ API (`zim::Archive`, `zim::Searcher`, `zim::SuggestionSearcher`, …) on top of zimru and Xapian. [xapianbuilder](https://github.com/jasontitus/xapianbuilder) builds indexes only and has no query API, so it is not part of the read path. Nothing in this repository's history mentions zimru, so why the original implementation chose libzim was never recorded.
+[zimru](https://github.com/jasontitus/zimru) is a clean-room, MIT-licensed Rust ZIM reader/writer. A separate `libzim-shim` (not yet public) exposes libzim's C++ API (`zim::Archive`, `zim::Searcher`, `zim::SuggestionSearcher`, …) on top of zimru and Xapian. [xapianbuilder](https://github.com/jasontitus/xapianbuilder) builds indexes only and has no query API, so it is not part of the read path. Nothing in this repository's history mentions zimru, so why the original implementation chose libzim was never recorded.
 
 ### What the app needs from a ZIM engine
 

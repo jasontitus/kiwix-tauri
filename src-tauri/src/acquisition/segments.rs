@@ -499,8 +499,7 @@ pub(super) async fn run_segments(
     let preallocated = identity.len();
     let (stop_tx, stop_rx) = watch::channel(false);
     let mut tasks = JoinSet::new();
-    for index in 0..plan.ranges.len() {
-        let range = &plan.ranges[index];
+    for (index, range) in plan.ranges.iter().enumerate() {
         if range.done > range.end - range.start {
             continue;
         }

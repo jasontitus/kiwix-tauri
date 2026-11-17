@@ -1,10 +1,10 @@
 # Windows build-and-test brief for kiwix-tauri
 
-Paste this file into the session that can reach the Windows machine, or have it read `docs/WINDOWS-TEST-BRIEF.md` after checking out the branch.
+Paste this file into the session that can reach the Windows machine, or have it read `docs/WINDOWS-TEST-BRIEF.md` after checking out `main`.
 
 ## Goal
 
-Build and test branch **`deps/trim-direct-dependencies`** of `github.com/jasontitus/kiwix-tauri` (commit `edbd0f2` or later) **natively on Windows**. Nothing in this repository has been compiled with MSVC or run on Windows in this round.
+Build and test **`main`** of `github.com/jasontitus/kiwix-tauri` (record the exact commit) **natively on Windows**. Nothing in this repository has been compiled with MSVC or run on Windows in this round.
 
 **Do not build inside WSL.** A WSL build is a Linux build, and the code under test only compiles in a Windows build: the single-instance plugin, window focus and the hidden PDF-render window. Use PowerShell on the Windows side. You can reach it over ssh from WSL with `powershell.exe -Command ...`, or ssh directly into Windows.
 
@@ -26,7 +26,7 @@ Run this from a Developer PowerShell for VS 2022:
 ```powershell
 git clone https://github.com/jasontitus/kiwix-tauri C:\src\kiwix-tauri
 cd C:\src\kiwix-tauri
-git checkout deps/trim-direct-dependencies
+git checkout main
 git log --oneline -1
 npm ci
 npm run build                      # creates dist/, which the crate embeds
@@ -37,14 +37,8 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --features cust
 
 **Expected:**
 - `cargo check` passes.
-- On the `deps/trim-direct-dependencies` checkout above, `clippy` fails with **13 errors that existed on `main` before #6**, so they are not regressions:
-  - unused import `File` in `src/spelling.rs`
-  - "variable does not need to be mutable" at nine `let mut builder` sites
-  - `forward_launch` is never used
-  - `new_with_claimed_lock` is never used, twice
-- On a checkout that includes jasontitus/kiwix-tauri#6, those 13 are fixed and
-  `clippy` is expected to pass. The `windows-typecheck` job in
-  `.github/workflows/checks.yml` verifies that only for the
+- `cargo clippy` is expected to pass with `-D warnings`. The `windows-typecheck`
+  job in `.github/workflows/checks.yml` verifies the
   `x86_64-pc-windows-gnu` target; this MSVC run has not been observed.
 - A warning in the vendored `librqbit-dualstack-sockets` (`unused variable: name`
   in `bind_device.rs`) is known and does not fail the run.
@@ -121,7 +115,7 @@ Follow the PowerShell block in `docs/PACKAGING.md`, under "For a local Windows b
 3. **Opening a file goes to the running instance.**
    - With Kiwix running, double-click a `.zim`, or run `"C:\...\Kiwix.exe" C:\path\file.zim`.
    - Expected: it opens in the existing window, which comes forward.
-4. **The hidden PDF window never appears** (this is the bug the fix in `edbd0f2` addresses).
+4. **The hidden PDF window never appears** (the bug this brief covers).
    - Open a second reader window, then close the main window.
    - Start a PDF export of an article.
    - While the save dialog is open, launch Kiwix from the Start menu.
@@ -147,4 +141,4 @@ Report the following:
 - for every failure, whether `origin/main` fails the same way;
 - whether the SDK was pre-existing or self-built.
 
-Don't change code on the branch. Report findings, and they will be fixed with an independent review, as `AGENTS.md` requires.
+Don't change code on the checkout. Report findings, and they will be fixed with an independent review, as `AGENTS.md` requires.

@@ -268,7 +268,7 @@ Optional meaning-based search ("articles about …") and on-device article summa
 - **Packaging:** an NSIS installer per architecture, `Kiwix_<v>_arm64-setup.exe`.
 - **Checks:** a build step checks the PE machine type (`0xAA64`) of every shipped `.exe` and `.dll`, and fails on any x64 or x86 binary. The NSIS installer, uninstaller and NSIS plugins are x86 by design and are exempt.
 - **sherpa-onnx crate:** confirm the pinned `sherpa-onnx` crate version supports the `aarch64-pc-windows-msvc` shared prebuilts before relying on them.
-- **CI:** GitHub `windows-11-arm` runners build and run the Rust tests natively. This also gives runtime coverage, since no ARM64 hardware is available here. Hosted ARM runners are free only for public repositories, and this one is private, so this needs a paid larger runner or a self-hosted ARM64 machine.
+- **CI:** GitHub `windows-11-arm` runners build and run the Rust tests natively. This also gives runtime coverage, since no ARM64 hardware is available here. Hosted ARM runners are available for this public repository, so the runners can provide native ARM64 coverage without a paid larger runner; a self-hosted ARM64 machine is optional.
 
 ### Acceptance
 - Cross-compile on x64.

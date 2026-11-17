@@ -1890,7 +1890,7 @@ impl Service {
             None=>Vec::new()
         };
         let mut payload_jobs: Vec<Value> = jobs.iter()
-            .map(|job| serde_json::to_value(job)).collect::<Result<_, _>>()
+            .map(serde_json::to_value).collect::<Result<_, _>>()
             .map_err(|error| error.to_string())?;
         if let Ok(manager) = self.torrent_manager() {
             for job in manager.list().await {

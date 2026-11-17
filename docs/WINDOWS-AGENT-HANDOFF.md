@@ -4,8 +4,8 @@ Date: 2026-11-10
 Status: **completed on native Windows**. The build/runtime report and residual list are in [`WINDOWS-TEST-REPORT.md`](WINDOWS-TEST-REPORT.md); this handoff is retained for reproduction and evidence.
 
 Repository: `https://github.com/jasontitus/kiwix-tauri`
-Checkout: `main` at `290812c` (or newer; record the exact commit)
-Goal: build our Windows app natively, run W1–W15 against the official Qt 2.5.1 reference, and return evidence. Do not modify source on the branch; report findings.
+Checkout: `main` at the current public commit (record the exact commit; this handoff is historical)
+Goal: build our Windows app natively, run W1–W15 against the official Qt 2.5.1 reference, and return evidence. Do not modify source on the checkout; report findings.
 
 ## 1. Required environment
 

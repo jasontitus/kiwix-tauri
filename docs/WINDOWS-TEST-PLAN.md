@@ -41,7 +41,7 @@ Do not mark any Windows acceptance row passed from Wine alone.
 
 ## Phase 1 — native Windows: compile-only gate
 
-Use `docs/WINDOWS-BUILD-PROVISIONING.md` and `scripts/check-windows-build.ps1` for prerequisite setup, and `docs/WINDOWS-TEST-BRIEF.md` for the MSVC commands, but test the current `main` commit rather than the older `deps/trim-direct-dependencies` checkout named there. Record `rustc -V`, `node -v`, `cl`, and `winver`.
+Use `docs/WINDOWS-BUILD-PROVISIONING.md` and `scripts/check-windows-build.ps1` for prerequisite setup, and `docs/WINDOWS-TEST-BRIEF.md` for the MSVC commands, but test the current `main` commit. Record `rustc -V`, `node -v`, `cl`, and `winver`.
 
 From a Developer PowerShell for VS 2022, with `KIWIX_TYPECHECK_ONLY` set so the intentionally absent libzim SDK is not linked:
 

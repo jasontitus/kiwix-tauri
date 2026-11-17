@@ -47,6 +47,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "BSL-1.0",
+    "bzip2-1.0.6",
     "CC0-1.0",
     "CDLA-Permissive-2.0",
     "GPL-3.0-or-later",
@@ -57,6 +58,7 @@ allow = [
     "MPL-2.0",
     "Unicode-3.0",
     "Unlicense",
+    "WTFPL",
     "Zlib",
 ]
 confidence-threshold = 0.9

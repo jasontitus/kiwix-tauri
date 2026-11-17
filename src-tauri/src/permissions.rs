@@ -109,7 +109,7 @@ impl LocationError {
             cancelled: false,
         }
     }
-    #[cfg(any(target_os = "windows", target_os = "android", test))]
+    #[cfg(any(target_os = "windows", all(target_os = "android", native_location), test))]
     pub(crate) fn timeout(message: &str) -> Self {
         Self {
             code: 3,
