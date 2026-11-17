@@ -26,6 +26,29 @@ const readerError = readerElement.attributes.properties.find((node) => ts.isJsxA
 const localReporter = find(reader, (node) => ts.isVariableDeclaration(node) && node.name.getText(reader) === "report")[0].initializer.arguments[0];
 const recovery = find(reader, (node) => ts.isCallExpression(node) && node.expression.getText(reader) === "setProviderUnavailable" && ts.isArrowFunction(node.arguments[0]))[0];
 const compile = (source) => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+test("a target-independent Android bundle captures both document identities once", async () => {
+  const names = ["isNative", "agent", "buildPlatform", "isAndroid", "androidDocumentSource"];
+  const declarations = names.map((name) => {
+    const declaration = find(api, (node) => ts.isVariableDeclaration(node) && node.name.getText(api) === name)[0];
+    return `const ${declaration.getText(api)};`;
+  }).join("\n").replaceAll("import.meta.env.TAURI_ENV_PLATFORM", "undefined");
+  let activity = "12";
+  let captured;
+  const page = {
+    __KIWIX_ANDROID_WINDOW_INCARNATION__: "first",
+    __KIWIX_ANDROID_ACTIVITY_SOURCE__: { generation: () => activity },
+  };
+  const context = vm.createContext({
+    navigator: { userAgent: "Mozilla/5.0 (Linux; Android 15)" }, window: page,
+    isTauri: () => true, invoke: async (_, payload) => { captured = payload; },
+  });
+  vm.runInContext(compile(declarations + "\n" + boundary.getText(api)), context);
+  activity = "13";
+  page.__KIWIX_ANDROID_WINDOW_INCARNATION__ = "second";
+  await context.dispatchOnce("frontend_ready", {});
+  assert.equal(captured.androidWindowIncarnation, "first");
+  assert.equal(captured.androidActivityGeneration, "12");
+});
 const book = { id: "book-1", installationId: "installation-1", sourceReference: { reference: "01234567-89ab-4cde-8fab-0123456789ab" } };
 const envelope = (overrides = {}) => JSON.stringify({
   code: "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT", retry: true,

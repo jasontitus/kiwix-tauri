@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import React, { useId, useRef, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // Exercise the shipped handlers with deferred I/O. Extracting the functions
 // avoids replacing the runtime with a second implementation of their logic.
@@ -19,10 +21,13 @@ async function handlers(path, names) {
   visit(tree);
   for (const name of names) assert.ok(found.has(name), `Missing handler: ${name}`);
   return ts.transpileModule([...found.values()].join("\n"), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    fileName: path,
+    compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
   }).outputText;
 }
-const collectionCode = await handlers("../src/components/Collections.tsx", ["save", "clearList", "importList"]);
+const collectionCode = await handlers("../src/components/Collections.tsx", ["save", "clearList", "importList", "exportCollection"]);
+const pagedCode = await handlers("../src/components/UI.tsx", ["PagedResults"]);
+const binaryCode = await handlers("../src/api.ts", ["saveBytes", "saveResource", "saveMhtml"]);
 const pickerCode = await handlers("../src/api.ts", ["readTextFile"]);
 const bookmark = () => ({ id: "one", bookId: "book", path: "A/Article", title: "Title", note: "Original", tags: ["saved"] });
 function deferred() {
@@ -37,6 +42,7 @@ function collection(overrides = {}) {
     bookmarks: [bookmark(), { ...bookmark(), id: "two" }],
     capturePrivacyContext: () => ({ generation: 7 }),
     isPrivacyContextCurrent: () => true,
+    isPrivacyPolicyContextCurrent: () => true,
     confirmAction: async () => true,
     t: (key) => key,
     api: async () => {},
@@ -142,11 +148,13 @@ test("a privacy cutover stops the remaining batch and suppresses stale callbacks
   assert.equal(state.busy, false);
 });
 
-function picker() {
+function picker(overrides = {}) {
   const input = { click() {} };
   const context = vm.createContext({
     isMobile: false, isNative: false,
+    isPrivacyContextCurrent: () => true,
     document: { createElement: (tag) => { assert.equal(tag, "input"); return input; } },
+    ...overrides,
   });
   vm.runInContext(pickerCode, context);
   return { input, readTextFile: context.readTextFile };
@@ -184,4 +192,135 @@ test("unreadable browser file rejects through import and releases its busy state
   assert.deepEqual(state.errors, [failure]);
   assert.equal(state.busy, false);
   assert.equal(state.refreshed, 0);
+});
+
+test("browser import enforces the byte limit before reading the selected file", async () => {
+  for (const size of [16 * 1024 * 1024, 16 * 1024 * 1024 + 1]) {
+    const { input, readTextFile } = picker();
+    let reads = 0;
+    const pending = readTextFile({ generation: 7 });
+    input.files = [{ size, text: async () => { reads++; return "allowed"; } }];
+    input.onchange();
+    if (size === 16 * 1024 * 1024) assert.equal(await pending, "allowed");
+    else await assert.rejects(pending, /16 MiB/);
+    assert.equal(reads, Number(size === 16 * 1024 * 1024));
+  }
+});
+
+test("mobile text handoff waits for native foreground generation and retains its initiating policy", async () => {
+  for (const changed of [false, true]) {
+    const calls = [];
+    const snapshot = deferred();
+    let policyCurrent = true;
+    const requested = deferred();
+    const { readTextFile } = picker({
+      isMobile: true, privacyGeneration: 7,
+      isPrivacyPolicyContextCurrent: () => policyCurrent,
+      api: async (command) => {
+        calls.push(command);
+        if (command === "snapshot") { requested.resolve(); return snapshot.promise; }
+        return "selected document";
+      },
+    });
+    const pending = readTextFile({ generation: 7 });
+    await requested.promise;
+    assert.deepEqual(calls, ["mobile_read_text", "snapshot"]);
+    policyCurrent = !changed;
+    snapshot.resolve({});
+    assert.equal(await pending, changed ? null : "selected document");
+  }
+});
+
+test("import retains picker policy while using the active foreground generation", async () => {
+  for (const changedPolicy of [true, false]) {
+    const calls = [];
+    let generation = 7;
+    const { context, state } = collection({
+      capturePrivacyContext: () => ({ generation }),
+      isPrivacyPolicyContextCurrent: (privacy) => !changedPolicy || privacy.generation === generation,
+      readTextFile: async () => { generation++; return "contents"; },
+      api: async (_command, args) => { calls.push(args.privacyGeneration); return 1; },
+    });
+    await context.importList();
+    assert.deepEqual(calls, changedPolicy ? [] : [8]);
+    assert.equal(state.busy, false);
+    assert.equal(state.refreshed, Number(!changedPolicy));
+  }
+});
+
+for (const kind of ["bookmarks", "history"]) {
+  test(`a late ${kind} export cannot open a file picker after a privacy change`, async () => {
+    const result = deferred();
+    let current = true;
+    const saved = [];
+    const { context, state } = collection({
+      kind, api: () => result.promise, saveText: (...args) => saved.push(args),
+      isPrivacyContextCurrent: () => current,
+    });
+    const pending = context.exportCollection("json");
+    current = false;
+    result.resolve("old browsing data");
+    await pending;
+    assert.deepEqual(saved, []);
+    assert.equal(state.busy, false);
+  });
+}
+
+
+test("resource exports retain the reader installation through each platform handoff", async () => {
+  const privacy = { generation: 7 };
+  for (const platform of ["mobile", "desktop", "browser"]) {
+    const requests = [];
+    const context = vm.createContext({
+      isMobile: platform === "mobile", isNative: platform !== "browser",
+      capturePrivacyContext: () => privacy, isPrivacyContextCurrent: () => true,
+      desktopSave: (_name, write) => write("/chosen", privacy), t: (key) => key,
+      window: { prompt: () => "/chosen" }, browserSave() {}, atob: () => "", Blob,
+      api: async (name, args) => { requests.push([name, args]); return { bytes: "", fileName: "fixture" }; },
+    });
+    vm.runInContext(binaryCode, context);
+    await context.saveResource("book", "first-install", "A/file", "fixture");
+    await context.saveMhtml("book", "first-install", "A/page", "page.mhtml");
+    assert.deepEqual(requests.map(([name]) => name), platform === "mobile"
+      ? ["mobile_save_resource", "mobile_save_mhtml"] : platform === "desktop"
+        ? ["save_resource", "save_mhtml"] : ["export_article", "save_mhtml"]);
+    for (const [, args] of requests) {
+      assert.equal(args.installationId, "first-install");
+      assert.equal(args.privacyGeneration, 7);
+    }
+  }
+});
+
+test("retired binary exports never reach a native picker or browser download", async () => {
+  for (const platform of ["mobile", "desktop", "browser"]) {
+    const context = vm.createContext({
+      isMobile: platform === "mobile", isNative: platform !== "browser",
+      isPrivacyContextCurrent: () => false,
+      api: assert.fail, desktopSave: assert.fail, browserSave: assert.fail,
+    });
+    vm.runInContext(binaryCode, context);
+    await context.saveBytes("fixture.torrent", "", "application/x-bittorrent", { generation: 7 });
+  }
+});
+
+
+test("a 10,000-result group mounts a single accessible page", () => {
+  const context = vm.createContext({
+    React, useId, useState, useRef,
+    t: (key, fields) => fields ? key.replace(/\{(\w+)\}/g, (_, field) => fields[field]) : key,
+  });
+  vm.runInContext(pagedCode, context);
+  const rows = [];
+  const html = renderToStaticMarkup(React.createElement(context.PagedResults, {
+    items: Array.from({ length: 10000 }, (_, i) => i), criteria: "", label: "Recently read",
+    children: (item) => {
+      rows.push(item);
+      return React.createElement("article", { key: item }, String(item));
+    },
+  }));
+  assert.deepEqual(rows, Array.from({ length: 50 }, (_, i) => i));
+  assert.match(html, /role="group" aria-label="Recently read"/);
+  assert.match(html, /role="status">1–50 of 10000/);
+  assert.match(html, /<button[^>]+disabled[^>]+>Previous<\/button>/);
+  assert.match(html, /<button[^>]+aria-controls=[^>]+>Next<\/button>/);
 });

@@ -19,7 +19,7 @@ fn receipt() -> Runtime {
     Runtime { window: "main".into(), generation: 1, revision: 0, endpoints: vec!["127.0.0.1:43210".parse().unwrap()], binding: crate::transfer_policy::bind_local_tcp_socket(&socket).unwrap(), cancel: CancellationToken::new() }
 }
 fn session() -> Arc<PairSession> {
-    Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: None, peer_identity: None, peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at: (chrono::Utc::now() + chrono::Duration::seconds(20)).to_rfc3339(), phase: "waiting".into(), error: None }), token: Mutex::new(Some(zeroize::Zeroizing::new("0".repeat(64)))), expires: Instant::now() + Duration::from_secs(20), claimed: AtomicBool::new(true), notify: tokio::sync::Notify::new(), cancel: CancellationToken::new() })
+    Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: None, peer_identity: None, peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at: crate::timestamps::format(time::OffsetDateTime::now_utc() + time::Duration::seconds(20)), phase: "waiting".into(), error: None }), token: Mutex::new(Some(zeroize::Zeroizing::new("0".repeat(64)))), expires: Instant::now() + Duration::from_secs(20), claimed: AtomicBool::new(true), notify: tokio::sync::Notify::new(), cancel: CancellationToken::new() })
 }
 async fn channels(a: Arc<PrivateSyncManager>, b: Arc<PrivateSyncManager>) -> (Channel, Channel) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap(); let address = listener.local_addr().unwrap(); let pin = b.identity.public_hex();
@@ -124,6 +124,25 @@ async fn stale_conflict_resolution_never_discards_newly_arrived_alternatives() {
 }
 
 #[tokio::test]
+async fn disconnect_before_ready_does_not_enroll_the_peer() {
+    let ap = Profile::new(); let bp = Profile::new();
+    let a = ap.service(); let b = bp.service(); enabled(&a); enabled(&b);
+    let am = manager(&a); let runtime = receipt(); let pending = session();
+    let (mut local, mut remote) = channels(am.clone(), manager(&b)).await;
+    pending.view.lock().unwrap().local_confirmed = true;
+    let identity = am.identity.public_hex();
+    let disconnect = tokio::spawn(async move {
+        assert!(matches!(remote.receive().await.unwrap(), Message::Confirm { .. }));
+        remote.send(&Message::Confirm { identity }).await.unwrap();
+        assert!(matches!(remote.receive().await.unwrap(), Message::Ready));
+        drop(remote);
+    });
+    assert!(a.private_sync_pair_exchange(&am, &runtime, &pending, &mut local, "B".into(), runtime.endpoints.clone()).await.is_err());
+    disconnect.await.unwrap();
+    assert!(a.store.read().unwrap().private_sync.peers.is_empty());
+}
+
+#[tokio::test]
 async fn local_confirm_during_fragmented_remote_confirm_keeps_noise_framing() {
     let ap = Profile::new(); let bp = Profile::new(); let a = ap.service(); let b = bp.service(); enabled(&a); enabled(&b);
     let am = manager(&a); let bm = manager(&b); let runtime = receipt(); let pending = session();
@@ -157,7 +176,7 @@ async fn unpair_waits_for_backpressured_personal_sender_to_release_policy_lease(
     a.store.update(|state| {
         state.private_sync.peers.push(Peer { id: identity.clone(), identity: identity.clone(), name: "B".into(), endpoints: runtime.endpoints.clone(), enabled: true, automatic: false, last_sync: None, acknowledged_counter: 0 });
         for index in 0..180 {
-            state.bookmarks.push(Bookmark { id: Uuid::new_v4().to_string(), book_id: "missing".into(), path: format!("A/Article{index}"), title: "Title".into(), note: "x".repeat(8000), tags: vec![], highlights: vec![], created_at: chrono::Utc::now().to_rfc3339(), legacy_book: None });
+            state.bookmarks.push(Bookmark { id: Uuid::new_v4().to_string(), book_id: "missing".into(), path: format!("A/Article{index}"), title: "Title".into(), note: "x".repeat(8000), tags: vec![], highlights: vec![], created_at: crate::timestamps::now(), legacy_book: None });
         }
         Ok(())
     }).unwrap();

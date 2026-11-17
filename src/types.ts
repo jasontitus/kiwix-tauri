@@ -398,6 +398,7 @@ export interface DownloadNotificationAction {
   privacyGeneration: number;
 }
 export interface DownloadJob extends AcquisitionVerification {
+  historyWarning?: string;
   id: string;
   url: string;
   fileName: string;

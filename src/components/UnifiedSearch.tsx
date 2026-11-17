@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { t, formatDate } from "../i18n";
 import type { Book, Bookmark, HistoryEntry, Tab, TabLocation } from "../types";
-import { Modal } from "./UI";
+import { Modal, PagedResults } from "./UI";
 import { recentHistoryEntries } from "../recent-history";
 
 export interface UnifiedSearchProps {
@@ -162,25 +162,27 @@ export default function UnifiedSearch({
                 <PanelsTopLeft size={16} />
                 {t("Open tabs")}
               </h3>
-              {matchingTabs.map((tab) => (
-                <button
-                  className="unified-result"
-                  key={tab.id}
-                  onClick={() => {
-                    onSelectTab(tab.id);
-                    onClose();
-                  }}
-                >
-                  <strong>{tab.title || t("New tab")}</strong>
-                  <span>
-                    {tab.bookId
-                      ? bookById.get(tab.bookId)?.title ||
-                        t("Archive not in library")
-                      : t("New tab")}
-                  </span>
-                  <small>{t("Switch to tab")}</small>
-                </button>
-              ))}
+              <PagedResults items={matchingTabs} criteria={needle} label={t("Open tabs")}>
+                {(tab) => (
+                  <button
+                    className="unified-result"
+                    key={tab.id}
+                    onClick={() => {
+                      onSelectTab(tab.id);
+                      onClose();
+                    }}
+                  >
+                    <strong>{tab.title || t("New tab")}</strong>
+                    <span>
+                      {tab.bookId
+                        ? bookById.get(tab.bookId)?.title ||
+                          t("Archive not in library")
+                        : t("New tab")}
+                    </span>
+                    <small>{t("Switch to tab")}</small>
+                  </button>
+                )}
+              </PagedResults>
             </section>
           )}
           {!!matchingBookmarks.length && (
@@ -189,33 +191,35 @@ export default function UnifiedSearch({
                 <BookmarkIcon size={16} />
                 {t("Reading list")}
               </h3>
-              {matchingBookmarks.map((item) => (
-                <button
-                  className="unified-result"
-                  key={item.id}
-                  disabled={!bookById.get(item.bookId)?.available}
-                  onClick={() =>
-                    open({
-                      bookId: item.bookId,
-                      path: item.path,
-                      title: item.title,
-                      scroll: 0,
-                    })
-                  }
-                >
-                  <strong>{item.title}</strong>
-                  <span>
-                    {bookById.get(item.bookId)?.title ||
-                      t("Archive not in library")}
-                  </span>
-                  {item.note && <p>{item.note}</p>}
-                  <small>
-                    {bookById.get(item.bookId)?.available
-                      ? t("Open article in a new tab")
-                      : t("Archive unavailable")}
-                  </small>
-                </button>
-              ))}
+              <PagedResults items={matchingBookmarks} criteria={needle} label={t("Reading list")}>
+                {(item) => (
+                  <button
+                    className="unified-result"
+                    key={item.id}
+                    disabled={!bookById.get(item.bookId)?.available}
+                    onClick={() =>
+                      open({
+                        bookId: item.bookId,
+                        path: item.path,
+                        title: item.title,
+                        scroll: 0,
+                      })
+                    }
+                  >
+                    <strong>{item.title}</strong>
+                    <span>
+                      {bookById.get(item.bookId)?.title ||
+                        t("Archive not in library")}
+                    </span>
+                    {item.note && <p>{item.note}</p>}
+                    <small>
+                      {bookById.get(item.bookId)?.available
+                        ? t("Open article in a new tab")
+                        : t("Archive unavailable")}
+                    </small>
+                  </button>
+                )}
+              </PagedResults>
             </section>
           )}
           {!!matchingHistory.length && (
@@ -224,33 +228,35 @@ export default function UnifiedSearch({
                 <Clock size={16} />
                 {t("Recently read")}
               </h3>
-              {matchingHistory.map((item) => (
-                <button
-                  className="unified-result"
-                  key={item.id}
-                  disabled={!bookById.get(item.bookId)?.available}
-                  onClick={() =>
-                    open({
-                      bookId: item.bookId,
-                      path: item.path,
-                      title: item.title,
-                      scroll: item.scroll,
-                    })
-                  }
-                >
-                  <strong>{item.title}</strong>
-                  <span>
-                    {bookById.get(item.bookId)?.title ||
-                      t("Archive not in library")}{" "}
-                    · {formatDate(item.visitedAt)}
-                  </span>
-                  <small>
-                    {bookById.get(item.bookId)?.available
-                      ? t("Open article in a new tab")
-                      : t("Archive unavailable")}
-                  </small>
-                </button>
-              ))}
+              <PagedResults items={matchingHistory} criteria={needle} label={t("Recently read")}>
+                {(item) => (
+                  <button
+                    className="unified-result"
+                    key={item.id}
+                    disabled={!bookById.get(item.bookId)?.available}
+                    onClick={() =>
+                      open({
+                        bookId: item.bookId,
+                        path: item.path,
+                        title: item.title,
+                        scroll: item.scroll,
+                      })
+                    }
+                  >
+                    <strong>{item.title}</strong>
+                    <span>
+                      {bookById.get(item.bookId)?.title ||
+                        t("Archive not in library")}{" "}
+                      · {formatDate(item.visitedAt)}
+                    </span>
+                    <small>
+                      {bookById.get(item.bookId)?.available
+                        ? t("Open article in a new tab")
+                        : t("Archive unavailable")}
+                    </small>
+                  </button>
+                )}
+              </PagedResults>
             </section>
           )}
           {!count && (

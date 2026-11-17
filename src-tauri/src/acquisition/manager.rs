@@ -72,15 +72,15 @@ impl DownloadManager {
         let state_path = data_dir.join("downloads.json");
         let mut history_notice = None;
         let (mut jobs, mut load_warnings): (BTreeMap<String, StoredJob>, Vec<String>) =
-            match regular_file(&state_path)? {
-                Some(meta) => match load_saved_downloads(&state_path, meta.len(), &store) {
+            match open_history(&state_path)? {
+                Some(file) => match load_saved_downloads(&file, file.metadata().map_err(|e| e.to_string())?.len(), &store) {
                     Ok(loaded) => loaded,
                     Err(reason) => {
                         // Preserve the unreadable record byte-for-byte and start
                         // empty. A bad record must never block the profile:
                         // download history is recoverable, the app is not
                         // optional. This is a quiet notice, not an error.
-                        let preserved = quarantine_state(&state_path, &data_dir)?;
+                        let preserved = preserve_history(&state_path, file)?;
                         crate::diagnostics::record(&store, "downloads", Some(&reason));
                         eprintln!(
                             "Saved download history was unreadable ({reason}); preserved at {}",
@@ -816,6 +816,7 @@ impl DownloadManager {
             downloaded: 0,
             total: admission_size,
             error: None,
+            history_warning: None,
             speed: 0,
             eta_seconds: None,
             created_at: timestamp.clone(),
@@ -1066,9 +1067,6 @@ impl DownloadManager {
     ) -> Result<R, String> {
         let mut state = self.inner.state()?;
         let stored = state.jobs.get(id).ok_or("Unknown download ID")?;
-        if !native_complete && !stored.native.as_ref().is_some_and(|native| native.total.is_some()) {
-            require_download_network(&self.inner, id, &stored.job.url)?;
-        }
         if stored.history_dismissed || stored.files_deleted
             || stored.part_ownership.as_ref().is_some_and(crate::torrent::CleanupEntry::cleanup_started)
             || stored.published_ownership.as_ref().is_some_and(crate::torrent::CleanupEntry::cleanup_started)
@@ -1079,11 +1077,16 @@ impl DownloadManager {
             return Ok(project(stored));
         }
         if let Some(running) = state.running.get(id) {
-            return if *running.command.borrow() == Signal::Run {
+            // An automatic reconnect can overlap the previous interruption's
+            // final flush. Keep its interrupted flag for the next retry.
+            return if interrupted_only || *running.command.borrow() == Signal::Run {
                 Ok(project(stored))
             } else {
                 Err("Download is still stopping; await pause/cancel before resuming".into())
             };
+        }
+        if !native_complete && !stored.native.as_ref().is_some_and(|native| native.total.is_some()) {
+            require_download_network(&self.inner, id, &stored.job.url)?;
         }
         if !matches!(stored.job.status.as_str(), "paused" | "failed") {
             return Err("Only paused or failed downloads can resume".into());
@@ -1207,10 +1210,18 @@ impl DownloadManager {
                 // A job that cannot auto-resume must never wedge the manager or
                 // be retried on every launch: keep it visible with the reason
                 // and clear the interruption so this decision is durable.
-                let recorded = self.inner.update(&id, |stored| {
+                let recorded = (|| {
+                    let mut state = self.inner.state()?;
+                    if state.running.contains_key(&id) { return Ok(()); }
+                    let Some(stored) = state.jobs.get_mut(&id) else { return Ok(()); };
+                    if stored.job.status != "paused" || !stored.job.interrupted { return Ok(()); }
                     stored.job.error = Some(error.chars().take(2000).collect());
                     stored.job.interrupted = false;
-                });
+                    stored.job.updated_at = now();
+                    let journal = self.inner.stage(&state)?;
+                    drop(state);
+                    self.inner.publish(journal)
+                })();
                 if let Err(save_error) = recorded {
                     if first_error.is_none() {
                         first_error = Some(save_error);

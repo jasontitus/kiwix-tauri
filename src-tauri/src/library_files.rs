@@ -1944,7 +1944,8 @@ pub(crate) fn backup_record<T: serde::de::DeserializeOwned>(
     let metadata = Metadata::from_file(&file).map_err(err)?;
     FileStamp::of(&metadata)?;
     if metadata.len() > limit { return Err("Acquisition backup evidence exceeds its state limit".into()); }
-    let mut value = serde_json::from_reader(file.take(limit + 1)).map_err(err)?;
+    let mut value = crate::acquisition::read_history_json(file, limit).map_err(err)?
+        .ok_or("Acquisition backup evidence exceeds its state limit")?;
     store.mobile_rebase_saved_json(kind, &mut value)?;
     directory.unchanged()?;
     serde_json::from_value(value).map(Some).map_err(err)

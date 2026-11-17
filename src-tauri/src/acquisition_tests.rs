@@ -657,6 +657,7 @@ fn durable_stored(root: &Path, id: &str, bytes: &[u8], status: &str) -> StoredJo
             downloaded: total,
             total: Some(total),
             error: None,
+            history_warning: None,
             speed: 0,
             eta_seconds: None,
             created_at: now(),
@@ -696,6 +697,41 @@ fn durable_stored(root: &Path, id: &str, bytes: &[u8], status: &str) -> StoredJo
     }
 }
 
+#[test]
+fn failed_final_history_write_preserves_publication_and_recovers_on_restart() {
+    let root = test_directory();
+    let store = test_store(&root);
+    let folder = root.join("state");
+    let manager = DownloadManager::new(folder.clone(), store.clone(), Default::default()).unwrap();
+    let id = Uuid::new_v4().to_string();
+    let bytes = zim_bytes(b'a', 1024);
+    let stored = durable_stored(&root, &id, &bytes, "verifying");
+    let (destination, part) = paths(&stored.job).unwrap();
+    manager.inner.state().unwrap().jobs.insert(id.clone(), stored);
+    // The first write records the recovery intent. Only the post-rename write fails.
+    FAIL_JOURNAL_GENERATION.set(Some(manager.inner.journal_generation.load(Ordering::Relaxed) + 2));
+    let digest = hex::encode(sha2::Sha256::digest(&bytes));
+    assert_eq!(
+        finalize::publish_verified_download(&manager.inner, &id, File::open(&part).unwrap(),
+            bytes.len() as u64, &digest, FinalizeMode::Startup).unwrap(),
+        Outcome::Complete,
+    );
+    let job = manager.inner.snapshot(&id).unwrap().job;
+    assert_eq!(job.status, "complete");
+    assert!(job.error.is_none());
+    assert!(job.history_warning.as_deref().unwrap().contains("download history"));
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+    drop(manager);
+    let restored = DownloadManager::new(folder, store, Default::default()).unwrap();
+    let job = restored.inner.snapshot(&id).unwrap().job;
+    assert_eq!(job.status, "complete");
+    assert!(job.error.is_none() && job.history_warning.is_none());
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+    drop(restored);
+    fs::remove_dir_all(root).unwrap();
+}
+
+
 fn write_state(data_dir: &Path, stored: StoredJob) {
     fs::create_dir_all(data_dir).unwrap();
     let mut jobs = BTreeMap::new();
@@ -725,6 +761,7 @@ fn seed_partial(
         downloaded: bytes.len() as u64,
         total: Some(total),
         error: None,
+        history_warning: None,
         speed: 0,
         eta_seconds: None,
         created_at: now(),
@@ -2362,6 +2399,74 @@ async fn returning_archive_clears_a_stale_missing_error() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn transfer_journal_reads_are_buffered_and_enforce_the_stream_limit() {
+    use std::io::{Cursor, Read};
+    struct Counted {
+        input: Cursor<Vec<u8>>,
+        reads: usize,
+    }
+    impl Read for Counted {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            self.reads += 1;
+            Read::read(&mut self.input, bytes)
+        }
+    }
+    let mut bytes = b"{}".to_vec();
+    bytes.resize(128 * 1024, b' ');
+    let limit = bytes.len() as u64;
+    let mut reader = Counted { input: Cursor::new(bytes), reads: 0 };
+    assert_eq!(read_history_json(&mut reader, limit).unwrap(), Some(serde_json::json!({})));
+    assert!(reader.reads < 100);
+    reader.input.get_mut().push(b' ');
+    reader.input.set_position(0);
+    assert!(read_history_json(reader, limit).unwrap().is_none());
+}
+
+#[test]
+fn transfer_journal_recovery_refuses_a_replaced_source() {
+    let root = test_directory();
+    let path = root.join("downloads.json");
+    fs::write(&path, b"broken").unwrap();
+    let first = open_history(&path).unwrap().unwrap();
+    fs::rename(&path, root.join("old")).unwrap();
+    fs::write(&path, b"edited").unwrap();
+    assert!(preserve_history(&path, first).is_err());
+    assert_eq!(fs::read(&path).unwrap(), b"edited");
+    assert_eq!(fs::read(root.join("old")).unwrap(), b"broken");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn interruption_survives_a_stopping_worker_and_an_unwound_worker_can_be_cancelled() {
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store, crate::update_admission::AdmissionGate::default()).unwrap();
+    let id = seed_partial(&manager, &root, "http://127.0.0.1:9/fixture.zim".into(), b"partial", 128);
+    let (command, _receiver) = watch::channel(Signal::Interrupt);
+    let (_done, finished) = watch::channel(false);
+    {
+        let mut state = manager.inner.state().unwrap();
+        state.jobs.get_mut(&id).unwrap().job.interrupted = true;
+        state.running.insert(id.clone(), Running { command, finished });
+    }
+    manager.resume_interrupted().await.unwrap();
+    assert!(manager.inner.snapshot(&id).unwrap().job.interrupted);
+    let mut finished = {
+        let mut state = manager.inner.state().unwrap();
+        state.running.remove(&id);
+        spawn_download_worker(&manager.inner, &mut state, &id, WorkerMode::Panic);
+        state.running[&id].finished.clone()
+    };
+    finished.wait_for(|done| *done).await.unwrap();
+    assert_eq!(manager.inner.snapshot(&id).unwrap().job.status, "failed");
+    assert!(!manager.inner.state().unwrap().running.contains_key(&id));
+    manager.cancel(&id).await.unwrap();
+    assert_eq!(manager.inner.snapshot(&id).unwrap().job.status, "cancelled");
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn malformed_downloads_root_is_preserved_and_new_downloads_still_persist() {
     for original in [b"{not json".as_slice(), b"[]".as_slice()] {
@@ -3337,6 +3442,7 @@ fn a_fully_durable_segmented_row_is_finalized_on_load() {
             downloaded: total,
             total: Some(total),
             error: None,
+            history_warning: None,
             speed: 0,
             eta_seconds: None,
             created_at: now(),

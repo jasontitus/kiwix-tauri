@@ -512,3 +512,59 @@ test("another Android background transition beats delayed frontend confirmation 
   assert.equal(app.speechCapability.phase, "started");
   app.close();
 });
+
+test("native speech waits for the window listener and retires pending registration on unmount", async () => {
+  const hook = speechTree.statements.find((node) =>
+    ts.isFunctionDeclaration(node) && node.name?.text === "useNativeSpeech");
+  const effects = hook.body.statements.flatMap((statement) =>
+    ts.isExpressionStatement(statement) && ts.isCallExpression(statement.expression) &&
+    statement.expression.expression.getText(speechTree) === "useEffect"
+      ? [statement.expression.arguments[0].getText(speechTree)] : []);
+  const install = effects.find((source) => source.includes('"mobile-speech-state"'))
+    .replace('import("@tauri-apps/api/webviewWindow")', 'loadWindowModule()');
+  const discover = effects.find((source) => source.includes('"mobile_speech_voices"'));
+  const code = ts.transpileModule(`globalThis.install = ${install}; globalThis.discover = ${discover};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  for (const phase of ["browser", "import", "registration", "ready"]) {
+    let load, registered;
+    const module = new Promise((resolve) => { load = resolve; });
+    const listener = new Promise((resolve) => { registered = resolve; });
+    const sequence = [];
+    const source = { privacyGeneration: 7 };
+    const options = {
+      interactive: true, sourceReady: true, privacyGeneration: 7, context: () => source,
+      onVoices: () => sequence.push("voices"),
+    };
+    const env = vm.createContext({
+      isNative: phase !== "browser", options, latest: { current: options }, alive: { current: false },
+      listenerReady: { current: null }, ready: { current: false }, stop() {}, report: assert.fail,
+      sourceCurrent: () => true, capturePrivacyContext: () => ({ generation: 7 }),
+      loadWindowModule: () => { sequence.push("import"); return module; },
+      api: async (name) => {
+        assert.equal(name, "mobile_speech_voices");
+        sequence.push("discover");
+        return { available: true, voices: [] };
+      },
+    });
+    vm.runInContext(code, env);
+    const unmount = env.install();
+    const leave = env.discover();
+    if (phase === "browser") {
+      assert.deepEqual(sequence, []);
+      continue;
+    }
+    const listening = env.listenerReady.current;
+    if (phase === "import") { unmount(); leave(); }
+    load({ getCurrentWebviewWindow: () => ({ listen: () => { sequence.push("listen"); return listener; } }) });
+    await new Promise((resolve) => setImmediate(resolve));
+    if (phase === "registration") { unmount(); leave(); }
+    assert.deepEqual(sequence, phase === "import" ? ["import"] : ["import", "listen"]);
+    registered(() => sequence.push("unlisten"));
+    await listening;
+    await new Promise((resolve) => setImmediate(resolve));
+    if (phase === "ready") { assert.equal(env.ready.current, true); unmount(); leave(); }
+    assert.deepEqual(sequence, phase === "import" ? ["import"] :
+      phase === "registration" ? ["import", "listen", "unlisten"] : ["import", "listen", "discover", "voices", "unlisten"]);
+  }
+});

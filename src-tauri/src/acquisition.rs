@@ -95,6 +95,9 @@ pub struct DownloadJob {
     pub downloaded: u64,
     pub total: Option<u64>,
     pub error: Option<String>,
+    /// A durability warning after verified publication, separate from transfer/import errors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_warning: Option<String>,
     pub speed: u64,
     pub eta_seconds: Option<u64>,
     pub created_at: String,
@@ -863,6 +866,17 @@ impl From<SavedRecordError> for String {
     }
 }
 
+/// serde_json reads a stream byte by byte. Buffer file reads and require a
+/// real EOF within the limit, even if the open journal grows during parsing.
+pub(crate) fn read_history_json(
+    reader: impl Read,
+    limit: u64,
+) -> serde_json::Result<Option<serde_json::Value>> {
+    let mut bounded = std::io::BufReader::new(reader.take(limit + 1));
+    let value = serde_json::from_reader(&mut bounded)?;
+    Ok((bounded.get_ref().limit() != 0).then_some(value))
+}
+
 /// Capability-relative, bounded history read only: no manager construction,
 /// recovery, directory creation, process lock, or network initialization.
 pub(crate) fn saved_monitored_record<T: serde::de::DeserializeOwned>(
@@ -902,7 +916,7 @@ pub(crate) fn saved_monitored_record<T: serde::de::DeserializeOwned>(
     if !metadata.is_file() || metadata.len() > limit {
         return Err(SavedRecordError::NoClaims);
     }
-    let mut value: serde_json::Value = serde_json::from_reader(file.take(limit + 1))
+    let mut value = read_history_json(file, limit)
         .map_err(|error| {
             // A truncated or malformed record is invalid content; a read that
             // failed for another reason is an unavailable profile, not an
@@ -914,7 +928,7 @@ pub(crate) fn saved_monitored_record<T: serde::de::DeserializeOwned>(
             } else {
                 SavedRecordError::NoClaims
             }
-        })?;
+        })?.ok_or(SavedRecordError::NoClaims)?;
     #[cfg(mobile)]
     store.mobile_rebase_saved_json(kind, &mut value).map_err(|_| SavedRecordError::NoClaims)?;
     #[cfg(desktop)]
@@ -923,7 +937,7 @@ pub(crate) fn saved_monitored_record<T: serde::de::DeserializeOwned>(
 }
 
 fn now() -> String {
-    chrono::Utc::now().to_rfc3339()
+    crate::timestamps::now()
 }
 
 fn safe_name(name: &str) -> Result<(), String> {
@@ -1561,6 +1575,11 @@ struct PendingJournal {
     bytes: Vec<u8>,
 }
 
+#[cfg(test)]
+thread_local! {
+    static FAIL_JOURNAL_GENERATION: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
 impl Inner {
     async fn client(&self) -> Result<&reqwest::Client, String> {
         self.client.get_or_try_init(|| async { http_client(true) }).await
@@ -1603,6 +1622,11 @@ impl Inner {
     /// caller that still holds the state lock waits only for the rename and its
     /// directory fsync, never for another thread's whole-document write.
     fn write_journal(&self, journal: PendingJournal) -> Result<bool, String> {
+        #[cfg(test)]
+        if FAIL_JOURNAL_GENERATION.get() == Some(journal.generation) {
+            FAIL_JOURNAL_GENERATION.set(None);
+            return Err("Injected final history write failure".into());
+        }
         let temporary = self
             .data_dir
             .join(format!("downloads-{}.tmp", Uuid::new_v4()));
@@ -1772,6 +1796,8 @@ async fn download_request(inner: &Inner, id: &str, url: Url, headers: http::Head
 enum WorkerMode {
     Transfer,
     DurableFinalize,
+    #[cfg(test)]
+    Panic,
     #[cfg(any(target_os = "ios", all(test, unix)))]
     NativeAttach,
 }
@@ -1793,19 +1819,27 @@ fn spawn_download_worker(inner: &Arc<Inner>, state: &mut State, id: &str, mode: 
     let inner = Arc::clone(inner);
     let id = id.to_string();
     tokio::spawn(async move {
-        let mut result = match mode {
-            WorkerMode::Transfer => execute(Arc::clone(&inner), &id, receiver).await,
-            #[cfg(any(target_os = "ios", all(test, unix)))]
-            WorkerMode::NativeAttach => execute_native(&inner, &id, receiver, false).await,
-            WorkerMode::DurableFinalize => {
-                let task_inner = Arc::clone(&inner);
-                let task_id = id.clone();
-                tokio::task::spawn_blocking(move || {
-                    finalize_durable_download(&task_inner, &task_id, FinalizeMode::Sweep)
-                }).await.map_err(|error| format!("Download finalize task failed: {error}"))
-                    .and_then(|result| result)
+        // Let the normal settlement path record a failed transfer and release
+        // its running slot even if a transport future unwinds.
+        let operation = async {
+            match mode {
+                #[cfg(test)]
+                WorkerMode::Panic => panic!("Injected download worker failure"),
+                WorkerMode::Transfer => execute(Arc::clone(&inner), &id, receiver).await,
+                #[cfg(any(target_os = "ios", all(test, unix)))]
+                WorkerMode::NativeAttach => execute_native(&inner, &id, receiver, false).await,
+                WorkerMode::DurableFinalize => {
+                    let task_inner = Arc::clone(&inner);
+                    let task_id = id.clone();
+                    tokio::task::spawn_blocking(move || {
+                        finalize_durable_download(&task_inner, &task_id, FinalizeMode::Sweep)
+                    }).await.map_err(|error| format!("Download finalize task failed: {error}"))
+                        .and_then(|result| result)
+                }
             }
         };
+        let mut result = futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(operation))
+            .await.unwrap_or_else(|_| Err("The download worker stopped unexpectedly. Resume to try again".into()));
         let state = {
             #[cfg(any(target_os = "ios", all(test, unix)))]
             {
@@ -1892,10 +1926,14 @@ fn spawn_download_worker(inner: &Arc<Inner>, state: &mut State, id: &str, mode: 
             if !completed {
                 match inner.stage(&state) {
                     Ok(journal) => {
+                        let generation = journal.generation;
                         drop(state);
                         if let Err(error) = inner.publish(journal) {
                             if let Ok(mut state) = inner.state() {
-                                if let Some(stored) = state.jobs.get_mut(&id) {
+                                // A newer checkpoint owns its own result and any persistence error.
+                                if let Some(stored) = state.jobs.get_mut(&id).filter(|_| {
+                                    inner.journal_generation.load(Ordering::Relaxed) == generation
+                                }) {
                                     // A journal failure does not revoke an explicit stop.
                                     // In particular, Failed would make Cancel resumable.
                                     if !matches!(stored.job.status.as_str(), "cancelled" | "paused") {

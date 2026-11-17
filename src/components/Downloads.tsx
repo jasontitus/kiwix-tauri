@@ -667,11 +667,14 @@ export default function Downloads({
     }
   }
   async function saveTorrent(job: DownloadJob) {
+    const privacy = capturePrivacyContext();
+    if (!privacy || privacy.readOnly) return;
     try {
       const bytes = await api<string>("torrent_metadata", { id: job.id });
-      await saveBytes(`${job.fileName}.torrent`, bytes, "application/x-bittorrent");
+      if (!alive.current) return;
+      await saveBytes(`${job.fileName}.torrent`, bytes, "application/x-bittorrent", privacy);
     } catch (e) {
-      if (alive.current) onError(e);
+      if (alive.current && isPrivacyContextCurrent(privacy)) onError(e);
     }
   }
   async function mapAction(receipt?: string, cancellationPrivacy?: PrivacyContext, cancelledJobId?: string) {
@@ -1390,6 +1393,7 @@ export default function Downloads({
                       {spaceWarning && <>{" "}{t("Projected free space: {size}", { size: formatBytes(spaceWarning.projectedFreeBytes) })}</>}
                     </p>
                   )}
+                  {job.historyWarning && <p role="status">{errorText(job.historyWarning)}</p>}
                   {job.importError && (
                     <p className="inline-error" role="alert">
                       {t("Archive import failed: {error}", {

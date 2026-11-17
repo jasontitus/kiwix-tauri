@@ -350,7 +350,7 @@ fn valid_data<'a>(bookmarks: &'a Bookmarks, positions: &'a Positions, retired: &
                 for tag in v { text(tag, 1024, false)?; }
                 Ok(())
             })?;
-            valid_register(&b.created_at, |v| chrono::DateTime::parse_from_rfc3339(v).map(|_| ()).map_err(|_| "Reading sync contains an invalid creation timestamp".into()))?;
+            valid_register(&b.created_at, |v| crate::timestamps::parse(v).map(|_| ()).map_err(|_| "Reading sync contains an invalid creation timestamp".into()))?;
             valid_register(&b.legacy_book, descriptor)?;
             for (hid, highlights) in &b.highlights {
                 if uuid::Uuid::parse_str(hid).ok().is_none_or(|id| id.to_string() != *hid) { return Err("Reading sync contains an invalid highlight identity".into()); }

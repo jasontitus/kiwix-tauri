@@ -26,6 +26,7 @@ struct Attempt {
     requested: HashSet<String>,
     pending: HashSet<String>,
     error: Option<String>,
+    prepared: bool,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -204,39 +205,24 @@ fn reconcile(
     Ok(newly_opened)
 }
 
-/// Idle → Preparing. Exactly one Quit attempt exists at a time.
-fn begin_attempt(slot: &mut Option<Attempt>, request_id: &str) -> Result<(), String> {
-    if slot.is_some() {
-        return Err("Application quit is already pending".into());
+/// A prepared shell stays frozen until service retirement succeeds. A retry may
+/// reuse its acknowledged snapshot because new shell creation remains gated.
+fn needs_flush(slot: &mut Option<Attempt>, request_id: &str) -> Result<bool, String> {
+    if let Some(active) = slot {
+        return if active.prepared {
+            Ok(false)
+        } else {
+            Err("Application quit is already pending".into())
+        };
     }
     *slot = Some(Attempt {
         id: request_id.into(),
         requested: HashSet::new(),
         pending: HashSet::new(),
         error: None,
+        prepared: false,
     });
-    Ok(())
-}
-
-/// Prepared → Idle after a failed final retirement. A successful `prepare`
-/// deliberately keeps its attempt through `Service::shutdown`; if shutdown
-/// then fails, the attempt must be released or every later Quit is refused as
-/// "already pending" and new windows stay blocked while the service already
-/// refuses commands. `Service::shutdown` is repeatable, so releasing the
-/// attempt is what makes the next Quit able to retry it.
-fn take_attempt(manager: &QuitManager) -> Option<String> {
-    let mut guard = manager.attempt.lock().unwrap_or_else(|error| error.into_inner());
-    guard.take().map(|attempt| attempt.id)
-}
-
-/// Release a prepared Quit whose final service retirement failed and tell the
-/// shells to resume, so the user can repair the cause and Quit again.
-pub fn abandon(app: &AppHandle, error: &str) {
-    let Some(manager) = app.try_state::<QuitManager>() else { return };
-    if let Some(request_id) = take_attempt(&manager) {
-        cancel(app, &manager, &request_id, error);
-    }
-    manager.changed.notify_waiters();
+    Ok(true)
 }
 
 fn cancel(app: &AppHandle, manager: &QuitManager, request_id: &str, error: &str) {
@@ -282,7 +268,7 @@ pub async fn prepare(app: &AppHandle) -> Result<(), String> {
             .attempt
             .lock()
             .map_err(|_| "Quit state unavailable")?;
-        begin_attempt(&mut guard, &request_id)?;
+        if !needs_flush(&mut guard, &request_id)? { return Ok(()); }
         app.webview_windows()
     });
     let deadline = Instant::now() + FLUSH_TIMEOUT;
@@ -328,6 +314,10 @@ pub async fn prepare(app: &AppHandle) -> Result<(), String> {
         if let Err(error) = service.store.save_session_snapshot(&open) {
             eprintln!("Saving the restorable session: {error}");
         }
+        let mut guard = manager.attempt.lock().map_err(|_| "Quit state unavailable")?;
+        let attempt = guard.as_mut().filter(|attempt| attempt.id == request_id)
+            .ok_or("Quit request was cancelled")?;
+        attempt.prepared = true;
         Ok(())
     }.await;
     if let Err(error) = &result {
@@ -341,17 +331,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_failed_final_retirement_releases_the_quit_attempt_for_a_retry() {
-        let manager = QuitManager::default();
-        // A successful prepare leaves its attempt held through shutdown.
-        begin_attempt(&mut manager.attempt.lock().unwrap(), "first").unwrap();
-        let refused = begin_attempt(&mut manager.attempt.lock().unwrap(), "second").unwrap_err();
-        assert!(refused.contains("already pending"), "{refused}");
-        // Shutdown failed: the held attempt is released exactly once ...
-        assert_eq!(take_attempt(&manager).as_deref(), Some("first"));
-        assert_eq!(take_attempt(&manager), None);
-        // ... so the next Quit can prepare and retry the repeatable shutdown.
-        begin_attempt(&mut manager.attempt.lock().unwrap(), "retry").unwrap();
-        assert_eq!(manager.attempt.lock().unwrap().as_ref().map(|a| a.id.as_str()), Some("retry"));
+    fn only_a_prepared_attempt_can_retry_without_rewriting_sessions() {
+        let mut slot = None;
+        assert!(needs_flush(&mut slot, "first").unwrap());
+        assert!(needs_flush(&mut slot, "second").is_err());
+        slot.as_mut().unwrap().prepared = true;
+        assert!(!needs_flush(&mut slot, "retry").unwrap());
+        assert_eq!(slot.as_ref().unwrap().id, "first");
+        // Ordinary shell-flush cancellation clears the attempt and must flush again.
+        slot = None;
+        assert!(needs_flush(&mut slot, "after cancellation").unwrap());
     }
 }

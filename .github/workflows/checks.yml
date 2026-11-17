@@ -15,6 +15,7 @@ on:
       - 'COPYING'
       - '.gitignore'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -59,6 +60,19 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 1
+
+  connector:
+    name: Agent connector tests and clippy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --locked --manifest-path kiwix-mcp/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --locked --manifest-path kiwix-mcp/Cargo.toml
 
   android-typecheck:
     # Type-checks cfg(mobile)/Android code that the desktop jobs never compile.
@@ -135,3 +149,5 @@ jobs:
         run: |
           cargo clippy --locked --manifest-path src-tauri/Cargo.toml \
             --target x86_64-pc-windows-gnu --lib --features custom-protocol -- -D warnings
+      - name: Check Windows agent connector and its tests
+        run: cargo clippy --locked --manifest-path kiwix-mcp/Cargo.toml --target x86_64-pc-windows-gnu --all-targets -- -D warnings

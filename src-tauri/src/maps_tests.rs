@@ -1804,40 +1804,59 @@ async fn a_failed_new_job_checkpoint_keeps_the_previous_unresolved_record() {
     assert_eq!(fs::read(&foreign).unwrap(), b"unowned archive must survive");
 }
 
-#[tokio::test]
-async fn cancel_never_revokes_a_worker_admitted_while_the_old_one_retired() {
+#[test]
+fn pause_racing_storage_failure_retains_the_terminal_error_after_restart() {
     let fixture = Fixture::new();
     let manager = fixture.manager();
-    let decision: MapDecision = serde_json::from_value(serde_json::json!({
-        "token": "t", "session": "live-session", "generation": 0,
-        "catalogUrl": "https://offline-fixture.invalid/index.json",
-        "proxyUrl": "https://offline-fixture.invalid/", "destination": "/tmp",
-        "regionId": "fixture", "language": "en", "name": "fixture.zim",
-        "md5": "0", "uuid": "u", "size": 1, "target": null,
-    })).unwrap();
-    let old = {
-        let mut state = manager.inner.state.lock().unwrap();
-        state.job.as_mut().unwrap().decision = Some(decision);
-        state.active.clone().unwrap()
-    };
-    let canceller = manager.clone();
-    let cancelling = tokio::spawn(async move { canceller.cancel().await });
-    let mut cancel_seen = old.cancel.subscribe();
-    tokio::time::timeout(Duration::from_secs(5), cancel_seen.wait_for(|cancelled| *cancelled)).await.unwrap().unwrap();
-    {
-        // The old worker retires; before cancel's tail runs, a resume from
-        // another surface admits a new worker on the same job.
-        let mut state = manager.inner.state.lock().unwrap();
-        let job = state.job.as_mut().unwrap();
-        job.status = "queued".into();
-        state.active = Some(Arc::new(Control::new()));
+    let control = manager.inner.state.lock().unwrap().active.clone().unwrap();
+    control.request_pause();
+    manager.finish("offline-fixture", &control, Err("Cannot sync composed map".into()));
+    let reopened = MapManager::new(fixture.root.join("state"), fixture.store.clone()).unwrap();
+    let job = reopened.status().unwrap().unwrap();
+    assert_eq!(job.status, "failed");
+    assert_eq!(job.error.as_deref(), Some("Cannot sync composed map"));
+    assert!(!job.resumable);
+    reopened.remove_terminal(&job.id).unwrap();
+    assert!(reopened.status().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn cancel_never_revokes_a_worker_admitted_while_the_old_one_retired() {
+    for status in ["queued", "paused"] {
+        let fixture = Fixture::new();
+        let manager = fixture.manager();
+        let decision: MapDecision = serde_json::from_value(serde_json::json!({
+            "token": "t", "session": "live-session", "generation": 0,
+            "catalogUrl": "https://offline-fixture.invalid/index.json",
+            "proxyUrl": "https://offline-fixture.invalid/", "destination": "/tmp",
+            "regionId": "fixture", "language": "en", "name": "fixture.zim",
+            "md5": "0", "uuid": "u", "size": 1, "target": null,
+        })).unwrap();
+        let old = {
+            let mut state = manager.inner.state.lock().unwrap();
+            state.job.as_mut().unwrap().decision = Some(decision);
+            state.active.clone().unwrap()
+        };
+        let canceller = manager.clone();
+        let cancelling = tokio::spawn(async move { canceller.cancel().await });
+        let mut cancel_seen = old.cancel.subscribe();
+        tokio::time::timeout(Duration::from_secs(5), cancel_seen.wait_for(|cancelled| *cancelled)).await.unwrap().unwrap();
+        {
+            // A second surface resumed the same job. Its worker can still be
+            // writing or have paused again before the old waiter wakes.
+            let mut state = manager.inner.state.lock().unwrap();
+            let job = state.job.as_mut().unwrap();
+            job.status = status.into();
+            state.admission += 1;
+            state.active = (status == "queued").then(|| Arc::new(Control::new()));
+        }
+        old.done.send_replace(Some(Ok(())));
+        tokio::time::timeout(Duration::from_secs(5), cancelling).await.unwrap().unwrap().unwrap();
+        let state = manager.inner.state.lock().unwrap();
+        let job = state.job.as_ref().unwrap();
+        assert_eq!(job.status, status);
+        assert_eq!(job.decision.as_ref().unwrap().session, "live-session", "the newer admission's authorization was revoked");
     }
-    old.done.send_replace(Some(Ok(())));
-    tokio::time::timeout(Duration::from_secs(5), cancelling).await.unwrap().unwrap().unwrap();
-    let state = manager.inner.state.lock().unwrap();
-    let job = state.job.as_ref().unwrap();
-    assert_eq!(job.status, "queued");
-    assert_eq!(job.decision.as_ref().unwrap().session, "live-session", "the live worker's authorization was revoked");
 }
 
 #[tokio::test]

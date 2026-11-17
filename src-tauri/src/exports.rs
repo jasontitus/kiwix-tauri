@@ -30,16 +30,106 @@ const MAX_PARTS: usize = 4096;
 const MAX_REFERENCES: usize = 32768;
 const MAX_URL: usize = 16384;
 
-/// `overwrite` must reflect explicit native Save-dialog consent, never merely
-/// an existence check. False uses an atomic no-clobber rename on every platform.
-pub fn save_resource(
+/// Keep an existing document's ACLs, extended attributes and file identity.
+/// Back up only the prefix the replacement can overwrite. The original tail
+/// stays intact until the new bytes have reached disk. New files use the
+/// same staged, no-clobber publication as article exports.
+pub(crate) fn save_document(destination: &Path, bytes: &[u8]) -> Result<(), String> {
+    use cap_fs_ext::MetadataExt;
+    use std::io::{Read, Seek};
+    let selected = match open_export_file(destination, false) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return atomic_output(destination, false, |output| output.write_all(bytes).map_err(display));
+        }
+        Ok(file) => file,
+        Err(error) => return Err(format!("Opening export destination: {error}")),
+    };
+    let mut file = open_export_file(destination, true).map_err(|e| format!("Opening export destination: {e}"))?;
+    if !same_export_file(&selected, &file).map_err(display)? {
+        return Err("Export destination changed. Choose the file again".into());
+    }
+    drop(selected);
+    crate::fs_ext::FileExt::try_flock_exclusive(&file).map_err(|e| format!("Locking export destination: {e}"))?;
+    let metadata = cap_std::fs::Metadata::from_file(&file).map_err(display)?;
+    if !metadata.is_file() || metadata.permissions().readonly() || metadata.nlink() != 1 {
+        return Err("Choose a writable regular file without other links for this export".into());
+    }
+    let original_len = metadata.len();
+    let prefix_len = original_len.min(bytes.len() as u64);
+    let mut prefix = Vec::new();
+    Read::take(&mut file, prefix_len).read_to_end(&mut prefix).map_err(display)?;
+    if prefix.len() as u64 != prefix_len || file.metadata().map_err(display)?.len() != original_len {
+        return Err("Export destination changed. Choose the file again".into());
+    }
+    file.rewind().map_err(display)?;
+    #[cfg(test)]
+    let write = if FAIL_EXISTING_EXPORT.replace(false) {
+        file.write_all(&bytes[..bytes.len().min(2)]).and_then(|_| Err(io::Error::other("Injected write failure")))
+    } else { file.write_all(bytes) };
+    #[cfg(not(test))]
+    let write = file.write_all(bytes);
+    let write = write.and_then(|()| file.sync_all())
+        .and_then(|()| file.set_len(bytes.len() as u64));
+    if let Err(error) = write {
+        let restore = file.rewind().and_then(|()| file.write_all(&prefix))
+            .and_then(|()| file.set_len(original_len)).and_then(|()| file.sync_all());
+        return match restore {
+            Ok(()) => Err(format!("Saving export: {error}. The original file was restored.")),
+            Err(restore) => Err(format!("Saving export: {error}. Restoring the original file also failed: {restore}")),
+        };
+    }
+    file.sync_all().map_err(|_| "The export completed and the file was kept, but Kiwix could not confirm that it will survive a sudden power loss.".to_owned())?;
+    if !file_still_at(&file, destination) {
+        return Err("The saved file moved during export. Check the chosen folder before trying again".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static FAIL_EXISTING_EXPORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn open_export_file(path: &Path, write: bool) -> io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(write);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0020_0000);
+        if write { options.share_mode(1); }
+    }
+    let file = options.open(path)?;
+    if !cap_std::fs::Metadata::from_file(&file)?.is_file() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Choose a regular file for this export"));
+    }
+    Ok(file)
+}
+
+fn same_export_file(first: &File, second: &File) -> io::Result<bool> {
+    use cap_fs_ext::MetadataExt;
+    let first = cap_std::fs::Metadata::from_file(first)?;
+    let second = cap_std::fs::Metadata::from_file(second)?;
+    Ok(first.is_file() && second.is_file() && first.dev() == second.dev() && first.ino() == second.ino())
+}
+
+fn file_still_at(file: &File, path: &Path) -> bool {
+    open_export_file(path, false).and_then(|named| same_export_file(file, &named)).unwrap_or(false)
+}
+
+/// Stream an archive entry without touching its final destination before admission.
+pub(crate) fn prepare_resource(
     archive: &Archive,
     entry_path: &str,
     destination: &Path,
-    overwrite: bool,
-) -> Result<(), String> {
+) -> Result<PreparedOutput, String> {
     let entry = archive.entry(resource_path(entry_path)?)?;
-    atomic_output(destination, overwrite, |output| {
+    prepare_output(destination, |output| {
         stream(archive, &entry, |bytes| {
             output.write_all(bytes).map_err(display)
         })
@@ -51,12 +141,11 @@ pub fn save_resource(
 /// Explicit bounds reject oversized packages instead of silently losing assets.
 /// The one omission is a reference to an entry the archive does not contain:
 /// it is equally broken in the reader, so it stays unresolved in the package.
-pub fn save_mhtml(
+pub(crate) fn prepare_mhtml(
     archive: &Archive,
     entry_path: &str,
     destination: &Path,
-    overwrite: bool,
-) -> Result<(), String> {
+) -> Result<PreparedOutput, String> {
     let root = archive.entry(resource_path(entry_path)?)?;
     if !is_html_mime(&root.mime) {
         return Err("MHTML export requires an HTML article".into());
@@ -67,7 +156,7 @@ pub fn save_mhtml(
         Url::parse(&format!("http://{}.localhost/", archive_id.hyphenated())).map_err(display)?;
     let root_url = entry_url(&origin, &root.path)?;
     let boundary = format!("----kiwix-{}", Uuid::new_v4().simple());
-    atomic_output(destination, overwrite, |output| {
+    prepare_output(destination, |output| {
         write!(output, "MIME-Version: 1.0\r\nContent-Type: multipart/related; type=\"{}\"; boundary=\"{boundary}\"; start=\"<article@kiwix>\"\r\n\r\n", media_type(&root.mime)).map_err(display)?;
         let mut pending = VecDeque::from([(root_url.clone(), root_url.clone())]);
         let mut visited =
@@ -298,10 +387,10 @@ fn stream(
     Ok(())
 }
 
-struct Temporary(PathBuf);
+struct Temporary(PathBuf, File);
 impl Drop for Temporary {
     fn drop(&mut self) {
-        if !self.0.as_os_str().is_empty() {
+        if !self.0.as_os_str().is_empty() && file_still_at(&self.1, &self.0) {
             let _ = fs::remove_file(&self.0);
         }
     }
@@ -310,6 +399,7 @@ impl Drop for Temporary {
 pub(crate) struct PreparedOutput {
     temporary: Temporary,
     destination: PathBuf,
+    selected: Option<File>,
     /// A private same-volume directory holding the temporary file in the macOS
     /// App Sandbox. Declared after `temporary` so the file is removed first.
     _scratch: Option<ScratchDirectory>,
@@ -324,7 +414,13 @@ impl Drop for ScratchDirectory {
 }
 impl PreparedOutput {
     pub(crate) fn publish(mut self, overwrite: bool) -> Result<(), String> {
-        if overwrite {
+        if !file_still_at(&self.temporary.1, &self.temporary.0) {
+            return Err("The temporary export changed. Please save again".into());
+        }
+        if let Some(selected) = self.selected.as_ref().filter(|_| overwrite) {
+            if !file_still_at(selected, &self.destination) {
+                return Err("The chosen file changed before export. Choose a destination again".into());
+            }
             fs::rename(&self.temporary.0, &self.destination)
         } else {
             crate::publication::publish_noreplace(&self.temporary.0, &self.destination)
@@ -332,6 +428,9 @@ impl PreparedOutput {
         // Rename relinquishes the temporary name. Clear it to disarm cleanup
         // before any fallible post-commit work or reuse of that name.
         self.temporary.0.clear();
+        if !file_still_at(&self.temporary.1, &self.destination) {
+            return Err("The saved file changed during export. Check the chosen folder before trying again".into());
+        }
         #[cfg(unix)]
         if !crate::sandbox::is_sandboxed() {
             // A sandboxed app holds a grant for the saved file, not for its
@@ -371,13 +470,13 @@ fn sync_export_directory(parent: &Path) -> io::Result<()> {
 fn atomic_output(
     destination: &Path,
     overwrite: bool,
-    produce: impl FnOnce(&mut BufWriter<File>) -> Result<(), String>,
+    produce: impl FnOnce(&mut BufWriter<&File>) -> Result<(), String>,
 ) -> Result<(), String> {
     prepare_output(destination, produce)?.publish(overwrite)
 }
 fn prepare_output(
     destination: &Path,
-    produce: impl FnOnce(&mut BufWriter<File>) -> Result<(), String>,
+    produce: impl FnOnce(&mut BufWriter<&File>) -> Result<(), String>,
 ) -> Result<PreparedOutput, String> {
     let parent = destination
         .parent()
@@ -386,6 +485,11 @@ fn prepare_output(
     if destination.file_name().is_none() {
         return Err("Export destination has no filename".into());
     }
+    let selected = match open_export_file(destination, false) {
+        Ok(file) => Some(file),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(format!("Checking export destination: {error}")),
+    };
     let scratch = crate::sandbox::replacement_directory(destination).map(ScratchDirectory);
     let temporary_path = scratch.as_ref().map_or(parent, |scratch| scratch.0.as_path())
         .join(format!(".kiwix-export-{}.tmp", Uuid::new_v4()));
@@ -400,8 +504,8 @@ fn prepare_output(
         .open(&temporary_path)
         .map_err(|e| format!("Creating export: {e}"))?;
     // Arm cleanup only after create_new proves that this export owns the name.
-    let temporary = Temporary(temporary_path);
-    let mut output = BufWriter::with_capacity(CHUNK as usize, file);
+    let temporary = Temporary(temporary_path, file);
+    let mut output = BufWriter::with_capacity(CHUNK as usize, &temporary.1);
     produce(&mut output)?;
     output.flush().map_err(display)?;
     output
@@ -409,7 +513,7 @@ fn prepare_output(
         .sync_all()
         .map_err(|e| format!("Flushing export: {e}"))?;
     drop(output);
-    Ok(PreparedOutput { temporary, destination: destination.to_path_buf(), _scratch: scratch })
+    Ok(PreparedOutput { temporary, destination: destination.to_path_buf(), selected, _scratch: scratch })
 }
 
 struct MimeLines<'a, W: Write> {
@@ -2293,9 +2397,7 @@ mod tests {
         assert_eq!(STANDARD.decode(text.replace("\r\n", "")).unwrap(), bytes);
     }
 
-    #[cfg(unix)]
     struct ExportDirectory(PathBuf);
-    #[cfg(unix)]
     impl ExportDirectory {
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!("kiwix-export-durability-{}", Uuid::new_v4()));
@@ -2303,7 +2405,6 @@ mod tests {
             Self(path)
         }
     }
-    #[cfg(unix)]
     impl Drop for ExportDirectory {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
@@ -2313,6 +2414,45 @@ mod tests {
     #[cfg(unix)]
     fn assert_completed_but_unconfirmed(result: Result<(), String>) {
         result.expect_err("directory synchronization rejection must not report success");
+    }
+
+    #[test]
+    fn interrupted_write_restores_existing_document_and_its_tail() {
+        let directory = ExportDirectory::new();
+        let path = directory.0.join("bookmarks.json");
+        fs::write(&path, b"original and the complete tail").unwrap();
+        FAIL_EXISTING_EXPORT.set(true);
+        assert!(save_document(&path, b"shorter").unwrap_err().contains("restored"));
+        assert_eq!(fs::read(path).unwrap(), b"original and the complete tail");
+    }
+
+    #[test]
+    fn overwrite_consent_does_not_include_a_later_arrival() {
+        let directory = ExportDirectory::new();
+        let destination = directory.0.join("article");
+        for existed in [false, true] {
+            if existed { fs::write(&destination, b"selected").unwrap(); }
+            let staged = prepare_output(&destination, |output| output.write_all(b"new").map_err(display)).unwrap();
+            if existed { fs::rename(&destination, directory.0.join("moved")).unwrap(); }
+            fs::write(&destination, b"another file").unwrap();
+            assert!(staged.publish(true).is_err());
+            assert_eq!(fs::read(&destination).unwrap(), b"another file");
+            fs::remove_file(&destination).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_rejects_replaced_scratch_and_keeps_the_replacement() {
+        let directory = ExportDirectory::new();
+        let destination = directory.0.join("saved");
+        let prepared = prepare_output(&destination, |output| output.write_all(b"ours").map_err(display)).unwrap();
+        let scratch = prepared.temporary.0.clone();
+        fs::rename(&scratch, directory.0.join("moved")).unwrap();
+        fs::write(&scratch, b"another file").unwrap();
+        assert!(prepared.publish(false).is_err());
+        assert!(!destination.exists());
+        assert_eq!(fs::read(scratch).unwrap(), b"another file");
     }
 
     #[cfg(unix)]
@@ -2444,7 +2584,7 @@ mod tests {
         let directory = std::env::temp_dir().join(format!("kiwix-export-missing-{}", Uuid::new_v4()));
         fs::create_dir(&directory).unwrap();
         let destination = directory.join("fallback.mhtml");
-        save_mhtml(&archive, "fallback.html", &destination, false).unwrap();
+        prepare_mhtml(&archive, "fallback.html", &destination).unwrap().publish(false).unwrap();
         let package = fs::read_to_string(&destination).unwrap();
         let locations: Vec<&str> = package
             .lines()
@@ -2457,7 +2597,7 @@ mod tests {
         }
         assert!(!locations.iter().any(|location| location.contains("missing.png")), "{locations:?}");
         // The article itself must exist: a missing root still fails.
-        let error = save_mhtml(&archive, "absent.html", &directory.join("absent.mhtml"), false).unwrap_err();
+        let error = prepare_mhtml(&archive, "absent.html", &directory.join("absent.mhtml")).err().unwrap();
         assert!(crate::archive::is_entry_not_found(&error), "{error}");
         assert!(!directory.join("absent.mhtml").exists());
         fs::remove_dir_all(directory).unwrap();

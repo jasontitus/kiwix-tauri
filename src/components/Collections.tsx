@@ -7,10 +7,10 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { api, capturePrivacyContext, isPrivacyContextCurrent, readTextFile, saveText } from "../api";
+import { api, capturePrivacyContext, isPrivacyContextCurrent, isPrivacyPolicyContextCurrent, readTextFile, saveText } from "../api";
 import { t, formatDate } from "../i18n";
 import type { Book, Bookmark, HistoryEntry, TabLocation } from "../types";
-import { Empty, Modal, PageHeader, confirmAction } from "./UI";
+import { Empty, Modal, PagedResults, PageHeader, confirmAction } from "./UI";
 import { SwipeRow } from "./SwipeRow";
 import PrivateReadingSync from "./PrivateReadingSync";
 import { recentHistoryEntries } from "../recent-history";
@@ -63,15 +63,16 @@ export default function Collections({
     for (const book of books) if (!index.has(book.id)) index.set(book.id, book);
     return index;
   }, [books]);
+  const needle = query.toLocaleLowerCase();
   const items = useMemo(
-    () =>
+    () => kind !== "bookmarks" ? [] :
       bookmarks
         .filter(
           (b) =>
             (!tag || b.tags.includes(tag)) &&
             `${b.title} ${b.note} ${b.tags.join(" ")} ${bookById.get(b.bookId)?.title || ""}`
               .toLocaleLowerCase()
-              .includes(query.toLocaleLowerCase()),
+              .includes(needle),
         )
         .sort((a, b) =>
           sort === "alphabetical"
@@ -82,15 +83,15 @@ export default function Collections({
                 ? a.createdAt.localeCompare(b.createdAt)
                 : b.createdAt.localeCompare(a.createdAt),
         ),
-    [bookmarks, bookById, query, tag, sort],
+    [kind, bookmarks, bookById, needle, tag, sort],
   );
   const visits = useMemo(
-    () =>
+    () => kind !== "history" ? [] :
       recentHistory
         .filter((h) =>
           `${h.title} ${bookById.get(h.bookId)?.title || ""}`
             .toLocaleLowerCase()
-            .includes(query.toLocaleLowerCase()),
+            .includes(needle),
         )
         .sort((a, b) =>
           sort === "alphabetical"
@@ -101,7 +102,7 @@ export default function Collections({
                 ? a.visitedAt.localeCompare(b.visitedAt)
                 : b.visitedAt.localeCompare(a.visitedAt),
         ),
-    [recentHistory, bookById, query, sort],
+    [kind, recentHistory, bookById, needle, sort],
   );
   async function remove(item: Bookmark) {
     const privacy = capturePrivacyContext();
@@ -121,7 +122,7 @@ export default function Collections({
     try {
       await api("remove_bookmark", { id: item.id, privacyGeneration: privacy.generation });
       if (!isPrivacyContextCurrent(privacy)) return;
-      setEdit(null);
+      setEdit((current) => current?.id === item.id ? null : current);
       onRefresh();
     } catch (e) {
       if (isPrivacyContextCurrent(privacy)) onError(e);
@@ -185,44 +186,36 @@ export default function Collections({
       setBusy(false);
     }
   }
-  async function exportList(format: "json" | "xml") {
-    if (readOnlyRef.current) return;
+  async function exportCollection(format: "json" | "xml") {
+    const privacy = capturePrivacyContext();
+    if (!privacy || privacy.readOnly || readOnlyRef.current || busy) return;
     setBusy(true);
     try {
-      const text = await api<string>("export_bookmarks", { format });
-      if (readOnlyRef.current) return;
-      await saveText(`kiwix-reading-list.${format}`, text);
+      const history = kind === "history";
+      const text = history ? await api<string>("export_history") : await api<string>("export_bookmarks", { format });
+      if (!isPrivacyContextCurrent(privacy)) return;
+      await saveText(history ? "kiwix-history.json" : `kiwix-reading-list.${format}`, text, privacy);
     } catch (e) {
-      onError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function exportHistory() {
-    if (readOnlyRef.current) return;
-    setBusy(true);
-    try {
-      const text = await api<string>("export_history");
-      if (readOnlyRef.current) return;
-      await saveText("kiwix-history.json", text);
-    } catch (e) {
-      onError(e);
+      if (isPrivacyContextCurrent(privacy)) onError(e);
     } finally {
       setBusy(false);
     }
   }
   async function importList() {
-    if (readOnlyRef.current) return;
+    const privacy = capturePrivacyContext();
+    if (!privacy || privacy.readOnly || readOnlyRef.current || busy) return;
     setBusy(true);
     setNotice("");
     try {
-      const text = await readTextFile();
-      if (text === null) return;
-      const count = await api<number>("import_bookmarks", { text });
+      const text = await readTextFile(privacy);
+      const current = capturePrivacyContext();
+      if (text === null || !current || !isPrivacyPolicyContextCurrent(privacy)) return;
+      const count = await api<number>("import_bookmarks", { text, privacyGeneration: current.generation });
+      if (!isPrivacyPolicyContextCurrent(privacy)) return;
       setNotice(t("Imported {count} reading list entries.", { count: count }));
       onRefresh();
     } catch (e) {
-      onError(e);
+      if (isPrivacyPolicyContextCurrent(privacy)) onError(e);
     } finally {
       setBusy(false);
     }
@@ -338,14 +331,14 @@ export default function Collections({
                 </button>
                 <button
                   disabled={busy || readOnly || !bookmarks.length}
-                  onClick={() => exportList("json")}
+                  onClick={() => exportCollection("json")}
                 >
                   <ArrowDownToLine size={16} />
                   {t("Export JSON")}
                 </button>
                 <button
                   disabled={busy || readOnly || !bookmarks.length}
-                  onClick={() => exportList("xml")}
+                  onClick={() => exportCollection("xml")}
                 >
                   <ArrowDownToLine size={16} />
                   {t("Export XML")}
@@ -363,7 +356,7 @@ export default function Collections({
               <>
                 <button
                   disabled={busy || readOnly || !history.length}
-                  onClick={() => void exportHistory()}
+                  onClick={() => void exportCollection("json")}
                 >
                   <ArrowDownToLine size={16} />
                   {t("Export history")}
@@ -421,8 +414,8 @@ export default function Collections({
             }
           />
         ) : (
-          <div className="reading-list">
-            {items.map((item) => {
+          <PagedResults items={items} criteria={JSON.stringify([query, tag, sort])} label={t("Reading list")} className="reading-list">
+            {(item) => {
               const book = bookById.get(item.bookId);
               return (
                 <SwipeRow key={item.id} actionLabel={t("Remove saved article")}
@@ -476,8 +469,8 @@ export default function Collections({
                 </article>
                 </SwipeRow>
               );
-            })}
-          </div>
+            }}
+          </PagedResults>
         )
       ) : !visits.length ? (
         <Empty
@@ -495,8 +488,8 @@ export default function Collections({
           }
         />
       ) : (
-        <div className="history-list">
-          {visits.map((item) => {
+        <PagedResults items={visits} criteria={JSON.stringify([query, sort])} label={t("Recently read")} className="history-list">
+          {(item) => {
             const book = bookById.get(item.bookId);
             return (
               <SwipeRow key={item.id} actionLabel={t("Remove")}
@@ -534,8 +527,8 @@ export default function Collections({
               </article>
               </SwipeRow>
             );
-          })}
-        </div>
+          }}
+        </PagedResults>
       )}
       {edit && (
         <Modal title={t("Edit saved article")} onClose={() => setEdit(null)}>

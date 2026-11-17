@@ -21,6 +21,37 @@ use std::fmt::Write as _;
 use uuid::Uuid;
 
 const MAX_IMPORT_BYTES: usize = 16 * 1024 * 1024;
+
+pub(crate) fn read_import_document(path: &std::path::Path) -> Result<String, String> {
+    use std::io::Read;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Opening a FIFO can otherwise wait indefinitely before its type is known.
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err("Choose a regular document to import".into());
+    }
+    const TOO_LARGE: &str = "Import document exceeds 16 MiB";
+    if metadata.len() > MAX_IMPORT_BYTES as u64 {
+        return Err(TOO_LARGE.into());
+    }
+    // A provider or concurrent writer can change the length after metadata().
+    let mut bytes = Vec::new();
+    file.take(MAX_IMPORT_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() > MAX_IMPORT_BYTES {
+        return Err(TOO_LARGE.into());
+    }
+    String::from_utf8(bytes).map_err(|_| "Import document is not valid UTF-8".into())
+}
+
 // Bookmark interchange is independent of the native profile schema version.
 const BOOKMARK_EXPORT_VERSION: u32 = 1;
 

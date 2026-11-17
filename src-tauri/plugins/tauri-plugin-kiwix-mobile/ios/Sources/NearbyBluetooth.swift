@@ -533,6 +533,7 @@ private final class NearbyBluetoothSession: NSObject, CBCentralManagerDelegate, 
         // The failed candidate may be a stale advertisement. Drop it so the
         // next attempt cannot keep timing out against the same peer.
         peers.removeValue(forKey: peer)
+        seenSources.remove(selected.identifier)
         unnamedSources.removeValue(forKey: selected.identifier)
         event("lost", ["peer": peer])
     }

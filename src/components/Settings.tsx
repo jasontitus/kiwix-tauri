@@ -627,7 +627,7 @@ export default function Settings({
                 {t("Interrupted archive downloads follow your automatic-resume preference when an allowed connection returns. Maps must be restarted. System background and battery restrictions still apply.")}
               </p>
               <h3>{t("Archive backup")}</h3>
-              {import.meta.env.TAURI_ENV_PLATFORM === "ios" ? (
+              {isIOS ? (
                 <>
                   <label className="check-field">
                     <input

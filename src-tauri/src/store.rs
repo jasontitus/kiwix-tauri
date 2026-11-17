@@ -8,7 +8,6 @@
 //! container paths under the process lock. Saved read-only policy remains user-toggleable.
 
 use crate::archive::ArchiveMetadata;
-use chrono::Utc;
 use crate::fs_ext::FileExt;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
@@ -38,7 +37,7 @@ pub fn new_installation_id() -> String {
     Uuid::new_v4().to_string()
 }
 pub(crate) fn now() -> String {
-    Utc::now().to_rfc3339()
+    crate::timestamps::now()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1343,7 +1342,7 @@ pub(crate) fn validate_bookmark(bookmark: &Bookmark) -> Result<(), String> {
     if bookmark.id.is_empty() || bookmark.id.chars().any(char::is_control) {
         return Err("Bookmark ID must be nonempty and contain no control characters".into());
     }
-    if chrono::DateTime::parse_from_rfc3339(&bookmark.created_at).is_err() {
+    if crate::timestamps::parse(&bookmark.created_at).is_err() {
         return Err(format!(
             "Invalid bookmark createdAt {:?}; expected RFC3339",
             bookmark.created_at
@@ -2282,6 +2281,10 @@ impl Store {
     pub(crate) fn private_sync_peer(&self, id: &str) -> Result<Option<crate::private_sync::Peer>, String> {
         let inner = self.lock()?;
         Ok(inner.state.private_sync.peers.iter().find(|peer| peer.id == id).cloned())
+    }
+
+    pub(crate) fn check_private_peer_capacity(&self, id: &str) -> Result<(), String> {
+        self.lock()?.state.private_sync.check_capacity(id)
     }
 
     /// Devices marked for automatic reconciliation; callers still apply `enabled`.

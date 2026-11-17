@@ -397,11 +397,29 @@ impl Service {
         }
     }
     pub(super) async fn mobile_export(&self, path: &Path, mime: &str, name: &str, open: bool, share: bool) -> Result<(), String> {
+        self.mobile_export_authorized(path, mime, name, open, share, None).await
+    }
+    async fn mobile_export_authorized(&self, path: &Path, mime: &str, name: &str, open: bool, share: bool, installation: Option<(&str, &str, &str)>) -> Result<(), String> {
+        use futures_util::FutureExt;
         let prepared = if open { None } else { Some(crate::library_files::MobileExport::pin(self.store.data_dir(), path)?) };
         // iOS uses UIActivityViewController for `open`; Android distinguishes
         // the system viewer (ACTION_VIEW) from the share sheet (ACTION_SEND).
         let title = if share { "Share" } else { "Save export" };
-        let result = self.mobile_documents("exportFile", json!({"path":path,"mimeType":mime,"suggestedName":name,"open":open,"share":share,"labels":self.mobile_labels(title)?})).await
+        let payload = json!({"path":path,"mimeType":mime,"suggestedName":name,"open":open,"share":share,"labels":self.mobile_labels(title)?});
+        let mut request = Box::pin(self.mobile_documents("exportFile", payload));
+        // The plugin dispatches the native command on its first poll. Fence
+        // that handoff with the current installation, then release the store
+        // while the user picks a destination for the admitted byte snapshot.
+        let immediate = if let Some((window, book, installation)) = installation {
+            match self.with_export_installation(window, book, installation, || Ok(request.as_mut().now_or_never())) {
+                Ok(result) => result,
+                Err(error) => {
+                    if let Some(owned) = prepared { blocking(move || owned.cleanup()).await?; }
+                    return Err(error);
+                }
+            }
+        } else { None };
+        let result = match immediate { Some(result) => result, None => request.await }
             .map_err(|error| if prepared.is_some() { format!("{error}. Prepared export retained at {}", path.display()) } else { error })?;
         result.get("cancelled").and_then(Value::as_bool).ok_or_else(|| if prepared.is_some() {
             format!("Native export did not return a completion state; prepared export retained at {}", path.display())
@@ -1247,19 +1265,17 @@ impl Service {
                 self.ensure_generation(&args)?;
                 let name = text(&args,"suggestedName")?.to_string();
                 let id = text(&args,"bookId")?.to_string();
-                let entry_path = crate::server::decode_location_path(text(&args,"path")?)?;
                 let service = self.clone();
                 let export_name = name.clone();
                 let mhtml = command == "mobile_save_mhtml";
-                let (path,mime) = blocking(move || {
-                    let archive = service.archive(&id)?;
-                    let entry = archive.entry(&entry_path)?;
-                    let destination = crate::library_files::mobile_export_path(service.store.data_dir(),&export_name)?;
-                    if mhtml { crate::exports::save_mhtml(&archive,&entry.path,&destination,false)?; }
-                    else { crate::exports::save_resource(&archive,&entry.path,&destination,false)?; }
-                    Ok((destination,if mhtml {"multipart/related".to_string()} else {entry.mime}))
+                let (path, mime, installation) = blocking(move || {
+                    let destination = crate::library_files::mobile_export_path(service.store.data_dir(), &export_name)?;
+                    let (output, mime, installation) = service.prepare_archive_export(&args, &destination, mhtml)?;
+                    let window = args.get("__windowLabel").and_then(Value::as_str).unwrap_or("main");
+                    service.with_export_installation(window, text(&args, "bookId")?, &installation, || output.publish(false))?;
+                    Ok((destination, mime, installation))
                 }).await?;
-                self.mobile_export(&path,&mime,&name,false,false).await?;
+                self.mobile_export_authorized(&path, &mime, &name, false, false, Some((label, &id, &installation))).await?;
                 Ok(Value::Null)
             }
             "mobile_copy_incoming" => {

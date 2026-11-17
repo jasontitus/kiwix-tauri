@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { t } from "./i18n";
-import { parseProviderDocumentError, parseSuspendedError, SuspendedError } from "./error-visibility";
+import { isSuspendedError, parseProviderDocumentError, parseSuspendedError, SuspendedError } from "./error-visibility";
 import {
   ForegroundQueue,
   retrySuspended,
@@ -40,7 +40,7 @@ export const canPrintArticlePdf = isDesktop;
 // Capture this document's source once: a queued call must never acquire the
 // authority of a replacement Activity or label-routed WebviewWindow.
 const androidDocumentSource =
-  isNative && import.meta.env.TAURI_ENV_PLATFORM === "android"
+  isAndroid
     ? (() => {
         const source = window as Window & {
           readonly __KIWIX_ANDROID_WINDOW_INCARNATION__?: string;
@@ -1416,15 +1416,18 @@ function browserSave(name: string, blob: Blob): void {
 export async function saveText(
   suggestedName: string,
   text: string,
+  context: PrivacyContext,
 ): Promise<void> {
+  if (context.readOnly || !isPrivacyContextCurrent(context)) return;
   if (isMobile) {
-    await api("mobile_save_text", { suggestedName, text });
+    await api("mobile_save_text", { suggestedName, text, privacyGeneration: context.generation });
     return;
   }
   if (!isNative) {
     browserSave(
       suggestedName,
-      new Blob([text], { type: "application/json;charset=utf-8" }),
+      new Blob([text], { type: suggestedName.endsWith(".xml")
+        ? "application/xml;charset=utf-8" : "application/json;charset=utf-8" }),
     );
     return;
   }
@@ -1437,9 +1440,11 @@ export async function saveBytes(
   suggestedName: string,
   bytes: string,
   mime: string,
+  context: PrivacyContext,
 ): Promise<void> {
+  if (context.readOnly || !isPrivacyContextCurrent(context)) return;
   if (isMobile) {
-    await api("mobile_save_bytes", { suggestedName, bytes, mime });
+    await api("mobile_save_bytes", { suggestedName, bytes, mime, privacyGeneration: context.generation });
     return;
   }
   if (!isNative) {
@@ -1454,24 +1459,39 @@ export async function saveBytes(
   );
 }
 
-export async function readTextFile(): Promise<string | null> {
-  if (isMobile) return await api<string | null>("mobile_read_text");
+export async function readTextFile(context: PrivacyContext): Promise<string | null> {
+  if (!isPrivacyContextCurrent(context)) return null;
+  if (isMobile) {
+    const text = await api<string | null>("mobile_read_text", { privacyGeneration: context.generation });
+    if (text === null || !isPrivacyPolicyContextCurrent(context)) return null;
+    // The picker can finish before the root has observed foreground reader
+    // retirement. Reconcile the native generation before dispatching an import.
+    const before = privacyGeneration;
+    try {
+      await api("snapshot");
+    } catch (error) {
+      // An overlapping root refresh can supersede our suspended snapshot.
+      if (!isSuspendedError(error) || privacyGeneration === before) throw error;
+    }
+    return isPrivacyPolicyContextCurrent(context) ? text : null;
+  }
   if (!isNative) {
-    return await new Promise((resolve, reject) => {
+    const text = await new Promise<string | null>((resolve, reject) => {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".json,.xml,.opds";
       input.onchange = () => {
         const file = input.files?.[0];
-        if (file) file.text().then(resolve, reject);
+        if (file && file.size > 16 * 1024 * 1024)
+          reject(new Error("Import exceeds the 16 MiB limit. Split the export into smaller files."));
+        else if (file) file.text().then(resolve, reject);
         else resolve(null);
       };
       input.oncancel = () => resolve(null);
       input.click();
     });
+    return isPrivacyContextCurrent(context) ? text : null;
   }
-  const context = capturePrivacyContext();
-  if (!context) return null;
   const defaultPath = await desktopDialogPath("import", context);
   if (!defaultPath) return null;
   const selected = await open({
@@ -1493,11 +1513,14 @@ export async function readTextFile(): Promise<string | null> {
 
 export async function saveResource(
   bookId: string,
+  installationId: string,
   path: string,
   suggestedName: string,
 ): Promise<void> {
+  const context = capturePrivacyContext();
+  if (!context || context.readOnly) return;
   if (isMobile) {
-    await api("mobile_save_resource", { bookId, path, suggestedName });
+    await api("mobile_save_resource", { bookId, installationId, path, suggestedName, privacyGeneration: context.generation });
     return;
   }
   if (!isNative) {
@@ -1505,13 +1528,13 @@ export async function saveResource(
       fileName: string;
       bytes: string;
       mime: string;
-    }>("export_article", { bookId, path });
-    await saveBytes(resource.fileName, resource.bytes, resource.mime);
+    }>("export_article", { bookId, installationId, path, privacyGeneration: context.generation });
+    await saveBytes(resource.fileName, resource.bytes, resource.mime, context);
     return;
   }
   await desktopSave(suggestedName, (destination, context) =>
     api("save_resource", {
-      bookId,
+      bookId, installationId,
       path,
       destination,
       overwrite: true,
@@ -1623,17 +1646,20 @@ export async function shareArchive(bookId: string): Promise<void> {
 
 export async function saveMhtml(
   bookId: string,
+  installationId: string,
   path: string,
   suggestedName: string,
 ): Promise<void> {
+  const context = capturePrivacyContext();
+  if (!context || context.readOnly) return;
   if (isMobile) {
-    await api("mobile_save_mhtml", { bookId, path, suggestedName });
+    await api("mobile_save_mhtml", { bookId, installationId, path, suggestedName, privacyGeneration: context.generation });
     return;
   }
   if (isNative) {
     await desktopSave(suggestedName, (destination, context) =>
       api("save_mhtml", {
-        bookId,
+        bookId, installationId,
         path,
         destination,
         overwrite: true,
@@ -1642,15 +1668,13 @@ export async function saveMhtml(
     );
     return;
   }
-  const context = capturePrivacyContext();
-  if (!context) return;
   const destination = window.prompt(
     t("Export destination path on the host"),
     suggestedName,
   );
   if (destination && isPrivacyContextCurrent(context))
     await api("save_mhtml", {
-      bookId,
+      bookId, installationId,
       path,
       destination,
       overwrite: isNative,

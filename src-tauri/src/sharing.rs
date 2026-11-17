@@ -2105,7 +2105,7 @@ fn library_index_page(
 }
 
 fn opds_updated() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    crate::timestamps::utc_seconds()
 }
 
 fn opds_document(body: String) -> Response {

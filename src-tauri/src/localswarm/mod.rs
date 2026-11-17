@@ -335,7 +335,7 @@ impl Drop for SourceMonitor {
         }
     }
 }
-fn now() -> String { chrono::Utc::now().to_rfc3339() }
+fn now() -> String { crate::timestamps::now() }
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> { tokio::task::spawn_blocking(f).await.map_err(|e| format!("LocalSwarm background operation stopped: {e}"))? }
 /// Only read-only native verification belongs here. A retired result has no
 /// manager, writer handle, publication callback, listener or advertisement.

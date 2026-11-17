@@ -45,11 +45,13 @@ impl MapManager {
         let cache = data_dir.join("map-parts");
         fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
         let state_path = data_dir.join("map-job.json");
-        let mut job: Option<MapJob> = match fs::read(&state_path) {
-            Ok(bytes) => {
-                if bytes.len() > MAX_STATE {
-                    return Err("Map job history exceeds its state limit; saved claims were not changed".into());
-                }
+        let mut job: Option<MapJob> = match crate::acquisition::open_history(&state_path)? {
+            Some(file) => {
+                use std::io::Read;
+                let mut bytes = Vec::new();
+                file.take(MAX_STATE as u64 + 1).read_to_end(&mut bytes)
+                    .map_err(|e| format!("Cannot read saved map job: {e}"))?;
+                if bytes.len() > MAX_STATE { return Err("Map job history exceeds its state limit; saved claims were not changed".into()); }
                 #[cfg(desktop)]
                 if store.portable_mode() {
                     let mut value: serde_json::Value = serde_json::from_slice(&bytes)
@@ -62,8 +64,7 @@ impl MapManager {
                 #[cfg(not(desktop))]
                 Some(serde_json::from_slice(&bytes).map_err(|e| format!("Cannot read saved map job: {e}"))?)
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.to_string()),
+            None => None,
         };
         if let Some(job) = job.as_mut() {
             let mut changed = false;
@@ -163,7 +164,7 @@ impl MapManager {
                 store,
                 state_path,
                 client: OnceCell::new(),
-                state: Mutex::new(ManagerState { job, active: None, retirement_error: None, preparation: None, cache_reserved: false }),
+                state: Mutex::new(ManagerState { job, active: None, admission: 0, retirement_error: None, preparation: None, cache_reserved: false }),
                 session: Uuid::new_v4().to_string(),
                 active_work: std::sync::atomic::AtomicBool::new(false),
                 pause_control: Mutex::new(None),
@@ -499,6 +500,7 @@ impl MapManager {
         control.space_acknowledgements = Arc::new(acknowledgements);
         let control = Arc::new(control);
         state.job = Some(job.clone());
+        state.admission = state.admission.wrapping_add(1);
         state.active = Some(control.clone());
         *self.inner.pause_control.lock().map_err(|_| "Map pause signal unavailable")? = Some(control.clone());
         state.retirement_error = None;
@@ -623,6 +625,7 @@ impl MapManager {
         job.incoming_total = 0;
         persist(&self.inner.state_path, &job)?;
         state.job = Some(job.clone());
+        state.admission = state.admission.wrapping_add(1);
         state.active = Some(control.clone());
         *self.inner.pause_control.lock().map_err(|_| "Map pause signal unavailable")? = Some(control.clone());
         state.retirement_error = None;
@@ -645,7 +648,7 @@ impl MapManager {
     }
 
     pub async fn cancel(&self) -> Result<(), String> {
-        let (active, cancelled_job) = {
+        let (active, admission) = {
             let mut state = self.inner.state.lock().map_err(|_| "Map state lock poisoned")?;
             // Retirement joins the publication linearization point before
             // deciding whether an unpublished choice should be revoked.
@@ -658,7 +661,7 @@ impl MapManager {
                     .map_err(|error| format!("Cannot save map job state: {error}"))?;
                 state.retirement_error = None;
             }
-            (state.active.clone(), state.job.as_ref().map(|job| job.id.clone()))
+            (state.active.clone(), state.admission)
         };
         let retirement = if let Some(control) = active {
             let mut done = control.done.subscribe();
@@ -673,13 +676,13 @@ impl MapManager {
             Ok(())
         };
         retirement?;
-        self.recover_terminal_publication()?;
+        self.recover_terminal_publication_for(Some(admission))?;
         let mut state = self.inner.state.lock().map_err(|_| "Map state lock poisoned")?;
         // The lock was released while the worker retired. A resume/start
         // admitted meanwhile (desktop takes only shared admission locks) is a
         // newer intent: never revoke its authorization or reclaim the partial
         // file its live worker is writing.
-        if state.active.is_some() || state.job.as_ref().map(|job| &job.id) != cancelled_job.as_ref() {
+        if state.active.is_some() || state.admission != admission {
             return Ok(());
         }
         if let Some(job) = state.job.as_mut() {
@@ -1008,20 +1011,24 @@ impl MapManager {
     }
 
     pub(crate) fn recover_terminal_publication(&self) -> Result<(), String> {
+        self.recover_terminal_publication_for(None)
+    }
+
+    fn recover_terminal_publication_for(&self, expected: Option<u64>) -> Result<(), String> {
         let snapshot = {
             let state = self.inner.state.lock().map_err(|_| "Map state lock poisoned")?;
-            if state.active.is_some() { return Ok(()); }
+            if state.active.is_some() || expected.is_some_and(|id| state.admission != id) { return Ok(()); }
             state.job.as_ref().and_then(|job| {
                 let resume = job.resume.as_ref().filter(|resume| !resume.invalid)?;
                 let record = job.owned_partial.as_ref().filter(|record| record.publication.is_some() && record.capture.is_none())?;
-                Some((job.id.clone(), record.clone(), resume.written))
+                Some((state.admission, job.id.clone(), record.clone(), resume.written))
             })
         };
-        let Some((id, original, written)) = snapshot else { return Ok(()) };
+        let Some((admission, id, original, written)) = snapshot else { return Ok(()) };
         let mut recovered = original.clone();
         let result = recover_resume_publication(&mut recovered, written);
         let mut state = self.inner.state.lock().map_err(|_| "Map state lock poisoned")?;
-        if state.active.is_some() { return Ok(()); }
+        if state.active.is_some() || state.admission != admission { return Ok(()); }
         let Some(job) = state.job.as_mut().filter(|job| job.id == id
             && job.owned_partial.as_ref() == Some(&original)
             && job.resume.as_ref().is_some_and(|resume| resume.written == written)) else { return Ok(()) };
@@ -1091,9 +1098,10 @@ impl MapManager {
             let job = state.job.as_mut().filter(|job| job.id == id).ok_or("Missing map job")?;
             // Successful publication already committed completion durably.
             let retirement = if let Err(error) = result {
-                job.status = if control.is_pausing() { "paused" }
+                let paused = error == CANCELLED && control.is_pausing() && job.resumable;
+                job.status = if paused { "paused" }
                     else if error == CANCELLED { "cancelled" } else { "failed" }.into();
-                job.error = if control.is_pausing() { None } else { Some(error) };
+                job.error = if paused { None } else { Some(error) };
                 job.retain_current_path();
                 job.append_recovery_warning();
                 job.incoming = 0;

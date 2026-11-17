@@ -328,14 +328,15 @@ impl Service {
                 let mime = sniff_image(&bytes)
                     .filter(|mime| matches!(*mime, "image/jpeg" | "image/png"))
                     .ok_or("The photo is damaged")?;
-                let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+                let captured = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+                let stamp = captured.format(time::macros::format_description!("[year][month][day]-[hour][minute][second]")).map_err(|e| e.to_string())?;
                 let extension = if mime == "image/png" { "png" } else { "jpg" };
                 Ok(json!({
                     "status": "photo",
                     "requestId": session.request_id,
                     "name": format!("photo-{stamp}.{extension}"),
                     "mime": mime,
-                    "lastModified": chrono::Utc::now().timestamp_millis(),
+                    "lastModified": (captured.unix_timestamp_nanos() / 1_000_000) as i64,
                     "data": data,
                 }))
             })()

@@ -354,6 +354,13 @@ fn basename(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(any(unix, test))]
+pub(crate) fn rename_entry_noreplace(directory: &Dir, source: &Path, destination: &Path) -> io::Result<()> {
+    basename(source)?;
+    basename(destination)?;
+    platform_publish_in(directory, source, destination)
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn platform_publish_in(
     directory: &cap_std::fs::Dir,

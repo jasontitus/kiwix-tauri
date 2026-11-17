@@ -219,23 +219,21 @@ pub(super) fn publish_verified_download(
     stored.job.speed = 0;
     stored.job.eta_seconds = None;
     stored.job.error = None;
+    stored.job.history_warning = None;
     stored.job.updated_at = now();
     stored.segments = None;
     stored.segmented = false;
     stored.verification = None;
-    if let Err(_error) = sync_directory(destination.parent().ok_or("Destination has no parent")?)
-        .and_then(|_| inner.save(&state))
-    {
-        // A committed archive is never removed to roll back a failed state write.
-        // The durable publication intent still allows recovery on the next start.
-        state
-            .jobs
-            .get_mut(id)
-            .ok_or("Unknown download ID")?
-            .job
-            .error = Some(
-            "Archive added, but Kiwix could not finish saving its download history. Restart the app to finish tidying up".to_owned()
-        );
+    // Keep the earlier publication intent for recovery if either durability step fails.
+    let warning = if sync_directory(destination.parent().ok_or("Destination has no parent")?).is_err() {
+        Some("The archive is available, but Kiwix could not confirm it will survive a sudden power loss. Restart the app to check the download.")
+    } else if inner.save(&state).is_err() {
+        Some("Archive added, but Kiwix could not finish saving its download history. Restart the app to finish tidying up")
+    } else {
+        None
+    };
+    if let Some(warning) = warning {
+        state.jobs.get_mut(id).ok_or("Unknown download ID")?.job.history_warning = Some(warning.to_owned());
     }
     Ok(Outcome::Complete)
 }

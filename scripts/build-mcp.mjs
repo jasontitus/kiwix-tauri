@@ -26,14 +26,13 @@ function hostTriple() {
 const host = hostTriple();
 const target = process.env.TAURI_ENV_TARGET_TRIPLE || process.env.CARGO_BUILD_TARGET || host;
 const windows = target.includes("windows");
-const args = ["build", "--release", "--locked", "--manifest-path", manifest];
-if (target !== host) args.push("--target", target);
-run("cargo", args);
+const args = ["build", "--release", "--locked", "--manifest-path", manifest, "--target", target];
 
 const targetDirectory = process.env.CARGO_TARGET_DIR
   ? path.resolve(process.cwd(), process.env.CARGO_TARGET_DIR)
   : path.join(repository, "kiwix-mcp", "target");
-const profile = path.join(targetDirectory, ...(target === host ? ["release"] : [target, "release"]));
+run("cargo", [...args, "--target-dir", targetDirectory]);
+const profile = path.join(targetDirectory, target, "release");
 const source = path.join(profile, windows ? "kiwix-mcp.exe" : "kiwix-mcp");
 const directory = path.join(repository, "src-tauri", "binaries");
 const destination = path.join(directory, `kiwix-mcp-${target}${windows ? ".exe" : ""}`);

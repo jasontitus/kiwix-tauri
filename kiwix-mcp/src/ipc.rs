@@ -59,7 +59,7 @@ pub fn read_frame(reader: &mut impl Read) -> std::io::Result<Value> {
 /// canonical path. The app computes the same value from its own profile.
 pub fn profile_suffix(profile: &Path) -> Result<String, String> {
     let canonical = std::fs::canonicalize(profile)
-        .map_err(|_| format!("The Kiwix profile folder {} does not exist", profile.display()))?;
+        .map_err(|_| "Cannot identify the Kiwix profile folder. Check --data-dir and try again.".to_string())?;
     let digest = Sha256::digest(canonical.to_string_lossy().to_lowercase().as_bytes());
     Ok(digest[..8].iter().map(|byte| format!("{byte:02x}")).collect())
 }
@@ -77,14 +77,8 @@ pub fn target_profile(data_dir: Option<&Path>) -> Result<Option<PathBuf>, String
         return Ok(Some(path));
         #[cfg(not(unix))]
         {
-            let default = directories::ProjectDirs::from("org", "kiwix", "KiwixWorkbench")
-                .and_then(|dirs| std::fs::canonicalize(dirs.data_dir()).ok());
-            let is_default = match (std::fs::canonicalize(&path).ok(), default) {
-                (Some(path), Some(default)) => {
-                    path.to_string_lossy().to_lowercase() == default.to_string_lossy().to_lowercase()
-                }
-                _ => false,
-            };
+            let is_default = directories::ProjectDirs::from("org", "kiwix", "KiwixWorkbench")
+                .is_some_and(|dirs| same_file::is_same_file(&path, dirs.data_dir()).unwrap_or(false));
             return Ok((!is_default).then_some(path));
         }
     }
@@ -106,91 +100,73 @@ pub fn target_profile(data_dir: Option<&Path>) -> Result<Option<PathBuf>, String
     Ok(root.join(".portable").is_file().then(|| root.join("data")))
 }
 
+#[cfg(windows)]
+type Channel = windows::Pipe;
+#[cfg(unix)]
+type Channel = std::os::unix::net::UnixStream;
+
 pub struct Connection {
-    #[cfg(windows)]
-    pipe: std::fs::File,
-    #[cfg(unix)]
-    socket: std::os::unix::net::UnixStream,
+    channel: Channel,
     next_id: u64,
 }
 
 impl Connection {
     pub fn open(profile: Option<&Path>) -> Result<Self, String> {
         #[cfg(windows)]
-        {
-            let suffix = profile.map(profile_suffix).transpose()?;
-            let pipe = windows::connect(suffix.as_deref())?;
-            let mut connection = Self { pipe, next_id: 1 };
-            let hello = json!({"hello": 1, "dataDir": profile.map(|path| path.to_string_lossy().into_owned())});
-            write_frame(&mut connection.pipe, &hello).map_err(|_| NOT_RUNNING.to_string())?;
-            let reply = read_frame(&mut connection.pipe).map_err(|_| NOT_RUNNING.to_string())?;
-            if let Some(error) = reply.get("error").and_then(Value::as_str) {
-                return Err(error.chars().take(500).collect());
-            }
-            Ok(connection)
-        }
+        let mut channel = windows::connect(profile.map(profile_suffix).transpose()?.as_deref())?;
+        #[cfg(unix)]
+        let mut channel = unix::connect(profile)?;
         #[cfg(unix)]
         {
-            let socket = unix::connect(profile)?;
-            let mut connection = Self { socket, next_id: 1 };
-            let hello = json!({"hello": 1, "dataDir": profile.map(|path| path.to_string_lossy().into_owned())});
-            write_frame(&mut connection.socket, &hello).map_err(|_| NOT_RUNNING.to_string())?;
-            let reply = read_frame(&mut connection.socket).map_err(|_| NOT_RUNNING.to_string())?;
-            if let Some(error) = reply.get("error").and_then(Value::as_str) {
-                return Err(error.chars().take(500).collect());
-            }
-            Ok(connection)
+            // Longer than both the app's permit wait and its native work budget.
+            // An app that is suspended or wedged must not block the relay forever.
+            let timeout = Some(std::time::Duration::from_secs(30));
+            channel.set_read_timeout(timeout).and_then(|()| channel.set_write_timeout(timeout))
+                .map_err(|_| "Cannot configure the Kiwix connection".to_string())?;
         }
+        let hello = json!({"hello": 1, "dataDir": profile.map(|path| path.to_string_lossy().into_owned())});
+        write_frame(&mut channel, &hello).map_err(|_| NOT_RUNNING.to_string())?;
+        let reply = read_frame(&mut channel).map_err(|_| NOT_RUNNING.to_string())?;
+        if let Some(error) = reply.get("error").and_then(Value::as_str) {
+            return Err(error.chars().take(500).collect());
+        }
+        if reply["ok"]["version"].as_str().is_none_or(str::is_empty) {
+            return Err("Unexpected greeting from Kiwix. Check the installed connector version.".into());
+        }
+        Ok(Self { channel, next_id: 1 })
     }
 
     pub fn call(&mut self, tool: &str, arguments: Value) -> Result<Value, CallError> {
-        #[cfg(windows)]
-        {
-            let id = self.next_id;
-            self.next_id += 1;
-            write_frame(&mut self.pipe, &json!({"id": id, "tool": tool, "arguments": arguments}))
-                .map_err(|_| CallError::Lost)?;
-            let reply = read_frame(&mut self.pipe).map_err(|_| CallError::Lost)?;
-            if reply.get("id").and_then(Value::as_u64) != Some(id) {
-                return Err(CallError::Lost);
-            }
-            if let Some(error) = reply.get("error").and_then(Value::as_str) {
-                return Err(CallError::App(error.chars().take(2000).collect()));
-            }
-            reply.get("ok").cloned().ok_or_else(|| CallError::App("Kiwix returned an unexpected result".into()))
+        let id = self.next_id;
+        self.next_id += 1;
+        write_frame(&mut self.channel, &json!({"id": id, "tool": tool, "arguments": arguments}))
+            .map_err(|_| CallError::Lost)?;
+        let mut reply = read_frame(&mut self.channel).map_err(|_| CallError::Lost)?;
+        if reply.get("id").and_then(Value::as_u64) != Some(id) {
+            return Err(CallError::Lost);
         }
-        #[cfg(unix)]
-        {
-            let id = self.next_id;
-            self.next_id += 1;
-            write_frame(&mut self.socket, &json!({"id": id, "tool": tool, "arguments": arguments}))
-                .map_err(|_| CallError::Lost)?;
-            let reply = read_frame(&mut self.socket).map_err(|_| CallError::Lost)?;
-            if reply.get("id").and_then(Value::as_u64) != Some(id) {
-                return Err(CallError::Lost);
-            }
-            if let Some(error) = reply.get("error").and_then(Value::as_str) {
-                return Err(CallError::App(error.chars().take(2000).collect()));
-            }
-            reply.get("ok").cloned().ok_or_else(|| CallError::App("Kiwix returned an unexpected result".into()))
+        if let Some(error) = reply.get("error").and_then(Value::as_str) {
+            return Err(CallError::App(error.chars().take(2000).collect()));
         }
+        reply.get_mut("ok").map(Value::take).ok_or_else(|| CallError::App("Kiwix returned an unexpected result".into()))
     }
 }
 
 #[cfg(windows)]
 mod windows {
     use super::NOT_RUNNING;
+    use std::io::{self, Read, Write};
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use std::path::PathBuf;
-    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, HANDLE};
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_FILE_NOT_FOUND, ERROR_NO_DATA, ERROR_PIPE_BUSY, HANDLE};
     use windows_sys::Win32::Security::Authorization::{ConvertSidToStringSidW, GetSecurityInfo, SE_KERNEL_OBJECT};
     use windows_sys::Win32::Security::{
         EqualSid, GetTokenInformation, TokenUser, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, TOKEN_QUERY,
         TOKEN_USER,
     };
-    use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
+    use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, SetNamedPipeHandleState, WaitNamedPipeW, PIPE_NOWAIT};
     use windows_sys::Win32::System::Threading::{
         GetCurrentProcess, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
         PROCESS_QUERY_LIMITED_INFORMATION,
@@ -270,14 +246,6 @@ mod windows {
         Ok(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length as usize])))
     }
 
-    fn same_file(left: &std::path::Path, right: &std::path::Path) -> bool {
-        match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
-            (Ok(left), Ok(right)) => left.as_os_str().to_string_lossy().to_lowercase()
-                == right.as_os_str().to_string_lossy().to_lowercase(),
-            _ => false,
-        }
-    }
-
     /// The pipe object's owner must be this user.
     fn owned_by(pipe: HANDLE, own: &[u64]) -> bool {
         unsafe {
@@ -324,13 +292,43 @@ mod windows {
         let expected = std::env::current_exe()
             .map_err(|error| error.to_string())?
             .with_file_name("kiwix-workbench.exe");
-        if !same_file(&image_path(process.0).map_err(|_| REFUSED.to_string())?, &expected) {
+        if !same_file::is_same_file(image_path(process.0).map_err(|_| REFUSED.to_string())?, expected).unwrap_or(false) {
             return Err(REFUSED.into());
         }
         Ok(())
     }
 
-    pub fn connect(suffix: Option<&str>) -> Result<std::fs::File, String> {
+    pub struct Pipe(std::fs::File);
+
+    // This stdio relay has one synchronous caller. Retry only while the
+    // local byte pipe is empty (read) or full (write), with a finite wait.
+    fn wait_for_progress(mut attempt: impl FnMut() -> io::Result<Option<usize>>) -> io::Result<usize> {
+        use std::time::{Duration, Instant};
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Some(count) = attempt()? { return Ok(count); }
+            if Instant::now() >= deadline { return Err(io::ErrorKind::TimedOut.into()); }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    impl Read for Pipe {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            wait_for_progress(|| match self.0.read(buf) {
+                Err(err) if err.raw_os_error() == Some(ERROR_NO_DATA as i32) => Ok(None),
+                result => result.map(Some),
+            })
+        }
+    }
+
+    impl Write for Pipe {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            wait_for_progress(|| self.0.write(buf).map(|n| (n != 0 || buf.is_empty()).then_some(n)))
+        }
+        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+
+    pub fn connect(suffix: Option<&str>) -> Result<Pipe, String> {
         let name = pipe_name(suffix)?;
         for _ in 0..3 {
             let opened = std::fs::OpenOptions::new()
@@ -341,7 +339,11 @@ mod windows {
             match opened {
                 Ok(pipe) => {
                     verify_server(&pipe)?;
-                    return Ok(pipe);
+                    if unsafe { SetNamedPipeHandleState(pipe.as_raw_handle().cast(), &PIPE_NOWAIT,
+                        std::ptr::null(), std::ptr::null()) } == 0 {
+                        return Err("Cannot configure the Kiwix connection".into());
+                    }
+                    return Ok(Pipe(pipe));
                 }
                 Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
                     unsafe { WaitNamedPipeW(wide(&name).as_ptr(), 2000) };
@@ -392,12 +394,7 @@ mod unix {
     }
 
     pub(super) fn is_default_profile(profile: &Path) -> bool {
-        let Ok(profile) = std::fs::canonicalize(profile) else { return false };
-        default_profiles().iter().any(|candidate| {
-            std::fs::canonicalize(candidate).is_ok_and(|candidate| {
-                candidate.to_string_lossy().to_lowercase() == profile.to_string_lossy().to_lowercase()
-            })
-        })
+        default_profiles().iter().any(|candidate| same_file::is_same_file(candidate, profile).unwrap_or(false))
     }
 
     #[cfg(target_os = "macos")]
@@ -405,10 +402,7 @@ mod unix {
         let Some(home) = std::env::var_os("HOME") else { return false };
         let container = PathBuf::from(home)
             .join("Library/Containers/org.kiwix.workbench/Data/Library/Application Support/org.kiwix.KiwixWorkbench");
-        match (std::fs::canonicalize(profile), std::fs::canonicalize(container)) {
-            (Ok(profile), Ok(container)) => profile == container,
-            _ => false,
-        }
+        same_file::is_same_file(profile, container).unwrap_or(false)
     }
 
     /// The directory the distributed app was installed in, matching the app's
@@ -523,7 +517,11 @@ mod unix {
             if !path.exists() {
                 continue;
             }
-            let Ok(stream) = UnixStream::connect(&path) else { continue };
+            let Ok(address) = socket2::SockAddr::unix(&path) else { continue };
+            let socket = socket2::Socket::new(socket2::Domain::UNIX, socket2::Type::STREAM, None)
+                .map_err(|_| "Cannot open a local Kiwix connection".to_string())?;
+            if socket.connect_timeout(&address, std::time::Duration::from_secs(2)).is_err() { continue; }
+            let stream = UnixStream::from(std::os::fd::OwnedFd::from(socket));
             if peer_is_same_user(&stream) {
                 return Ok(stream);
             }
@@ -548,11 +546,11 @@ mod tests {
     }
 
     #[test]
-    fn profile_suffix_is_stable_and_case_insensitive() {
+    fn profile_suffix_is_stable_and_resolves_directory_aliases() {
         let dir = std::env::temp_dir();
         let one = profile_suffix(&dir).unwrap();
         assert_eq!(one.len(), 16);
-        assert_eq!(one, profile_suffix(Path::new(&dir.to_string_lossy().to_uppercase())).unwrap());
+        assert_eq!(one, profile_suffix(&dir.join(".")).unwrap());
         assert!(profile_suffix(Path::new("Z:/definitely/missing/profile")).is_err());
     }
 

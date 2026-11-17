@@ -256,7 +256,7 @@ fn strings(args: &Value, key: &str) -> Result<Vec<String>, String> {
         .map_err(|e| format!("Invalid {key}: {e}"))
 }
 fn now() -> String {
-    chrono::Utc::now().to_rfc3339()
+    crate::timestamps::now()
 }
 fn value<T: serde::Serialize>(input: T) -> Result<Value, String> {
     serde_json::to_value(input).map_err(|e| e.to_string())
@@ -1162,6 +1162,12 @@ impl Service {
         let settings: store::Settings =
             serde_json::from_value(merged).map_err(|e| format!("Invalid settings: {e}"))?;
         settings.validate()?;
+        #[cfg(any(mobile, test))]
+        if settings.download_directory != previous.download_directory
+            && crate::library_root::has_pending_operation(&self.store)?
+        {
+            return Err("Finish recovering the pending storage move before changing the download folder".into());
+        }
         if settings.completion_notifications && !previous.completion_notifications {
             return Err("Enable completion notifications through the explicit permission action".into());
         }
@@ -1377,10 +1383,43 @@ impl Service {
         !std::fs::metadata(&book.path).is_ok_and(|metadata| metadata.is_file())
     }
     pub fn archive(&self, id: &str) -> Result<Archive, String> {
-        let book = self
-            .store
-            .book(id)?
-            .ok_or("Archive is not in the library")?;
+        let book = self.store.book(id)?.ok_or("Archive is not in the library")?;
+        self.archive_for_book(book)
+    }
+
+    fn export_archive(&self, args: &Value) -> Result<(Archive, String), String> {
+        let id = text(args, "bookId")?;
+        let book = self.store.book(id)?.ok_or("Archive is not in the library")?;
+        if !book.available || args.get("installationId")
+            .is_some_and(|expected| expected.as_str() != Some(&book.installation_id))
+        {
+            return Err("The archive installation changed or is unavailable; open it again".into());
+        }
+        let installation = book.installation_id.clone();
+        Ok((self.archive_for_book(book)?, installation))
+    }
+
+    fn with_export_installation<T>(&self, window: &str, book: &str, installation: &str,
+        action: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        let _window = self.active_window_guard(window)?;
+        self.store.with_current_installation(book, installation, action)
+    }
+
+    fn prepare_archive_export(&self, args: &Value, destination: &Path, mhtml: bool)
+        -> Result<(crate::exports::PreparedOutput, String, String), String>
+    {
+        let (archive, installation) = self.export_archive(args)?;
+        let entry = archive.entry(&crate::server::decode_location_path(text(args, "path")?)?)?;
+        let (output, mime) = if mhtml {
+            (crate::exports::prepare_mhtml(&archive, &entry.path, destination)?, "multipart/related".into())
+        } else {
+            (crate::exports::prepare_resource(&archive, &entry.path, destination)?, entry.mime)
+        };
+        Ok((output, mime, installation))
+    }
+
+    fn archive_for_book(&self, book: store::Book) -> Result<Archive, String> {
+        let id = book.metadata.id.as_str();
         #[cfg(mobile)]
         if book.source_reference.is_none()
             && !crate::library_root::is_managed_path(&self.store, Path::new(&book.path))
@@ -2530,7 +2569,27 @@ impl Service {
                 args.get("privacyGeneration").and_then(Value::as_u64),
             ))
         };
+        // Even a failed settings save may have retired the old reader origins.
+        // Notify all shells before the writer is released, and discard queued
+        // launches only when the effective privacy policy actually changed.
+        let previous_policy = if command == "save_settings" {
+            let policy = self.store.settings()?;
+            Some((self.launch_generation(), policy.private_mode, policy.read_only))
+        } else { None };
         let result = self.clone().dispatch_inner(command, args, update_installation).await;
+        if let Some((epoch, private, read_only)) = previous_policy {
+            if self.launch_generation() != epoch {
+                if !self.store.settings().is_ok_and(|s| (s.private_mode, s.read_only) == (private, read_only)) {
+                    self.launch_locations.lock().unwrap_or_else(|error| error.into_inner()).clear();
+                    #[cfg(any(desktop, test))]
+                    self.launch_search.lock().unwrap_or_else(|error| error.into_inner()).take();
+                }
+                if let Some(app) = self.app.lock().unwrap_or_else(|error| error.into_inner()).as_ref() {
+                    use tauri::Emitter;
+                    let _ = app.emit("kiwix-privacy-changed", ());
+                }
+            }
+        }
         #[cfg(target_os = "android")]
         if _mobile_transfer_guard.is_some() && self.mobile.foreground_transfers.load(Ordering::SeqCst) {
             if let Err(error) = self.mobile_transfer_update_locked().await {
@@ -3426,18 +3485,14 @@ fn external_link_target(settings: &store::Settings, args: &Value) -> Result<url:
 
 const MAX_EXPORT: u64 = 16 * 1024 * 1024;
 fn read_saved(store: &Store, relative: &str) -> Result<Value, String> {
-    use std::io::Read;
     let path = store.data_dir().join(relative);
-    let file = match std::fs::File::open(&path) {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Value::Null),
-        Err(e) => return Err(format!("Reading saved state: {e}")),
-    };
+    let Some(file) = crate::acquisition::open_history(&path)? else { return Ok(Value::Null); };
     if file.metadata().map_err(|e| e.to_string())?.len() > 16 * 1024 * 1024 {
         return Err("Saved transfer state exceeds 16 MiB".into());
     }
-    let mut saved: Value = serde_json::from_reader(file.take(16 * 1024 * 1024 + 1))
-        .map_err(|e| format!("Invalid saved transfer state: {e}"))?;
+    let mut saved = crate::acquisition::read_history_json(file, 16 * 1024 * 1024)
+        .map_err(|e| format!("Invalid saved transfer state: {e}"))?
+        .ok_or("Saved transfer state exceeds 16 MiB")?;
     #[cfg(mobile)]
     {
         let kind = match relative {

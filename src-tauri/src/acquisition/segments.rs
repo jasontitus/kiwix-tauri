@@ -98,7 +98,7 @@ pub(super) fn response_validator(headers: &reqwest::header::HeaderMap) -> Option
         .filter(|tag| !tag.starts_with("W/") && tag.starts_with('"') && tag.ends_with('"'))
         .or_else(|| {
             header_text(headers, LAST_MODIFIED.as_str())
-                .filter(|value| chrono::DateTime::parse_from_rfc2822(value).is_ok())
+                .filter(|value| crate::timestamps::parse_mail_date(value).is_ok())
         })
 }
 

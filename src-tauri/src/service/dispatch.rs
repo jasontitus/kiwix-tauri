@@ -1235,10 +1235,18 @@ impl Service {
                 )
             }
             "import_bookmarks" => {
+                if args.get("privacyGeneration").is_some() {
+                    self.ensure_generation(&args)?;
+                }
+                let _window = self.active_window_guard(&label)?;
                 let input = text(&args, "text")?;
                 value(self.store.update(|s| store::import_bookmarks(input, s))?)
             }
             "migrate_library" => {
+                if args.get("privacyGeneration").is_some() {
+                    self.ensure_generation(&args)?;
+                }
+                self.ensure_window_active(&label)?;
                 self.writable()?;
                 let input = text(&args, "text")?.to_string();
                 let base = args
@@ -1385,16 +1393,6 @@ impl Service {
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     self.privacy_policy_generation.fetch_add(1, Ordering::SeqCst);
                     self.editions.retire_authorizations();
-                    self.launch_locations
-                        .lock()
-                        .map_err(|_| "Launch queue unavailable")?
-                        .clear();
-                    // A lookup requested before a mode change belongs to the old mode.
-                    #[cfg(any(desktop, test))]
-                    self.launch_search
-                        .lock()
-                        .map_err(|_| "Launch search unavailable")?
-                        .take();
                     retire_readers(&mut *self.readers.lock().await, None).await?;
                     #[cfg(mobile)]
                     self.mobile_note_retirement()?;
@@ -1528,12 +1526,6 @@ impl Service {
                                 );
                             }
                         }
-                    }
-                }
-                if privacy_changed {
-                    if let Some(app) = self.app.lock().unwrap().as_ref() {
-                        use tauri::Emitter;
-                        let _ = app.emit("kiwix-privacy-changed", ());
                     }
                 }
                 if settings.show_search_snippets != previous.show_search_snippets {
@@ -2805,39 +2797,37 @@ impl Service {
                 Ok(self.sharing_status().await)
             }
             "export_article" => {
-                let id = text(&args, "bookId")?.to_string();
-                let path = text(&args, "path")?.to_string();
+                if args.get("privacyGeneration").is_some() { self.ensure_generation(&args)?; }
                 let service = self.clone();
-                blocking(move||{let archive=service.archive(&id)?;let entry=archive.entry(&crate::server::decode_location_path(&path)?)?;if entry.size>MAX_EXPORT{return Err("Resource exceeds in-memory export limit; use the archive resource URL to save large media".into());}let bytes=archive.read(&entry.path,0,entry.size)?;let name=Path::new(&entry.path).file_name().and_then(|n|n.to_str()).unwrap_or("article.html");Ok(json!({"fileName":name,"mime":entry.mime,"bytes":STANDARD.encode(bytes)}))}).await
+                blocking(move || {
+                    let id = text(&args, "bookId")?;
+                    let (archive, installation) = service.export_archive(&args)?;
+                    let entry = archive.entry(&crate::server::decode_location_path(text(&args, "path")?)?)?;
+                    if entry.size > MAX_EXPORT {
+                        return Err("Resource exceeds in-memory export limit; use the archive resource URL to save large media".into());
+                    }
+                    let bytes = archive.read(&entry.path, 0, entry.size)?;
+                    let name = Path::new(&entry.path).file_name().and_then(|n| n.to_str()).unwrap_or("article.html");
+                    let result = json!({"fileName": name, "mime": entry.mime, "bytes": STANDARD.encode(bytes)});
+                    let _window = service.active_window_guard(&label)?;
+                    if !service.store.book(id)?.is_some_and(|book| book.available && book.installation_id == installation) {
+                        return Err("The archive installation changed or is unavailable; open it again".into());
+                    }
+                    Ok(result)
+                }).await
             }
             "save_resource" | "save_mhtml" => {
                 self.ensure_generation(&args)?;
                 self.writable()?;
-                let id = text(&args, "bookId")?.to_string();
-                let path = text(&args, "path")?.to_string();
-                let destination = PathBuf::from(text(&args, "destination")?);
-                let overwrite = args
-                    .get("overwrite")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false);
                 let service = self.clone();
                 let mhtml = command == "save_mhtml";
                 blocking(move || {
-                    let archive = service.archive(&id)?;
-                    let entry = archive.entry(&crate::server::decode_location_path(&path)?)?;
-                    if mhtml {
-                        crate::exports::save_mhtml(&archive, &entry.path, &destination, overwrite)?;
-                    } else {
-                        crate::exports::save_resource(
-                            &archive,
-                            &entry.path,
-                            &destination,
-                            overwrite,
-                        )?;
-                    }
+                    let destination = Path::new(text(&args, "destination")?);
+                    let (output, _, installation) = service.prepare_archive_export(&args, destination, mhtml)?;
+                    let overwrite = args.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
+                    service.with_export_installation(&label, text(&args, "bookId")?, &installation, || output.publish(overwrite))?;
                     Ok(Value::Null)
-                })
-                .await
+                }).await
             }
             "save_text" | "save_bytes" => {
                 self.ensure_generation(&args)?;
@@ -2851,7 +2841,8 @@ impl Service {
                         .map_err(|e| e.to_string())?
                 };
                 blocking(move || {
-                    std::fs::write(path, bytes).map_err(|e| format!("Saving export: {e}"))?;
+                    let _window = self.active_window_guard(&label)?;
+                    crate::exports::save_document(&path, &bytes)?;
                     Ok(Value::Null)
                 })
                 .await
@@ -2863,14 +2854,7 @@ impl Service {
             "read_text" => {
                 self.ensure_generation(&args)?;
                 let path = PathBuf::from(text(&args, "path")?);
-                blocking(move || {
-                    let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
-                    if size > 16 * 1024 * 1024 {
-                        return Err("Import document exceeds 16 MiB".into());
-                    }
-                    value(std::fs::read_to_string(path).map_err(|e| e.to_string())?)
-                })
-                .await
+                blocking(move || crate::migration::read_import_document(&path).map(Value::String)).await
             }
             "open_external" => {
                 // The mode read lease also excludes save_settings: a stale

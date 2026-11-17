@@ -67,7 +67,7 @@ pub(super) fn validator(stored: &StoredJob) -> Option<&str> {
             stored
                 .last_modified
                 .as_deref()
-                .filter(|s| chrono::DateTime::parse_from_rfc2822(s).is_ok())
+                .filter(|s| crate::timestamps::parse_mail_date(s).is_ok())
         })
 }
 

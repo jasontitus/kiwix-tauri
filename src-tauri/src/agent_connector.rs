@@ -53,6 +53,7 @@ struct Running {
 pub(crate) struct AgentConnector {
     running: Mutex<Option<Running>>,
     generation: std::sync::atomic::AtomicU64,
+    transport: tokio::sync::Mutex<()>,
     bucket: Mutex<(f64, Instant)>,
     permits: Arc<tokio::sync::Semaphore>,
     activity: Mutex<Activity>,
@@ -63,6 +64,7 @@ impl Default for AgentConnector {
         Self {
             running: Mutex::new(None),
             generation: Default::default(),
+            transport: Default::default(),
             bucket: Mutex::new((BURST, Instant::now())),
             permits: Arc::new(tokio::sync::Semaphore::new(CONCURRENT_CALLS)),
             activity: Mutex::new(Activity::default()),
@@ -124,13 +126,12 @@ pub(crate) fn clean_line(text: &str, max_chars: usize) -> String {
         if c.is_control() || crate::exports::html::invisible(c) {
             continue;
         }
+        if count >= max_chars { break; }
         if space {
+            if max_chars - count < 2 { break; }
             out.push(' ');
             count += 1;
             space = false;
-        }
-        if count >= max_chars {
-            break;
         }
         out.push(c);
         count += 1;
@@ -178,13 +179,13 @@ impl Service {
     /// after settings are saved; turning it off, private mode and shutdown
     /// stop it earlier through [`Service::agent_connector_stop`].
     pub(crate) fn agent_connector_reconcile(self: &Arc<Self>) {
+        let Ok(mut running) = self.agent.running.lock() else { return; };
         let want = self
             .store
             .settings()
             .map(|settings| settings.agent_connector && !settings.private_mode && !settings.read_only)
             .unwrap_or(false)
             && !self.stopping.load(std::sync::atomic::Ordering::SeqCst);
-        let Ok(mut running) = self.agent.running.lock() else { return; };
         match (want, running.is_some()) {
             (true, false) => {
                 let generation = self.agent.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
@@ -193,14 +194,17 @@ impl Service {
                 self.agent.set_error(None);
                 let service = self.clone();
                 tauri::async_runtime::spawn(async move {
+                    // Finish retiring the old listener before the replacement claims its endpoint.
+                    let _transport = service.agent.transport.lock().await;
+                    if cancel.is_cancelled() { return; }
                     let result = transport::serve(service.clone(), cancel).await;
                     if let Err(error) = result {
                         eprintln!("Agent connector: {error}");
-                        service.agent.set_error(Some(error));
                         // Forget a failed server so turning the setting off and
                         // on again retries, unless a newer one replaced it.
                         if let Ok(mut running) = service.agent.running.lock() {
                             if running.as_ref().is_some_and(|current| current.generation == generation) {
+                                service.agent.set_error(Some(error));
                                 *running = None;
                             }
                         }
@@ -255,6 +259,7 @@ impl Service {
         }
         let cancel = self.agent.call_token().ok_or(OFF)?;
         self.agent.admit()?;
+        let deadline = tokio::time::Instant::now() + CALL_BUDGET;
         let permit = tokio::select! {
             _ = cancel.cancelled() => return Err(OFF.into()),
             permit = tokio::time::timeout(Duration::from_secs(5), self.agent.permits.clone().acquire_owned()) => permit
@@ -285,7 +290,7 @@ impl Service {
             }
         });
         tokio::select! {
-            result = tokio::time::timeout(CALL_BUDGET, task) => match result {
+            result = tokio::time::timeout_at(deadline, task) => match result {
                 Ok(result) => result.map_err(|_| "The request stopped unexpectedly".to_string())?,
                 Err(_) => {
                     cancel.cancel();
@@ -297,9 +302,8 @@ impl Service {
     }
 
     fn agent_list_archives(&self) -> Result<Value, String> {
-        let state = self.store.read()?;
-        let archives: Vec<Value> = state
-            .books
+        let books = self.store.books()?;
+        let archives: Vec<Value> = books
             .iter()
             .filter(|book| book.available)
             .take(1000)
@@ -331,11 +335,10 @@ impl Service {
                 .collect::<Result<_, _>>()?,
             Some(_) => return Err("archiveIds must be a list of at most 64 archive IDs".into()),
         };
-        let state = self.store.read()?;
+        let books = self.store.books()?;
         let mut titles = std::collections::HashMap::new();
         let mut archives = Vec::new();
-        for book in state
-            .books
+        for book in books
             .into_iter()
             .filter(|book| book.available && (requested.is_empty() || requested.contains(&book.metadata.id)))
         {
@@ -491,6 +494,7 @@ async fn write_frame<W: tokio::io::AsyncWrite + Unpin>(
         writer.flush().await
     };
     tokio::select! {
+        biased;
         _ = cancel.cancelled() => Err("Agent connector stopped".into()),
         result = tokio::time::timeout(WRITE, write) => match result {
             Ok(result) => result.map_err(|error| error.to_string()),
@@ -500,10 +504,7 @@ async fn write_frame<W: tokio::io::AsyncWrite + Unpin>(
 }
 
 fn same_profile(service: &Service, requested: &str) -> bool {
-    match (std::fs::canonicalize(requested), std::fs::canonicalize(service.store.data_dir())) {
-        (Ok(requested), Ok(own)) => requested.to_string_lossy().to_lowercase() == own.to_string_lossy().to_lowercase(),
-        _ => false,
-    }
+    same_file::is_same_file(requested, service.store.data_dir()).unwrap_or(false)
 }
 
 /// The handshake and request loop shared by the Windows pipe and Unix socket.
@@ -625,10 +626,7 @@ mod transport {
             return false;
         }
         let Some(default) = directories::ProjectDirs::from("org", "kiwix", "KiwixWorkbench") else { return false; };
-        match (std::fs::canonicalize(profile), std::fs::canonicalize(default.data_dir())) {
-            (Ok(profile), Ok(default)) => profile.to_string_lossy().to_lowercase() == default.to_string_lossy().to_lowercase(),
-            _ => false,
-        }
+        same_file::is_same_file(profile, default.data_dir()).unwrap_or(false)
     }
 
     fn pipe_name(service: &Service, own: &User) -> Result<String, String> {
@@ -757,7 +755,6 @@ mod transport {
 
     use super::super::Service;
     use serde_json::json;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -769,10 +766,7 @@ mod transport {
             return false;
         }
         let Some(default) = directories::ProjectDirs::from("org", "kiwix", "KiwixWorkbench") else { return false; };
-        match (std::fs::canonicalize(profile), std::fs::canonicalize(default.data_dir())) {
-            (Ok(profile), Ok(default)) => profile.to_string_lossy().to_lowercase() == default.to_string_lossy().to_lowercase(),
-            _ => false,
-        }
+        same_file::is_same_file(profile, default.data_dir()).unwrap_or(false)
     }
 
     fn socket_dir(service: &Service) -> PathBuf {
@@ -808,19 +802,11 @@ mod transport {
     }
 
     pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken) -> Result<(), String> {
-        let dir = socket_dir(&service);
-        std::fs::create_dir_all(&dir).map_err(|error| format!("Cannot create the agent connector directory: {error}"))?;
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("Cannot secure the agent connector directory: {error}"))?;
-        let path = dir.join(socket_file(&service)?);
-        // The profile lock makes a stale socket safe to replace.
-        let _ = std::fs::remove_file(&path);
-        let listener = UnixListener::bind(&path).map_err(|error| format!("Cannot open the agent connector socket: {error}"))?;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("Cannot secure the agent connector socket: {error}"))?;
-        // A restarted connector may bind this path before the old task exits;
-        // only the task that still owns this inode may unlink it.
-        let bound = std::fs::metadata(&path).ok().map(|metadata| (metadata.dev(), metadata.ino()));
+        let path = socket_dir(&service).join(socket_file(&service)?);
+        let (listener, _entry) = crate::instance::socket::bind(&path)
+            .map_err(|err| format!("Cannot open the agent connector socket: {err}"))?;
+        listener.set_nonblocking(true).map_err(|err| err.to_string())?;
+        let listener = UnixListener::from_std(listener).map_err(|err| err.to_string())?;
         let clients = Arc::new(AtomicUsize::new(0));
         loop {
             let accepted = tokio::select! {
@@ -852,11 +838,6 @@ mod transport {
                 clients.fetch_sub(1, Ordering::SeqCst);
             });
         }
-        if let Some((dev, ino)) = bound {
-            if std::fs::metadata(&path).is_ok_and(|metadata| metadata.dev() == dev && metadata.ino() == ino) {
-                let _ = std::fs::remove_file(&path);
-            }
-        }
         Ok(())
     }
 }
@@ -885,6 +866,8 @@ mod tests {
         assert_eq!(clean_line("  Bahrain\u{202E}\u{200B} \n island\u{E0041}\u{0007} ", 100), "Bahrain island");
         assert_eq!(clean_line("a\u{061C}b\u{3164}c\u{FE0F}", 100), "abc");
         assert_eq!(clean_line(&"x".repeat(50), 10).len(), 10);
+        assert_eq!(clean_line("éé z", 2), "éé");
+        assert_eq!(clean_line("éé z", 3), "éé");
     }
 
     #[test]
@@ -915,10 +898,6 @@ mod tests {
         let dir = std::env::temp_dir();
         let suffix = profile_suffix(&dir).unwrap();
         assert_eq!(suffix.len(), 16);
-        // Canonicalization is case-sensitive on Linux, so an uppercased /tmp
-        // does not exist there. Only exercise the case-insensitive comparison
-        // on filesystems where the uppercased path resolves.
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        assert_eq!(Some(suffix), profile_suffix(std::path::Path::new(&dir.to_string_lossy().to_uppercase())));
+        assert_eq!(profile_suffix(&dir.join(".")), Some(suffix));
     }
 }

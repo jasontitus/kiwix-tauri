@@ -253,8 +253,8 @@ static OPERATION: OperationGate = OperationGate::new();
 
 /// Set by a completed install that must relaunch. The relaunch is performed by
 /// the ordinary Quit path only after every shell flushed and `Service::shutdown`
-/// succeeded; a cancelled or failed Quit clears it so a later plain Quit never
-/// turns into a surprise restart.
+/// succeeded. A cancelled prepare clears it so a later plain Quit never restarts.
+/// A retry of the same prepared retirement retains the requested relaunch.
 static RESTART_AFTER_QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Consume the pending relaunch request (Quit retired the service).
@@ -262,7 +262,7 @@ pub(crate) fn take_restart_after_quit() -> bool {
     RESTART_AFTER_QUIT.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 
-/// Quit was cancelled or failed: the next Quit is a plain exit.
+/// Preparation was cancelled and the shells resumed. The next Quit is a plain exit.
 pub(crate) fn clear_restart_after_quit() {
     RESTART_AFTER_QUIT.store(false, std::sync::atomic::Ordering::SeqCst);
 }
@@ -313,25 +313,20 @@ fn save_state(store: &crate::store::Store, state: &StoredState) {
     }
 }
 
-pub(crate) fn check_due(last_checked: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> bool {
+pub(crate) fn check_due(last_checked: Option<&str>, now: time::OffsetDateTime) -> bool {
     let Some(last_checked) = last_checked else {
         return true;
     };
-    match chrono::DateTime::parse_from_rfc3339(last_checked) {
-        Ok(checked) => now
-            .signed_duration_since(checked.with_timezone(&chrono::Utc))
-            .num_seconds()
+    match crate::timestamps::parse(last_checked) {
+        Ok(checked) => (now - checked).whole_seconds()
             >= CHECK_INTERVAL_SECONDS,
         Err(_) => true,
     }
 }
 
 fn next_check_at(last_checked: Option<&str>) -> Option<String> {
-    let checked = chrono::DateTime::parse_from_rfc3339(last_checked?).ok()?;
-    Some(
-        (checked + chrono::Duration::seconds(CHECK_INTERVAL_SECONDS))
-            .to_rfc3339(),
-    )
+    let checked = crate::timestamps::parse(last_checked?).ok()?;
+    checked.checked_add(time::Duration::seconds(CHECK_INTERVAL_SECONDS)).map(crate::timestamps::format)
 }
 
 // ---------------------------------------------------------------------------
@@ -616,12 +611,12 @@ pub(crate) async fn check(
     let _operation = OPERATION.try_begin().ok_or_else(|| BUSY.to_string())?;
     let updater = updater_for(&app, &config)?;
     let result = updater.check().await;
-    let now = chrono::Utc::now();
+    let now = time::OffsetDateTime::now_utc();
     let path = service.store.data_dir().join(STATE_FILE);
     match result {
         Ok(update) => {
             let mut stored = load_state_at(&path);
-            stored.last_checked = Some(now.to_rfc3339());
+            stored.last_checked = Some(crate::timestamps::format(now));
             stored.last_available_version = update.as_ref().map(|update| update.version.clone());
             stored.last_error = None;
             save_state(&service.store, &stored);
@@ -637,7 +632,7 @@ pub(crate) async fn check(
         Err(error) => {
             let plain = plain_update_error(&error);
             let mut stored = load_state_at(&path);
-            stored.last_checked = Some(now.to_rfc3339());
+            stored.last_checked = Some(crate::timestamps::format(now));
             stored.last_error = Some(plain.clone());
             save_state(&service.store, &stored);
             Err(plain)
@@ -667,7 +662,7 @@ pub(crate) async fn automatic_check(service: Arc<Service>) {
         return;
     }
     let stored = load_state_at(&service.store.data_dir().join(STATE_FILE));
-    if !check_due(stored.last_checked.as_deref(), chrono::Utc::now()) {
+    if !check_due(stored.last_checked.as_deref(), time::OffsetDateTime::now_utc()) {
         return;
     }
     if !automatic_check_allowed(&settings, false) {
@@ -956,9 +951,9 @@ mod tests {
         ));
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join(STATE_FILE);
-        let checked = chrono::Utc::now();
+        let checked = time::OffsetDateTime::now_utc();
         let state = StoredState {
-            last_checked: Some(checked.to_rfc3339()),
+            last_checked: Some(crate::timestamps::format(checked)),
             last_available_version: Some("0.1.1".into()),
             last_error: None,
         };
@@ -969,7 +964,7 @@ mod tests {
         assert!(!check_due(loaded.last_checked.as_deref(), checked));
         assert!(check_due(
             loaded.last_checked.as_deref(),
-            checked + chrono::Duration::hours(25)
+            checked + time::Duration::hours(25)
         ));
         assert!(check_due(None, checked));
         std::fs::remove_dir_all(&directory).ok();
@@ -982,7 +977,7 @@ mod tests {
         clear_restart_after_quit();
         assert!(!take_restart_after_quit(), "a plain Quit never restarts");
         RESTART_AFTER_QUIT.store(true, std::sync::atomic::Ordering::SeqCst);
-        clear_restart_after_quit(); // flush timed out / shutdown failed
+        clear_restart_after_quit(); // the flush timed out and the shells resumed
         assert!(!take_restart_after_quit(), "a cancelled Quit leaves no restart behind");
         RESTART_AFTER_QUIT.store(true, std::sync::atomic::Ordering::SeqCst);
         assert!(take_restart_after_quit());
@@ -1163,11 +1158,11 @@ mod tests {
         });
 
         let state_path = workdir.join(STATE_FILE);
-        let now = chrono::Utc::now();
+        let now = time::OffsetDateTime::now_utc();
         save_state_at(
             &state_path,
             &StoredState {
-                last_checked: Some(now.to_rfc3339()),
+                last_checked: Some(crate::timestamps::format(now)),
                 last_available_version: Some(expected_version),
                 last_error: None,
             },

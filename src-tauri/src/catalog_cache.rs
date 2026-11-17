@@ -375,7 +375,9 @@ impl CatalogCache {
                             status: if revalidated { "revalidated" } else { "network" }.into(),
                             stale: false, stored: false, error: cache_warning,
                         };
-                        if !private && !read_only {
+                        // A 304 describes the representation sent with this request. A
+                        // later 200 may already have committed a different representation.
+                        if !private && !read_only && (!revalidated || cache.contains(&record)) {
                             // Retain only bounded identity fields, not another XML body.
                             let identity = (record.url.clone(), record.language.clone(), record.kind, record.base.clone(), record.digest.clone());
                             match cache.save(record) {

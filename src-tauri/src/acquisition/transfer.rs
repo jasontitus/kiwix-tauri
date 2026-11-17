@@ -367,7 +367,7 @@ pub(super) async fn execute_transfer(
         let etag = header_text(response.headers(), ETAG.as_str())
             .filter(|tag| !tag.starts_with("W/") && tag.starts_with('"') && tag.ends_with('"'));
         let modified = header_text(response.headers(), LAST_MODIFIED.as_str())
-            .filter(|value| chrono::DateTime::parse_from_rfc2822(value).is_ok());
+            .filter(|value| crate::timestamps::parse_mail_date(value).is_ok());
         // Parallel ranges need a stable object, a known total and either a
         // server that advertises ranges or a 206 that already proved it honors
         // them. The layout is durable before the part is preallocated or any

@@ -26,7 +26,7 @@ on:
         default: ''
   push:
     branches: [main]
-    paths: ['src-tauri/**', 'scripts/**', 'package*.json', 'index.html', '*config*', '.github/workflows/build.yml']
+    paths: ['src-tauri/**', 'kiwix-mcp/**', 'src/**', 'public/**', 'upstream/**', 'scripts/**', 'package*.json', '*.html', '*config*', '.github/workflows/build.yml']
 
 permissions:
   contents: read
@@ -309,6 +309,8 @@ jobs:
     name: Windows x86_64 NSIS (trusted SDK prerequisite)
     runs-on: [self-hosted, Windows, X64, kiwix-libzim-9_8]
     timeout-minutes: 150
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
     environment: ${{ inputs.release_version != '' && 'desktop-release' || 'native-windows' }}
     steps:
       - uses: actions/checkout@v4
@@ -354,15 +356,6 @@ jobs:
           foreach ($required in @('include/zim/archive.h', 'lib/zim.lib')) {
             if (-not $manifest.files.PSObject.Properties[$required]) { throw "SDK manifest must cover $required" }
           }
-          $dlls = @(Get-ChildItem (Join-Path $sdk 'bin') -Filter '*.dll' -File)
-          if (-not $dlls.Count) { throw 'SDK bin directory must contain the complete runtime DLL closure.' }
-          $resources = @{}
-          foreach ($dll in $dlls) {
-            if (-not $manifest.files.PSObject.Properties['bin/' + $dll.Name]) { throw "Unverified runtime DLL: $($dll.Name)" }
-            $resources[$dll.FullName] = $dll.Name
-          }
-          # Tauri resources are installed beside the executable on Windows.
-          @{ bundle = @{ resources = $resources } } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 .native-windows.json
           "LIBZIM_INCLUDE_DIR=$sdk\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "KIWIX_DESKTOP_SDK_ROOT=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LIBZIM_LIB_DIR=$sdk\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -377,6 +370,9 @@ jobs:
           npm ci
           if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
           $config = Join-Path $env:GITHUB_WORKSPACE '.native-windows.json'
+          $overlay = node scripts/windows-bundle-resources.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows runtime verification failed' }
+          $overlay | Set-Content -Encoding utf8 $config
           if ($env:KIWIX_RELEASE_VERSION) {
             node scripts/stage-update-release.mjs --configure
             if ($LASTEXITCODE -ne 0) { throw 'Release trust configuration failed' }

@@ -280,7 +280,7 @@ pub fn summary(store: &Store) -> Result<serde_json::Value, String> {
             "status":match record.map(|record| record.status) {
                 Some(IntegrityStatus::Valid) => "valid", Some(IntegrityStatus::Invalid) => "invalid", None => "unknown"
             },
-            "checkedAt":record.and_then(|record| chrono::DateTime::parse_from_rfc3339(&record.checked_at).ok()).map(|time|time.to_rfc3339()),
+            "checkedAt":record.and_then(|record| crate::timestamps::normalized(&record.checked_at)),
             "persisted":record.is_some()})
     }).collect();
     Ok(serde_json::json!({"valid":valid,"invalid":invalid,"unknown":state.books.len()-valid-invalid,

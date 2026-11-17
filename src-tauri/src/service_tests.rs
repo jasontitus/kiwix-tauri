@@ -17,6 +17,42 @@ fn fixture() -> PathBuf {
 }
 
 #[tokio::test]
+async fn article_exports_require_the_selected_installation_through_publication() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let book = load_book(fixture().to_str().unwrap(), true, false).unwrap();
+    let id = book.metadata.id.clone();
+    service.register_books(&[book], None).unwrap();
+    let installation = service.store.book(&id).unwrap().unwrap().installation_id;
+    let path = crate::server::encode_path(&service.archive(&id).unwrap().main_entry().unwrap().path);
+    let destination = profile.0.join("export");
+    let args = json!({"bookId": id, "installationId":installation, "privacyGeneration": service.launch_generation(),
+        "path":path, "destination":destination, "overwrite":true});
+    let bytes = service.clone().dispatch("export_article", args.clone()).await.unwrap();
+    assert!(!bytes["bytes"].as_str().unwrap().is_empty());
+    service.clone().dispatch("save_resource", args.clone()).await.unwrap();
+    let (prepared, _, admitted) = service.prepare_archive_export(&args, &destination, false).unwrap();
+    let closed = "window-retired";
+    service.clone().dispatch("close_window", json!({"__windowLabel":closed})).await.unwrap();
+    let mut retired = args.clone();
+    retired["__windowLabel"] = json!(closed);
+    std::fs::write(&destination, b"selected file").unwrap();
+    for command in ["export_article", "save_resource", "save_mhtml"] {
+        assert!(service.clone().dispatch(command, retired.clone()).await.is_err());
+    }
+    assert_eq!(std::fs::read(&destination).unwrap(), b"selected file");
+    let new_installation = crate::store::new_installation_id();
+    service.store.update(|state| { state.books[0].installation_id = new_installation; Ok(()) }).unwrap();
+    std::fs::write(&destination, b"selected file").unwrap();
+    assert!(service.store.with_current_installation(&id, &admitted, || prepared.publish(true)).is_err());
+    for command in ["export_article", "save_resource", "save_mhtml"] {
+        assert!(service.clone().dispatch(command, args.clone()).await.unwrap_err().contains("installation changed"));
+    }
+    assert_eq!(std::fs::read(&destination).unwrap(), b"selected file");
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn concurrent_archive_opens_share_one_cache_slot_and_keep_active_readers_after_invalidation() {
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
@@ -1702,6 +1738,77 @@ async fn closing_window_releases_its_readers_and_sensor_state() {
         .lock()
         .unwrap()
         .contains_key("window-secondary"));
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn interchange_commands_preserve_file_aliases_and_reject_retired_pickers() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let path = profile.0.join("bookmarks.json");
+    let retained = profile.0.join("retained.json");
+    std::fs::write(&path, b"first export").unwrap();
+    std::fs::hard_link(&path, &retained).unwrap();
+    let generation = service.launch_generation();
+    assert!(service.clone().dispatch("save_text", json!({"text":"unrelated","path":path,"privacyGeneration":generation})).await.is_err());
+    assert_eq!(std::fs::read(&retained).unwrap(), b"first export");
+    std::fs::remove_file(&path).unwrap();
+    for (command, payload) in [("save_text", json!({"text":"new export"})), ("save_bytes", json!({"bytes":"W10="}))] {
+        let mut args = payload;
+        args["path"] = json!(path);
+        args["privacyGeneration"] = json!(generation);
+        service.clone().dispatch(command, args).await.unwrap();
+    }
+    assert_eq!(std::fs::read(retained).unwrap(), b"first export");
+    let read = |path: &Path| service.clone().dispatch("read_text", json!({"path":path,"privacyGeneration":generation}));
+    assert_eq!(read(&path).await.unwrap(), json!("[]"));
+    std::fs::File::create(&path).unwrap().set_len(MAX_EXPORT + 1).unwrap();
+    assert!(read(&path).await.unwrap_err().contains("16 MiB"));
+    assert!(read(&profile.0).await.is_err());
+    service.clone().dispatch("save_settings", json!({"settings":{"privateMode":true}})).await.unwrap();
+    for (command, text) in [("migrate_library", "<library/>"), ("import_bookmarks", "[]")] {
+        let result = service.clone().dispatch(command, json!({"text":text,"privacyGeneration":generation})).await;
+        assert!(result.unwrap_err().contains("privacy transition"));
+    }
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn pending_storage_move_protects_the_download_folder_setting() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let original = service.store.settings().unwrap().download_directory;
+    let journal = profile.0.join("library-root-v1");
+    std::fs::create_dir_all(&journal).unwrap();
+    std::fs::write(journal.join("migration.json"), b"pending").unwrap();
+    let save = |directory: &str| service.clone().dispatch("save_settings", json!({"settings":{"downloadDirectory":directory}}));
+    save(&original).await.unwrap();
+    let next = profile.0.join("new-downloads");
+    let error = save(next.to_str().unwrap()).await.unwrap_err();
+    assert!(error.contains("pending storage move"));
+    assert_eq!(service.store.settings().unwrap().download_directory, original);
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn failed_mode_commit_keeps_queued_launches_for_the_fresh_generation() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let epoch = service.launch_generation();
+    service.queue_launch_search("main", "pending".to_owned(), epoch).await.unwrap();
+    let path = profile.0.join("state.json");
+    let original = profile.0.join("saved-before-test");
+    std::fs::rename(&path, &original).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let result = service.clone().dispatch("save_settings", json!({"settings":{"privateMode":true}})).await;
+    assert!(result.is_err());
+    assert!(!service.store.private_mode().unwrap());
+    assert_ne!(service.launch_generation(), epoch);
+    assert_eq!(service.launch_search.lock().unwrap().as_ref().unwrap()["query"], "pending");
+    std::fs::remove_dir(&path).unwrap();
+    std::fs::rename(original, &path).unwrap();
+    service.clone().dispatch("save_settings", json!({"settings":{"privateMode":true}})).await.unwrap();
+    assert!(service.launch_search.lock().unwrap().is_none());
     service.shutdown().await.unwrap();
 }
 

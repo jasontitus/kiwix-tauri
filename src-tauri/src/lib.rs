@@ -82,6 +82,7 @@ mod sharing;
 mod spelling;
 mod storage;
 mod store;
+mod timestamps;
 mod torrent;
 mod transfer_policy;
 mod transfer_response;
@@ -1220,15 +1221,23 @@ fn run_application(options: Options) -> Result<(), String> {
                             return;
                         }
                         if let Err(error) = service.shutdown().await {
-                            eprintln!("Application Quit cancelled: service retirement failed: {error}");
-                            #[cfg(desktop)]
-                            update::clear_restart_after_quit();
-                            // Accept a new Quit before the shells hear about
-                            // the cancellation, then release the prepared
-                            // attempt so that Quit can retry the (repeatable)
-                            // retirement after repair.
-                            exiting.store(false, Ordering::SeqCst);
-                            quit::abandon(&app, &format!("Quit could not finish: {error}"));
+                            eprintln!("Application Quit needs a retry: service retirement failed: {error}");
+                            // Keep the acknowledged shells frozen. Their ordinary commands
+                            // cannot run once the service has started retiring.
+                            let locale = service.store.locale().unwrap_or_else(|_| "system".into());
+                            let strings = localization::Localizer::for_app(&locale);
+                            let retry_app = app.clone();
+                            app.dialog()
+                                .message(format!("{}\n\n{error}",
+                                    strings.text("The operation could not be completed.", &[])))
+                                .title(strings.text("Quit", &[]))
+                                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                                .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCustom(
+                                    strings.text("Retry", &[])))
+                                .show(move |retry| {
+                                    exiting.store(false, Ordering::SeqCst);
+                                    if retry { retry_app.exit(code.unwrap_or(0)); }
+                                });
                             return;
                         }
                         authorized.store(true, Ordering::SeqCst);

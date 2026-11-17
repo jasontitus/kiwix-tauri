@@ -45,8 +45,10 @@ export default function AdvancedSettings({
   const integrity = useIntegritySnapshot(settings.privateMode, settings.readOnly, onError);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [migration, setMigration] = useState<string | null>(null);
-  const [baseDirectory, setBaseDirectory] = useState("");
+  const [migration, setMigration] = useState<{
+    text: string; baseDirectory: string; privacy: PrivacyContext;
+  } | null>(null);
+  const [importing, setImporting] = useState(false);
   const [updates, setUpdates] = useState<ContentUpdates | null>(null);
   const [integrityOpen, setIntegrityOpen] = useState(false);
   const [updatesOpen, setUpdatesOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function AdvancedSettings({
     editionAlive.current = true;
     return () => { editionAlive.current = false; editionRequest.current++; };
   }, []);
+  const catalogSources = JSON.stringify(settings.opdsSources);
   useEffect(() => {
     editionRequest.current++;
     bulkRequest.current++;
@@ -87,7 +90,8 @@ export default function AdvancedSettings({
     setBulkError("");
     setBulkActive(false);
     setBulkStopping(false);
-  }, [settings.privateMode, settings.readOnly, settings.catalogUrl, settings.opdsSources]);
+  }, [settings.privateMode, settings.readOnly, settings.catalogUrl, catalogSources]);
+  useEffect(() => { setMigration(null); }, [settings.privateMode, settings.readOnly]);
   const integrityRunning = integrity.snapshot?.job.running ?? false;
   const integrityIssues = [
     ...(integrity.snapshot?.job.results ?? []),
@@ -107,13 +111,17 @@ export default function AdvancedSettings({
     onError,
   });
   async function migrate() {
-    if (migration === null) return;
-    setBusy(true);
+    const current = capturePrivacyContext();
+    if (!migration || importing || !current || current.readOnly ||
+        !isPrivacyPolicyContextCurrent(migration.privacy)) return;
+    setImporting(true);
     try {
       const result = await api<ImportResult>("migrate_library", {
-        text: migration,
-        baseDirectory: baseDirectory || undefined,
+        text: migration.text,
+        baseDirectory: migration.baseDirectory || undefined,
+        privacyGeneration: current.generation,
       });
+      if (!editionAlive.current || !isPrivacyPolicyContextCurrent(migration.privacy)) return;
       setMigration(null);
       setNotice(
         t(
@@ -127,9 +135,9 @@ export default function AdvancedSettings({
           result.errors.map((item) => `${displayPath(item.path)}: ${item.error}`).join("\n"),
         );
     } catch (e) {
-      onError(e);
+      if (editionAlive.current && isPrivacyPolicyContextCurrent(migration.privacy)) onError(e);
     } finally {
-      setBusy(false);
+      setImporting(false);
     }
   }
   async function findContentUpdates() {
@@ -467,16 +475,19 @@ export default function AdvancedSettings({
           )}
         </p>
         <button
-          disabled={busy || settings.readOnly}
+          disabled={busy || importing || settings.readOnly}
           onClick={async () => {
+            const privacy = capturePrivacyContext();
+            if (!privacy || privacy.readOnly) return;
+            setImporting(true);
             try {
-              const text = await readTextFile();
-              if (text !== null) {
-                setBaseDirectory("");
-                setMigration(text);
-              }
+              const text = await readTextFile(privacy);
+              if (editionAlive.current && text !== null && isPrivacyPolicyContextCurrent(privacy))
+                setMigration({ text, baseDirectory: "", privacy });
             } catch (e) {
-              onError(e);
+              if (editionAlive.current && isPrivacyPolicyContextCurrent(privacy)) onError(e);
+            } finally {
+              setImporting(false);
             }
           }}
         >
@@ -676,10 +687,10 @@ export default function AdvancedSettings({
           {notice}
         </p>
       )}
-      {migration !== null && (
+      {migration !== null && isPrivacyPolicyContextCurrent(migration.privacy) && (
         <Modal
           title={t("Import an existing library")}
-          onClose={() => setMigration(null)}
+          onClose={() => { if (!importing) setMigration(null); }}
         >
           <p>
             {isMobile
@@ -692,24 +703,26 @@ export default function AdvancedSettings({
             {isMobile ? t("Imported library folder copy (optional)") : t("Original library folder (optional)")}
             <div className="input-action">
               <input
-                value={isIOS && baseDirectory ? pathFileName(baseDirectory) : baseDirectory}
+                value={isIOS && migration.baseDirectory ? pathFileName(migration.baseDirectory) : migration.baseDirectory}
                 readOnly={isMobile}
-                onChange={(e) => setBaseDirectory(e.target.value)}
+                disabled={importing}
+                onChange={(e) => setMigration({ ...migration, baseDirectory: e.target.value })}
               />
               <button
                 type="button"
                 aria-label={isMobile ? t("Import original library folder copy") : t("Choose original library folder")}
-                disabled={busy || (isMobile && (settings.privateMode || settings.readOnly))}
+                disabled={importing || (isMobile && (settings.privateMode || settings.readOnly))}
                 onClick={async () => {
+                  const privacy = capturePrivacyContext();
+                  if (!privacy) return;
                   try {
-                    const privacy = capturePrivacyContext();
-                    if (!privacy) return;
                     const path = isMobile
                       ? await api<string | null>("mobile_pick_directory_copy", { privacyGeneration: privacy.generation })
                       : await chooseDirectory();
-                    if (path && isPrivacyPolicyContextCurrent(privacy)) setBaseDirectory(path);
+                    if (path && isPrivacyPolicyContextCurrent(privacy))
+                      setMigration((current) => current === migration ? { ...current, baseDirectory: path } : current);
                   } catch (e) {
-                    onError(e);
+                    if (editionAlive.current && isPrivacyPolicyContextCurrent(privacy)) onError(e);
                   }
                 }}
               >
@@ -718,10 +731,10 @@ export default function AdvancedSettings({
             </div>
           </label>
           <div className="modal-actions">
-            <button onClick={() => setMigration(null)}>{t("Cancel")}</button>
-            <button className="primary" disabled={busy} onClick={migrate}>
+            <button disabled={importing} onClick={() => setMigration(null)}>{t("Cancel")}</button>
+            <button className="primary" disabled={importing} onClick={migrate}>
               <FileUp size={16} />
-              {busy ? t("Importing…") : t("Import library")}
+              {importing ? t("Importing…") : t("Import library")}
             </button>
           </div>
         </Modal>

@@ -50,7 +50,8 @@ async fn serve(State(state): State<Arc<Network>>, uri: Uri, headers: HeaderMap) 
         state.release.notified().await;
     }
     if mode == 1 { return (StatusCode::SERVICE_UNAVAILABLE, "offline fixture").into_response(); }
-    let etag = format!("{}\"{language}-v1\"", if mode == 5 { "W/" } else { "" });
+    let version = if mode == 8 { 2 } else { 1 };
+    let etag = format!("{}\"{language}-v{version}\"", if mode == 5 { "W/" } else { "" });
     if mode == 2 || conditional.as_deref().is_some_and(|value| value.strip_prefix("W/").unwrap_or(value) == etag.strip_prefix("W/").unwrap_or(&etag)) {
         return (StatusCode::NOT_MODIFIED, [("etag", etag)], "").into_response();
     }
@@ -59,7 +60,7 @@ async fn serve(State(state): State<Arc<Network>>, uri: Uri, headers: HeaderMap) 
         let label = if language == "fr" { "Sciences françaises" } else { "English science" };
         format!(r#"<feed xmlns="http://www.w3.org/2005/Atom"><entry><title xml:lang="{language}">{label}</title><link rel="subsection" href="https://example.org/feed?{key}={value}"/></entry></feed>"#)
     } else {
-        let title = uri.query().unwrap_or("unfiltered").replace('&', "&amp;");
+        let title = (if mode == 8 { "replacement" } else { uri.query().unwrap_or("unfiltered") }).replace('&', "&amp;");
         format!(r#"<feed xmlns="http://www.w3.org/2005/Atom" xmlns:o="http://a9.com/-/spec/opensearch/1.1/"><o:totalResults>2</o:totalResults><o:startIndex>0</o:startIndex><o:itemsPerPage>1</o:itemsPerPage><entry><id>book</id><title>{language}:{title}</title><link type="application/x-zim" href="https://example.org/book.zim"/></entry></feed>"#)
     };
     (StatusCode::OK, [("etag", etag)], xml).into_response()
@@ -77,6 +78,33 @@ async fn mode(store: &Store, gate: &Arc<RwLock<()>>, generation: &AtomicU64, pri
     let _guard = gate.write().await;
     generation.fetch_add(1, Ordering::SeqCst);
     store.set_runtime_mode(private, read_only).unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn late_not_modified_does_not_replace_the_newer_offline_page() {
+    let profile = Profile::new();
+    let fixture = Fixture::new().await;
+    let cache = cache(Arc::new(Store::new(profile.0.clone()).unwrap()));
+    let url = fixture.url("/feed");
+    let (gate, generation) = policy();
+    cache.fetch_page(&url, "en", &gate, &generation, 1).await.unwrap();
+    fixture.network.mode.store(4, Ordering::SeqCst);
+    let pending = {
+        let (cache, url, gate, generation) = (cache.clone(), url.clone(), gate.clone(), generation.clone());
+        tokio::spawn(async move { cache.fetch_page(&url, "en", &gate, &generation, 1).await.unwrap() })
+    };
+    fixture.network.started.notified().await;
+    fixture.network.mode.store(8, Ordering::SeqCst);
+    let fresh = cache.fetch_page(&url, "en", &gate, &generation, 1).await.unwrap();
+    assert_eq!(fresh.page.entries[0].title, "en:replacement");
+    fixture.network.release.notify_one();
+    let older = pending.await.unwrap();
+    assert_eq!(older.cache.status, "revalidated");
+    assert!(!older.cache.stored);
+    fixture.network.mode.store(1, Ordering::SeqCst);
+    let offline = cache.fetch_page(&url, "en", &gate, &generation, 1).await.unwrap();
+    assert_eq!(offline.page.entries[0].title, "en:replacement");
+    fixture.stop().await;
 }
 
 #[tokio::test(flavor = "current_thread")]

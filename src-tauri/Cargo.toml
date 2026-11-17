@@ -44,7 +44,7 @@ sha2 = "0.10"
 md-5 = "0.10"
 hex = "0.4"
 base64 = "0.22"
-chrono = { version = "0.4", features = ["serde"] }
+time = { version = "0.3", features = ["parsing", "macros", "formatting", "local-offset", "large-dates"] }
 libc = "0.2"
 axum = "0.8"
 percent-encoding = "2"
@@ -62,6 +62,7 @@ html5ever = "0.39.0"
 cssparser = "0.37.0"
 librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
 cap-std = "4"
+same-file = "1"
 cap-fs-ext = "4"
 anyhow = "1"
 icu_plurals = "2.4"
@@ -120,7 +121,7 @@ sherpa-onnx = "2.0.1"
 # rustix's `net` feature. Already in the graph through cap-std; no default
 # features so only these modules compile.
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1", default-features = false, features = ["process", "time", "net"] }
+rustix = { version = "1", default-features = false, features = ["fs", "process", "time", "net"] }
 
 # Iteration builds keep line tables so backtraces stay actionable, but skip the
 # full variable/type debug info that dominates debug-object size and link time.

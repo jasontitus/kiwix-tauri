@@ -47,11 +47,6 @@ static BOOL sameIdentity(NSDictionary *a, NSDictionary *b) {
     return [a[@"receipt"] isEqual:b[@"receipt"]] && [a[@"bookId"] isEqual:b[@"bookId"]]
         && [a[@"installationId"] isEqual:b[@"installationId"]] && [a[@"profileId"] isEqual:b[@"profileId"]];
 }
-static BOOL regular(int fd, off_t maximum) {
-    struct stat st;
-    return fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink == 1
-        && st.st_uid == geteuid() && st.st_size >= 0 && st.st_size <= maximum;
-}
 static BOOL writeAll(int fd, NSData *data) {
     const char *bytes = (const char *)data.bytes;
     NSUInteger left = data.length;
@@ -139,15 +134,16 @@ static BOOL writeAll(int fd, NSData *data) {
 }
 - (BOOL)load:(NSError **)error {
     if (self.directory < 0) return YES;
-    int file = openat(self.directory, StateName.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    int file = openat(self.directory, StateName.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
     if (file < 0) {
         if (errno == ENOENT) return YES;
         if (error) *error = notificationError(@"Opening notification handoff journal"); return NO;
     }
-    if (!regular(file, JournalLimit)) {
+    struct stat st;
+    if (fstat(file, &st) != 0 || !S_ISREG(st.st_mode) || st.st_nlink != 1
+        || st.st_uid != geteuid() || st.st_size < 0 || (uint64_t)st.st_size > JournalLimit) {
         close(file); if (error) *error = notificationError(@"Notification handoff journal is not a bounded owned regular file"); return NO;
     }
-    struct stat st; fstat(file, &st);
     NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)st.st_size];
     NSUInteger offset = 0;
     while (offset < data.length) {
@@ -278,7 +274,7 @@ static BOOL writeAll(int fd, NSData *data) {
             if (self.enabled && !self.protectedMode && !self.failure) {
                 for (NSDictionary *received in self.earlyTaps) {
                     NSDictionary *notice = self.notices[received[@"id"]];
-                    BOOL duplicate = [self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger index, BOOL *stop) {
+                    BOOL duplicate = [self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger, BOOL *) {
                         return [tap[@"id"] isEqual:received[@"id"]];
                     }] != NSNotFound;
                     if (notice && sameIdentity(notice, received) && !duplicate && self.taps.count < TapLimit) {
@@ -329,7 +325,7 @@ static BOOL writeAll(int fd, NSData *data) {
         if ([command isEqual:@"ack"]) {
             NSString *key = request[@"id"];
             if (!text(key, 128)) { if (error) *error = notificationError(@"Invalid notification acknowledgment"); return nil; }
-            NSIndexSet *indexes = [self.taps indexesOfObjectsPassingTest:^BOOL(NSDictionary *tap, NSUInteger index, BOOL *stop) { return [tap[@"id"] isEqual:key]; }];
+            NSIndexSet *indexes = [self.taps indexesOfObjectsPassingTest:^BOOL(NSDictionary *tap, NSUInteger, BOOL *) { return [tap[@"id"] isEqual:key]; }];
             if (!indexes.count) return @{};
             self.dirty = YES;
             [self.taps removeObjectsAtIndexes:indexes];
@@ -353,7 +349,7 @@ static BOOL writeAll(int fd, NSData *data) {
             // This bounded native history also suppresses duplicate bridge calls.
             while (self.order.count >= NoticeLimit) {
                 NSString *oldest = self.order.firstObject;
-                if ([self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger index, BOOL *stop) { return [tap[@"id"] isEqual:oldest]; }] != NSNotFound) {
+                if ([self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger, BOOL *) { return [tap[@"id"] isEqual:oldest]; }] != NSNotFound) {
                     if (error) *error = notificationError(@"Acknowledge pending notification opens before adding more"); return nil;
                 }
                 [self.notices removeObjectForKey:oldest]; [self.order removeObjectAtIndex:0];
@@ -372,11 +368,12 @@ static BOOL writeAll(int fd, NSData *data) {
                 @synchronized (self) {
                     if (epoch != self.epoch || !self.enabled || self.protectedMode || self.failure) return;
                     if (settings.authorizationStatus != UNAuthorizationStatusAuthorized && settings.authorizationStatus != UNAuthorizationStatusProvisional) return;
-                    [center addNotificationRequest:notification withCompletionHandler:^(NSError *deliveryError) {
+                    [center addNotificationRequest:notification withCompletionHandler:^(NSError *) {
                         @synchronized (self) {
                             if (epoch != self.epoch || !self.enabled || self.protectedMode || self.failure) {
-                                [center removePendingNotificationRequestsWithIdentifiers:@[key]];
-                                [center removeDeliveredNotificationsWithIdentifiers:@[key]];
+                                UNUserNotificationCenter *current = UNUserNotificationCenter.currentNotificationCenter;
+                                [current removePendingNotificationRequestsWithIdentifiers:@[key]];
+                                [current removeDeliveredNotificationsWithIdentifiers:@[key]];
                             }
                             // Denial/revocation/OS delivery errors never undo a
                             // verified library admission or trigger a retry alert.
@@ -410,7 +407,7 @@ static BOOL writeAll(int fd, NSData *data) {
         }
         if (self.configured && !self.failure && self.enabled && !self.protectedMode && notice && identity(received)
             && sameIdentity(notice, received) && [response.actionIdentifier isEqual:UNNotificationDefaultActionIdentifier]) {
-            BOOL duplicate = [self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger index, BOOL *stop) { return [tap[@"id"] isEqual:key]; }] != NSNotFound;
+            BOOL duplicate = [self.taps indexOfObjectPassingTest:^BOOL(NSDictionary *tap, NSUInteger, BOOL *) { return [tap[@"id"] isEqual:key]; }] != NSNotFound;
             if (!duplicate && self.taps.count < TapLimit) {
                 [self.taps addObject:notice]; self.dirty = YES; NSError *error = nil;
                 if (self.writeAllowed && ![self save:&error]) [self.taps removeLastObject];

@@ -206,8 +206,8 @@ impl TorrentManager {
         let mut history_notice = None;
         #[cfg(test)]
         let mut load_warnings = Vec::new();
-        let mut state = if path.exists() {
-            match load_state(&path, &folder, &store) {
+        let mut state = if let Some(file) = crate::acquisition::open_history(&path)? {
+            match load_state(&file, &folder, &store) {
                 Ok((state, warnings)) => {
                     if !warnings.is_empty() {
                         crate::diagnostics::record(
@@ -224,7 +224,7 @@ impl TorrentManager {
                     // Preserve the unreadable history byte-for-byte and start
                     // empty. A bad record must never block the profile: transfer
                     // history is recoverable, the rest of the app is not optional.
-                    let preserved = quarantine_history(&path, &folder)?;
+                    let preserved = crate::acquisition::preserve_history(&path, file)?;
                     crate::diagnostics::record(&store, "downloads", Some(&reason));
                     eprintln!(
                         "Saved transfer history was unreadable ({reason}); preserved at {}",
@@ -1784,6 +1784,9 @@ impl TorrentManager {
                     r.job.destination = r.job.completed_paths[0].clone();
                     r.job.downloaded = r.job.total.unwrap_or(r.job.downloaded);
                     r.job.status = "completed".into();
+                    // Recovery can finish without staging, peers, or an
+                    // engine. A future explicit Seed action starts the worker.
+                    r.job.seeding = false;
                     r.job.error = None;
                     r.job.speed = 0.0;
                     r.job.upload_speed = 0.0;

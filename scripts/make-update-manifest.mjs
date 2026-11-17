@@ -8,21 +8,26 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash, createPublicKey, verify } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
+  copyFile,
   link,
+  lstat,
   mkdir,
   readFile,
+  realpath,
   rename,
   mkdtemp,
   stat,
   rm,
+  rmdir,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
-const repository = fileURLToPath(new URL("..", import.meta.url));
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const MAX_VERSION_COMPONENT = 18446744073709551615n;
 const TARGET_PATTERN =
@@ -166,13 +171,14 @@ export function buildManifest({
   };
 }
 
-function run(command, args, { allowFailure = false } = {}) {
+function run(command, args, env = process.env) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    env,
   });
   if (result.error) throw result.error;
-  if (result.status !== 0 && !allowFailure) {
+  if (result.status !== 0) {
     throw new Error(
       `${command} failed (${result.status}):\n${result.stderr || result.stdout}`,
     );
@@ -182,11 +188,21 @@ function run(command, args, { allowFailure = false } = {}) {
 
 async function exists(file) {
   try {
-    await stat(file);
+    await lstat(file);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
   }
+}
+
+async function resolveOutputDirectory(directory) {
+  // Preserve the requested path below the nearest existing directory while
+  // resolving aliases of that directory for input/output collision checks.
+  let parent = directory;
+  while (!(await exists(parent))) parent = path.dirname(parent);
+  if (!(await stat(parent)).isDirectory()) fail(`Not an output directory: ${parent}`);
+  return path.join(await realpath(parent), path.relative(parent, directory));
 }
 
 function parseArgs(argv) {
@@ -278,31 +294,41 @@ export async function tauriCli() {
   return path.resolve(path.dirname(packageFile), entry);
 }
 
+async function signingKeyIsFile(value) {
+  try {
+    return (await stat(value)).isFile();
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR", "ENAMETOOLONG", "EINVAL"].includes(error.code)) return false;
+    // A filesystem error can contain the entire key in its path.
+    fail("Could not inspect signing key. Use --private-key-path for a key file.");
+  }
+}
+
 async function signArtifact(file, version, options) {
-  const args = ["signer", "sign", "--app-version", version];
+  const env = { ...process.env };
+  delete env.TAURI_SIGNING_PRIVATE_KEY;
+  delete env.TAURI_SIGNING_PRIVATE_KEY_PATH;
+  delete env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
   if (options.privateKeyPath) {
-    args.push("--private-key-path", options.privateKeyPath);
+    env.TAURI_SIGNING_PRIVATE_KEY_PATH = options.privateKeyPath;
   } else if (options.privateKey) {
-    if (await exists(options.privateKey)) {
-      args.push("--private-key-path", options.privateKey);
+    if (await signingKeyIsFile(options.privateKey)) {
+      env.TAURI_SIGNING_PRIVATE_KEY_PATH = options.privateKey;
     } else {
-      args.push("--private-key", options.privateKey);
+      env.TAURI_SIGNING_PRIVATE_KEY = options.privateKey;
     }
   } else {
     fail(
       "No signing key supplied. Set TAURI_SIGNING_PRIVATE_KEY_PATH (or --private-key-path), or place a .sig file next to every artifact.",
     );
   }
-  if (options.privateKeyPassword !== null) {
-    args.push("--password", options.privateKeyPassword);
-  }
-  args.push(file);
-  run(process.execPath, [await tauriCli(), ...args]);
+  if (options.privateKeyPassword != null) env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = options.privateKeyPassword;
+  run(process.execPath, [await tauriCli(), "signer", "sign", "--app-version", version, file], env);
 }
 
 // Tauri's minisign envelope authenticates both the exact payload and the
 // trusted comment containing its release version. Never trust a staged .sig.
-export function verifyArtifactSignature(bytes, signature, publicKey, version) {
+function signatureEnvelope(signature, publicKey, version) {
   try {
     const keyLines = Buffer.from(publicKey, "base64").toString("utf8").trim().split(/\r?\n/);
     const lines = Buffer.from(signature.trim(), "base64").toString("utf8").trim().split(/\r?\n/);
@@ -312,9 +338,7 @@ export function verifyArtifactSignature(bytes, signature, publicKey, version) {
         !key.subarray(2, 10).equals(record.subarray(2, 10)) ||
         !lines[2].startsWith("trusted comment: ")) throw new Error("Invalid minisign envelope");
     const algorithm = record.subarray(0, 2).toString("ascii");
-    const payload = algorithm === "ED" ? createHash("blake2b512").update(bytes).digest()
-      : algorithm === "Ed" ? bytes : null;
-    if (!payload) throw new Error("Unsupported minisign algorithm");
+    if (algorithm !== "ED" && algorithm !== "Ed") throw new Error("Unsupported minisign algorithm");
     const edKey = createPublicKey({
       key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), key.subarray(10)]),
       format: "der",
@@ -322,14 +346,37 @@ export function verifyArtifactSignature(bytes, signature, publicKey, version) {
     });
     const comment = lines[2].slice("trusted comment: ".length);
     const payloadSignature = record.subarray(10);
-    if (!verify(null, payload, edKey, payloadSignature) ||
-        !verify(null, Buffer.concat([payloadSignature, Buffer.from(comment)]), edKey, Buffer.from(lines[3], "base64"))) {
-      throw new Error("Signature does not authenticate artifact bytes");
+    if (!verify(null, Buffer.concat([payloadSignature, Buffer.from(comment)]), edKey, Buffer.from(lines[3], "base64"))) {
+      throw new Error("Signature does not authenticate trusted comment");
     }
     const signedVersion = comment.split("\t").find((field) => field.startsWith("version:"))?.slice(8);
     if (signedVersion !== version) throw new Error("Signature does not authenticate release version");
+    return { prehashed: algorithm === "ED", edKey, payloadSignature };
   } catch (error) {
     fail(`Artifact signature verification failed: ${error.message}`);
+  }
+}
+
+function verifyPayload(payload, envelope) {
+  if (!verify(null, payload, envelope.edKey, envelope.payloadSignature)) {
+    fail("Artifact signature verification failed: signature does not authenticate artifact bytes");
+  }
+}
+
+export function verifyArtifactSignature(bytes, signature, publicKey, version) {
+  const envelope = signatureEnvelope(signature, publicKey, version);
+  verifyPayload(envelope.prehashed ? createHash("blake2b512").update(bytes).digest() : bytes, envelope);
+}
+
+async function verifyArtifactFile(file, signature, publicKey, version) {
+  const envelope = signatureEnvelope(signature, publicKey, version);
+  if (envelope.prehashed) {
+    const hash = createHash("blake2b512");
+    for await (const chunk of createReadStream(file)) hash.update(chunk);
+    verifyPayload(hash.digest(), envelope);
+  } else {
+    // Legacy Ed25519 signs the raw message and requires the whole payload.
+    verifyPayload(await readFile(file), envelope);
   }
 }
 
@@ -338,7 +385,7 @@ async function planArtifacts(options, stageDir, out) {
   const targets = new Set();
   // Case-fold even on case-sensitive hosts: published release files must also
   // remain distinct when downloaded/staged on Windows and default macOS.
-  const outputs = new Set([out.toLowerCase(), `${out}.tmp`.toLowerCase()]);
+  const outputs = new Set([out.toLowerCase()]);
   for (const artifact of options.artifacts) {
     const target = validateTarget(artifact.target);
     if (targets.has(target)) fail(`Duplicate target ${target}`);
@@ -359,17 +406,31 @@ async function planArtifacts(options, stageDir, out) {
       outputs.add(folded);
       if (await exists(output)) fail(`Output already exists: ${output}; use a fresh release staging directory`);
     }
-    const bytes = packaged ? null : await readFile(source);
     const signature = !options.sign ? await readFile(`${source}.sig`, "utf8") : null;
     if (!options.sign) {
       if (!options.publicKey) fail("--no-sign requires --public-key to authenticate source bytes and version");
-      verifyArtifactSignature(bytes, signature, options.publicKey, options.version);
+      signatureEnvelope(signature, options.publicKey, options.version);
     }
-    plans.push({ target, source, packaged, fileName, staged, bytes, signature });
+    plans.push({ target, source, packaged, fileName, staged, signature });
+  }
+  const inputs = plans.flatMap(plan => [plan.source, `${plan.source}.sig`]);
+  if (options.notesFile) inputs.push(path.resolve(options.notesFile));
+  if (options.privateKeyPath) inputs.push(path.resolve(options.privateKeyPath));
+  else if (options.privateKey && await signingKeyIsFile(options.privateKey)) inputs.push(path.resolve(options.privateKey));
+  for (const source of inputs) {
+    if (!(await exists(source))) continue;
+    const parent = await realpath(path.dirname(source));
+    const entry = path.join(parent, path.basename(source));
+    if (outputs.has(entry.toLowerCase()) || outputs.has((await realpath(source)).toLowerCase())) {
+      fail("Output collides with an input; choose a distinct manifest and staging directory");
+    }
   }
   for (const plan of plans) {
-    for (const source of [plan.source, `${plan.source}.sig`]) {
-      if (outputs.has(source.toLowerCase())) fail(`Output collides with an input: ${source}`);
+    if (plan.packaged) {
+      const bundle = (await realpath(plan.source)).toLowerCase();
+      if ([stageDir, path.dirname(out)].some(dir => dir.toLowerCase() === bundle || dir.toLowerCase().startsWith(bundle + path.sep))) {
+        fail("Release outputs must be outside the app bundle");
+      }
     }
   }
   return plans;
@@ -380,8 +441,7 @@ async function prepareArtifact(plan, options, scratch) {
   if (plan.packaged) {
     run("tar", ["-czf", temporary, "-C", path.dirname(plan.source), path.basename(plan.source)]);
   } else {
-    // Use the same snapshot that was verified, not a second read of the source.
-    await writeFile(temporary, plan.bytes);
+    await copyFile(plan.source, temporary);
   }
   let signature = plan.signature;
   if (options.sign) {
@@ -389,13 +449,62 @@ async function prepareArtifact(plan, options, scratch) {
     // output path, even when a previous release generation was interrupted.
     await signArtifact(temporary, options.version, options);
     signature = await readFile(`${temporary}.sig`, "utf8");
-    if (options.publicKey) {
-      verifyArtifactSignature(await readFile(temporary), signature, options.publicKey, options.version);
-    }
   } else {
     await writeFile(`${temporary}.sig`, signature);
   }
+  if (options.publicKey) await verifyArtifactFile(temporary, signature, options.publicKey, options.version);
   return { target: plan.target, fileName: plan.fileName, signature };
+}
+
+async function rollbackLink(destination, identity) {
+  const current = await lstat(destination, { bigint: true });
+  if (current.ino !== identity.ino || current.dev !== identity.dev) return;
+  // A pathname can change between inspection and unlink. Capture it into a
+  // private directory and inspect the captured object before discarding it.
+  const recovery = await mkdtemp(path.join(path.dirname(destination), ".updater-rollback-"));
+  const captured = path.join(recovery, path.basename(destination));
+  try {
+    await rename(destination, captured);
+    const entry = await lstat(captured, { bigint: true });
+    if (entry.ino !== identity.ino || entry.dev !== identity.dev) {
+      // Restore a replacement without overwriting another arrival. If the
+      // filename is taken or the object cannot be linked, keep it for recovery.
+      try { await link(captured, destination); }
+      catch (error) { fail(`Changed entry preserved at ${captured}: ${error.message}`); }
+    }
+    await unlink(captured);
+  } finally {
+    // Only an empty directory can be removed. Never sweep a captured entry.
+    try { await rmdir(recovery); }
+    catch (error) { if (!["ENOTEMPTY", "EEXIST"].includes(error.code)) throw error; }
+  }
+}
+
+async function publishArtifacts(plans, scratch, temporaryManifest, out) {
+  const published = [];
+  try {
+    for (const plan of plans) {
+      for (const suffix of ["", ".sig"]) {
+        const snapshot = path.join(scratch, plan.fileName + suffix);
+        const destination = plan.staged + suffix;
+        const identity = await lstat(snapshot, { bigint: true });
+        await link(snapshot, destination);
+        published.push({ destination, identity });
+      }
+    }
+    await rename(temporaryManifest, out);
+  } catch (error) {
+    const failures = [];
+    for (const { destination, identity } of published.reverse()) {
+      try {
+        await rollbackLink(destination, identity);
+      } catch (cleanup) {
+        if (cleanup.code !== "ENOENT") failures.push(cleanup.message);
+      }
+    }
+    if (failures.length) fail(`${error.message}\nCould not roll back release staging: ${failures.join(", ")}`);
+    throw error;
+  }
 }
 
 export async function generate(options) {
@@ -403,16 +512,20 @@ export async function generate(options) {
   const baseUrl = validateBaseUrl(options.baseUrl, {
     allowLoopback: options.allowLoopback,
   });
-  const out = path.resolve(options.out);
-  const stageDir = path.resolve(options.stageDir ?? path.join(path.dirname(out), "artifacts"));
+  const requested = path.resolve(options.out);
+  const out = path.join(await resolveOutputDirectory(path.dirname(requested)), path.basename(requested));
+  if (await exists(out) && !(await lstat(out)).isFile()) fail(`Manifest output must name a regular file: ${out}`);
+  const stageDir = await resolveOutputDirectory(path.resolve(options.stageDir ?? path.join(path.dirname(out), "artifacts")));
   const notes = options.notesText
     ?? (options.notesFile ? await readFile(path.resolve(options.notesFile), "utf8") : null);
   if (!Array.isArray(options.artifacts) || options.artifacts.length === 0) fail("At least one --artifact is required");
   const plans = await planArtifacts(options, stageDir, out);
-  // Complete admission, including all signatures and output collisions, before
-  // writing anything into the release directory.
-  await mkdir(stageDir, { recursive: true });
-  const scratch = await mkdtemp(path.join(stageDir, ".updater-"));
+  // Work on the destination volume so verified snapshots can be published by
+  // no-replace hard links. Keep previously absent output directories absent on
+  // verification failures.
+  let scratchParent = stageDir;
+  while (!(await exists(scratchParent))) scratchParent = path.dirname(scratchParent);
+  const scratch = await mkdtemp(path.join(scratchParent, ".updater-"));
   try {
     const artifacts = [];
     for (const plan of plans) {
@@ -425,15 +538,16 @@ export async function generate(options) {
       baseUrl,
       artifacts,
     });
-    for (const plan of plans) {
-      // Publish immutable artifact names without overwriting a concurrent release.
-      await link(path.join(scratch, plan.fileName), plan.staged);
-      await link(path.join(scratch, `${plan.fileName}.sig`), `${plan.staged}.sig`);
-    }
+    await mkdir(stageDir, { recursive: true });
     await mkdir(path.dirname(out), { recursive: true });
-    const temporary = `${out}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-    await rename(temporary, out);
+    const manifestScratch = await mkdtemp(path.join(path.dirname(out), ".updater-manifest-"));
+    try {
+      const temporary = path.join(manifestScratch, "manifest");
+      await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      await publishArtifacts(plans, scratch, temporary, out);
+    } finally {
+      await rm(manifestScratch, { recursive: true, force: true });
+    }
     return { manifest, out, stageDir };
   } finally {
     await rm(scratch, { recursive: true, force: true });

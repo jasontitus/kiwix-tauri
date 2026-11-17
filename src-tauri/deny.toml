@@ -1,6 +1,6 @@
 # cargo-deny policy for the native application crate.
 # CI runs `cargo deny --all-features --target <triple> check` from src-tauri/
-# once per shipping target (.github/workflows/checks.yml); run it that way
+# once per shipping target (.github/workflows/dependencies.yml); run it that way
 # locally too. A run without --target checks crates that no build ships.
 
 [graph]
@@ -12,7 +12,7 @@ all-features = true
 # reports unsound notices for direct dependencies only. Unmaintained notices are
 # checked for direct dependencies only; see docs/DEPENDENCIES.md for the
 # transitive list (`unmaintained = "all"` shows them). CI runs the check once
-# per shipping target (`cargo deny --target <triple> check`, checks.yml), so
+# per shipping target (`cargo deny --target <triple> check`, dependencies.yml), so
 # an exception for a platform-specific crate warns "advisory-not-detected" on
 # the targets that do not build it.
 unmaintained = "workspace"

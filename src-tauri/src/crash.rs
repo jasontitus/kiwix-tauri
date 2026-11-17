@@ -199,7 +199,7 @@ fn build_record(
 ) -> Value {
     let mut record = Map::new();
     record.insert("schema".into(), json!(SCHEMA));
-    record.insert("capturedAt".into(), json!(chrono::Utc::now().to_rfc3339()));
+    record.insert("capturedAt".into(), json!(crate::timestamps::now()));
     record.insert("appVersion".into(), json!(env!("CARGO_PKG_VERSION")));
     record.insert("platform".into(), json!(std::env::consts::OS));
     record.insert("architecture".into(), json!(std::env::consts::ARCH));
@@ -306,7 +306,7 @@ fn bounded_bytes(record: &Value) -> Result<Vec<u8>, String> {
     // The bounded fields already fit; this is a last-resort hard stop.
     let fallback = json!({
         "schema": SCHEMA,
-        "capturedAt": chrono::Utc::now().to_rfc3339(),
+        "capturedAt": crate::timestamps::now(),
         "appVersion": env!("CARGO_PKG_VERSION"),
         "platform": std::env::consts::OS,
         "architecture": std::env::consts::ARCH,
@@ -359,7 +359,7 @@ pub fn mark_reported(data_dir: &Path) -> Result<bool, String> {
         return Ok(false);
     };
     if let Some(object) = record.as_object_mut() {
-        object.insert("reportedAt".into(), json!(chrono::Utc::now().to_rfc3339()));
+        object.insert("reportedAt".into(), json!(crate::timestamps::now()));
     }
     write_record(&data_dir.join(RECORD_DIR), &record, false)?;
     Ok(true)

@@ -4,7 +4,7 @@ This file lists the application's explicit and implicit state machines. For each
 
 "Explicit" means a status enum or string field. "Implicit" means state carried by flags, `Option` slots, refs, generations or locks.
 
-Audit snapshot: 2026-11-07, branch `claude/app-state-machines-doc-3zj50h`. The scope is the native service and job managers (`src-tauri/src`) and the React shell (`src`). Platform-native Swift/Kotlin code was read only where a Rust transition depends on it.
+Initial audit snapshot: 2026-11-07, branch `claude/app-state-machines-doc-3zj50h`. The scope is the native service and job managers (`src-tauri/src`) and the React shell (`src`). Platform-native Swift/Kotlin code was read only where a Rust transition depends on it. The transition descriptions below incorporate the [November 17 review](reviews/2026-11-17/PROJECT-REVIEW.md).
 
 ---
 
@@ -22,7 +22,7 @@ The Quit attempt (`QuitManager.attempt`) moves **Idle** → **Preparing** (flush
 | Preparing | flush error, timeout or cancellation | Idle (`cancel` emits `kiwix-quit-cancelled`), `exiting=false` | `quit::prepare` |
 | Preparing | every shell acknowledged | Prepared | `quit::prepare` |
 | Prepared | `Service::shutdown` → Ok | Retired, `authorized=true`, then `app.exit`, or `app.request_restart()` when an installed update armed a relaunch | `lib.rs`, `update::take_restart_after_quit` (fix F-2) |
-| Prepared | `Service::shutdown` → Err | `exiting=false`, then **Idle** via `quit::abandon`; any armed update relaunch is cleared. The service stays Stopping, so the next Quit retries the repeatable shutdown. | `lib.rs`, `quit::abandon` (fix F-1) |
+| Prepared | `Service::shutdown` → Err | Stay Prepared and show the retirement error with a native Retry button. The next Quit reuses the flushed session and retries shutdown. An installed update retains its relaunch request. | `lib.rs`, `quit::prepare`, `quit::needs_flush` |
 
 Invariants:
 - Every command passes `ensure_running` at dispatch entry and again after the privacy lease is taken.
@@ -49,9 +49,9 @@ All three are bumped only while the write lease is held.
 4. Re-run the admission checks under the writer.
 5. Replace the import manager.
 6. When entering a restricted mode: stop LocalSwarm, call `downloads.shutdown()`, cancel maps, take and shut down torrents, stop sharing.
-7. Bump the epochs, retire edition authorizations, clear the launch queue, retire readers.
-8. `store.update`.
-9. Resume, set limits, emit `kiwix-privacy-changed`.
+7. Bump the epochs and retire edition authorizations and readers.
+8. Persist settings and apply the new limits.
+9. Before releasing the writer, notify shells whenever the epoch advanced, including on failure. Clear queued launches if the effective policy changed or cannot be read.
 
 Invariants:
 - Commands that hold no lease (catalog, map prepare, find_updates, shared_library_browse, sensor location) capture the generation under a short lease and check it again afterwards.
@@ -78,7 +78,7 @@ The `AdmissionGate` (an RwLock) ensures transfer and migration work holds read l
 
 Flow: blocker check → download → verify → install → **arm `RESTART_AFTER_QUIT`, call `app.exit(0)`, return** (Windows: the installer exits the process).
 
-The command returning releases the dispatch privacy read lease and the admission write lease. The preventable `ExitRequested` then runs the ordinary Quit path (§1.1). Only after `Service::shutdown` succeeds does it call `request_restart()`. A cancelled or failed Quit clears the relaunch (fix F-2).
+The command returning releases the dispatch privacy read lease and the admission write lease. The preventable `ExitRequested` then runs the ordinary Quit path (§1.1). Only after `Service::shutdown` succeeds does it call `request_restart()`. Cancelling the shell flush clears the relaunch. A retryable failure after the shells have flushed preserves it.
 
 ### 1.6 Instance lock (`lib.rs`, `instance.rs`, `store.rs`)
 
@@ -125,7 +125,7 @@ Worker types:
 | verifying | `publish_verified_download` | complete | `finalize.rs` |
 | verifying | finalize forbidden (private/read-only) | paused+interrupted | `finalize_durable_download` |
 | any non-complete | `stop()`: intent persisted before the worker acknowledges | paused / cancelled | `manager.rs::stop` |
-| running | worker settlement | paused / paused+interrupted / cancelled / failed | `acquisition.rs` |
+| running | worker settlement, including a worker panic | paused / paused+interrupted / cancelled / failed | `acquisition.rs` |
 | paused / failed | `queue_resume` | queued, or complete through recovery | `manager.rs` |
 | queued / downloading on load | load repair | paused+interrupted | `persistence.rs` |
 | terminal | remove / forget / delete files | dismissed / removed / files_deleted | `manager.rs` |
@@ -145,6 +145,8 @@ Start, resume, pause and cancel require `normal_writable` at dispatch entry (`di
 
 Each segment range is unstarted, partial or full. `durable` is copied into the journal on each `SYNC_INTERVAL` and on stop.
 
+A published HTTP archive can carry a separate `historyWarning` when saving the completion record or synchronizing its publication directory fails. Downloads displays the warning separately. Opening an available archive still requires its matching imported receipt. Recovery can use the previously saved publication intent.
+
 The frontend `downloadStatusDecision` (`src/download-state.ts`) uses this priority: confirmation > cancelled > paused(interrupted) > verifying > failed > seeding/completed > unavailable > preparing.
 
 ---
@@ -163,6 +165,7 @@ The status string is one of `queued, resolving, publishing, checking, downloadin
 | any non-cancelled | `pause` | paused, or completed if verified (a share also gets seeding=false) |
 | any | `cancel` | cancelled, seeding=false |
 | non-cancelled | `resume` / `seeding(true)` (**refused while another live share of the same file exists**) | queued, or seeding if verified (fix F-13) |
+| recovering a published archive | verified publication, no engine | completed with seeding off |
 | running | worker error, not cancelled (`apply_worker_error`) | error. **Seed intent is kept** so Retry restarts the seed. |
 | terminal | `finish_terminal` / `forget_terminal` | dismissed / files deleted / removed. An errored row is removable even if its seed intent is still set. The intent is not mutated, so a refused removal leaves Retry working (fix F-3). |
 
@@ -213,7 +216,7 @@ Invariant: the accepted `descriptor` (route plus cancel token) is the authority 
 | connected to P | browse / refresh / re-select of P while its descriptor is live | **stays connected**. A new receipt is minted on the same descriptor; running downloads keep their grant (fix F-4). |
 | connected to P | browse of P fails on the live route, or another peer is selected | `nearby_connect_selected`: cancel the descriptor → connecting |
 | connecting to P | `lost` event for **another** peer | stays connecting; that row is dropped (fix F-17) |
-| connecting to P | `lost` event for P | failed |
+| connecting to P | `lost` event for P | failed. On iOS a fresh advertisement for the same sender can make it selectable again. |
 
 ### 4.4 LocalSwarm (`localswarm/*.rs`)
 
@@ -225,7 +228,7 @@ Invariant: the accepted `descriptor` (route plus cancel token) is the authority 
 
 The runtime is serialized and revision-fenced; `cancel()` bumps the revision.
 
-Pairing: waiting → verifying → local confirm → Confirm exchange → durable enroll → Ready exchange → confirmed. Any error → error plus retire. Invitations are single-use.
+Pairing: waiting → verifying → local confirm → Confirm exchange → capacity preflight → Ready exchange → policy and capacity recheck → durable local enrollment → confirmed. A pre-commit error retires the session and preserves the previous enrollment. A confirmed session stays confirmed. Invitations are single-use.
 
 ---
 
@@ -239,8 +242,8 @@ Status: `queued, downloading, validating, composing, paused, failed, cancelled, 
 |---|---|---|
 | none / terminal | `start` (persist the new job). **On a persist failure the previous job keeps its unresolved `owned_partial`.** | queued, active (fix F-15) |
 | paused/failed/cancelled + resumable | `resume` | queued, active |
-| running | `finish` | paused / cancelled / failed |
-| any non-complete | `cancel`: retire the worker, then the tail (clear the session, reclaim the partial, paused→cancelled). **The tail is skipped if a worker was admitted or the job was replaced meanwhile.** | cancelled (fix F-16) |
+| running | `finish` after a pause request | paused only on cancellation with a resumable checkpoint. Other errors remain visible as failed. |
+| any non-complete | `cancel`: retire the worker, then the tail (clear the session, reclaim the partial, paused→cancelled). **The recovery and cleanup steps recheck the admission generation, including when a newer worker has already finished.** | cancelled (fix F-16) |
 | restart, running status | `MapManager::new` | paused (resumable) / failed / complete (recovered) |
 
 Invariants:
@@ -261,11 +264,11 @@ Queued → Verifying → Ready / Failed. Ready → `ack` removes the entry. Fail
 ### 5.4 Library move journals (`library_files.rs`, `library_root.rs`)
 
 - **Desktop:** journal → same-filesystem rename or cross-volume staged copy → publish → cleanup → journal removed. Replay on start.
-- **Mobile:** Copying → Publishing → Store commit → Committed → cleanup. Recovery decides rollback or finish from the configured root.
+- **Mobile:** Copying → Publishing → Store commit → Committed → cleanup. Recovery checks the configured root, journal phase, registered archive paths and file identities. When the preferred folder has been switched back following a committed move, it verifies the registered destinations and keeps the original files.
 
 ### 5.5 Catalog cache (`catalog_cache.rs`)
 
-absent → stored. The conditional request gives 200 (save), 304 (re-save) or an offline stale result, and is fenced by the privacy generation.
+absent → stored. The conditional request gives 200 (save), 304 (refresh the record only if the response still matches the durable representation) or an offline stale result, and is fenced by the privacy generation.
 
 ---
 
@@ -353,7 +356,9 @@ Tracking issues:
 
 - **Resume/Retry of HTTP downloads in private mode.** Reported as reachable, but `dispatch_inner` applies `normal_writable()` to `start_download`, `pause_download`, `resume_download` and `cancel_download` before routing (`service/dispatch.rs`). The UI button stays enabled and the click shows "This operation is disabled in private mode".
 
-### Open (confirmed or plausible, not fixed in this pass)
+### Follow-up findings from November 7
+
+These rows preserve the original findings and proposed fixes. The November 17 [review record](reviews/2026-11-17/PROJECT-REVIEW.md) records their dispositions, regression coverage and platform limits.
 
 | ID | Sev | Machine | Finding | Suggested fix |
 |---|---|---|---|---|

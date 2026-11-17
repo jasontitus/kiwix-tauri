@@ -40,9 +40,8 @@ const JOURNAL_FILE: &str = "migration.json";
 const JOURNAL_VERSION: u32 = 1;
 const MAX_ENTRIES: usize = 4096;
 const COPY_BUFFER: usize = 1024 * 1024;
-/// Entries copied between durable journal checkpoints. A crash between
-/// checkpoints only leaves staged copies inside the staging directory, which
-/// rollback removes wholesale; the complete record is durable before publishing.
+/// Empty stage identities are durable before copying any payload. Batch the
+/// later digest checkpoints; the complete record is durable before publishing.
 const JOURNAL_ENTRY_BATCH: usize = 8;
 static OPERATIONS: Mutex<()> = Mutex::new(());
 
@@ -106,7 +105,14 @@ struct Journal {
     old_root: String,
     new_root: String,
     remove_old: bool,
-    marker_created: bool,
+    // Version-one journals can predate marker identity tracking. Their boolean
+    // is never authority to unlink an external directory entry during recovery.
+    #[serde(default, rename = "markerCreated", skip_serializing)]
+    _legacy_marker_created: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    marker_directory: Option<FileIdentity>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    staging_directories: std::collections::BTreeMap<String, FileIdentity>,
     staging: String,
     phase: Phase,
     entries: Vec<JournalEntry>,
@@ -146,6 +152,8 @@ struct JournalPart {
     size: u64,
     sha256: Option<String>,
     #[serde(default)]
+    staging_identity: Option<FileIdentity>,
+    #[serde(default)]
     source_identity: Option<FileIdentity>,
     #[serde(default)]
     publication_identity: Option<FileIdentity>,
@@ -164,7 +172,7 @@ fn file_identity(path: &Path) -> Result<FileIdentity, String> {
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return Err("Archive ownership requires a regular file".into());
     }
-    let file = File::open(path).map_err(|error| error.to_string())?;
+    let file = crate::acquisition::open_history(path)?.ok_or("Archive disappeared")?;
     let metadata = cap_std::fs::Metadata::from_file(&file).map_err(|error| error.to_string())?;
     if !metadata.is_file() || metadata.nlink() != 1 {
         return Err("Archive ownership requires a regular file without hard links".into());
@@ -190,7 +198,7 @@ struct FileStamp {
 
 fn file_stamp(path: &Path) -> Result<FileStamp, String> {
     use cap_fs_ext::MetadataExt;
-    let file = File::open(path).map_err(|error| error.to_string())?;
+    let file = crate::acquisition::open_history(path)?.ok_or("Archive disappeared")?;
     let metadata = cap_std::fs::Metadata::from_file(&file).map_err(|error| error.to_string())?;
     if !metadata.is_file() || metadata.nlink() != 1 {
         return Err("Archive ownership requires a regular file without hard links".into());
@@ -276,21 +284,10 @@ pub fn is_managed_path(store: &Store, path: &Path) -> bool {
         if !ancestor.is_dir() {
             continue;
         }
-        match fs::symlink_metadata(ancestor.join(MARKER)) {
-            Ok(metadata) if metadata.is_file() => {
-                let Ok(bytes) = fs::read(ancestor.join(MARKER)) else {
-                    return false;
-                };
-                if bytes.len() > 4096 {
-                    return false;
-                }
-                let Ok(saved) = serde_json::from_slice::<Value>(&bytes) else {
-                    return false;
-                };
-                return saved.get("profile").and_then(Value::as_str) == Some(profile.as_str());
-            }
-            Ok(_) => return false,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        let Ok(directory) = crate::storage::open_directory_nofollow(ancestor) else { return false };
+        match read_marker(&directory, &profile) {
+            Ok(Some(matches)) => return matches,
+            Ok(None) => {},
             Err(_) => return false,
         }
     }
@@ -346,7 +343,7 @@ pub fn switch(
     if store.private_mode()? {
         return Err("Private mode cannot copy or move the library".into());
     }
-    if journal_path(store).exists() {
+    if has_pending_operation(store)? {
         return Err(
             "A previous storage move is still pending. Restart Kiwix to finish it before changing the location again."
                 .into(),
@@ -385,7 +382,7 @@ pub fn switch(
     if let Some((free, _)) = crate::storage::volume_space(target) {
         ensure_space(Some(free), bytes)?;
     }
-    let marker_created = prepare_target(store, target)?;
+    let marker_directory = Some(prepare_target(store, target)?);
     let id = Uuid::new_v4().to_string();
     let staging_name = format!(".kiwix-library-root-{id}");
     let mut journal = Journal {
@@ -395,7 +392,7 @@ pub fn switch(
         old_root: old_root.to_string_lossy().into_owned(),
         new_root: target.to_string_lossy().into_owned(),
         remove_old,
-        marker_created,
+        _legacy_marker_created: false, marker_directory, staging_directories: Default::default(),
         staging: staging_name,
         phase: Phase::Copying,
         selection: None,
@@ -413,26 +410,22 @@ pub fn switch(
                         name: part.name.clone(),
                         size: part.size,
                         sha256: None,
-                        source_identity: None,
+                        staging_identity: None, source_identity: None,
                         publication_identity: None,
                     })
                     .collect(),
             })
             .collect(),
     };
-    if let Err(error) = write_journal(store, &journal) {
-        if marker_created {
-            let _ = fs::remove_file(target.join(MARKER));
-        }
-        return Err(error);
-    }
+    write_journal(store, &journal)?;
     let result = copy_and_commit(store, target, &old_root, &planned, &mut journal, remove_old);
     match result {
         Ok(value) => Ok(value),
         Err(error) => {
             // Store may adopt the new state before reporting a directory-sync
             // error. An unreadable or committed state never authorizes rollback.
-            if !matches!(configured_root(store), Ok(current) if current == old_root) {
+            if !matches!(configured_root(store), Ok(current) if current == old_root)
+                || !matches!(root_can_rollback(store, &journal), Ok(true)) {
                 return Err(format!("{error}. Copies and the recovery journal were preserved; restart Kiwix to finish the storage move."));
             }
             if let Err(rollback) = rollback(store, &journal) {
@@ -453,7 +446,7 @@ pub fn relocate_selected(
     if store.read_only()? || store.private_mode()? {
         return Err("Private or read-only mode cannot copy or move archives".into());
     }
-    if journal_path(store).exists() {
+    if has_pending_operation(store)? {
         return Err("A storage operation is pending. Restart Kiwix to finish recovery first".into());
     }
     if !normalized_absolute(target) || !allowed_roots(store, native)?.iter().any(|root| root.path == target) {
@@ -503,25 +496,22 @@ pub fn relocate_selected(
     }
     let bytes = planned.iter().flat_map(|entry| &entry.parts).try_fold(0u64, |sum, part| sum.checked_add(part.size)).ok_or("Archive size overflow")?;
     ensure_space(crate::storage::volume_space(target).map(|space| space.0), bytes)?;
-    let marker_created = prepare_target(store, target)?;
+    let marker_directory = Some(prepare_target(store, target)?);
     let id = Uuid::new_v4().to_string();
     let old_root = configured_root(store)?;
     let mut journal = Journal {
         version: JOURNAL_VERSION, staging: format!(".kiwix-library-root-{id}"), id,
         profile: profile_identity(store)?, old_root: old_root.to_string_lossy().into_owned(),
-        new_root: target.to_string_lossy().into_owned(), remove_old, marker_created, phase: Phase::Copying,
+        new_root: target.to_string_lossy().into_owned(), remove_old, _legacy_marker_created: false, marker_directory, staging_directories: Default::default(), phase: Phase::Copying,
         selection: Some(selection),
         entries: planned.iter().map(|entry| JournalEntry {
             book_id: entry.book_id.clone(), title: entry.title.clone(), primary: entry.primary.clone(), relative: entry.relative.clone(),
             parts: entry.parts.iter().map(|part| JournalPart {
-                name: part.name.clone(), size: part.size, sha256: None, source_identity: None, publication_identity: None,
+                name: part.name.clone(), size: part.size, sha256: None, staging_identity: None, source_identity: None, publication_identity: None,
             }).collect(),
         }).collect(),
     };
-    if let Err(error) = write_journal(store, &journal) {
-        if marker_created { let _ = fs::remove_file(target.join(MARKER)); }
-        return Err(error);
-    }
+    write_journal(store, &journal)?;
     match copy_and_commit(store, target, &old_root, &planned, &mut journal, remove_old) {
         Ok(value) => Ok(value),
         Err(error) => {
@@ -549,6 +539,20 @@ fn selection_state(store: &Store, journal: &Journal) -> Result<Option<bool>, Str
             && Path::new(&book.path) == destination && book.managed && book.source_reference.is_none());
     }
     Ok(if committed { Some(true) } else if original { Some(false) } else { None })
+}
+
+fn root_can_rollback(store: &Store, journal: &Journal) -> Result<bool, String> {
+    if journal.phase == Phase::Committed { return Ok(false); }
+    let books = store.books()?;
+    let paths: std::collections::HashMap<_, _> = books.iter().map(|book| (&book.metadata.id, book)).collect();
+    let installed: std::collections::HashSet<_> = books.iter().map(|book| Path::new(&book.path)).collect();
+    Ok(journal.entries.iter().all(|entry| {
+        let relative = relative_path(&entry.relative);
+        let old = Path::new(&journal.old_root).join(&relative).join(&entry.primary);
+        let new = Path::new(&journal.new_root).join(relative);
+        paths.get(&entry.book_id).is_some_and(|book| Path::new(&book.path) == old && book.managed)
+            && !entry.parts.iter().any(|part| installed.contains(new.join(&part.name).as_path()))
+    }))
 }
 
 fn retain_relocation_source(book: &crate::store::Book) -> Result<crate::archive_source::RetainedSource, String> {
@@ -590,8 +594,7 @@ pub fn recover(store: &Store) -> Result<Option<String>, String> {
     if store.read_only()? || store.private_mode()? {
         return Ok(None);
     }
-    let path = journal_path(store);
-    if !path.exists() {
+    if !has_pending_operation(store)? {
         return Ok(None);
     }
     let journal = match read_journal(store).and_then(|journal| {
@@ -626,6 +629,16 @@ pub fn recover(store: &Store) -> Result<Option<String>, String> {
     let old = PathBuf::from(&journal.old_root);
     let new = PathBuf::from(&journal.new_root);
     if current == old {
+        if !root_can_rollback(store, &journal)? {
+            // Older versions allowed changing the preferred folder while a
+            // committed move still needed cleanup. Keep the old copies too
+            // if the user has since selected that folder again. Completion
+            // still requires every registered destination and file to verify.
+            let mut keep_originals = journal;
+            keep_originals.remove_old = false;
+            finish_cleanup(store, &keep_originals, None)?;
+            return Ok(Some("A previous storage move was verified. The original copies and your current download folder were kept.".into()));
+        }
         rollback(store, &journal)?;
         return Ok(Some(
             "A previous storage move was rolled back. Archives remain in the previous location.".into(),
@@ -654,7 +667,7 @@ fn copy_and_commit(
     remove_old: bool,
 ) -> Result<Value, String> {
     let staging = target.join(&journal.staging);
-    fs::create_dir_all(&staging).map_err(|error| format!("Creating library staging directory: {error}"))?;
+    let (target_dir, opened) = reserve_staging(store, target, journal)?;
     let mut copied_parts = 0usize;
     // Stamps of the bytes written by this process, keyed by their published
     // path, so cleanup can prove the replacements without re-reading them.
@@ -662,7 +675,7 @@ fn copy_and_commit(
         std::collections::HashMap::new();
     let mut uncheckpointed = 0usize;
     for (index, entry) in planned.iter().enumerate() {
-        let staged_primary = staging.join(relative_path(&entry.relative)).join(&entry.primary);
+        let parent = open_staging_parent(&opened, &entry.relative, &mut journal.staging_directories, false)?;
         let selected = journal.selection.as_ref().and_then(|sources| sources.iter().find(|source| source.book.metadata.id == entry.book_id));
         let mut retained = selected.map(|source| retain_relocation_source(&source.book)).transpose()?;
         for part in &entry.parts {
@@ -672,19 +685,24 @@ fn copy_and_commit(
             let source_identity = if selected.is_some_and(|source| source.book.source_reference.is_some()) {
                 None
             } else { Some(file_identity(&source)?) };
+            let recorded = journal.entries[index].parts.iter_mut()
+                .find(|recorded| recorded.name == part.name).ok_or("Library migration journal is missing a part")?;
+            let mut output = open_staged_output(&parent, recorded)?;
             let hash = if let Some(retained) = retained.as_mut() {
                 let (_, file) = retained.files_mut().iter_mut().find(|(name, _)| name == &part.name)
                     .ok_or("Selected source part disappeared")?;
-                copy_descriptor(file, &destination, part.size)?
-            } else { copy_part(&source, &destination, part.size)? };
+                copy_descriptor(file, &mut output, part.size, File::write_all)?
+            } else {
+                let mut input = crate::acquisition::open_history(&source)?.ok_or("The original archive disappeared")?;
+                copy_descriptor(&mut input, &mut output, part.size, File::write_all)?
+            };
             if source_identity.is_some() && !owned_part(&source, &source_identity) {
                 return Err("Archive source was replaced while copying".into());
             }
-            let recorded = journal.entries[index].parts.iter_mut()
-                .find(|recorded| recorded.name == part.name).ok_or("Library migration journal is missing a part")?;
             recorded.sha256 = Some(hash);
             recorded.source_identity = source_identity;
-            recorded.publication_identity = Some(file_identity(&destination)?);
+            recorded.publication_identity.clone_from(&recorded.staging_identity);
+            if !owned_part(&destination, &recorded.publication_identity) { return Err("The staged archive was replaced".into()); }
             // A stamp that cannot be read only costs the identity shortcut in
             // cleanup; it never fails the copy, which keeps its full checksum.
             if let Ok(stamp) = file_stamp(&destination) {
@@ -696,41 +714,42 @@ fn copy_and_commit(
             copied_parts += 1;
         }
         if let Some(retained) = retained { retained.unchanged()?; }
-        verify_archive(&staged_primary, &entry.book_id, &entry.parts)?;
-        sync_directory(&staging.join(relative_path(&entry.relative)))?;
+        verify_archive(&parent, &staging.join(relative_path(&entry.relative)), &entry.book_id, &journal.entries[index].parts)?;
+        #[cfg(unix)]
+        crate::storage::sync_cap_directory(&parent).map_err(|e| e.to_string())?;
         uncheckpointed += 1;
         if uncheckpointed >= JOURNAL_ENTRY_BATCH || index + 1 == planned.len() {
             write_journal(store, journal)?;
             uncheckpointed = 0;
         }
     }
-    sync_directory(&staging)?;
+    #[cfg(unix)]
+    crate::storage::sync_cap_directory(&opened).map_err(|e| e.to_string())?;
     journal.phase = Phase::Publishing;
     write_journal(store, journal)?;
-    for entry in planned {
-        let relative = relative_path(&entry.relative);
-        for part in &entry.parts {
-            let source = staging.join(&relative).join(&part.name);
-            let destination = target.join(&relative).join(&part.name);
-            if let Some(parent) = destination.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|error| format!("Creating library destination directory: {error}"))?;
-            }
-            match fs::symlink_metadata(&destination) {
-                Ok(_) => {
-                    return Err(format!(
-                        "A file already exists at {}; nothing was overwritten",
-                        destination.display()
-                    ))
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(format!("Checking library destination: {error}")),
-            }
-            publish_exclusive(&source, &destination)?;
+    let mut destinations = Vec::with_capacity(journal.entries.len());
+    for recorded in &journal.entries {
+        let source = open_staging_parent(&opened, &recorded.relative, &mut journal.staging_directories, false)?;
+        let destination = destination_parent(&target_dir, &recorded.relative, true)?;
+        for part in &recorded.parts {
+            check_published_part(&source, part)?;
+            publish_exclusive(&source, &destination, &part.name)?;
+            check_published_part(&destination, part)?;
         }
-        sync_directory(&target.join(&relative))?;
+        #[cfg(unix)]
+        crate::storage::sync_cap_directory(&destination).map_err(|e| e.to_string())?;
+        destinations.push(directory_identity(&destination)?);
     }
-    sync_directory(target)?;
+    #[cfg(unix)]
+    crate::storage::sync_cap_directory(&target_dir).map_err(|e| e.to_string())?;
+    let current = crate::storage::open_directory_nofollow(target).map_err(|e| e.to_string())?;
+    if directory_identity(&current)? != directory_identity(&target_dir)? { return Err("Library destination changed before adoption".into()); }
+    for (entry, expected) in journal.entries.iter().zip(destinations) {
+        let parent = destination_parent(&current, &entry.relative, false)?;
+        if directory_identity(&parent)? != expected { return Err("Library destination changed before adoption".into()); }
+        for part in &entry.parts { check_published_part(&parent, part)?; }
+    }
+    drop(opened);
     let entries = planned;
     let target_string = target
         .to_str()
@@ -807,6 +826,9 @@ fn finish_cleanup(
     let old_root = PathBuf::from(&journal.old_root);
     let new_root = PathBuf::from(&journal.new_root);
     verify_replacements(store, journal, published)?;
+    if let Some(expected) = &journal.marker_directory {
+        adopt_committed_root(&new_root, expected, &journal.profile)?;
+    }
     if journal.remove_old {
         for entry in &journal.entries {
             let relative = relative_path(&entry.relative);
@@ -822,22 +844,14 @@ fn finish_cleanup(
             for part in &entry.parts {
                 let source = selected.map(|source| Path::new(&source.book.path).with_file_name(&part.name))
                     .unwrap_or_else(|| old_root.join(&relative).join(&part.name));
-                match fs::symlink_metadata(&source) {
-                    Ok(_) => {
-                        if !owned_part(&source, &part.source_identity) || !source_matches(&source, part) {
-                            return Err("An original archive changed; copies and recovery journal were preserved".into());
-                        }
-                        fs::remove_file(&source).map_err(|error| format!("Removing original archive: {error}"))?;
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(format!("Checking original archive before cleanup: {error}")),
+                if !remove_recorded_part(&source, &journal.id, part, Cleanup::Original)? {
+                    return Err("An original archive changed; copies and recovery journal were preserved".into());
                 }
             }
-            remove_empty_directories(&old_root, &entry.relative);
         }
         sync_directory(&old_root).ok();
     }
-    remove_staging(&new_root, &journal.staging);
+    remove_staging(&new_root, journal)?;
     #[cfg(mobile)]
     if let Some(selection) = &journal.selection {
         for source in selection {
@@ -861,26 +875,12 @@ fn rollback(store: &Store, journal: &Journal) -> Result<(), String> {
         let relative = relative_path(&entry.relative);
         for part in &entry.parts {
             let destination = target.join(&relative).join(&part.name);
-            match fs::symlink_metadata(&destination) {
-                Ok(_) if owned_part(&destination, &part.publication_identity) => {
-                    if let Err(error) = fs::remove_file(&destination) {
-                        errors.push(error.to_string());
-                    }
-                }
-                Ok(_) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => errors.push(error.to_string()),
+            if let Err(error) = remove_recorded_part(&destination, &journal.id, part, Cleanup::Published) {
+                errors.push(error);
             }
         }
-        remove_empty_directories(&target, &entry.relative);
     }
-    remove_staging(&target, &journal.staging);
-    if journal.marker_created {
-        let marker = target.join(MARKER);
-        if marker.is_file() {
-            let _ = fs::remove_file(marker);
-        }
-    }
+    if let Err(error) = remove_staging(&target, journal) { errors.push(error); }
     if errors.is_empty() {
         remove_journal(store);
         Ok(())
@@ -940,34 +940,58 @@ fn verify_replacements(
     Ok(())
 }
 
-fn publish_exclusive(source: &Path, destination: &Path) -> Result<(), String> {
+fn destination_parent(root: &cap_std::fs::Dir, relative: &[String], create: bool) -> Result<cap_std::fs::Dir, String> {
+    use cap_fs_ext::DirExt;
+    let mut dir = root.try_clone().map_err(|e| e.to_string())?;
+    for name in relative {
+        dir = match dir.open_dir_nofollow(name) {
+            Err(error) if create && error.kind() == std::io::ErrorKind::NotFound => {
+                match dir.create_dir(name) {
+                    Ok(()) => {},
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {},
+                    Err(error) => return Err(error.to_string()),
+                }
+                #[cfg(unix)]
+                crate::storage::sync_cap_directory(&dir).map_err(|e| e.to_string())?;
+                dir.open_dir_nofollow(name).map_err(|e| e.to_string())?
+            },
+            result => result.map_err(|e| e.to_string())?,
+        };
+    }
+    Ok(dir)
+}
+
+fn matches_publication(meta: &cap_std::fs::Metadata, part: &JournalPart) -> bool {
+    use cap_fs_ext::MetadataExt;
+    meta.is_file() && !meta.is_symlink() && meta.nlink() == 1 && meta.len() == part.size
+        && part.publication_identity.as_ref() == Some(&FileIdentity { device: meta.dev(), inode: meta.ino() })
+}
+
+fn check_published_part(parent: &cap_std::fs::Dir, part: &JournalPart) -> Result<(), String> {
+    if !matches_publication(&parent.symlink_metadata(&part.name).map_err(|e| e.to_string())?, part) {
+        return Err("The copied archive changed before adoption".into());
+    }
+    Ok(())
+}
+
+fn publish_exclusive(source: &cap_std::fs::Dir, destination: &cap_std::fs::Dir, name: &str) -> Result<(), String> {
+    validate_part_name(name)?;
     #[cfg(unix)]
-    {
-        use std::os::unix::ffi::OsStrExt;
-        let source = std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(|error| error.to_string())?;
-        let destination = std::ffi::CString::new(destination.as_os_str().as_bytes()).map_err(|error| error.to_string())?;
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        let result = unsafe { libc::renameatx_np(libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_EXCL) };
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        let result = unsafe { libc::syscall(libc::SYS_renameat2, libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE) };
-        if result != 0 { return Err(format!("Publishing archive without overwriting: {}", std::io::Error::last_os_error())); }
-        Ok(())
-    }
+    let result = rustix::fs::renameat_with(source, name, destination, name, rustix::fs::RenameFlags::NOREPLACE)
+        .map_err(std::io::Error::from);
     #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        #[link(name = "kernel32")]
-        unsafe extern "system" {
-            fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
-        }
-        let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
-        let destination: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
-        // Unlike std::fs::rename, flags=0 never replaces an existing name.
-        if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0) } == 0 {
-            return Err(format!("Publishing archive without overwriting: {}", std::io::Error::last_os_error()));
-        }
-        Ok(())
-    }
+    let result = {
+        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
+        use cap_std::fs::OpenOptionsExt;
+        use std::os::windows::io::AsRawHandle;
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.access_mode(0x0001_0000 | 0x0000_0080).follow(FollowSymlinks::No).custom_flags(0x0020_0000);
+        let file = source.open_with(name, &options).map_err(|e| e.to_string())?;
+        crate::storage::rename_into_directory_noreplace(file.as_raw_handle(), destination.as_raw_handle(), name.as_ref())
+    };
+    result.map_err(|error| if error.kind() == std::io::ErrorKind::AlreadyExists {
+        format!("A file already exists at {name}; nothing was overwritten")
+    } else { format!("Publishing archive without overwriting: {error}") })
 }
 
 fn activity_blocks(activity: &Activity, old_root: &Path) -> bool {
@@ -1043,7 +1067,7 @@ fn plan_entries(store: &Store, old_root: &Path) -> Result<Vec<PlannedEntry>, Str
     Ok(planned)
 }
 
-fn prepare_target(store: &Store, target: &Path) -> Result<bool, String> {
+fn prepare_target(store: &Store, target: &Path) -> Result<FileIdentity, String> {
     match fs::symlink_metadata(target) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
             return Err("The library location must not be a symbolic link".into())
@@ -1058,30 +1082,67 @@ fn prepare_target(store: &Store, target: &Path) -> Result<bool, String> {
         }
         Err(error) => return Err(format!("Checking library location: {error}")),
     }
-    let marker = target.join(MARKER);
-    let profile = profile_identity(store)?;
-    match fs::symlink_metadata(&marker) {
-        Ok(metadata) if metadata.file_type().is_file() => {
-            let bytes = fs::read(&marker)
-                .map_err(|error| format!("Reading library location marker: {error}"))?;
-            if bytes.len() > 4096 {
-                return Err("Library location marker is invalid".into());
-            }
-            let saved: Value = serde_json::from_slice(&bytes)
-                .map_err(|_| "Library location marker is invalid".to_string())?;
-            if saved.get("profile").and_then(Value::as_str) != Some(profile.as_str()) {
-                return Err("That folder belongs to a different Kiwix profile".into());
-            }
-            return Ok(false);
-        }
-        Ok(_) => return Err("Library location marker is invalid".into()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("Checking library location marker: {error}")),
+    let directory = crate::storage::open_directory_nofollow(target).map_err(|error| error.to_string())?;
+    if read_marker(&directory, &profile_identity(store)?)? == Some(false) {
+        return Err("That folder belongs to a different Kiwix profile".into());
     }
-    let value = json!({"version": 1, "profile": profile});
-    write_atomic(&marker, &serde_json::to_vec(&value).map_err(|error| error.to_string())?)?;
-    sync_directory(target)?;
-    Ok(true)
+    directory_identity(&directory)
+}
+
+fn directory_identity(directory: &cap_std::fs::Dir) -> Result<FileIdentity, String> {
+    use cap_fs_ext::MetadataExt;
+    let metadata = directory.dir_metadata().map_err(|error| error.to_string())?;
+    Ok(FileIdentity { device: metadata.dev(), inode: metadata.ino() })
+}
+
+fn read_marker(directory: &cap_std::fs::Dir, profile: &str) -> Result<Option<bool>, String> {
+    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    let file = match directory.open_with(MARKER, &options) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("Opening library location marker: {error}")),
+    };
+    if !file.metadata().map_err(|error| error.to_string())?.is_file() {
+        return Err("Library location marker must be a regular file".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(4097).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
+    if bytes.len() > 4096 { return Err("Library location marker is oversized".into()); }
+    let saved: Value = serde_json::from_slice(&bytes).map_err(|_| "Library location marker is invalid")?;
+    Ok(Some(saved.get("profile").and_then(Value::as_str) == Some(profile)))
+}
+
+/// Publish only after the store commit and complete replacement verification.
+/// A failed pre-commit move never changes the marker or needs to unlink it.
+fn adopt_committed_root(target: &Path, expected: &FileIdentity, profile: &str) -> Result<(), String> {
+    let directory = crate::storage::open_directory_nofollow(target).map_err(|error| error.to_string())?;
+    if directory_identity(&directory)? != *expected { return Err("The selected storage folder was replaced".into()); }
+    match read_marker(&directory, profile)? {
+        Some(true) => {},
+        Some(false) => return Err("That folder belongs to a different Kiwix profile".into()),
+        None => {
+            let bytes = serde_json::to_vec(&json!({"version": 1, "profile": profile})).map_err(|e| e.to_string())?;
+            let temp = format!(".kiwix-library-marker-{}", Uuid::new_v4());
+            let mut options = cap_std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            { use cap_std::fs::OpenOptionsExt; options.mode(0o600); }
+            let mut file = directory.open_with(&temp, &options).map_err(|e| e.to_string())?.into_std();
+            file.write_all(&bytes).and_then(|()| file.sync_all()).map_err(|e| e.to_string())?;
+            let verified = crate::publication::VerifiedFile::new(file, bytes.len() as u64).map_err(|e| e.to_string())?;
+            crate::publication::publish_verified_noreplace_in(&directory, Path::new(&temp), Path::new(MARKER), &verified)
+                .map_err(|e| format!("Publishing storage marker: {e}"))?;
+        },
+    }
+    #[cfg(unix)]
+    crate::storage::sync_cap_directory(&directory).map_err(|error| error.to_string())?;
+    let current = crate::storage::open_directory_nofollow(target).map_err(|error| error.to_string())?;
+    if directory_identity(&current)? != *expected { return Err("The selected storage folder was replaced".into()); }
+    Ok(())
 }
 
 fn location_for(root: Root, active: &Path) -> Location {
@@ -1168,13 +1229,65 @@ fn ensure_space(free: Option<u64>, needed: u64) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_part(source: &Path, destination: &Path, expected: u64) -> Result<String, String> {
-    let mut input = File::open(source)
-        .map_err(|error| format!("Opening archive part {}: {error}", source.display()))?;
-    copy_descriptor(&mut input, destination, expected)
+fn reserve_staging(store: &Store, target: &Path, journal: &mut Journal) -> Result<(cap_std::fs::Dir, cap_std::fs::Dir), String> {
+    use cap_fs_ext::{DirExt, MetadataExt};
+    let root = crate::storage::open_directory_nofollow(target).map_err(|e| e.to_string())?;
+    if journal.marker_directory.as_ref() != Some(&directory_identity(&root)?) { return Err("Library destination changed".into()); }
+    root.create_dir(&journal.staging).map_err(|e| format!("Creating library staging directory: {e}"))?;
+    let staging = root.open_dir_nofollow(&journal.staging).map_err(|e| e.to_string())?;
+    journal.staging_directories.insert(String::new(), directory_identity(&staging)?);
+    for entry in &mut journal.entries {
+        let parent = open_staging_parent(&staging, &entry.relative, &mut journal.staging_directories, true)?;
+        for part in &mut entry.parts {
+            let mut options = cap_std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            { use cap_std::fs::OpenOptionsExt; options.mode(0o600); }
+            let file = parent.open_with(&part.name, &options).map_err(|e| format!("Creating staged archive: {e}"))?;
+            let meta = file.metadata().map_err(|e| e.to_string())?;
+            part.staging_identity = Some(FileIdentity { device: meta.dev(), inode: meta.ino() });
+        }
+    }
+    // Even a full volume or sudden power loss during the first large payload
+    // now leaves a bounded identity ledger for the partially written files.
+    write_journal(store, journal)?;
+    Ok((root, staging))
 }
 
-fn copy_descriptor(input: &mut File, destination: &Path, expected: u64) -> Result<String, String> {
+fn open_staging_parent(root: &cap_std::fs::Dir, relative: &[String], directories: &mut std::collections::BTreeMap<String, FileIdentity>, create: bool) -> Result<cap_std::fs::Dir, String> {
+    use cap_fs_ext::DirExt;
+    let mut parent = root.try_clone().map_err(|e| e.to_string())?;
+    for end in 1..=relative.len() {
+        let name = &relative[end - 1];
+        let key = relative[..end].join("/");
+        if !directories.contains_key(&key) {
+            if !create { return Err("Missing staged directory identity".into()); }
+            parent.create_dir(name).map_err(|e| e.to_string())?;
+        }
+        parent = parent.open_dir_nofollow(name).map_err(|e| e.to_string())?;
+        let identity = directory_identity(&parent)?;
+        if *directories.entry(key).or_insert_with(|| identity.clone()) != identity { return Err("Library staging directory changed".into()); }
+    }
+    Ok(parent)
+}
+
+fn open_staged_output(parent: &cap_std::fs::Dir, part: &JournalPart) -> Result<File, String> {
+    use cap_fs_ext::{FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.write(true).follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    let file = parent.open_with(&part.name, &options).map_err(|e| e.to_string())?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    if !meta.is_file() || meta.is_symlink() || meta.nlink() != 1 || meta.len() != 0
+        || part.staging_identity.as_ref() != Some(&FileIdentity { device: meta.dev(), inode: meta.ino() }) {
+        return Err("Reserved staged archive changed before copying".into());
+    }
+    Ok(file.into_std())
+}
+
+fn copy_descriptor(input: &mut File, output: &mut File, expected: u64,
+    mut write: impl FnMut(&mut File, &[u8]) -> std::io::Result<()>) -> Result<String, String> {
     use std::io::{Seek, SeekFrom};
     input.seek(SeekFrom::Start(0)).map_err(|error| format!("Seeking archive source: {error}"))?;
     let metadata = input
@@ -1183,15 +1296,6 @@ fn copy_descriptor(input: &mut File, destination: &Path, expected: u64) -> Resul
     if !metadata.is_file() || metadata.len() != expected {
         return Err("Archive part changed before it could be copied".into());
     }
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("Creating staging directory: {error}"))?;
-    }
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(|error| format!("Creating staged archive part: {error}"))?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0u8; COPY_BUFFER];
     let mut copied = 0u64;
@@ -1209,8 +1313,7 @@ fn copy_descriptor(input: &mut File, destination: &Path, expected: u64) -> Resul
             return Err("Archive part changed size while copying".into());
         }
         digest.update(&buffer[..count]);
-        output
-            .write_all(&buffer[..count])
+        write(output, &buffer[..count])
             .map_err(|error| format!("Writing staged archive part: {error}"))?;
     }
     output
@@ -1222,11 +1325,16 @@ fn copy_descriptor(input: &mut File, destination: &Path, expected: u64) -> Resul
     Ok(hex::encode(digest.finalize()))
 }
 
-fn verify_archive(path: &Path, book_id: &str, parts: &[PlannedPart]) -> Result<(), String> {
-    let directory = path.parent().ok_or("Copied archive has no parent directory")?;
+fn verify_archive(parent: &cap_std::fs::Dir, directory: &Path, book_id: &str, parts: &[JournalPart]) -> Result<(), String> {
+    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
     let files = parts.iter().map(|part| {
-        File::open(directory.join(&part.name)).map(|file| (part.name.clone(), file))
-            .map_err(|error| format!("Opening copied archive part for verification: {error}"))
+        let file = parent.open_with(&part.name, &options).map_err(|e| e.to_string())?;
+        if !matches_publication(&file.metadata().map_err(|e| e.to_string())?, part) { return Err("Staged archive changed before verification".to_string()); }
+        Ok((part.name.clone(), file.into_std()))
     }).collect::<Result<Vec<_>, _>>()?;
     let archive = crate::archive::Archive::open_files(directory, &files)
         .map_err(|error| format!("Opening copied archive for verification: {error}"))?;
@@ -1243,15 +1351,9 @@ fn source_matches(path: &Path, part: &JournalPart) -> bool {
     let Some(expected) = part.sha256.as_deref() else {
         return false;
     };
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() || metadata.len() != part.size {
-        return false;
-    }
-    let Ok(mut file) = File::open(path) else {
-        return false;
-    };
+    let Ok(Some(file)) = crate::acquisition::open_history(path) else { return false };
+    if !file.metadata().is_ok_and(|meta| meta.len() == part.size) { return false; }
+    let mut file = file.take(part.size.saturating_add(1));
     let mut digest = Sha256::new();
     let mut buffer = vec![0u8; COPY_BUFFER];
     loop {
@@ -1270,6 +1372,14 @@ fn journal_directory(store: &Store) -> PathBuf {
 
 fn journal_path(store: &Store) -> PathBuf {
     journal_directory(store).join(JOURNAL_FILE)
+}
+
+pub(crate) fn has_pending_operation(store: &Store) -> Result<bool, String> {
+    match fs::symlink_metadata(journal_path(store)) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(format!("Checking for a pending storage move: {err}")),
+    }
 }
 
 fn write_journal(store: &Store, journal: &Journal) -> Result<(), String> {
@@ -1291,11 +1401,12 @@ fn write_journal(store: &Store, journal: &Journal) -> Result<(), String> {
 }
 
 fn read_journal(store: &Store) -> Result<Journal, String> {
-    let bytes = fs::read(journal_path(store))
+    let file = crate::acquisition::open_history(&journal_path(store))?
+        .ok_or("The storage migration journal disappeared")?;
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024 + 1).read_to_end(&mut bytes)
         .map_err(|error| format!("Reading storage migration journal: {error}"))?;
-    if bytes.len() > 1024 * 1024 {
-        return Err("Storage migration journal is oversized".into());
-    }
+    if bytes.len() > 1024 * 1024 { return Err("Storage migration journal is oversized".into()); }
     serde_json::from_slice(&bytes).map_err(|error| format!("Reading storage migration journal: {error}"))
 }
 
@@ -1322,6 +1433,9 @@ fn validate_journal(store: &Store, journal: &Journal) -> Result<(), String> {
     }
     if journal.staging != format!(".kiwix-library-root-{}", journal.id) {
         return Err("Storage migration journal has an invalid staging name".into());
+    }
+    for key in journal.staging_directories.keys().filter(|key| !key.is_empty()) {
+        for name in key.split('/') { validate_part_name(name)?; }
     }
     if journal.entries.len() > MAX_ENTRIES {
         return Err("Storage migration journal has too many entries".into());
@@ -1388,30 +1502,117 @@ fn quarantine_journal(store: &Store) -> Result<PathBuf, String> {
     Ok(destination)
 }
 
-fn remove_staging(root: &Path, staging: &str) {
-    if !staging.starts_with(".kiwix-library-root-") {
-        return;
+enum Cleanup { Original, Published, Staged }
+
+/// Capture before deleting. The deterministic private filename also lets a
+/// restarted cleanup finish or restore an interrupted capture.
+fn remove_recorded_part(path: &Path, id: &str, part: &JournalPart, purpose: Cleanup) -> Result<bool, String> {
+    use cap_fs_ext::{FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
+    let dir = match crate::storage::open_directory_nofollow(path.parent().ok_or("Missing archive parent")?) {
+        Ok(dir) => dir,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(error) => return Err(error.to_string()),
+    };
+    let name = Path::new(&part.name);
+    let expected = match purpose {
+        Cleanup::Original => part.source_identity.as_ref(),
+        Cleanup::Published => part.publication_identity.as_ref(),
+        Cleanup::Staged => part.staging_identity.as_ref(),
+    };
+    let incomplete = matches!(purpose, Cleanup::Staged) && part.sha256.is_none();
+    let Some(owned) = expected else {
+        return match dir.symlink_metadata(name) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+            Err(error) => Err(error.to_string()),
+            Ok(_) => Ok(false),
+        };
+    };
+    let captured = format!(".kiwix-retired-{id}-{:x}-{:x}", owned.device, owned.inode);
+    let captured = Path::new(&captured);
+    let matches = |meta: &cap_std::fs::Metadata| meta.is_file() && !meta.is_symlink() && meta.nlink() == 1
+        && meta.dev() == owned.device && meta.ino() == owned.inode
+        && (meta.len() == part.size || (incomplete && meta.len() < part.size));
+    let captured_here = match dir.symlink_metadata(captured) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match dir.symlink_metadata(name) {
+                Ok(meta) if matches(&meta) => {},
+                Ok(_) => return Ok(false),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+                Err(error) => return Err(error.to_string()),
+            }
+            crate::publication::rename_entry_noreplace(&dir, name, captured).map_err(|e| e.to_string())?;
+            true
+        },
+        Ok(_) => false,
+        Err(error) => return Err(error.to_string()),
+    };
+    // Keep a changed or unrecognized object. Restore its old name only if it
+    // is still free. Once captured, neither a stale waiter nor a restarted
+    // operation may delete a new arrival at the original pathname.
+    let check = (|| -> Result<bool, String> {
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        #[cfg(unix)]
+        { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+        if !matches(&dir.symlink_metadata(captured).map_err(|e| e.to_string())?) { return Ok(false); }
+        let file = dir.open_with(captured, &options).map_err(|e| e.to_string())?;
+        if !matches(&file.metadata().map_err(|e| e.to_string())?) { return Ok(false); }
+        if let Some(digest) = &part.sha256 {
+            let mut hash = Sha256::new();
+            let size = std::io::copy(&mut file.take(part.size.saturating_add(1)), &mut hash).map_err(|e| e.to_string())?;
+            if size != part.size || hex::encode(hash.finalize()) != *digest { return Ok(false); }
+        }
+        Ok(matches(&dir.symlink_metadata(captured).map_err(|e| e.to_string())?))
+    })();
+    if !matches!(check, Ok(true)) {
+        if !captured_here { return Err(format!("An unrecognized file was preserved at {}", path.with_file_name(captured).display())); }
+        crate::publication::rename_entry_noreplace(&dir, captured, name)
+            .map_err(|e| format!("Changed file preserved at {}: {e}", path.with_file_name(captured).display()))?;
+        return check;
     }
-    let path = root.join(staging);
-    if path.is_dir() {
-        let _ = fs::remove_dir_all(path);
-    }
+    dir.remove_file(captured).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    crate::storage::sync_cap_directory(&dir).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
-fn remove_empty_directories(root: &Path, relative: &[String]) {
-    let mut path = root.to_path_buf();
-    for component in relative {
-        path.push(component);
-    }
-    while path != root && path.starts_with(root) {
-        if fs::remove_dir(&path).is_err() {
-            break;
+fn remove_staging(root: &Path, journal: &Journal) -> Result<(), String> {
+    let staging = root.join(&journal.staging);
+    let Some(expected) = journal.staging_directories.get("") else { return Ok(()) };
+    let directory = match crate::storage::open_directory_nofollow(&staging) {
+        Ok(directory) => directory,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    };
+    if directory_identity(&directory)? != *expected { return Ok(()); }
+    drop(directory);
+    for entry in &journal.entries {
+        let parent = staging.join(relative_path(&entry.relative));
+        for part in &entry.parts {
+            remove_recorded_part(&parent.join(&part.name), &journal.id, part, Cleanup::Staged)?;
         }
-        let Some(parent) = path.parent() else {
-            break;
-        };
-        path = parent.to_path_buf();
     }
+    // A crash may leave copied bytes before their first ownership checkpoint.
+    // Only remove proven empty directories, deepest first. Unknown contents,
+    // complete replacements and staging from older journals stay untouched.
+    for (relative, expected) in journal.staging_directories.iter().rev() {
+        let path = if relative.is_empty() { staging.clone() } else {
+            for name in relative.split('/') { validate_part_name(name)?; }
+            staging.join(relative)
+        };
+        let directory = match crate::storage::open_directory_nofollow(&path) {
+            Ok(directory) => directory,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.to_string()),
+        };
+        if directory_identity(&directory)? != *expected { continue; }
+        match directory.remove_open_dir() {
+            Ok(()) => {},
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::DirectoryNotEmpty | std::io::ErrorKind::NotFound) => {},
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(())
 }
 
 fn relative_path(components: &[String]) -> PathBuf {
@@ -1811,7 +2012,7 @@ mod tests {
             old_root: store.data_dir().join("archives").to_string_lossy().into_owned(),
             new_root: new_root.to_string_lossy().into_owned(),
             remove_old: true,
-            marker_created: true,
+            _legacy_marker_created: true, marker_directory: None, staging_directories: Default::default(),
             staging: format!(".kiwix-library-root-{id}"),
             phase: Phase::Publishing,
             selection: None,
@@ -1824,7 +2025,7 @@ mod tests {
                     name: "small.zim".into(),
                     size: 7,
                     sha256: None,
-                    source_identity: None,
+                    staging_identity: None, source_identity: None,
                     publication_identity: Some(file_identity(&new_root.join("small.zim")).unwrap()),
                 }],
             }],
@@ -1833,7 +2034,7 @@ mod tests {
         let warning = recover(&store).unwrap().unwrap();
         assert!(warning.contains("rolled back"));
         assert!(!new_root.join("small.zim").exists());
-        assert!(!staging.exists());
+        assert_eq!(fs::read(staging.join("partial.zim")).unwrap(), b"partial");
         assert!(!journal_path(&store).exists());
         assert!(store.data_dir().join("archives/small.zim").is_file());
     }
@@ -1862,7 +2063,7 @@ mod tests {
             old_root: store.data_dir().join("archives").to_string_lossy().into_owned(),
             new_root: new_root.to_string_lossy().into_owned(),
             remove_old: true,
-            marker_created: false,
+            _legacy_marker_created: false, marker_directory: None, staging_directories: Default::default(),
             staging: format!(".kiwix-library-root-{id}"),
             phase: Phase::Committed,
             selection: None,
@@ -1875,7 +2076,7 @@ mod tests {
                     name: "small.zim".into(),
                     size: source_bytes.len() as u64,
                     sha256: Some(hash),
-                    source_identity: Some(file_identity(&old).unwrap()),
+                    staging_identity: None, source_identity: Some(file_identity(&old).unwrap()),
                     publication_identity: Some(file_identity(&new_root.join("small.zim")).unwrap()),
                 }],
             }],
@@ -1982,6 +2183,27 @@ mod tests {
     }
 
     #[test]
+    fn marker_is_bounded_and_created_only_on_the_committed_directory() {
+        let (_profile, store, target) = profile_with_book();
+        let root = target.join("archives");
+        let original = prepare_target(&store, &root).unwrap();
+        let profile = profile_identity(&store).unwrap();
+        let marker = root.join(MARKER);
+        assert!(!marker.exists());
+        fs::rename(&root, target.join("previous")).unwrap();
+        fs::create_dir(&root).unwrap();
+        assert!(adopt_committed_root(&root, &original, &profile).is_err());
+        assert!(!marker.exists());
+        fs::write(&marker, vec![b'x'; 4097]).unwrap();
+        assert!(prepare_target(&store, &root).unwrap_err().contains("oversized"));
+        assert!(!is_managed_path(&store, &root));
+        let mut journal = committed_cleanup_journal(&store, &root);
+        journal._legacy_marker_created = true;
+        rollback(&store, &journal).unwrap();
+        assert_eq!(fs::read(&marker).unwrap(), vec![b'x'; 4097]);
+    }
+
+    #[test]
     fn unknown_target_is_refused() {
         let (_profile, store, target) = profile_with_book();
         let elsewhere = Temp::new("elsewhere");
@@ -1998,7 +2220,7 @@ mod tests {
             old_root: store.data_dir().join("archives").to_string_lossy().into_owned(),
             new_root: target.join("archives").to_string_lossy().into_owned(),
             remove_old: false,
-            marker_created: false,
+            _legacy_marker_created: false, marker_directory: None, staging_directories: Default::default(),
             staging: format!(".kiwix-library-root-{}", Uuid::new_v4()),
             phase: Phase::Copying,
             selection: None,
@@ -2011,7 +2233,7 @@ mod tests {
                     name: "small.zim".into(),
                     size: 1,
                     sha256: None,
-                    source_identity: None,
+                    staging_identity: None, source_identity: None,
                     publication_identity: None,
                 }],
             }],
@@ -2048,17 +2270,39 @@ mod tests {
             profile: profile_identity(store).unwrap(),
             old_root: old.parent().unwrap().to_string_lossy().into_owned(),
             new_root: new_root.to_string_lossy().into_owned(),
-            remove_old: true, marker_created: false, phase: Phase::Committed, selection: None,
+            remove_old: true, _legacy_marker_created: false, marker_directory: None, staging_directories: Default::default(), phase: Phase::Committed, selection: None,
             entries: vec![JournalEntry {
                 book_id: store.read().unwrap().books[0].metadata.id.clone(), title: "Small".into(),
                 primary: "small.zim".into(), relative: vec![],
                 parts: vec![JournalPart {
                     name: "small.zim".into(), size: bytes.len() as u64,
                     sha256: Some(hex::encode(Sha256::digest(&bytes))),
-                    source_identity: Some(file_identity(&old).unwrap()),
+                    staging_identity: None, source_identity: Some(file_identity(&old).unwrap()),
                     publication_identity: Some(file_identity(&new_root.join("small.zim")).unwrap()),
                 }],
             }],
+        }
+    }
+
+    #[test]
+    fn root_recovery_keeps_adopted_archives_when_the_preferred_folder_was_changed_back() {
+        for phase in [Phase::Publishing, Phase::Committed] {
+            let (_profile, store, target) = profile_with_book();
+            let new_root = target.join("archives");
+            let mut journal = committed_cleanup_journal(&store, &new_root);
+            journal.phase = phase;
+            write_journal(&store, &journal).unwrap();
+            store.update(|state| {
+                state.settings.download_directory.clone_from(&journal.old_root);
+                Ok(())
+            }).unwrap();
+            let registered = store.books().unwrap();
+            assert!(recover(&store).unwrap().unwrap().contains("verified"));
+            assert!(Path::new(&registered[0].path).is_file());
+            assert!(Path::new(&journal.old_root).join("small.zim").is_file());
+            assert_eq!(store.books().unwrap(), registered);
+            assert_eq!(store.settings().unwrap().download_directory, journal.old_root);
+            assert!(!has_pending_operation(&store).unwrap());
         }
     }
 
@@ -2123,6 +2367,90 @@ mod tests {
     }
 
     #[test]
+    fn staging_cleanup_removes_recorded_bytes_and_preserves_every_other_entry() {
+        let (_profile, store, target) = profile_with_book();
+        let root = target.join("archives");
+        let mut journal = committed_cleanup_journal(&store, &root);
+        let staging = root.join(&journal.staging);
+        fs::create_dir(&staging).unwrap();
+        let dir = crate::storage::open_directory_nofollow(&staging).unwrap();
+        journal.staging_directories.insert(String::new(), directory_identity(&dir).unwrap());
+        drop(dir);
+        let part = &mut journal.entries[0].parts[0];
+        fs::copy(root.join(&part.name), staging.join(&part.name)).unwrap();
+        part.staging_identity = Some(file_identity(&staging.join(&part.name)).unwrap());
+        fs::write(staging.join("unrecorded.zim"), b"keep my file").unwrap();
+        remove_staging(&root, &journal).unwrap();
+        assert!(!staging.join("small.zim").exists());
+        assert_eq!(fs::read(staging.join("unrecorded.zim")).unwrap(), b"keep my file");
+        fs::rename(&staging, root.join("previous-stage")).unwrap();
+        fs::create_dir(&staging).unwrap();
+        fs::write(staging.join("small.zim"), b"replacement directory").unwrap();
+        remove_staging(&root, &journal).unwrap();
+        assert_eq!(fs::read(staging.join("small.zim")).unwrap(), b"replacement directory");
+    }
+
+    #[test]
+    fn removal_resumes_only_a_captured_original_and_preserves_a_new_arrival() {
+        let (_profile, store, target) = profile_with_book();
+        let root = target.join("archives");
+        let journal = committed_cleanup_journal(&store, &root);
+        let part = &journal.entries[0].parts[0];
+        let owned = part.source_identity.as_ref().unwrap();
+        let original = Path::new(&journal.old_root).join(&part.name);
+        let captured = original.with_file_name(format!(".kiwix-retired-{}-{:x}-{:x}", journal.id, owned.device, owned.inode));
+        fs::write(&captured, b"unrelated file").unwrap();
+        assert!(remove_recorded_part(&original, &journal.id, part, Cleanup::Original).is_err());
+        assert_eq!(fs::read(&captured).unwrap(), b"unrelated file");
+        fs::remove_file(&captured).unwrap();
+        fs::rename(&original, &captured).unwrap();
+        fs::write(&original, b"new arrival").unwrap();
+        assert!(remove_recorded_part(&original, &journal.id, part, Cleanup::Original).unwrap());
+        assert!(!captured.exists());
+        assert_eq!(fs::read(&original).unwrap(), b"new arrival");
+    }
+
+    #[test]
+    fn full_volume_during_copy_reclaims_only_the_reserved_partial_after_restart() {
+        let (_profile, store, target) = profile_with_book();
+        let original_book = store.read().unwrap().books[0].clone();
+        let original_root = configured_root(&store).unwrap();
+        let root = target.join("archives");
+        let mut journal = committed_cleanup_journal(&store, &root);
+        store.update(|state| {
+            state.books[0] = original_book.clone();
+            state.settings.download_directory = original_root.to_string_lossy().into_owned();
+            Ok(())
+        }).unwrap();
+        journal.phase = Phase::Copying;
+        journal.marker_directory = Some(prepare_target(&store, &root).unwrap());
+        let part = &mut journal.entries[0].parts[0];
+        part.sha256 = None;
+        part.publication_identity = None;
+        fs::write(root.join(&part.name), b"unrelated destination").unwrap();
+        let (_, staged) = reserve_staging(&store, &root, &mut journal).unwrap();
+        let part = &journal.entries[0].parts[0];
+        let source = fs::read(&original_book.path).unwrap();
+        let mut input = File::open(&original_book.path).unwrap();
+        let mut output = open_staged_output(&staged, part).unwrap();
+        let error = copy_descriptor(&mut input, &mut output, part.size, |file, bytes| {
+            file.write_all(&bytes[..8])?;
+            Err(std::io::ErrorKind::StorageFull.into())
+        }).unwrap_err();
+        assert!(error.contains("Writing staged archive part"), "{error}");
+        drop(output);
+        let partial = root.join(&journal.staging).join(&part.name);
+        assert_eq!(fs::read(&partial).unwrap(), source[..8]);
+        drop(staged);
+        drop(journal);
+        assert!(recover(&store).unwrap().unwrap().contains("rolled back"));
+        assert!(!partial.exists());
+        assert_eq!(fs::read(root.join("small.zim")).unwrap(), b"unrelated destination");
+        assert_eq!(fs::read(&original_book.path).unwrap(), source);
+        assert_eq!(store.read().unwrap().books[0], original_book);
+    }
+
+    #[test]
     fn selected_copy_and_move_preserve_identity_and_leave_other_archives_and_root_unchanged() {
         for remove_old in [false, true] {
             let (_profile, store, target) = profile_with_book();
@@ -2180,7 +2508,7 @@ mod tests {
             book_id: other.metadata.id, title: "Other".into(), primary: "other.zim".into(), relative: vec![],
             parts: vec![JournalPart {
                 name: "other.zim".into(), size: fs::metadata(&other_path).unwrap().len(), sha256: None,
-                source_identity: Some(file_identity(&other_path).unwrap()), publication_identity: None,
+                staging_identity: None, source_identity: Some(file_identity(&other_path).unwrap()), publication_identity: None,
             }],
         });
         write_journal(&store, &journal).unwrap();
@@ -2270,13 +2598,38 @@ mod tests {
     #[test]
     fn publication_primitive_never_overwrites_a_late_collision() {
         let temp = Temp::new("exclusive-publication");
-        let source = temp.0.join("staged.zim");
+        let staging = temp.0.join("staged");
+        fs::create_dir(&staging).unwrap();
+        let source = staging.join("existing.zim");
         let destination = temp.0.join("existing.zim");
         fs::write(&source, b"staged").unwrap();
         fs::write(&destination, b"existing").unwrap();
-        assert!(publish_exclusive(&source, &destination).is_err());
+        let from = crate::storage::open_directory_nofollow(&staging).unwrap();
+        let to = crate::storage::open_directory_nofollow(&temp.0).unwrap();
+        assert!(publish_exclusive(&from, &to, "existing.zim").is_err());
         assert_eq!(fs::read(&source).unwrap(), b"staged");
         assert_eq!(fs::read(&destination).unwrap(), b"existing");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn publication_remains_in_the_open_folder_when_the_visible_parent_is_replaced() {
+        let temp = Temp::new("moved-publication");
+        let staging = temp.0.join("stage");
+        let target = temp.0.join("target");
+        let outside = temp.0.join("other-storage");
+        for directory in [&staging, &target, &outside] { fs::create_dir(directory).unwrap(); }
+        let source = crate::storage::open_directory_nofollow(&staging).unwrap();
+        let root = crate::storage::open_directory_nofollow(&target).unwrap();
+        let relative = vec!["installation".to_owned()];
+        let parent = destination_parent(&root, &relative, true).unwrap();
+        fs::write(staging.join("small.zim"), b"staged contents").unwrap();
+        fs::rename(target.join("installation"), target.join("previous")).unwrap();
+        std::os::unix::fs::symlink(&outside, target.join("installation")).unwrap();
+        publish_exclusive(&source, &parent, "small.zim").unwrap();
+        assert_eq!(fs::read(target.join("previous/small.zim")).unwrap(), b"staged contents");
+        assert!(!outside.join("small.zim").exists());
+        assert!(destination_parent(&root, &relative, false).is_err());
     }
 
     fn write_named_fixture(directory: &Path, names: &[&str]) -> Vec<PlannedPart> {
@@ -2328,20 +2681,25 @@ mod tests {
             provider.managed = false;
             provider.source_reference = Some(reference);
             let new_root = target.join("archives");
-            prepare_target(&store, &new_root).unwrap();
+            let destination_id = prepare_target(&store, &new_root).unwrap();
+            adopt_committed_root(&new_root, &destination_id, &profile_identity(&store).unwrap()).unwrap();
             let relative = vec![provider.installation_id.clone()];
             let destination = new_root.join(relative_path(&relative));
             let mut recorded = Vec::new();
             for part in &parts {
                 let mut input = File::open(provider_directory.join(&part.name)).unwrap();
                 let path = destination.join(&part.name);
-                let hash = copy_descriptor(&mut input, &path, part.size).unwrap();
+                fs::create_dir_all(&destination).unwrap();
+                let mut output = File::create_new(&path).unwrap();
+                let hash = copy_descriptor(&mut input, &mut output, part.size, File::write_all).unwrap();
+                let identity = file_identity(&path).unwrap();
                 recorded.push(JournalPart {
                     name: part.name.clone(), size: part.size, sha256: Some(hash),
-                    source_identity: None, publication_identity: Some(file_identity(&path).unwrap()),
+                    staging_identity: None, source_identity: None, publication_identity: Some(identity),
                 });
             }
-            verify_archive(&destination.join(names[0]), &provider.metadata.id, &parts).unwrap();
+            let dir = crate::storage::open_directory_nofollow(&destination).unwrap();
+            verify_archive(&dir, &destination, &provider.metadata.id, &recorded).unwrap();
             let mut replacement = provider.clone();
             replacement.path = destination.join(names[0]).to_string_lossy().into_owned();
             replacement.managed = true;
@@ -2352,7 +2710,7 @@ mod tests {
                 version: JOURNAL_VERSION, staging: format!(".kiwix-library-root-{id}"), id,
                 profile: profile_identity(&store).unwrap(), old_root: configured_root(&store).unwrap().to_string_lossy().into_owned(),
                 new_root: new_root.to_string_lossy().into_owned(), remove_old: false,
-                marker_created: false, phase: Phase::Publishing,
+                _legacy_marker_created: false, marker_directory: None, staging_directories: Default::default(), phase: Phase::Publishing,
                 selection: Some(vec![SelectedSource { book: provider.clone(), delete_receipt: None }]),
                 entries: vec![JournalEntry {
                     book_id: provider.metadata.id.clone(), title: provider.metadata.title.clone(),

@@ -255,7 +255,7 @@ export default function IntegrityPanel({ book, books, snapshot, refresh, private
     if (readOnly || !report || !isPrivacyContextCurrent(report.privacy)) return;
     setSubmitting(true);
     try {
-      await saveText(`kiwix_diagnostic_${new Date().toISOString().slice(0, 10)}.json`, report.text);
+      await saveText(`kiwix_diagnostic_${new Date().toISOString().slice(0, 10)}.json`, report.text, report.privacy);
     } catch (error) {
       if (alive.current && isPrivacyContextCurrent(report.privacy)) onError(error);
     } finally { if (alive.current) setSubmitting(false); }

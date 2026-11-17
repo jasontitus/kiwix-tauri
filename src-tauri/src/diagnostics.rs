@@ -21,7 +21,7 @@ fn export_events(raw: &str) -> String {
     let mut output = String::new();
     for line in raw.lines() {
         let Ok(event) = serde_json::from_str::<Value>(line) else { continue };
-        let Some(time) = event["time"].as_str().and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok()) else { continue };
+        let Some(time) = event["time"].as_str().and_then(crate::timestamps::normalized) else { continue };
         let level = if event["level"] == "error" { "error" } else { "info" };
         let category = match event["category"].as_str() {
             Some(category @ ("permission" | "capacity" | "network" | "archive" | "state" | "operation")) => Some(category),
@@ -29,7 +29,7 @@ fn export_events(raw: &str) -> String {
         };
         let operation = safe_operation(event["operation"].as_str().unwrap_or(""));
         // Old or externally modified logs never export arbitrary fields/values.
-        let safe = json!({"time":time.to_rfc3339(),"level":level,"category":category,"operation":operation});
+        let safe = json!({"time":time,"level":level,"category":category,"operation":operation});
         output.push_str(&safe.to_string());
         output.push('\n');
     }
@@ -61,7 +61,7 @@ pub fn record(store: &Store, operation: &str, error: Option<&str>) {
         }
     });
     let operation = safe_operation(operation);
-    let event = json!({"time":chrono::Utc::now().to_rfc3339(),"level":if error.is_some(){"error"}else{"info"},"operation":operation,"category":category,"os":std::env::consts::OS,"version":env!("CARGO_PKG_VERSION")});
+    let event = json!({"time":crate::timestamps::now(),"level":if error.is_some(){"error"}else{"info"},"operation":operation,"category":category,"os":std::env::consts::OS,"version":env!("CARGO_PKG_VERSION")});
     let Ok(_guard) = LOG_LOCK.lock() else { return };
     let path = store.data_dir().join("diagnostics.jsonl");
     if std::fs::metadata(&path).is_ok_and(|m| m.len() > LIMIT) {
@@ -110,7 +110,7 @@ pub fn integrity_run(job: &crate::integrity::Job) -> Value {
                 status @ ("valid" | "invalid" | "unavailable") => status, _ => "unknown"
             }).unwrap_or("unknown"),
             "checkedAt":result.and_then(|result| result.checked_at.as_deref())
-                .and_then(|time|chrono::DateTime::parse_from_rfc3339(time).ok()).map(|time|time.to_rfc3339()),
+                .and_then(crate::timestamps::normalized),
             "persisted":result.is_some_and(|result|result.persisted)})
     }).collect();
     json!({"running":job.running,"phase":job.phase,"completed":job.completed,

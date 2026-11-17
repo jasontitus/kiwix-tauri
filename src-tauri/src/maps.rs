@@ -550,6 +550,9 @@ impl Control {
 struct ManagerState {
     job: Option<MapJob>,
     active: Option<Arc<Control>>,
+    // A resumed job keeps its ID. Distinguish its worker from earlier
+    // admissions even after both workers have retired.
+    admission: u64,
     retirement_error: Option<String>,
     preparation: Option<MapDecision>,
     /// A cache clear owns the private parts directory while it runs. The state

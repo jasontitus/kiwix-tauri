@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign, createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import fs, { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -206,6 +207,47 @@ test("generation copies an artifact, reads its .sig and writes the manifest", as
   }
 });
 
+test("a late publication collision preserves other outputs and permits a clean retry", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "kiwix-release-retry-"));
+  const originalLink = fs.link;
+  try {
+    const bytes = Buffer.from("signed installer");
+    const file = path.join(directory, "setup.exe");
+    const fixture = signingFixture(bytes);
+    await writeFile(file, bytes);
+    await writeFile(`${file}.sig`, fixture.signature);
+    const options = optionsFor(directory, [{ target: "windows-x86_64-nsis", file }], {
+      publicKey: fixture.publicKey, stageDir: path.join(directory, "stage"),
+      out: path.join(directory, "update.json"),
+    });
+    await writeFile(options.out, "previous release");
+    await writeFile(`${options.out}.tmp`, "another process's file");
+    // Simulate a competing publisher winning the signature name after our
+    // artifact link succeeds. The real exclusive link then reports EEXIST.
+    fs.link = async (source, destination) => {
+      if (destination.endsWith(".sig")) await writeFile(destination, "other publisher", { flag: "wx" });
+      return originalLink(source, destination);
+    };
+    syncBuiltinESMExports();
+    await assert.rejects(generate(options), { code: "EEXIST" });
+    assert.equal(await readFile(options.out, "utf8"), "previous release");
+    const names = await readdir(options.stageDir);
+    assert.deepEqual(names, ["windows-x86_64-nsis-0.1.1-setup.exe.sig"]);
+    const collision = path.join(options.stageDir, names[0]);
+    assert.equal(await readFile(collision, "utf8"), "other publisher");
+    await rm(collision);
+    fs.link = originalLink;
+    syncBuiltinESMExports();
+    await generate(options);
+    assert.equal(JSON.parse(await readFile(options.out, "utf8")).version, "0.1.1");
+    assert.equal(await readFile(`${options.out}.tmp`, "utf8"), "another process's file");
+  } finally {
+    fs.link = originalLink;
+    syncBuiltinESMExports();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("source signatures authenticate exact bytes, trusted version and key", () => {
   const bytes = Buffer.from("signed release");
   const fixture = signingFixture(bytes);
@@ -215,6 +257,44 @@ test("source signatures authenticate exact bytes, trusted version and key", () =
   assert.throws(() => verifyArtifactSignature(bytes, fixture.signature, signingFixture(bytes).publicKey, "0.1.1"), /verification failed/);
   const envelope = Buffer.from(fixture.signature, "base64").toString().replace("version:0.1.1", "version:0.1.2");
   assert.throws(() => verifyArtifactSignature(bytes, Buffer.from(envelope).toString("base64"), fixture.publicKey, "0.1.2"), /verification failed/);
+});
+
+test("rollback preserves replacements that arrive while a staged entry is being captured", async () => {
+  const directory = await fs.realpath(await mkdtemp(path.join(tmpdir(), "kiwix-release-replacement-")));
+  const originalLink = fs.link;
+  const originalRename = fs.rename;
+  try {
+    const file = path.join(directory, "setup.exe");
+    const stageDir = path.join(directory, "stage");
+    const staged = path.join(stageDir, "windows-x86_64-nsis-0.1.1-setup.exe");
+    const bytes = Buffer.from("signed fixture");
+    const fixture = signingFixture(bytes);
+    await writeFile(file, bytes);
+    await writeFile(file + ".sig", fixture.signature);
+    fs.link = async (source, destination) => {
+      if (destination === staged + ".sig") await writeFile(destination, "unrelated signature", { flag: "wx" });
+      return originalLink(source, destination);
+    };
+    fs.rename = async (source, destination) => {
+      if (source !== staged) return originalRename(source, destination);
+      await rm(staged);
+      await writeFile(staged, "first replacement");
+      await originalRename(source, destination);
+      await writeFile(staged, "second replacement", { flag: "wx" });
+    };
+    syncBuiltinESMExports();
+    await assert.rejects(generate(optionsFor(directory, [{ target: "windows-x86_64-nsis", file }],
+      { stageDir, publicKey: fixture.publicKey })), /Changed entry preserved at/);
+    const recovery = (await readdir(stageDir)).find(name => name.startsWith(".updater-rollback-"));
+    assert.equal(await readFile(path.join(stageDir, recovery, path.basename(staged)), "utf8"), "first replacement");
+    assert.equal(await readFile(staged, "utf8"), "second replacement");
+    assert.equal(await readFile(staged + ".sig", "utf8"), "unrelated signature");
+  } finally {
+    fs.link = originalLink;
+    fs.rename = originalRename;
+    syncBuiltinESMExports();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("duplicate targets and output/input collisions fail before publishing", async () => {
@@ -248,9 +328,18 @@ test("Node-invoked Tauri signs and stages an installer with spaces and binds its
     const bytes = Buffer.from("disposable installer fixture");
     await writeFile(file, bytes);
     const version = "0.1.1-rc.1+build.5";
-    const result = await generate(optionsFor(directory, [{ target: "windows-x86_64-nsis", file }], {
+    const options = optionsFor(directory, [{ target: "windows-x86_64-nsis", file }], {
       version, sign: true, privateKeyPath: key, privateKeyPassword: "", publicKey,
-    }));
+    });
+    const originalKey = await readFile(key);
+    await assert.rejects(generate({ ...options, out: key }), /collides with an input/);
+    await assert.rejects(generate({ ...options, privateKeyPath: null, privateKey: key, out: key }), /collides with an input/);
+    assert.deepEqual(await readFile(key), originalKey);
+    const notes = path.join(directory, "release-notes");
+    await writeFile(notes, "operator's release notes");
+    await assert.rejects(generate({ ...options, notesFile: notes, out: notes }), /collides with an input/);
+    assert.equal(await readFile(notes, "utf8"), "operator's release notes");
+    const result = await generate(options);
     const artifact = result.manifest.platforms["windows-x86_64-nsis"];
     const staged = path.join(result.stageDir, decodeURIComponent(path.basename(new URL(artifact.url).pathname)));
     assert.deepEqual(await readFile(staged), bytes);

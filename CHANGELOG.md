@@ -5,6 +5,11 @@ This changelog records source changes, not release certification. Only unsigned 
 ## Unreleased — 0.1.0 implementation
 
 ### Latest implementation and adversarial corrections
+
+- Preserve unrelated files when an interrupted library move resumes or rolls back. A downloaded archive remains available when only its final history update fails, and Downloads shows the warning separately.
+- Cancel stale reader exports when the archive installation or privacy context changes. Reading history and search now show 50 results per section while continuing to search the entire collection.
+- Harden local connector startup and cleanup, release signing, and Windows installer resource checks. The November 17 review records the fixes, independent checks, and remaining platform and dependency limits. [Project review](docs/reviews/2026-11-17/PROJECT-REVIEW.md)
+
 - Offer **Use camera** or **Choose a file** on Windows when an archive's image file input is activated (StreetZim photo search). The camera runs in an app-owned `camera-capture` window that alone is granted camera, only while a user-started capture is open; archives gain no camera access, WebView2 no longer saves permission decisions in the profile, requests carry a per-session secret hidden from archive scripts, and picked files are read bounded and content-sniffed. Three adversarial reviews (two design, one implementation); installed Windows 11 build verified with a USB webcam. Design and limits: [PHOTO-CHOOSER](docs/PHOTO-CHOOSER.md).
 - Fix a finished download dropping below the fold: the Downloads list is ordered by start time whatever each job's state, so a download keeps its place when it completes, and Resume/Retry moves a job back to the top. Torrent and map jobs now record `created_at` (legacy torrents backfill from metadata mtime), the map card joins the same list, and retained original editions move below it.
 - Add a Windows ARM64 build: cross-built libzim 9.8.2 SDK (meson zlib/zstd/static Xapian, official ICU 74.2 WinARM64), an installer script that pins the sherpa-onnx ARM64 DLLs, bundles the ARM64 VC++ runtime app-locally and checks every shipped binary is `0xAA64`; sha2's asm backend is disabled on Windows ARM64 because sha2-asm's GNU assembly cannot build with MSVC. Not yet run on ARM hardware. See [PACKAGING](docs/PACKAGING.md#windows-arm64).

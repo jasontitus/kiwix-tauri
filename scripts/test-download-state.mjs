@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { cleanupDownloadBooks, downloadStatusDecision, downloadLiveSummary, downloadNotificationPhase, rankJobs, remainingTime } from "../src/download-state.ts";
+import { cleanupDownloadBooks, downloadStatusDecision, downloadLiveSummary, downloadNotificationPhase, rankJobs, readyDownloadBooks, remainingTime } from "../src/download-state.ts";
 
 function job(overrides = {}) {
   return {
@@ -66,6 +66,19 @@ test("a ready completed job reads completed", () => {
     downloadStatusDecision(job({ status: "complete", interrupted: false }), true, false),
     { kind: "completed" },
   );
+});
+
+test("a history warning preserves access only after the verified archive was imported", () => {
+  const book = { path: "/downloads/archive.zim", available: true };
+  const complete = job({
+    status: "complete", historyWarning: "Restart to repair the saved history",
+    importState: "imported", imports: [{ state: "imported", paths: [book.path] }],
+  });
+  const ready = readyDownloadBooks(complete, [book]);
+  assert.deepEqual(ready, [book]);
+  assert.equal(downloadStatusDecision(complete, ready.length > 0, false).kind, "completed");
+  assert.deepEqual(readyDownloadBooks({ ...complete, error: "Completed archive is missing" }, [book]), []);
+  assert.deepEqual(readyDownloadBooks({ ...complete, imports: [] }, [book]), []);
 });
 
 test("a verifying job is a local finalize, never a stalled download", () => {

@@ -111,6 +111,8 @@ pub(super) fn validate_loaded_download(id: &str, stored: &mut StoredJob) -> Resu
     if stored.history_dismissed || stored.files_deleted {
         return Ok(());
     }
+    // This launch recovered the durable journal or its publication intent.
+    stored.job.history_warning = None;
     stored.job.speed = 0;
     stored.job.eta_seconds = None;
     if !matches!(
@@ -259,7 +261,7 @@ pub(super) fn validate_loaded_download(id: &str, stored: &mut StoredJob) -> Resu
 /// unreadable; per-record failures stay warnings so one bad row cannot hide
 /// the rest of the history.
 pub(super) fn load_saved_downloads(
-    path: &Path,
+    file: &File,
     size: u64,
     store: &Store,
 ) -> Result<(BTreeMap<String, StoredJob>, Vec<String>), String> {
@@ -269,9 +271,7 @@ pub(super) fn load_saved_downloads(
         return Err("Download state exceeds size limit".into());
     }
     let mut bytes = Vec::with_capacity(size.min(STATE_LIMIT) as usize);
-    File::open(path)
-        .map_err(|e| format!("Opening download state: {e}"))?
-        .take(STATE_LIMIT + 1)
+    file.take(STATE_LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| format!("Reading download state: {e}"))?;
     if bytes.len() as u64 > STATE_LIMIT {
@@ -336,48 +336,46 @@ fn decode_saved_downloads(
     Ok((jobs, warnings))
 }
 
-/// Move an unreadable download record aside without changing a byte. Rename is
-/// preferred; a directory that forbids renames still gets a preserved copy, and
-/// the original is never deleted here.
-pub(super) fn quarantine_state(path: &Path, folder: &Path) -> Result<PathBuf, String> {
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or(0);
-    for attempt in 0..1000u32 {
-        let target = folder.join(if attempt == 0 {
-            format!("downloads.unreadable-{stamp}.json")
-        } else {
-            format!("downloads.unreadable-{stamp}-{attempt}.json")
-        });
-        if target.exists() {
-            continue;
-        }
-        match fs::rename(path, &target) {
-            Ok(()) => {
-                sync_directory(folder)?;
-                return Ok(target);
-            }
-            Err(_) => {
-                return match fs::copy(path, &target) {
-                    Ok(_) => {
-                        // The original is replaced by the fresh empty record
-                        // below, so the preserved copy must be durable first.
-                        File::open(&target)
-                            .and_then(|file| file.sync_all())
-                            .map_err(|error| format!("Synchronizing preserved download history {}: {error}", target.display()))?;
-                        sync_directory(folder)?;
-                        Ok(target)
-                    }
-                    Err(_) => Err(format!(
-                        "Kiwix could not move a damaged saved download file aside ({path}). Restart the app; if this keeps happening, free some storage",
-                        path = path.display()
-                    )),
-                };
-            }
-        }
+/// Open one journal handle for decoding and any subsequent recovery. Missing
+/// files are a first launch; a non-regular entry cannot start an empty history.
+pub(crate) fn open_history(path: &Path) -> Result<Option<File>, String> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    Err("Kiwix could not move a damaged saved download file aside. Restart the app; if this keeps happening, free some storage".into())
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0020_0000);
+    }
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("Opening transfer history: {e}")),
+    };
+    if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err("The transfer history must be a regular file".into());
+    }
+    Ok(Some(file))
+}
+
+/// Preserve exactly the journal that failed decoding. A competing backup
+/// name never grants overwrite permission. The profile manager owns its lock
+/// throughout recovery and publishes fresh state only after a durable backup.
+pub(crate) fn preserve_history(path: &Path, file: File) -> Result<PathBuf, String> {
+    use crate::publication::VerifiedFile;
+    let folder = path.parent().ok_or("Missing transfer history folder")?;
+    let stem = path.file_stem().and_then(|name| name.to_str()).ok_or("Invalid transfer history filename")?;
+    let size = file.metadata().map_err(|e| e.to_string())?.len();
+    let source = VerifiedFile::new(file, size).map_err(|e| e.to_string())?;
+    let target = folder.join(format!("{stem}.unreadable-{}.json", uuid::Uuid::new_v4()));
+    crate::publication::publish_verified_noreplace(path, &target, &source)
+        .map_err(|error| format!("Cannot safely move the damaged transfer history aside. Check the folder permissions and retry: {error}"))?;
+    sync_directory(folder)?;
+    Ok(target)
 }
 
 /// A restored row normally uses its job ID as the map key. A row that failed

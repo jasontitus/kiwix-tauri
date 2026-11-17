@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { api, capturePrivacyContext, isNative, isPrivacyContextCurrent } from "./api";
 import type { PrivacyContext } from "./api";
 import { t } from "./i18n";
@@ -283,9 +282,12 @@ export function useNativeSpeech(options: Options) {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     const listening = (async () => {
+      const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      if (cancelled) return;
       const remove = await getCurrentWebviewWindow().listen<{
         id: string; speaking: boolean; offset: number; paused?: boolean; error?: string;
       }>("mobile-speech-state", ({ payload }) => {
+        if (cancelled) return;
         const request = current.current;
         if (!request || payload.id !== request.id) return;
         const offset = Number.isSafeInteger(payload.offset) && payload.offset >= 0 ? payload.offset : null;
@@ -337,7 +339,7 @@ export function useNativeSpeech(options: Options) {
       unlisten = remove;
     })();
     listenerReady.current = listening;
-    void listening.catch(report);
+    void listening.catch((error) => { if (!cancelled) report(error); });
     return () => {
       cancelled = true;
       ready.current = false;

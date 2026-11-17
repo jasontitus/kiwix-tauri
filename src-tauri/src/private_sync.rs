@@ -32,9 +32,17 @@ pub(crate) struct Peer {
     #[serde(default)]
     pub acknowledged_counter: u64,
 }
+const MAX_PEERS: usize = 32;
+
 impl Settings {
+    pub(crate) fn check_capacity(&self, id: &str) -> Result<(), String> {
+        if self.peers.len() >= MAX_PEERS && !self.peers.iter().any(|peer| peer.id == id) {
+            return Err("Disconnect an unused private device before connecting another".into());
+        }
+        Ok(())
+    }
     pub(crate) fn validate(&self) -> Result<(), String> {
-        if self.peers.len() > 32 { return Err("Too many connected private devices".into()); }
+        if self.peers.len() > MAX_PEERS { return Err("Too many connected private devices".into()); }
         let mut seen = std::collections::HashSet::new();
         for peer in &self.peers {
             validate_identity(&peer.identity)?;

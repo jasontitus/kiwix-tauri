@@ -225,7 +225,7 @@ fn torrent_job(job: &TorrentJob) -> DownloadJob {
             Some((status, downloaded, stamp))
                 if *status == current.0 && *downloaded == current.1 => stamp.clone(),
             _ => {
-                let stamp = chrono::Utc::now().to_rfc3339();
+                let stamp = crate::timestamps::now();
                 stamps.insert(job.id.clone(), (current.0, current.1, stamp.clone()));
                 stamp
             }
@@ -241,6 +241,7 @@ fn torrent_job(job: &TorrentJob) -> DownloadJob {
         downloaded: job.downloaded,
         total: job.total,
         error: job.error.clone(),
+        history_warning: None,
         speed: job.speed.max(0.0) as u64,
         eta_seconds: job.eta_seconds,
         created_at: stamp.clone(),
@@ -342,6 +343,7 @@ mod tests {
             downloaded,
             total: Some(1000),
             error: None,
+            history_warning: None,
             speed: 0,
             eta_seconds: None,
             created_at: "2026-10-31T10:00:00+00:00".into(),

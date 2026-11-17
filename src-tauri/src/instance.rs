@@ -22,6 +22,9 @@
 //! profile lock. The lock itself remains the single source of ownership, so a
 //! crashed owner releases the profile without this endpoint's help.
 
+#[cfg(unix)]
+pub(crate) mod socket;
+
 use std::path::Path;
 #[cfg(unix)]
 use std::path::PathBuf;
@@ -230,6 +233,7 @@ struct OwnedReply {
 #[cfg(unix)]
 pub(crate) struct Rendezvous {
     listener: std::os::unix::net::UnixListener,
+    _entry: socket::SocketEntry,
     path: PathBuf,
 }
 
@@ -239,11 +243,6 @@ impl Rendezvous {
     /// claimed `store.lock`; that ownership is what makes replacing a stale
     /// socket safe.
     pub(crate) fn bind(data_dir: &Path) -> std::io::Result<Self> {
-        use std::os::unix::fs::PermissionsExt;
-
-        let directory = socket_dir(data_dir);
-        std::fs::create_dir_all(&directory)?;
-        ensure_private_directory(&directory)?;
         let path = socket_path(data_dir);
         // sockaddr_un.sun_path is 104 bytes on macOS and 108 on Linux. Stay
         // under the smaller limit; a deeper profile keeps the dialog fallback.
@@ -256,9 +255,8 @@ impl Rendezvous {
                 ),
             ));
         }
-        let listener = bind_replacing_stale(&path)?;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-        Ok(Self { listener, path })
+        let (listener, entry) = socket::bind(&path)?;
+        Ok(Self { listener, path, _entry: entry })
     }
 
     /// Start accepting after the app is fully initialized. Connections made
@@ -268,6 +266,7 @@ impl Rendezvous {
         let spawned = std::thread::Builder::new()
             .name("kiwix-instance".into())
             .spawn(move || {
+                let _entry = self._entry;
                 for stream in self.listener.incoming() {
                     match stream {
                         Ok(stream) => handle_connection(&app, stream),
@@ -278,52 +277,6 @@ impl Rendezvous {
         if let Err(error) = spawned {
             eprintln!("Kiwix instance: listener thread unavailable: {error}");
         }
-    }
-}
-
-#[cfg(unix)]
-fn ensure_private_directory(directory: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-
-    let metadata = std::fs::symlink_metadata(directory)?;
-    if !metadata.file_type().is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!("{} is not a directory", directory.display()),
-        ));
-    }
-    if metadata.uid() != crate::fs_ext::effective_uid() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!("{} is owned by another user", directory.display()),
-        ));
-    }
-    if metadata.permissions().mode() & 0o077 != 0 {
-        std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn bind_replacing_stale(path: &Path) -> std::io::Result<std::os::unix::net::UnixListener> {
-    use std::os::unix::net::{UnixListener, UnixStream};
-
-    match UnixListener::bind(path) {
-        Ok(listener) => Ok(listener),
-        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
-            // The caller holds store.lock, so no live owner can be listening.
-            // A refused connect proves the socket file is a leftover.
-            if UnixStream::connect(path).is_ok() {
-                return Err(error);
-            }
-            match std::fs::remove_file(path) {
-                Ok(()) => {}
-                Err(remove) if remove.kind() == std::io::ErrorKind::NotFound => {}
-                Err(remove) => return Err(remove),
-            }
-            UnixListener::bind(path)
-        }
-        Err(error) => Err(error),
     }
 }
 
@@ -341,6 +294,9 @@ pub(crate) fn request_activation(
     let mut stream = connect_with_grace(&path).map_err(|error| {
         format!("No instance is listening at {}: {error}", path.display())
     })?;
+    if !peer_is_owner(&stream) {
+        return Err("The activation endpoint belongs to another account".into());
+    }
     let _ = stream.set_read_timeout(Some(ACTIVATION_TIMEOUT));
     let _ = stream.set_write_timeout(Some(ACTIVATION_TIMEOUT));
     let request = Request {
@@ -378,10 +334,12 @@ pub(crate) fn request_activation(
 fn connect_with_grace(path: &Path) -> std::io::Result<std::os::unix::net::UnixStream> {
     use std::os::unix::net::UnixStream;
 
+    let address = socket2::SockAddr::unix(path)?;
     let mut last = None;
     for _ in 0..20 {
-        match UnixStream::connect(path) {
-            Ok(stream) => return Ok(stream),
+        let socket = socket2::Socket::new(socket2::Domain::UNIX, socket2::Type::STREAM, None)?;
+        match socket.connect_timeout(&address, std::time::Duration::from_millis(100)) {
+            Ok(()) => return Ok(UnixStream::from(std::os::fd::OwnedFd::from(socket))),
             Err(error)
                 if matches!(
                     error.kind(),
@@ -613,12 +571,24 @@ mod tests {
         let socket_mode = std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777;
         assert_eq!(directory_mode, 0o700);
         assert_eq!(socket_mode, 0o600);
+        assert!(Rendezvous::bind(&root).is_err(), "must preserve a live listener");
         drop(rendezvous);
 
-        // The lock owner crashed or exited: the leftover socket must be
+        assert!(!socket.exists());
+        drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
+        // The lock owner crashed: the leftover socket must be
         // replaced, not treated as a live listener.
         let rebound = Rendezvous::bind(&root).unwrap();
+        // A replacement made by the user must survive the earlier owner's cleanup.
+        std::fs::rename(&socket, root.join("old-socket")).unwrap();
+        std::fs::write(&socket, b"user file").unwrap();
         drop(rebound);
+        assert!(Rendezvous::bind(&root).is_err());
+        assert_eq!(std::fs::read(&socket).unwrap(), b"user file");
+        std::fs::remove_file(&socket).unwrap();
+        std::os::unix::fs::symlink(root.join("missing"), &socket).unwrap();
+        assert!(Rendezvous::bind(&root).is_err());
+        assert!(socket.is_symlink());
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -422,6 +422,19 @@ async fn duplicate_transfer_record_is_skipped_and_profile_still_opens() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn malformed_job_envelopes_preserve_the_original_history() {
+    for document in [r#"{"version":4294967297,"jobs":[]}"#, r#"{"version":1}"#, r#"{"version":1,"jobs":{}}"#] {
+        let profile = Profile::new();
+        let path = profile.0.join("torrents/jobs.json");
+        fs::write(&path, document).unwrap();
+        let manager = TorrentManager::new(profile.0.clone(), false, profile.1.clone()).unwrap();
+        let kept = manager.history_notice().expect("unreadable history has a recovery file");
+        assert_eq!(fs::read_to_string(kept).unwrap(), document);
+        assert!(manager.list().await.is_empty());
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn unreadable_transfer_record_is_skipped_without_quarantining_history() {
     let profile = Profile::new();
     let record = profile.record();
@@ -2068,7 +2081,7 @@ async fn worker_recovers_publication_without_staging_metadata_engine_or_peers() 
         record.job.completed_paths,
         vec![destination.to_string_lossy().into_owned()]
     );
-    assert!(record.job.seeding);
+    assert!(!record.job.seeding);
     assert!(manager.engine_cell().unwrap().get().is_none());
     assert!(manager.claims_monitored_path(&destination).unwrap());
     assert!(!staging.exists());

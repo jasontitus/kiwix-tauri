@@ -431,9 +431,9 @@ pub fn series_key(name: &str, language: &str, tags: &[String]) -> Option<SeriesK
 
 /// Complete calendar dates and RFC3339 timestamps only. A month-only value has
 /// unknown day precision and cannot safely establish a newer edition.
-pub fn edition_date(value: &str) -> Option<chrono::NaiveDate> {
-    if value.len() == 10 { return chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").ok(); }
-    chrono::DateTime::parse_from_rfc3339(value).ok().map(|date| date.naive_utc().date())
+pub fn edition_date(value: &str) -> Option<time::Date> {
+    if value.len() == 10 { return time::Date::parse(value, time::macros::format_description!("[year]-[month]-[day]")).ok(); }
+    crate::timestamps::parse(value).ok().map(|date| date.to_offset(time::UtcOffset::UTC).date())
 }
 
 /// Compare only non-overlapping calendar precision intervals. In particular,
@@ -444,20 +444,20 @@ pub fn edition_is_newer(candidate: &str, installed: &str) -> bool {
         .is_some_and(|((candidate_start, _), (_, installed_end))| candidate_start >= installed_end)
 }
 
-fn edition_interval(value: &str) -> Option<(chrono::NaiveDate, chrono::NaiveDate)> {
+fn edition_interval(value: &str) -> Option<(time::Date, time::Date)> {
     if value.len() == 7 {
         let bytes = value.as_bytes();
         if bytes[4] != b'-' || !bytes[..4].iter().chain(&bytes[5..]).all(u8::is_ascii_digit) {
             return None;
         }
         let year = value.get(..4)?.parse().ok()?;
-        let month = value.get(5..7)?.parse().ok()?;
-        let start = chrono::NaiveDate::from_ymd_opt(year, month, 1)?;
-        let end = start.checked_add_months(chrono::Months::new(1))?;
+        let month: u8 = value.get(5..7)?.parse().ok()?;
+        let start = time::Date::from_calendar_date(year, time::Month::try_from(month).ok()?, 1).ok()?;
+        let end = start.checked_add(time::Duration::days(i64::from(start.month().length(year))))?;
         return Some((start, end));
     }
     let start = edition_date(value)?;
-    Some((start, start.succ_opt()?))
+    Some((start, start.next_day()?))
 }
 
 #[cfg(test)]

@@ -4289,10 +4289,10 @@ export default function Reader(props: ReaderProps) {
     }
     setExportBusy(true);
     try {
+      const book = latest.current.books.find((book) => book.id === current.bookId);
+      if (!book || source.installationId !== book.installationId)
+        throw new Error(t("The archive changed; reopen the article before exporting."));
       if (format === "pdf" && isHtml(mime)) {
-        const book = latest.current.books.find((book) => book.id === current.bookId);
-        if (!book || source.installationId !== book.installationId)
-          throw new Error(t("The archive changed; reopen the article before exporting."));
         const title = Array.from(current.title).slice(0, 55).join("");
         const name = exportName(title, "application/pdf")
           .replace(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?=\.|$)/i, "_$1");
@@ -4343,10 +4343,11 @@ export default function Reader(props: ReaderProps) {
           /\.html$/,
           "",
         );
-        await saveMhtml(current.bookId, current.path, `${stem}.mhtml`);
+        await saveMhtml(current.bookId, book.installationId, current.path, `${stem}.mhtml`);
       } else
         await saveResource(
           current.bookId,
+          book.installationId,
           current.path,
           exportName(current.title, mime),
         );
@@ -6705,7 +6706,8 @@ export default function Reader(props: ReaderProps) {
                   try {
                     const leaf = new URL(context.url).pathname.split("/").pop() || "resource";
                     const name = decodeURIComponent(leaf).replace(/[/\\:*?"<>|\u0000-\u001f]/g, "_") || "resource";
-                    await saveResource(context.session.location.bookId, context.path, name);
+                    if (!context.session.installationId) throw new Error(t("The archive changed; reopen the article before exporting."));
+                    await saveResource(context.session.location.bookId, context.session.installationId, context.path, name);
                   } catch (error) {
                     if (alive.current) latest.current.onError(error);
                   } finally {

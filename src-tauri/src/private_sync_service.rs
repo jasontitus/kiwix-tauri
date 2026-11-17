@@ -55,8 +55,10 @@ struct PairSession {
 impl PairSession {
     fn retire(&self) {
         self.token.lock().unwrap_or_else(|error| error.into_inner()).take();
-        if let Ok(mut view) = self.view.lock() { view.invitation = None; }
+        let mut view = self.view.lock().unwrap_or_else(|error| error.into_inner());
+        view.invitation = None;
         self.cancel.cancel();
+        drop(view);
         self.notify.notify_waiters();
     }
 }
@@ -112,7 +114,11 @@ impl PrivateSyncManager {
             .ok_or_else(|| "This connection invitation has expired. Create a new invitation".into())
     }
     fn finish_pair_error(&self, session: &PairSession, error: String) {
-        if let Ok(mut view) = session.view.lock() { view.phase = "error".into(); view.error = Some(error); view.invitation = None; }
+        if let Ok(mut view) = session.view.lock() {
+            if matches!(view.phase.as_str(), "confirmed" | "error") { return; }
+            view.phase = "error".into(); view.error = Some(error); view.invitation = None;
+            session.cancel.cancel();
+        }
         session.retire();
     }
 }
@@ -222,9 +228,9 @@ impl Service {
                                 // that has not been reached for a while, still connects
                                 // so enrollment and endpoint refresh are not skipped.
                                 if peer.acknowledged_counter >= counter && peer.last_sync.as_deref()
-                                    .and_then(|last| chrono::DateTime::parse_from_rfc3339(last).ok())
-                                    .is_some_and(|last| chrono::Utc::now().signed_duration_since(last)
-                                        < chrono::Duration::seconds(IDLE_SYNC_REFRESH.as_secs() as i64))
+                                    .and_then(|last| crate::timestamps::parse(last).ok())
+                                    .is_some_and(|last| (time::OffsetDateTime::now_utc() - last)
+                                        < time::Duration::seconds(IDLE_SYNC_REFRESH.as_secs() as i64))
                                 { continue; }
                                 service.private_sync_spawn(owned.clone(), peer.id.clone(), false)?;
                             }
@@ -363,7 +369,7 @@ impl Service {
                 let mut bytes = [0u8; 32]; getrandom::fill(&mut bytes).map_err(|_| "Cannot create a secure connection invitation")?;
                 let token = zeroize::Zeroizing::new(hex::encode(bytes));
                 use zeroize::Zeroize; bytes.zeroize();
-                let expires_at = (chrono::Utc::now() + chrono::Duration::seconds(PAIR_LIFETIME.as_secs() as i64)).to_rfc3339();
+                let expires_at = crate::timestamps::format(time::OffsetDateTime::now_utc() + PAIR_LIFETIME);
                 let invitation = zeroize::Zeroizing::new(serde_json::to_string(&Invitation { version: 1, identity: manager.identity.public_hex(), token: token.clone(), endpoints: runtime.endpoints.clone(), expires_at: expires_at.clone() }).map_err(|error| error.to_string())?);
                 let session = Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: Some(invitation), peer_identity: None, peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at, phase: "waiting".into(), error: None }), token: Mutex::new(Some(token)), expires: Instant::now() + PAIR_LIFETIME, claimed: AtomicBool::new(false), notify: tokio::sync::Notify::new(), cancel: runtime.cancel.child_token() });
                 if let Some(old) = manager.session.lock().map_err(|_| "Private pairing unavailable")?.replace(session.clone()) { old.retire(); }
@@ -374,12 +380,12 @@ impl Service {
                 if invitation.len() > 8192 { return Err("Connection invitation is too large".into()); }
                 let invitation: Invitation = serde_json::from_str(invitation).map_err(|_| "Invalid private connection invitation")?;
                 crate::private_sync::validate_identity(&invitation.identity)?;
-                let expires = chrono::DateTime::parse_from_rfc3339(&invitation.expires_at).map_err(|_| "Invalid invitation expiry")?;
+                let expires = crate::timestamps::parse(&invitation.expires_at).map_err(|_| "Invalid invitation expiry")?;
                 if invitation.version != 1 || invitation.identity == manager.identity.public_hex() || invitation.token.len() != 64
                     || !invitation.token.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-                    || expires <= chrono::Utc::now() || expires > chrono::Utc::now() + chrono::Duration::seconds(330)
+                    || expires <= time::OffsetDateTime::now_utc() || expires > time::OffsetDateTime::now_utc() + time::Duration::seconds(330)
                     || invitation.endpoints.is_empty() || invitation.endpoints.len() > 16 { return Err("This invitation is invalid or expired. Create a new invitation on the other device".into()); }
-                let remaining = (expires.with_timezone(&chrono::Utc) - chrono::Utc::now()).to_std().map_err(|_| "Invitation expired")?.min(PAIR_LIFETIME);
+                let remaining = Duration::try_from(expires - time::OffsetDateTime::now_utc()).map_err(|_| "Invitation expired")?.min(PAIR_LIFETIME);
                 let session = Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: None, peer_identity: Some(invitation.identity.clone()), peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at: invitation.expires_at.clone(), phase: "waiting".into(), error: None }), token: Mutex::new(Some(invitation.token.clone())), expires: Instant::now() + remaining, claimed: AtomicBool::new(true), notify: tokio::sync::Notify::new(), cancel: runtime.cancel.child_token() });
                 if let Some(old) = manager.session.lock().map_err(|_| "Private pairing unavailable")?.replace(session.clone()) { old.retire(); }
                 Self::private_sync_expire(manager.clone(), session.clone());
@@ -406,7 +412,7 @@ impl Service {
         tokio::spawn(async move {
             let remaining = session.expires.saturating_duration_since(Instant::now());
             tokio::select! { _ = session.cancel.cancelled() => session.retire(), _ = tokio::time::sleep(remaining) => {
-                if session.view.lock().is_ok_and(|view| view.phase != "confirmed") { manager.finish_pair_error(&session, "This invitation expired. Create a new invitation to connect".into()); }
+                manager.finish_pair_error(&session, "This invitation expired. Create a new invitation to connect".into());
             } }
         });
     }
@@ -505,6 +511,9 @@ impl Service {
         session.token.lock().map_err(|_| "Private pairing unavailable")?.take();
         {
             let mut view = session.view.lock().map_err(|_| "Private pairing unavailable")?;
+            if session.cancel.is_cancelled() || Instant::now() >= session.expires {
+                return Err("Private invitation expired or was cancelled".into());
+            }
             view.peer_identity = Some(channel.identity.clone()); view.peer_name = Some(name.clone());
             view.verification_code = Some(channel.verification.clone()); view.phase = "verifying".into(); view.invitation = None;
         }
@@ -532,24 +541,28 @@ impl Service {
             },
             _ => return Err("Invalid private device confirmation".into()),
         }
+        // Ready means both sides finished confirming the displayed code. Wait
+        // for the peer before changing a durable enrollment (including re-pairs).
+        self.private_sync_admit(runtime)?;
+        self.store.check_private_peer_capacity(&channel.identity)?;
+        channel.send(&Message::Ready).await?;
+        if !matches!(channel.receive().await?, Message::Ready) { return Err("Private device did not finish confirmation".into()); }
         {
             let _policy = self.privacy_gate.read().await;
             self.private_sync_admit(runtime)?;
             if session.cancel.is_cancelled() { return Err("Private pairing was cancelled".into()); }
+            let mut view = session.view.lock().map_err(|_| "Private pairing unavailable")?;
+            if Instant::now() >= session.expires { return Err("Private invitation expired".into()); }
             self.store.update_reading_sync(|state| {
                 if runtime.cancel.is_cancelled() || session.cancel.is_cancelled() { return Err("Private pairing was cancelled".into()); }
-                if state.private_sync.peers.len() >= 32 && !state.private_sync.peers.iter().any(|peer|peer.id == channel.identity) { return Err("Disconnect an unused private device before connecting another".into()); }
+                state.private_sync.check_capacity(&channel.identity)?;
                 let automatic = state.private_sync.peers.iter().find(|peer|peer.id == channel.identity).is_some_and(|peer|peer.automatic);
                 state.private_sync.peers.retain(|peer|peer.id != channel.identity);
                 state.private_sync.peers.push(Peer { id: channel.identity.clone(), identity: channel.identity.clone(), name, endpoints, enabled: true, automatic, last_sync: None, acknowledged_counter: 0 });
                 Ok(())
             })?;
+            view.phase = "confirmed".into();
         }
-        channel.send(&Message::Ready).await?;
-        if !matches!(channel.receive().await?, Message::Ready) { return Err("Private device did not finish confirmation".into()); }
-        self.private_sync_admit(runtime)?;
-        if session.cancel.is_cancelled() { return Err("Private pairing was cancelled".into()); }
-        session.view.lock().map_err(|_| "Private pairing unavailable")?.phase = "confirmed".into();
         // Reading payloads are never sent over the enrollment session. A fresh
         // authenticated connection must find both identities durably enrolled.
         Ok(())
@@ -609,7 +622,7 @@ impl Service {
         self.store.update_reading_sync(|state| {
             if runtime.cancel.is_cancelled() { return Err("Private sync was cancelled".into()); }
             let peer = state.private_sync.peers.iter_mut().find(|peer|peer.identity == channel.identity && peer.enabled).ok_or("Private device was revoked")?;
-            peer.endpoints = endpoints; peer.last_sync = Some(chrono::Utc::now().to_rfc3339()); peer.acknowledged_counter = sent_counter;
+            peer.endpoints = endpoints; peer.last_sync = Some(crate::timestamps::now()); peer.acknowledged_counter = sent_counter;
             Ok(())
         })?;
         self.notify_library_changed();

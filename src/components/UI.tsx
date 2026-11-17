@@ -203,6 +203,45 @@ export function ErrorNotice({
     </div>
   );
 }
+/** Keep only one page of matching rows mounted. Filtering and sorting belong to the caller. */
+export function PagedResults<T>({ items, criteria, label, className, children }: {
+  items: readonly T[];
+  criteria: string;
+  label: string;
+  className?: string;
+  children: (item: T) => ReactNode;
+}) {
+  const size = 50;
+  const [selection, setSelection] = useState({ criteria, page: 0 });
+  const last = Math.max(0, Math.ceil(items.length / size) - 1);
+  const page = selection.criteria === criteria ? Math.min(selection.page, last) : 0;
+  if (selection.criteria !== criteria || selection.page !== page)
+    setSelection({ criteria, page });
+  const start = page * size;
+  const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+  function select(next: number) {
+    setSelection({ criteria, page: next });
+    // Move keyboard and scroll position back to the start of this section.
+    ref.current?.focus({ preventScroll: true });
+    ref.current?.scrollIntoView({ block: "start" });
+  }
+  return <>
+    <div ref={ref} id={id} className={className} tabIndex={-1} role="group" aria-label={label}>
+      {items.slice(start, start + size).map(children)}
+    </div>
+    {last > 0 && <nav className="pagination" aria-label={label}>
+      <button type="button" disabled={page === 0} aria-controls={id}
+        onClick={() => select(page - 1)}>{t("Previous")}</button>
+      <span role="status">{t("{start}–{end} of {total}", {
+        start: start + 1, end: Math.min(start + size, items.length), total: items.length,
+      })}</span>
+      <button type="button" disabled={page === last} aria-controls={id}
+        onClick={() => select(page + 1)}>{t("Next")}</button>
+    </nav>}
+  </>;
+}
+
 export function Modal({
   title,
   children,

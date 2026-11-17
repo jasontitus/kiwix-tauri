@@ -650,11 +650,14 @@ export default function Library({
     }
   }
   async function saveTorrent(job: DownloadJob) {
+    const privacy = capturePrivacyContext();
+    if (!privacy || privacy.readOnly) return;
     try {
       const bytes = await api<string>("torrent_metadata", { id: job.id });
-      await saveBytes(`${job.fileName}.torrent`, bytes, "application/x-bittorrent");
+      if (!alive.current) return;
+      await saveBytes(`${job.fileName}.torrent`, bytes, "application/x-bittorrent", privacy);
     } catch (e) {
-      if (alive.current) setShareError(errorText(e));
+      if (alive.current && isPrivacyContextCurrent(privacy)) setShareError(errorText(e));
     }
   }
   async function relink(book: Book) {

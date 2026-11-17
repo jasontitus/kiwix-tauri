@@ -46,7 +46,7 @@ use std::{
     path::{Component, Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Context};
@@ -733,16 +733,17 @@ fn reanchor_saved_paths(record: &mut Record, folder: &Path, store: &Store) -> Re
 /// and reported; only an unreadable file, unsupported version, or structurally
 /// impossible envelope still returns `Err` so the caller can quarantine it.
 fn load_state(
-    path: &Path,
+    file: &File,
     folder: &Path,
     store: &Store,
 ) -> Result<(State, Vec<String>), String> {
-    let file = File::open(path).map_err(display)?;
+    const TOO_LARGE: &str = "Saved transfer history is too large to read. Clear it from Troubleshooting or start with a new profile";
     if file.metadata().map_err(display)?.len() > MAX_METADATA as u64 {
-        return Err("Saved transfer history is too large to read. Clear it from Troubleshooting or start with a new profile".into());
+        return Err(TOO_LARGE.into());
     }
-    let mut value: serde_json::Value = serde_json::from_reader(file)
-        .map_err(|error| format!("Invalid saved transfer history JSON: {error}"))?;
+    let mut value = crate::acquisition::read_history_json(file, MAX_METADATA as u64)
+        .map_err(|error| format!("Invalid saved transfer history JSON: {error}"))?
+        .ok_or(TOO_LARGE)?;
     #[cfg(desktop)]
     store
         .portable_rebase_saved_json(crate::profile_paths::RecordKind::Torrents, &mut value)
@@ -751,49 +752,48 @@ fn load_state(
     store
         .mobile_rebase_saved_json(crate::mobile_rebase::RecordKind::Torrents, &mut value)
         .map_err(|error| format!("Cannot re-anchor saved transfer paths: {error}"))?;
-    let Some(object) = value.as_object() else {
+    let Some(object) = value.as_object_mut() else {
         return Err("Invalid saved transfer history: expected an object".into());
     };
     let version = object
         .get("version")
         .and_then(serde_json::Value::as_u64)
-        .ok_or("Invalid saved transfer history: missing version")? as u32;
-    if version != STATE_VERSION {
+        .ok_or("Invalid saved transfer history: missing version")?;
+    if version != u64::from(STATE_VERSION) {
         return Err(format!("Saved transfer history was written by a different version of Kiwix ({version}). Open it with that version, or start with a new profile"));
     }
     let mut warnings = Vec::new();
     let mut jobs = Vec::new();
     let mut ids = BTreeSet::new();
-    if let Some(rows) = object.get("jobs").and_then(serde_json::Value::as_array) {
-        for row in rows {
-            let Ok(mut record) = serde_json::from_value::<Record>(row.clone()) else {
-                warnings.push("A saved transfer could not be read and was skipped.".into());
-                continue;
-            };
-            if reanchor_saved_paths(&mut record, folder, store).is_err()
-                || validate_saved_record(&record, folder).is_err()
-                || !ids.insert(record.job.id.clone())
-            {
-                warnings.push("A saved transfer could not be read and was skipped.".into());
-                continue;
-            }
-            // Jobs saved before creation times were recorded: approximate with
-            // the metadata file's modification time, which (unlike creation
-            // time) survives copying or restoring a profile. A magnet job that
-            // never received metadata has no file and stays unstamped.
-            if record.job.created_at.is_none() {
-                record.job.created_at = std::fs::metadata(&record.metadata)
-                    .and_then(|metadata| metadata.modified())
-                    .ok()
-                    .map(|time| chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339());
-            }
-            jobs.push(record);
+    let Some(serde_json::Value::Array(rows)) = object.remove("jobs") else {
+        return Err("Invalid saved transfer history: expected a list of jobs".into());
+    };
+    for row in rows {
+        let Ok(mut record) = serde_json::from_value::<Record>(row) else {
+            warnings.push("A saved transfer could not be read and was skipped.".into());
+            continue;
+        };
+        if reanchor_saved_paths(&mut record, folder, store).is_err()
+            || validate_saved_record(&record, folder).is_err()
+            || !ids.insert(record.job.id.clone())
+        {
+            warnings.push("A saved transfer could not be read and was skipped.".into());
+            continue;
         }
-    } else if object.contains_key("jobs") {
-        warnings.push("Some saved transfers could not be read and were skipped.".into());
+        // Jobs saved before creation times were recorded: approximate with
+        // the metadata file's modification time, which (unlike creation
+        // time) survives copying or restoring a profile. A magnet job that
+        // never received metadata has no file and stays unstamped.
+        if record.job.created_at.is_none() {
+            record.job.created_at = std::fs::metadata(&record.metadata)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .map(|time| crate::timestamps::format(time::OffsetDateTime::from(time)));
+        }
+        jobs.push(record);
     }
     let state = State {
-        version,
+        version: STATE_VERSION,
         download_limit: object
             .get("downloadLimit")
             .and_then(serde_json::Value::as_u64)
@@ -905,46 +905,6 @@ fn validate_saved_record(record: &Record, folder: &Path) -> Result<(), String> {
     }
     Ok(())
 }
-
-/// Move unreadable history aside without changing a byte. Rename is preferred;
-/// a directory that forbids renames still gets a preserved copy, and the
-/// original is never deleted here.
-fn quarantine_history(path: &Path, folder: &Path) -> Result<PathBuf, String> {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or(0);
-    for attempt in 0..1000u32 {
-        let target = folder.join(if attempt == 0 {
-            format!("jobs.unreadable-{stamp}.json")
-        } else {
-            format!("jobs.unreadable-{stamp}-{attempt}.json")
-        });
-        if target.exists() {
-            continue;
-        }
-        match fs::rename(path, &target) {
-            Ok(()) => {
-                #[cfg(unix)]
-                if let Ok(directory) = File::open(folder) {
-                    let _ = directory.sync_all();
-                }
-                return Ok(target);
-            }
-            Err(rename_error) => {
-                return match fs::copy(path, &target) {
-                    Ok(_) => Ok(target),
-                    Err(_) => Err(format!(
-                        "Cannot set aside unreadable transfer history {}: {rename_error}",
-                        path.display()
-                    )),
-                };
-            }
-        }
-    }
-    Err("Kiwix could not move a damaged saved transfer file aside. Restart the app; if this keeps happening, free some storage".into())
-}
-
 
 // Staging is retained after publication, so a same-volume download needs both
 // its remaining payload and the separate no-clobber archive copies at once.

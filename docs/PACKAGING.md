@@ -772,7 +772,7 @@ Provision **outside the checkout**, using your organization's trusted SDK build/
 - `LIBZIM_SDK_ROOT/include/zim/...`, `LIBZIM_SDK_ROOT/lib/zim.lib` and `LIBZIM_SDK_ROOT/bin/*.dll` containing the complete dynamic dependency closure, including runtime DLLs where redistribution is permitted. Use pinned libzim 9.8.2 with Xapian enabled, release-mode MSVC ABI and compatible C/C++ runtime settings; MinGW archives are not substitutes.
 - An independently reviewed `LIBZIM_SDK_ROOT/kiwix-sdk.json` with `schema: 2`, `version: "9.8.2"`, target `x86_64-pc-windows-msvc`, trusted `source`/`license` references and `libzim: {commit: "26ec526f74e8342a40da5ab14e364546988e0e1a", search: true}`. `patches` must include `kiwix-split-ranges-v1` and `kiwix-retained-fd-v1`. Each `sourcePatches` record requires its marker, `component: "zim"`, current patch SHA-256 and exact installed `share/provenance/<filename>.patch` path. Windows does not require the POSIX Xapian offset factory. `files` maps SDK-relative paths to actual SHA-256 digests: cover all installed provenance, headers (including `include/zim/archive.h` and `include/zim/search.h`), `lib/zim.lib` and every `bin/<filename>.dll`. Use `/` separators. Do not manufacture hashes or mistake a self-authored manifest for trusted provenance.
 
-The workflow rejects missing prerequisites and mismatched checksums. It does **not yet** add the four pinned sherpa-onnx runtime DLLs that the Windows app needs at load time (see the local build below); until it does, its installer cannot start. It generates a temporary Tauri resources map to install each verified DLL beside the executable, sets both `LIBZIM_INCLUDE_DIR` and `LIBZIM_LIB_DIR`, and builds an NSIS installer. It does **not** assert that hashes alone prove ABI, transitive completeness, or trust. Those are SDK-provider and clean-machine acceptance obligations. The default WebView2 bootstrapper may need Internet access on a new machine; fully offline installer deployments need an actual approved WebView2 offline runtime packaging policy.
+The Windows build combines the verified libzim DLLs, four checksum-pinned sherpa-onnx runtime DLLs, and the agent connector executable in the NSIS resource map. The local and CI builds use the same helper. A clean Windows installation and launch remain required to establish runtime compatibility. The default WebView2 bootstrapper may need Internet access on a new machine; fully offline installer deployments need an actual approved WebView2 offline runtime packaging policy.
 
 For a local Windows build, perform the same SDK verification, then in PowerShell from the repository root:
 
@@ -782,40 +782,12 @@ $sdk = (Resolve-Path $env:LIBZIM_SDK_ROOT).Path
 $env:LIBZIM_INCLUDE_DIR = Join-Path $sdk 'include'
 $env:LIBZIM_LIB_DIR = Join-Path $sdk 'lib'
 $env:PATH = (Join-Path $sdk 'bin') + ';' + $env:PATH
-$resources = @{}
-Get-ChildItem (Join-Path $sdk 'bin') -Filter '*.dll' -File | ForEach-Object {
-  $resources[$_.FullName] = $_.Name
-}
-# Kokoro read-aloud: Windows links sherpa-onnx's shared build (its only static
-# Windows archive uses the static C++ runtime, which cannot link with the /MD
-# libzim SDK). Its build script copies the runtime DLLs into the release
-# profile directory; build it first, then install them beside the executable.
-cargo build --release --locked --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
-if ($LASTEXITCODE -ne 0) { throw 'sherpa-onnx runtime build failed' }
-$release = Join-Path $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'src-tauri\target' }) 'x86_64-pc-windows-msvc\release'
-# The crate downloads its prebuilt archive without a checksum; these pins are
-# sherpa-onnx 2.0.1 win-x64-shared-MT-Release. The app cannot start without
-# these load-time DLLs, so a missing or changed one must stop the build.
-$sherpa = @{
-  'onnxruntime.dll' = '7F66F939A881BAF4F46A2216496798EDF4A1429878B646D12674AA62F27D8A25'
-  'onnxruntime_providers_shared.dll' = '551D0E1FE4C227D8542314BA718D52F4379E0C7BFE729A37C59833A884E27B4D'
-  'sherpa-onnx-c-api.dll' = '0965A6E4C0254DA2BEFF489CF7A8AAFFAF7DC94F90B43B3E66448B8CAB4177EA'
-  'sherpa-onnx-cxx-api.dll' = 'ADA772889F966426AD9CABA5B5125BFFB836163573791FDDA99541280D45DAFA'
-}
-foreach ($entry in $sherpa.GetEnumerator()) {
-  $dll = (Resolve-Path (Join-Path $release $entry.Key)).Path
-  if ((Get-FileHash -Algorithm SHA256 $dll).Hash -ne $entry.Value) { throw "sherpa-onnx runtime checksum mismatch: $($entry.Key)" }
-  $resources[$dll] = $entry.Key
-}
-# Agent connector relay (docs/AGENT-CONNECTOR.md): a separate console crate
-# that MCP clients start; it must sit beside kiwix-workbench.exe, which it
-# checks before talking to the app.
-cargo build --release --locked --target x86_64-pc-windows-msvc --manifest-path kiwix-mcp/Cargo.toml
-if ($LASTEXITCODE -ne 0) { throw 'kiwix-mcp build failed' }
-$resources[(Resolve-Path (Join-Path $release 'kiwix-mcp.exe')).Path] = 'kiwix-mcp.exe'
+$env:KIWIX_DESKTOP_SDK_ROOT = $sdk
 $config = Join-Path $env:TEMP ('kiwix-bundle-' + [guid]::NewGuid() + '.json')
-@{ bundle = @{ resources = $resources } } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $config
 try {
+  $overlay = node scripts/windows-bundle-resources.mjs
+  if ($LASTEXITCODE -ne 0) { throw 'Windows runtime verification failed' }
+  [IO.File]::WriteAllLines($config, [string[]]$overlay)
   npm ci
   if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
   npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --config $config
