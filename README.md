@@ -8,7 +8,7 @@ No account is required. Your library, reading history, notes, and downloads stay
 
 ## Download
 
-Get the latest build from the **[releases page](https://github.com/jasontitus/kiwix-tauri/releases)**.
+Release binaries are being republished after the move to this public repository. Until they are available, build from source with the instructions below.
 
 | Platform | Package |
 |---|---|
@@ -155,7 +155,7 @@ npm run desktop        # native Tauri app
 npm run bundle:macos   # macOS app + dependency finalization
 ```
 
-Linux AppImage/Flatpak, Windows (including ARM64), and mobile build commands are documented in [Packaging](docs/PACKAGING.md). The repository is private; see the packaging guide before publishing artifacts.
+Linux AppImage/Flatpak, Windows (including ARM64), and mobile build commands are documented in [Packaging](docs/PACKAGING.md). See the packaging guide before publishing artifacts.
 
 Changes must pass the independent review gate in [AGENTS.md](AGENTS.md). A successful compile is not a substitute for runtime evidence.
 
