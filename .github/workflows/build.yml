@@ -77,6 +77,8 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Build MCP sidecar required by Tauri resource resolution
+        run: npm run build:mcp
       - name: Clippy with warnings as errors
         # Check this exact checkout before packaging, including release runs.
         run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol -- -D warnings
@@ -201,6 +203,8 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Build MCP sidecar required by Tauri resource resolution
+        run: npm run build:mcp
       - name: Clippy with warnings as errors
         # Check this exact checkout before packaging, including release runs.
         run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --features custom-protocol -- -D warnings
