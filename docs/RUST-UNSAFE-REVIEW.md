@@ -1,5 +1,7 @@
 # Rust `unsafe` usage review — 2026-11-12
 
+For the current cross-platform replacement checklist, including native and transitive dependencies, see the [memory-safety inventory](MEMORY-SAFETY-INVENTORY.md).
+
 Scope: hand-written Rust under `src-tauri/src` and `src-tauri/build.rs` at `3d289b1`. Vendored crates,
 `target/`, generated Android projects and native C/C++/Objective-C++ sources are excluded from the Rust
 keyword counts, although the C/C++ FFI boundary is the reason most `unsafe` exists.
