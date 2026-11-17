@@ -26,11 +26,12 @@ certification.
   `AndroidEvaluationBridge` JNI symbol is absent; that is a test-harness
   feature gate, not an app crash.
 - **iOS physical device (iPhone 13 Pro):** the current app installed, launched,
-  and rendered its Library. The `iphone.py` acceptance window could not complete
-  because the test fixture admission path did not import Wikipedia 100; the
-  runner then reported `Expected Open Wikipedia 100 in the library`. The app
-  itself remained running and was released. This is an acceptance-harness
-  fixture/rendezvous gap, not a reproduced reader crash.
+  and rendered its Library. The bounded `device-launch` UI test passed **1/1**
+  (`device-launch-68e07138483f439489cbe78dd9169517`). The separate acceptance
+  window could not complete because the test fixture admission path did not
+  import Wikipedia 100; the runner then reported `Expected Open Wikipedia 100
+  in the library`. The app itself remained running and was released. This is an
+  acceptance-harness fixture/rendezvous gap, not a reproduced reader crash.
 - **iOS simulator:** the simulator app build required thinning the pinned
   universal `SherpaOnnxC` framework to arm64 before ad-hoc signing. That build
   step is now implemented in `iphone-build.py`; the simulator app built and
