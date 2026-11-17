@@ -915,6 +915,10 @@ mod tests {
         let dir = std::env::temp_dir();
         let suffix = profile_suffix(&dir).unwrap();
         assert_eq!(suffix.len(), 16);
+        // Canonicalization is case-sensitive on Linux, so an uppercased /tmp
+        // does not exist there. Only exercise the case-insensitive comparison
+        // on filesystems where the uppercased path resolves.
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         assert_eq!(Some(suffix), profile_suffix(std::path::Path::new(&dir.to_string_lossy().to_uppercase())));
     }
 }
