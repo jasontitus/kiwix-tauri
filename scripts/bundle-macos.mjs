@@ -18,6 +18,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { checkArchiveLibrary } from "./check-archive-libraries.mjs";
+
 const repository = fileURLToPath(new URL("..", import.meta.url));
 
 const usage = `Usage: node bundle-macos.mjs [APP.app] [options]
@@ -233,6 +235,7 @@ async function main() {
     visitedDirectories.add(actual);
     for (const entry of await readdir(actual, { withFileTypes: true })) {
       const file = path.join(actual, entry.name);
+      checkArchiveLibrary(file);
       const target = await realpath(file);
       if (!inside(app, target))
         throw new Error(`Bundle symlink escapes the app: ${file}`);
@@ -323,8 +326,10 @@ async function main() {
       .concat(inheritedRpaths);
     const edges = [];
     for (const reference of info.dependencies) {
+      checkArchiveLibrary(reference);
       if (systemLibrary(reference)) continue;
       const dependency = await resolveDependency(reference, source, rpaths);
+      checkArchiveLibrary(dependency);
       if (systemLibrary(dependency)) {
         edges.push({ reference, system: dependency });
         continue;

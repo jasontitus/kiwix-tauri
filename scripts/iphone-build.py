@@ -113,7 +113,6 @@ class Build:
         self.logs.mkdir(exist_ok=True, mode=0o700)
         self.counter = 0
         self.commands = []
-        self.sdk = Path(args.sdk or self.repo / '.native/mobile-retained-fd-v2' / self.target).expanduser().resolve(strict=True) if args.product == 'tauri' else None
         self.env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'TMPDIR', 'SSH_AUTH_SOCK', 'DEVELOPER_DIR') if key in os.environ}
         # Discover installed tools, but do not inherit compiler/SDK/flag overrides.
         rust = Path.home() / '.rustup/toolchains/stable-aarch64-apple-darwin/bin'
@@ -137,8 +136,6 @@ class Build:
                         RUSTC=str(rust / 'rustc'),
                         CI='true', npm_config_offline='true', npm_config_audit='false', npm_config_fund='false',
                         TAURI_ENV_PLATFORM='ios', CARGO_INCREMENTAL=os.environ.get('KIWIX_CARGO_INCREMENTAL', '0'))
-        if self.sdk:
-            self.env['TAURI_KIWIX_MOBILE_SDK_ROOT'] = str(self.sdk)
         if os.environ.get('KIWIX_CODEGEN_UNITS'):
             self.env['CARGO_PROFILE_RELEASE_CODEGEN_UNITS'] = os.environ['KIWIX_CODEGEN_UNITS']
 
@@ -223,15 +220,7 @@ class Build:
 
     def inputs(self):
         self.commit = self.capture(['/usr/bin/git', 'rev-parse', '--verify', self.args.revision + '^{commit}'])
-        sdk_manifest = self.sdk / 'kiwix-sdk.json'
-        sdk = json.loads(sdk_manifest.read_text())
-        require(sdk['target'] == self.target, 'Wrong retained SDK target')
-        for rel, expected in sdk['archives'].items():
-            p = self.sdk / rel
-            require(p.resolve().is_relative_to(self.sdk) and digest(p) == expected, f'SDK archive mismatch: {rel}')
-            require(self.capture(['/usr/bin/lipo', '-archs', str(p)]) == 'arm64', f'SDK not single arm64: {rel}')
-        for patch in sdk.get('sourcePatches', []) + sdk.get('dependencyPatches', []):
-            require(digest(self.sdk / patch['path']) == patch['sha256'], 'SDK provenance patch mismatch')
+        archive_lock = self.run(['/usr/bin/git', 'show', self.commit + ':src-tauri/Cargo.lock'])
         tooling = {name: self.capture(command) for name, command in {
             'rustc': ['rustc', '-Vv'], 'cargo': ['cargo', '-V'], 'node': ['node', '--version'],
             'xcode': ['/usr/bin/xcodebuild', '-version'], 'developer_dir': ['/usr/bin/xcode-select', '-p'],
@@ -272,8 +261,8 @@ class Build:
             require(signer in identities, 'Accepted signing identity/private key not available locally')
             signing = {'main': main, 'widget': widget, 'signer_sha1': signer, 'widget_name': extensions[0].name}
         require(signing or self.args.prepare_only or self.args.unsigned or self.simulator, 'Pass --signing-source pointing to an accepted signed app')
-        self.identity = {'schema': 1, 'platform': self.args.platform, 'rust_target': self.target, 'architectures': ['arm64'], 'source_commit': self.commit, 'sdk_manifest_sha256': digest(sdk_manifest),
-                         'sdk_path': str(self.sdk), 'tooling': tooling, 'npm_installed_lock_sha256': digest(installed_lock),
+        self.identity = {'schema': 1, 'platform': self.args.platform, 'rust_target': self.target, 'architectures': ['arm64'], 'source_commit': self.commit, 'cargo_lock_sha256': hashlib.sha256(archive_lock).hexdigest(),
+                         'tooling': tooling, 'npm_installed_lock_sha256': digest(installed_lock),
                          'npm_committed_lock_sha256': hashlib.sha256(canonical(lock)).hexdigest(), 'signing': signing,
                          'helper_sha256': digest(Path(__file__).resolve())}
         self.fingerprint = object_hash(self.identity)
@@ -970,7 +959,7 @@ def main():
                         help='Explicitly acknowledge upstream Apple Pay merchant capability cannot be retained by the existing wildcard profile; reader source stays unchanged')
     parser.add_argument('--revision', default='HEAD', help='Commit-ish to archive; dirty working tree content is never included')
     parser.add_argument('--output', help='Owned persistent cache root; defaults to REPO/.native/iphone-tool')
-    parser.add_argument('--sdk', help='Retained aarch64-apple-ios SDK root')
+    parser.add_argument('--sdk', help=argparse.SUPPRESS)
     parser.add_argument('--signing-source', help='Previously accepted signed .app; reuse exact profiles, entitlements and certificate')
     parser.add_argument('--signing-identity', help='Optional SHA1 of accepted signing certificate; must match the source app')
     parser.add_argument('--device-udid', help='Validate profile membership locally; never contacts this device')

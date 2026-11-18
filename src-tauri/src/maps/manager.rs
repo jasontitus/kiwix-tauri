@@ -1340,7 +1340,7 @@ impl MapManager {
             crate::mobile_backup::exclude_payload(&file, &directory.path.join(&cleanup.record.name))?;
             cleanup.record.identity = Some(FileIdentity::of(&file.metadata().map_err(|error| error.to_string())?));
             self.checkpoint_partial(id, Some(cleanup.record.clone()))?;
-            (file.into_std(), Md5::new(), Sha256::new())
+            (file.into_std(), md5::Context::new(), Sha256::new())
         };
         let mut output = tokio::fs::File::from_std(file);
         if resume.is_none() {
@@ -1378,16 +1378,16 @@ impl MapManager {
                             .map_err(|error| error.to_string())?;
                         let bytes = &bytes[skip as usize..];
                         output.write_all(bytes).await.map_err(|error| format!("Map write failed: {error}"))?;
-                        md5.update(bytes);
+                        md5.consume(bytes);
                         prefix_sha256.update(bytes);
                         chunks.written += bytes.len() as u64;
                     }
                     "md5" => {
-                        let digest = md5.clone().finalize();
+                        let digest = md5.clone().finalize().0;
                         if hex::encode(digest) != recipe.md5 { return Err(CompositionFailure::invalid("Composed ZIM MD5 mismatch")); }
-                        md5.update(digest);
+                        md5.consume(digest);
                         if recipe.file_md5.as_ref().is_some_and(|expected|
-                            hex::encode(md5.clone().finalize()) != *expected) {
+                            hex::encode(md5.clone().finalize().0) != *expected) {
                             return Err(CompositionFailure::invalid("Composed whole-file MD5 mismatch"));
                         }
                         output.write_all(&digest).await.map_err(|error| format!("Map write failed: {error}"))?;
@@ -1406,7 +1406,7 @@ impl MapManager {
                             let count = ((bytes.len() - from) as u64).min(end - offset) as usize;
                             let slice = &bytes[from..from + count];
                             output.write_all(slice).await.map_err(|error| format!("Map write failed: {error}"))?;
-                            md5.update(slice);
+                            md5.consume(slice);
                             prefix_sha256.update(slice);
                             offset += count as u64;
                             chunks.written += count as u64;

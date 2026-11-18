@@ -1,6 +1,5 @@
 #Requires -Version 5.1
 # Provisions the Windows build tools that can be installed non-interactively.
-# The verified libzim 9.8.2 MSVC SDK remains an external prerequisite.
 param([switch]$Install)
 
 $ErrorActionPreference = 'Stop'

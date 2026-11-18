@@ -148,10 +148,8 @@ if (!inventoryOnlyBuild) {
 //
 // Android 15+ devices can run with 16 KiB memory pages. Native libraries must
 // align every PT_LOAD segment to 16 KiB and the APK must zip-align its
-// uncompressed .so entries to 16 KiB. NDK r28 and the Rust linker already emit
-// that alignment because the mobile SDK manifest's
-// `-Wl,-z,max-page-size=16384` reaches the final link; this gate fails the
-// build if a toolchain, SDK or packaging change ever regresses it.
+// uncompressed .so entries to 16 KiB. Verify the finished package to catch
+// linker, toolchain and packaging regressions.
 
 androidComponents {
     onVariants { variant ->

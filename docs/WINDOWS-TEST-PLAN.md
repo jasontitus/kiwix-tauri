@@ -1,5 +1,7 @@
 # Windows test plan (2026-11-09)
 
+These instructions record the November 9 native-SDK baseline. For builds using the Rust archive reader, use the current [Windows prerequisites and packaging commands](PACKAGING.md#guarded-windows-prerequisite-and-build). Skip the libzim SDK provisioning and environment setup below.
+
 Goal: verify the current `kiwix-tauri` Windows build against the pinned Qt `kiwix-desktop` 2.5.1 reference and the feature contract in `docs/FEATURES.md`.
 
 Two separate activities, with different evidentiary value:

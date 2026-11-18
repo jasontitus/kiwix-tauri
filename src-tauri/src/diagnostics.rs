@@ -116,7 +116,7 @@ pub fn integrity_run(job: &crate::integrity::Job) -> Value {
     json!({"running":job.running,"phase":job.phase,"completed":job.completed,
         "total":job.total,"bytesChecked":job.bytes_checked,"totalBytes":job.total_bytes,
         "archiveNumbering":"run-order","archives":archives,
-        "methods":["retained-byte-md5","libzim-structure"],"publisherAuthenticity":false,
+        "methods":["retained-byte-md5","zimru-structure"],"publisherAuthenticity":false,
         "outcomes":{
             "valid":job.results.iter().filter(|result|result.status=="valid").count(),
             "invalid":job.results.iter().filter(|result|result.status=="invalid").count(),

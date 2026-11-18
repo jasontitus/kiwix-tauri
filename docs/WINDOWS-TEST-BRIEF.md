@@ -1,5 +1,7 @@
 # Windows build-and-test brief for kiwix-tauri
 
+These instructions record the November 9 native-SDK baseline. For builds using the Rust archive reader, use the current [Windows prerequisites and packaging commands](PACKAGING.md#guarded-windows-prerequisite-and-build). Skip the libzim SDK provisioning and environment setup below.
+
 Paste this file into the session that can reach the Windows machine, or have it read `docs/WINDOWS-TEST-BRIEF.md` after checking out `main`.
 
 ## Goal

@@ -1,6 +1,6 @@
 # Native application packaging
 
-Desktop targets dynamically link the matched, patched **libzim 9.8.2/Xapian 1.4.32 SDK** on POSIX; mobile targets use separate target-built static SDKs. Windows uses a provisioned MSVC build of the same pinned libzim with native path-backed index access. Schema-2 manifests bind current source-patch provenance to actual installed-library hashes. Stock pkg-config libraries are no longer accepted. Headers, link/runtime libraries, architecture and C++ ABI must match; a frontend build alone is not a native package.
+The app reads ZIM content with Zimru and searches embedded indexes with the Rust Xapian reader. Cargo fetches both exact Git revisions from the private repository listed in `src-tauri/Cargo.lock`. Configure read access before building. The native archive SDK recipes below reproduce earlier releases and provide independent comparison tools.
 
 All commands below run from the standalone `kiwix-tauri` repository root. No sibling checkout is required. The workflow is `.github/workflows/build.yml`.
 
@@ -8,27 +8,33 @@ All commands below run from the standalone `kiwix-tauri` repository root. No sib
 
 | Target | Packaging path | Prerequisites and current limits |
 | --- | --- | --- |
-| macOS, native Apple Silicon or Intel | Build patched libzim and `.app`, close its dylib graph with `scripts/bundle-macos.mjs`, then archive | Xcode command-line tools, Node 22, current stable Rust (manifest minimum 1.90), Homebrew build dependencies, Meson/Ninja and pkgconf. CI uses the native architecture of `macos-15`, recorded in the artifact name. An Intel or universal package is **not** produced merely by changing a Rust target: every native dependency needs the corresponding slice. |
-| Linux x86_64 | Ubuntu 24.04 source-built libzim, then Tauri AppImage | GTK3, WebKitGTK 4.1, development dependencies listed below. The build host has glibc 2.39; older distributions are not claimed compatible. AppImages still require the host's supported WebKit/graphics/kernel environment and may require FUSE. No Debian/RPM package with an unbundled libzim dependency is advertised. |
-| Windows x86_64 MSVC | Explicitly opted-in NSIS job on a trusted, provisioned runner | Visual Studio C++ build tools, Windows SDK, WebView2 or permission/network to install its bootstrapper, and a verified release-mode MSVC libzim SDK including **all** transitive DLLs. No hosted Windows SDK download is assumed. The job is disabled by default and never runs pull-request code. |
+| macOS, Apple Silicon or Intel | Build a native Tauri app, close its dylib graph and sign it | Xcode command-line tools, Node 22 and stable Rust. Each architecture needs compatible speech and platform libraries. |
+| Linux x86_64 | Build an AppImage on Ubuntu 24.04 | GTK3, WebKitGTK 4.1 and the development packages below. Test graphics, WebKit and FUSE on the target system. |
+| Windows x86_64 MSVC | Run the manually dispatched NSIS job on its restricted runner | Visual Studio C++ tools, Windows SDK, Node 22, stable Rust and WebView2. |
 
-These are implementation/build instructions, **not a record that every target was executed**. The new packaging workflow and clean-machine acceptance must be exercised before declaring release support. Windows remains conditional on the external SDK prerequisite; ARM64 Windows, Linux ARM64, Intel macOS, universal macOS, store submissions, and automatic updater feeds have no verified release claim here.
-
-**StreetZim maps are a cross-platform feature, not a macOS-only feature.** Windows, macOS, and Linux use the same shared Rust `src-tauri/src/maps.rs` pipeline for the map catalog, recipe-based assembly, local-part reuse, and completed/saved maps. Platform packaging prerequisites do not select a separate or reduced map implementation. In particular, the external Windows libzim SDK is needed for native archive validation and application packaging; it is not an absent Windows map engine. This implementation scope does not constitute evidence of successful execution on each OS: map networking, assembly, persistence, archive validation, and offline reuse still need runtime acceptance on every supported target.
+StreetZim uses the same Rust recipe assembly and archive validation on these targets. Building a package leaves map assembly, offline reopening and clean-machine compatibility to the runtime acceptance steps below.
 
 macOS app metadata declares a minimum of **13.3**, including Safari/WebKit 16.4 Fetch Metadata support required to distinguish the trusted iframe retirement document from archive fetch/XHR/script requests. The native handoff fails closed without navigation metadata; there is no origin-only fallback. Linux requires WebKitGTK 2.40 or later; the Windows package uses supported evergreen WebView2. This does not lower the deployment target of Homebrew bottles: a package needs the maximum minimum-OS version of **all** its Mach-O images. CI Homebrew dependencies may require macOS 15 or newer. To ship macOS 13.3, rebuild libzim and its entire dependency closure with that deployment target and test on 13.3; do not infer support from `tauri.conf.json` alone.
 
 Fetch Metadata compatibility is recorded in [MDN's browser compatibility data](https://github.com/mdn/browser-compat-data/blob/main/http/headers/Sec-Fetch-Mode.json). Native-window screen capture is separate from app operation: this workstation denies global screen-recording permission, which was not changed. An owned-WKWebView software snapshot captured chrome but omitted the accelerated map canvas, consistent with [WebKit bug 221662](https://bugs.webkit.org/show_bug.cgi?id=221662). Do not treat a white snapshot canvas as proof that the native map is blank—or as proof that its GPU pixels rendered correctly.
 
-Evidence used for SDK setup:
+### Native comparison tools and historical evidence
 
-- [libzim 9.8.2 upstream source](https://github.com/openzim/libzim/tree/26ec526f74e8342a40da5ab14e364546988e0e1a), [release-tag API](https://api.github.com/repos/openzim/libzim/git/ref/tags/9.8.2), and its [Meson dependencies](https://github.com/openzim/libzim/blob/26ec526f74e8342a40da5ab14e364546988e0e1a/meson.build). The workflow pins commit `26ec526f74e8342a40da5ab14e364546988e0e1a`, the resolved 9.8.2 release tag, rather than trusting a moving branch.
+The SDK setup in this section applies to native comparison tools and previous releases.
+
+- [libzim 9.8.2 upstream source](https://github.com/openzim/libzim/tree/26ec526f74e8342a40da5ab14e364546988e0e1a), [release-tag API](https://api.github.com/repos/openzim/libzim/git/ref/tags/9.8.2), and its [Meson dependencies](https://github.com/openzim/libzim/blob/26ec526f74e8342a40da5ab14e364546988e0e1a/meson.build). The comparison recipe pins commit `26ec526f74e8342a40da5ab14e364546988e0e1a`, the resolved 9.8.2 release tag, rather than trusting a moving branch.
 - Homebrew supplies native ICU, xz, zstd and zlib build dependencies. `scripts/build-desktop-sdk.py` builds its own matched Xapian and libzim rather than trusting the [stock libzim formula](https://formulae.brew.sh/formula/libzim) or an unrelated system Xapian ABI.
 - [Upstream build instructions](https://github.com/openzim/libzim/blob/26ec526f74e8342a40da5ab14e364546988e0e1a/README.md) describe POSIX builds and caution that Microsoft compiler builds must use release-mode dependencies. They are not evidence of an arbitrary prebuilt Windows MSVC SDK URL.
 
 The SDK requires `src-tauri/native/libzim-split-ranges.patch` followed by `libzim-retained-fd.patch`; POSIX also requires `xapian-fd-offset.patch` against pinned Xapian 1.4.32. Split-range ordering and empty ranges are corrected. Borrowed descriptors are duplicated and owned, logical archive extents drive checksums, retained metadata avoids path reopening, and Xapian opens at explicit physical offsets without moving shared cursors. FD-only public direct-access information does not invent a reopenable filename. Actual macOS embedded and 7/73/remainder multipart scenarios passed checksum, non-prefix title/full-text search, delayed index opening, unchanged caller cursor, unlink and caller-FD reuse. This is not Android SAF or physical iOS acceptance. The Rust retained-byte checksum remains an independent application validation layer.
 
-## iOS and Android native SDKs
+## iOS and Android builds
+
+Current app builds use the platform toolchain and the locked Rust reader. Follow the mobile frontend and Rust target instructions below the historical receipts.
+
+<details>
+<summary>Historical native SDK builds, measurements and reproduction commands</summary>
+
 
 ### Current release SDK rebuild — 2026-11-11
 
@@ -260,6 +266,8 @@ The Android recipe requires NDK r28c (`28.2.13676358`); pass `--ndk` or set `AND
 
 `TAURI_KIWIX_MOBILE_SDK_ROOT` selects one target's SDK directory, containing `kiwix-sdk.json`, `include/` and `lib/`. The `TAURI_` prefix is required by the mobile CLI's [environment allowlist](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-cli/src/mobile/mod.rs); an arbitrary custom variable or `XCODE_XCCONFIG_FILE` was not forwarded in the actual iOS archive attempts. For example, export `TAURI_KIWIX_MOBILE_SDK_ROOT="$PWD/.native/mobile-retained/aarch64-apple-ios"` before the device build. Never pass a macOS SDK or desktop `LIBZIM_*` overrides to mobile. Android embeds ICU data and the static NDK C++ runtime; the manifest's 16 KiB-page linker flag applies to the final shared library. Device/simulator iOS archives are distinct despite both using arm64.
 
+</details>
+
 Use the Rust compiler whose sysroot contains the installed mobile target libraries. On this workstation, `rustup target add` installed Android/iOS standard libraries into the rustup toolchain, while the default Homebrew `rustc` used a different sysroot; the first Android application build consequently failed to find `core`. Put the actual rustup toolchain's `bin` directory first in `PATH` for the entire Tauri/Gradle invocation, rather than repeatedly installing targets into a different compiler's sysroot:
 
 ```sh
@@ -280,7 +288,7 @@ Mobile frontend behavior is selected by `TAURI_ENV_PLATFORM`, including the iOS-
 npm run build
 TAURI_ENV_PLATFORM=android npm run build -- --outDir .native/frontend/android
 TAURI_ENV_PLATFORM=ios npm run build -- --outDir .native/frontend/ios
-# With the matching target SDK and Rust sysroot selected:
+# With the platform toolchain and Rust target selected:
 npm run tauri -- android build --debug --target aarch64 --apk --ci \
   --config '{"build":{"beforeBuildCommand":"","frontendDist":"../.native/frontend/android"}}'
 npm run tauri -- ios build --debug --target aarch64-sim --no-sign --archive-only \
@@ -329,7 +337,6 @@ Configure the workstation once in ignored `.native/iphone-config.json`:
 | Key | Value |
 | --- | --- |
 | `device` | Explicit paired physical iPhone UDID; no automatic device choice |
-| `sdk` | iOS ARM64 SDK directory containing `kiwix-sdk.json` |
 | `signing_source` | Previously authorized signed `Kiwix.app`, including its widget and valid profiles |
 | `signing_identity` | Available signing certificate SHA-1 authorized by both profiles |
 | `pmd` | Optional explicit `pymobiledevice3` executable; the actual CLI must report supported 9.36.x |
@@ -341,7 +348,6 @@ Configure the workstation once in ignored `.native/iphone-config.json`:
 | `upstream_repo` | Optional official-origin local repository reference; its working tree is never built or modified |
 | `allow_payment_entitlement_omission` | Comparison: explicit `true` only after accepting the Apple Pay signing limitation below |
 | `simulator_device` | Simulator: explicit booted, available simulator UUID with name prefix `KiwixProfilingValidation-` |
-| `simulator_sdk` | Simulator: retained `aarch64-apple-ios-sim` SDK |
 | `corekiwix_archive` | Optional verified official framework archive shared with simulator preparation |
 | `upstream_package_lock` | Simulator: existing frozen upstream package-resolution receipt |
 | `upstream_sourcepackages` | Optional existing validated SwiftPM checkout cache; no cache cloning |
@@ -667,21 +673,15 @@ Android has no equivalent safe per-file runtime backup switch. Its application m
 
 ## macOS local application
 
-Run from the repository root. Prepare a fresh pinned, patched SDK; do not overwrite an existing source/build directory containing your changes:
+Run from the repository root with Xcode command-line tools and access to the private Rust dependencies.
 
 ```sh
-brew install python@3.12 pkgconf meson ninja icu4c xz zstd zlib
-export PKG_CONFIG_PATH="$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix xz)/lib/pkgconfig:$(brew --prefix zstd)/lib/pkgconfig:$(brew --prefix zlib)/lib/pkgconfig"
-python3.12 scripts/build-desktop-sdk.py --jobs 6
-# For an Intel host, use x86_64-apple-darwin instead.
-export KIWIX_DESKTOP_SDK_ROOT="$PWD/.native/desktop-retained/aarch64-apple-darwin"
-export DYLD_LIBRARY_PATH="$KIWIX_DESKTOP_SDK_ROOT/lib"
 npm ci
 npm run build:mcp   # externalBin: src-tauri/binaries/kiwix-mcp-<host triple>
 npm run tauri -- build --bundles app
 ```
 
-`npm run bundle:macos` runs `build:mcp` itself. `KIWIX_DESKTOP_SDK_ROOT` may also be repository-relative (`.native/desktop-retained/aarch64-apple-darwin`); it is resolved from the repository root, not from `src-tauri/`.
+`npm run bundle:macos` also builds the MCP sidecar.
 
 Then finalize the actual `.app` (this is the exact local post-build command):
 
@@ -700,8 +700,8 @@ The script:
 2. Enumerates bundled Mach-O files and recursively resolves all non-system dylib dependencies using `otool` load commands, original `LC_RPATH`s, `@loader_path`, `@executable_path`, and inherited executable/loader runpaths. `--library-dir DIR` adds an explicit trusted fallback lookup directory if the SDK requires one.
 3. Resolves the graph before rewriting any references, checks architecture coverage, copies external dylibs into `Contents/Frameworks`, and refuses basename collisions/overwrites. `/System/Library` and `/usr/lib` stay system-provided. External non-system frameworks require a complete framework packaging path and fail explicitly rather than copying a resource-less framework binary.
 4. Rewrites dylib IDs to `@rpath`/`@loader_path`, rewrites references to bundle-relative paths, removes original SDK runpaths, and adds `@executable_path/../Frameworks` to the app executable. The original SDK is not modified.
-5. Audits every rewritten image for escaping/missing dependencies and Homebrew/Cellar load-command paths, then signs inside-out. It verifies the resulting code signatures. This audits loader commands, not unrelated embedded debug/source strings.
-6. Before sealing the app, verifies every Mach-O directly under `Contents/Frameworks` and re-signs any that is not valid, because signing the bundle executable validates nested code and the x86_64 SDK ships dylibs the dependency walk does not rewrite. An image codesign still refuses is named and aborts packaging; resolved `.framework` directories are skipped.
+5. Rejects native libzim and Xapian names in the bundle and its Mach-O dependencies. Audits every rewritten image for escaping/missing dependencies and Homebrew/Cellar load-command paths, then signs inside-out. It verifies the resulting code signatures. This audits loader commands, not unrelated embedded debug/source strings.
+6. Before sealing the app, verifies every Mach-O directly under `Contents/Frameworks` and re-signs any that is not valid, because signing the bundle executable validates nested code and bundles can also contain dylibs the dependency walk does not rewrite. An image codesign still refuses is named and aborts packaging; resolved `.framework` directories are skipped.
 
 All subprocesses use argument arrays, not shell command interpolation. Copies do not overwrite existing files, and temporary notarization files are created in a private temporary directory and removed afterward. A failed command aborts packaging. Dylibs must contain all slices needed by their consumer; architecture-specific differences in universal load commands may require separate native builds instead. If `install_name_tool` reports insufficient load-command space, rebuild the executable with linker header padding (for example `RUSTFLAGS='-C link-arg=-Wl,-headerpad_max_install_names'`) rather than distributing an unmodified binary.
 
@@ -745,20 +745,15 @@ On Ubuntu 24.04, from the repository root:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y python3.12 build-essential meson ninja-build pkg-config \
-  liblzma-dev libzstd-dev libicu-dev zlib1g-dev libssl-dev \
+sudo apt-get install -y build-essential pkg-config libssl-dev \
   libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-  librsvg2-dev patchelf file libfuse2t64
-python3.12 scripts/build-desktop-sdk.py --jobs 6
-# Native arm64 Linux uses aarch64-unknown-linux-gnu instead.
-export KIWIX_DESKTOP_SDK_ROOT="$PWD/.native/desktop-retained/x86_64-unknown-linux-gnu"
-export LD_LIBRARY_PATH="$KIWIX_DESKTOP_SDK_ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  librsvg2-dev patchelf file libfuse2t64 libasound2-dev
 npm ci
 npm run build:mcp   # externalBin: src-tauri/binaries/kiwix-mcp-<host triple>
 APPIMAGE_EXTRACT_AND_RUN=1 npm run tauri -- build --bundles appimage
 ```
 
-Xapian is deliberately enabled: building a reduced libzim without its search API is not an equivalent SDK. The AppImage bundler must include libzim and its runtime dependencies. Building only a `.deb`/`.rpm` without explicitly packaging those libraries or declaring a real installable >=9.8 dependency would not solve runtime deployment, so this workflow does not advertise those formats. The generated AppImage is unsigned and still needs the clean-machine checks below.
+CI examines the extracted AppImage for native archive library filenames and inspects ELF dynamic dependencies with `readelf`. The generated AppImage is unsigned and needs the clean-machine checks below.
 
 The Linux runtime/GeoClue application identifier is `org.kiwix.workbench`. Tauri's [desktop generator](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle/linux/freedesktop/mod.rs) names the desktop file after `productName`, not the bundle identifier or the desktop template. Therefore `src-tauri/tauri.linux.conf.json` sets the Linux-only packaging product name to `org.kiwix.workbench`, while `linux/main.desktop` keeps the displayed name `Kiwix`, sets the matching startup class, accepts associated local archive paths and `kiwix://` links through `%U`, and declares `x-scheme-handler/kiwix`. AppImage generation uses the Debian desktop template, so both Debian/AppImage and RPM template settings are supplied. macOS/Windows keep their `Kiwix` product name. The resulting Linux artifact filename starts with `org.kiwix.workbench`, and its installed desktop entry is `org.kiwix.workbench.desktop`. The workflow checks the packaged AppImage's `usr/share/applications/org.kiwix.workbench.desktop` before upload and fails on disagreement. A matching filename is necessary, not sufficient: GeoClue availability, desktop integration, and the user's location permission still need runtime validation.
 
@@ -766,23 +761,12 @@ The Linux runtime/GeoClue application identifier is `org.kiwix.workbench`. Tauri
 
 The workflow's Windows job requires manual dispatch with `build_windows=true` on `main`, an approved `native-windows` environment, and a self-hosted runner labeled `Windows`, `X64`, and `kiwix-libzim-9_8`. Configure environment required reviewers; do not allow arbitrary contributors to execute code on this runner. No untrusted pull request is allowed to use it.
 
-Provision **outside the checkout**, using your organization's trusted SDK build/distribution mechanism:
+The existing `kiwix-libzim-9_8` label selects the restricted Windows runner. Install stable Rust with `x86_64-pc-windows-msvc`, Node 22, Visual Studio release C++ tools and a matching Windows SDK. The installer resource helper packages the four checksum-pinned speech runtime DLLs and the agent connector executable. Clean-machine acceptance includes WebView2 bootstrap and offline installation behavior.
 
-- Current stable Rust with `x86_64-pc-windows-msvc`, Node 22, Visual Studio release C++ tools and a matching Windows SDK.
-- `LIBZIM_SDK_ROOT/include/zim/...`, `LIBZIM_SDK_ROOT/lib/zim.lib` and `LIBZIM_SDK_ROOT/bin/*.dll` containing the complete dynamic dependency closure, including runtime DLLs where redistribution is permitted. Use pinned libzim 9.8.2 with Xapian enabled, release-mode MSVC ABI and compatible C/C++ runtime settings; MinGW archives are not substitutes.
-- An independently reviewed `LIBZIM_SDK_ROOT/kiwix-sdk.json` with `schema: 2`, `version: "9.8.2"`, target `x86_64-pc-windows-msvc`, trusted `source`/`license` references and `libzim: {commit: "26ec526f74e8342a40da5ab14e364546988e0e1a", search: true}`. `patches` must include `kiwix-split-ranges-v1` and `kiwix-retained-fd-v1`. Each `sourcePatches` record requires its marker, `component: "zim"`, current patch SHA-256 and exact installed `share/provenance/<filename>.patch` path. Windows does not require the POSIX Xapian offset factory. `files` maps SDK-relative paths to actual SHA-256 digests: cover all installed provenance, headers (including `include/zim/archive.h` and `include/zim/search.h`), `lib/zim.lib` and every `bin/<filename>.dll`. Use `/` separators. Do not manufacture hashes or mistake a self-authored manifest for trusted provenance.
-
-The Windows build combines the verified libzim DLLs, four checksum-pinned sherpa-onnx runtime DLLs, and the agent connector executable in the NSIS resource map. The local and CI builds use the same helper. A clean Windows installation and launch remain required to establish runtime compatibility. The default WebView2 bootstrapper may need Internet access on a new machine; fully offline installer deployments need an actual approved WebView2 offline runtime packaging policy.
-
-For a local Windows build, perform the same SDK verification, then in PowerShell from the repository root:
+Run the local build in PowerShell from the repository root.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$sdk = (Resolve-Path $env:LIBZIM_SDK_ROOT).Path
-$env:LIBZIM_INCLUDE_DIR = Join-Path $sdk 'include'
-$env:LIBZIM_LIB_DIR = Join-Path $sdk 'lib'
-$env:PATH = (Join-Path $sdk 'bin') + ';' + $env:PATH
-$env:KIWIX_DESKTOP_SDK_ROOT = $sdk
 $config = Join-Path $env:TEMP ('kiwix-bundle-' + [guid]::NewGuid() + '.json')
 try {
   $overlay = node scripts/windows-bundle-resources.mjs
@@ -808,12 +792,6 @@ Windows ARM64 (`aarch64-pc-windows-msvc`) is cross-compiled on an x64 Windows ho
 - `Microsoft.VisualStudio.Component.VC.Llvm.Clang`: `ring` and `aws-lc-sys` compile their ARM64 Windows sources with clang.
 - The Rust target: `rustup target add aarch64-pc-windows-msvc`.
 
-**libzim SDK** (`build-arm64-sdk.ps1`). Same libzim 9.8.2 source and patches as x64:
-- zlib, zstd and Xapian (static) are built with meson for ARM64.
-- ICU uses the official `icu4c-74_2-WinARM64-MSVC2019.zip` from unicode-org.
-- A small x64 native file lets Xapian's configure run its one host-side probe.
-- Every DLL in the assembled SDK is checked to be ARM64 (machine `0xAA64`).
-
 **App and installer** (`build-nsis-arm64.ps1`):
 - The four sherpa-onnx 2.0.1 `win-arm64-shared-MT-Release` DLLs are pinned by SHA-256, like x64.
 - The ARM64 Visual C++ runtime is installed app-local, because clean ARM64 PCs often lack it.
@@ -822,7 +800,7 @@ Windows ARM64 (`aarch64-pc-windows-msvc`) is cross-compiled on an x64 Windows ho
 On ARM64, `sha2`'s assembly backend is disabled: its AArch64 code is GNU assembly, which MSVC cannot build, so SHA-256 uses the portable implementation there.
 
 **Limits:**
-- **No tests on ARM64.** The libzim tests and the app have not run on ARM64 hardware. An x64 host cannot execute ARM64 binaries, and this repository has no ARM64 CI runner.
+- **No tests on ARM64.** The migrated app needs runtime verification on ARM64 hardware. An x64 host cannot execute ARM64 binaries, and this repository has no ARM64 CI runner.
 - **Release use** needs an ARM64 test pass (for example a Snapdragon PC or a hosted `windows-11-arm` runner).
 
 ## Signed updater feed
@@ -869,15 +847,15 @@ artifacts only.
 
 ## Artifacts, channels, and release acceptance
 
-`.github/workflows/build.yml` uploads packages plus `SHA256SUMS` and SDK provenance through GitHub Actions artifacts. macOS artifacts are ZIPs of the finalized `.app`, Linux artifacts are AppImages, and guarded Windows artifacts are NSIS installers. These are build artifacts, not published stable/beta releases. Reproducibility is limited by resolved Rust/npm/runner/Homebrew tooling; the Linux libzim source revision is pinned and the npm/Rust lockfiles belong in the source release.
+`.github/workflows/build.yml` uploads packages plus `SHA256SUMS`, the Rust lockfile and archive-reader license notices through GitHub Actions artifacts. macOS artifacts are ZIPs of the finalized `.app`, Linux artifacts are AppImages, and guarded Windows artifacts are NSIS installers. These are build artifacts, not published stable/beta releases. Reproducibility is limited by resolved Rust/npm/runner/Homebrew tooling; the archive-reader revisions are pinned and the npm/Rust lockfiles belong in the source release.
 
 Before publication, record and perform the following on clean machines/VMs without the build SDK:
 
 1. Verify the downloaded archive/installer checksum before extraction/install. A checksum detects corruption, not publisher identity; authenticate the release channel separately.
 2. On macOS, inspect each image with `otool -L` and `otool -l` (no external SDK or Cellar references), inspect `LC_BUILD_VERSION`/minimum deployment versions for every slice, and run `codesign --verify --deep --strict --verbose=2 Kiwix.app`. For a real release also run `spctl --assess --type execute --verbose=2 Kiwix.app` and `xcrun stapler validate Kiwix.app`. Test the downloaded, quarantined app on the oldest claimed macOS with no Homebrew installed. Do not turn off Gatekeeper or remove quarantine and call that release validation.
-3. On Linux, copy only the AppImage to a fresh supported Ubuntu machine without the SDK, then launch it with the SDK's `LD_LIBRARY_PATH`/`PKG_CONFIG_PATH` unset. Use `--appimage-extract-and-run` if testing the no-FUSE mode. Inspect extracted ELF dependencies for unresolved libraries and confirm libzim's closure is in the image rather than supplied by the build directory. Confirm desktop integration retains `org.kiwix.workbench.desktop`, then exercise location permission with GeoClue available; report unsupported/service-denied states honestly instead of treating a filename check as a successful location fix.
+3. On Linux, copy only the AppImage to a fresh supported Ubuntu machine without the SDK, then launch it with the SDK's `LD_LIBRARY_PATH`/`PKG_CONFIG_PATH` unset. Use `--appimage-extract-and-run` if testing the no-FUSE mode. Inspect extracted ELF dependencies for unresolved libraries and check the package for obsolete native libzim/Xapian dependencies. Confirm desktop integration retains `org.kiwix.workbench.desktop`, then exercise location permission with GeoClue available; report unsupported/service-denied states honestly instead of treating a filename check as a successful location fix.
 4. On Windows, install in a fresh standard-user VM without the SDK directories on `PATH`. Check DLL resolution and WebView2 installation behavior, and verify the installer and executable Authenticode signatures for a signed channel. Uninstall/reinstall and verify that the installed archive association opens the application.
-5. On every target: launch from the platform launcher; open a known local ZIM through the dialog and file association; read text/images, navigate links, and run full-text search. Exercise a split ZIM, persistence after restart, library import/removal, download pause/resume, export, window close/reopen, and the actual offline behavior. For StreetZim, fetch the real HTTPS catalog, assemble a known recipe, validate/open the completed archive, restart and reopen the saved map, then demonstrate local-part reuse and offline reopening with networking disabled. Run those map checks on Windows, macOS, and Linux; a successful local fixture on one OS is not evidence for the other two. Record app/SDK versions, OS/architecture, and results. Packaging success alone does not verify these behaviors.
+5. On every target: launch from the platform launcher; open a known local ZIM through the dialog and file association; read text/images, navigate links, and run full-text search. Exercise a split ZIM, persistence after restart, library import/removal, download pause/resume, export, window close/reopen, and the actual offline behavior. For StreetZim, fetch the real HTTPS catalog, assemble a known recipe, validate/open the completed archive, restart and reopen the saved map, then demonstrate local-part reuse and offline reopening with networking disabled. Run those map checks on Windows, macOS, and Linux; a successful local fixture on one OS is not evidence for the other two. Record app and locked reader versions, OS/architecture, and results. Packaging success alone does not verify these behaviors.
 6. Publish corresponding source and dependency license notices/source offers as required by GPL and bundled dependency licenses. SDK provenance metadata alone is not a complete license-compliance package.
 
 Stable/beta publication requires an authorized release manager, appropriate repository/channel write credentials, and platform signing/notarization credentials. Upload only accepted artifacts to the intended GitHub release or other authenticated channel. No workflow here creates a release or asserts notarization without Apple's response. The in-app updater is implemented (see [UPDATE.md](UPDATE.md)), but the release manifest, public key, HTTPS endpoint and platform signing credentials must be configured with the actual publication infrastructure before advertising a channel.

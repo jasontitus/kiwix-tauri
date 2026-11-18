@@ -29,18 +29,6 @@ $webview = @(
 ) | Where-Object { Test-Path $_ }
 if (-not $webview) { $missing.Add('Microsoft Edge WebView2 runtime') }
 
-$sdk = if ($env:KIWIX_DESKTOP_SDK_ROOT) { $env:KIWIX_DESKTOP_SDK_ROOT } else { $env:LIBZIM_SDK_ROOT }
-if (-not $sdk) {
-    $missing.Add('KIWIX_DESKTOP_SDK_ROOT/LIBZIM_SDK_ROOT (verified Windows libzim 9.8.2 SDK)')
-} elseif (-not (Test-Path (Join-Path $sdk 'kiwix-sdk.json'))) {
-    $missing.Add("kiwix-sdk.json under $sdk")
-} else {
-    $manifest = Get-Content (Join-Path $sdk 'kiwix-sdk.json') -Raw | ConvertFrom-Json
-    if ($manifest.schema -ne 2) { $missing.Add('SDK manifest schema 2') }
-    if ($manifest.target -ne 'x86_64-pc-windows-msvc') { $missing.Add('SDK target x86_64-pc-windows-msvc') }
-    if ($manifest.version -ne '9.8.2') { $missing.Add('SDK libzim version 9.8.2') }
-}
-
 if ($missing.Count -gt 0) {
     Write-Host 'Windows build is NOT ready. Missing:' -ForegroundColor Yellow
     $missing | ForEach-Object { Write-Host "  - $_" }

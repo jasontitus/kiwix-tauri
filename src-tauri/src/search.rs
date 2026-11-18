@@ -5,7 +5,7 @@
 //! continuation token binds the prefix, scope, archive cursor, and local offset,
 //! so a page produced for another query or scope can never be appended.
 use crate::archive::{Archive, SearchHit};
-use md5::{Digest, Md5};
+
 use serde_json::{json, Value};
 use std::{
     cmp::Ordering,
@@ -382,17 +382,17 @@ fn run_combined(
 }
 
 fn suggestion_token(prefix: &str, scope: &[String], book: usize, offset: u32) -> String {
-    let mut digest = Md5::new();
-    digest.update(prefix.as_bytes());
-    digest.update([0]);
+    let mut digest = md5::Context::new();
+    digest.consume(prefix.as_bytes());
+    digest.consume([0]);
     for id in scope {
-        digest.update(id.as_bytes());
-        digest.update([0]);
+        digest.consume(id.as_bytes());
+        digest.consume([0]);
     }
-    digest.update(book.to_string().as_bytes());
-    digest.update([0]);
-    digest.update(offset.to_string().as_bytes());
-    format!("{book}:{offset}:{}", hex::encode(digest.finalize()))
+    digest.consume(book.to_string().as_bytes());
+    digest.consume([0]);
+    digest.consume(offset.to_string().as_bytes());
+    format!("{book}:{offset}:{}", hex::encode(digest.finalize().0))
 }
 
 fn suggestion_cursor(token: &str, prefix: &str, scope: &[String]) -> Result<(usize, u32), String> {

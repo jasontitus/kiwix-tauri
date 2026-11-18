@@ -1,10 +1,9 @@
-# Local unsigned NSIS build per docs/PACKAGING.md "For a local Windows build" (self-built SDK).
+# Local unsigned NSIS build per docs/PACKAGING.md "For a local Windows build".
 # Usage: build-nsis.ps1 [-Source <worktree>]  -> E:\kiwix-win\nsis-build.log(.exit)
 param([string]$Source = 'E:\kiwix-win\lf-check')
 . E:\kiwix-win\env.ps1
 $env:CARGO_TARGET_DIR = 'E:\kiwix-win\target-release'
 $target = 'x86_64-pc-windows-msvc'
-$sdk = (Resolve-Path $env:KIWIX_DESKTOP_SDK_ROOT).Path
 Set-Location $Source
 Remove-Item E:\kiwix-win\nsis-build.log.exit -ErrorAction SilentlyContinue
 $log = 'E:\kiwix-win\nsis-build.log'
@@ -15,7 +14,6 @@ $log = 'E:\kiwix-win\nsis-build.log'
     ForEach-Object { "$_" } | Out-File -Encoding utf8 $log
 if ($LASTEXITCODE -ne 0) { Set-Content E:\kiwix-win\nsis-build.log.exit $LASTEXITCODE; exit }
 $resources = @{}
-Get-ChildItem (Join-Path $sdk 'bin') -Filter '*.dll' -File | ForEach-Object { $resources[$_.FullName] = $_.Name }
 $profile = Join-Path $env:CARGO_TARGET_DIR "$target\release"
 $sherpa = @{
     'onnxruntime.dll' = '7F66F939A881BAF4F46A2216496798EDF4A1429878B646D12674AA62F27D8A25'

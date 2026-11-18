@@ -112,7 +112,7 @@ impl Fixture {
         let bytes = &self.bytes;
         assert!(bytes.len() > 80);
         let checksum_offset = bytes.len() - 16;
-        let checksum = Md5::digest(&bytes[..checksum_offset]);
+        let checksum = md5::compute(&bytes[..checksum_offset]).0;
         assert_eq!(
             &checksum[..],
             &bytes[checksum_offset..],
@@ -128,7 +128,7 @@ impl Fixture {
         serde_json::from_value(serde_json::json!({
             "format": "streetzim-recipe/2", "uuid": uuid, "name": "osm_en_fixture",
             "size": bytes.len(), "md5": hex::encode(checksum),
-            "file_md5": hex::encode(Md5::digest(bytes)),
+            "file_md5": hex::encode(md5::compute(bytes).0),
             "base": {
                 "file": "fixture-base.zim", "size": bytes.len(), "uuid": uuid,
                 "chunk": 1024, "sha256": hashes, "mask": [[32,32]]
@@ -1342,7 +1342,7 @@ async fn full_composer_rebuilds_real_zim_from_masked_local_ranges_and_inline_dat
         "local sources must remain unchanged"
     );
     assert_eq!(
-        hex::encode(Md5::digest(&composed[..composed.len() - 16])),
+        hex::encode(md5::compute(&composed[..composed.len() - 16]).0),
         hex::encode(&composed[composed.len() - 16..])
     );
     let archive = crate::archive::Archive::open(&path).unwrap();

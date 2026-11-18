@@ -146,7 +146,7 @@ Open a ZIM and Kiwix gives you a fast, quiet reader: a searchable library, tabs 
 
 ## Build and contribute
 
-All commands run from the repository root. You need Node 22, current stable Rust, a C++17 compiler, the platform's Tauri development libraries, and the **matched schema-2 libzim 9.8.2 / Xapian SDK** described in [Packaging](docs/PACKAGING.md). Stock system libzim packages are not accepted.
+Run these commands from the repository root with Node 22, stable Rust, a C++ toolchain and the platform’s Tauri development libraries. Cargo needs Git read access to the private archive libraries pinned in `src-tauri/Cargo.lock`. [Platform setup](docs/PACKAGING.md)
 
 ```sh
 npm ci

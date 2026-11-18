@@ -43,7 +43,7 @@ use crate::map_chunk_cache::{MapChunkCache, MAX_BYTES as MAX_CACHE_BYTES};
 use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, Metadata};
 use futures_util::{FutureExt, StreamExt};
-use md5::Md5;
+
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
