@@ -154,18 +154,34 @@ if (!inventoryOnlyBuild) {
 androidComponents {
     onVariants { variant ->
         val capitalized = variant.name.replaceFirstChar { it.uppercaseChar() }
+        val packagedAbis = if (inventoryOnlyBuild) {
+            emptySet()
+        } else {
+            val flavor = variant.productFlavors.single { it.first == "abi" }.second
+            android.productFlavors.getByName(flavor).ndk.abiFilters.toSet().also {
+                require(it.isNotEmpty()) { "No native ABI configured for ${variant.name}" }
+            }
+        }
         val apkDirectory = variant.artifacts.get(SingleArtifact.APK)
         val sdkDirectory = sdkComponents.sdkDirectory
         val verify = tasks.register<Verify16KbPageAlignmentTask>("verify${capitalized}16KbPageAlignment") {
             group = "verification"
             description = "Fails when ${variant.name} native libraries or APK are not 16 KB page compatible"
+            this.expectedAbis.set(packagedAbis)
             this.apkDirectory.set(apkDirectory)
             this.sdkDirectory.set(sdkDirectory)
+        }
+        val bundleArtifact = variant.artifacts.get(SingleArtifact.BUNDLE)
+        val verifyBundle = tasks.register<VerifyBundleNativeLibrariesTask>("verify${capitalized}BundleNativeLibraries") {
+            group = "verification"
+            bundle.set(bundleArtifact)
+            expectedAbis.set(packagedAbis)
         }
         // AGP registers assemble tasks after the variant callbacks run, so match
         // lazily instead of resolving the task name here.
         tasks.configureEach {
             if (name == "assemble$capitalized") finalizedBy(verify)
+            if (name == "bundle$capitalized") finalizedBy(verifyBundle)
         }
     }
 }
