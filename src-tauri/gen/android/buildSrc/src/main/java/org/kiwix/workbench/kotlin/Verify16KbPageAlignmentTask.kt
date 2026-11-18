@@ -4,6 +4,10 @@ import java.util.zip.ZipFile
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.SetProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
@@ -18,6 +22,9 @@ import org.gradle.api.tasks.TaskAction
 abstract class Verify16KbPageAlignmentTask : DefaultTask() {
     @get:InputFiles
     abstract val apkDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val expectedAbis: SetProperty<String>
 
     @get:Internal
     abstract val sdkDirectory: DirectoryProperty
@@ -38,6 +45,7 @@ abstract class Verify16KbPageAlignmentTask : DefaultTask() {
 
     private fun verifyApkPageSize(apk: File, zipalign: File) {
         ZipFile(apk).use { archive ->
+            verifyRequiredLibraries(archive, "lib", expectedAbis.get())
             for (entry in archive.entries()) {
                 if (entry.isDirectory || !entry.name.endsWith(".so")) continue
                 val (elfClass, aligns) = archive.getInputStream(entry).use { loadAlignments(entry.name, it) }
@@ -152,5 +160,37 @@ abstract class Verify16KbPageAlignmentTask : DefaultTask() {
     private companion object {
         const val SIXTEEN_KIB = 0x4000L
         const val FOUR_KIB = 0x1000L
+    }
+}
+
+/** Bundletool builds each per-device install from the base module's native payload. */
+abstract class VerifyBundleNativeLibrariesTask : DefaultTask() {
+    @get:InputFile
+    abstract val bundle: RegularFileProperty
+
+    @get:Input
+    abstract val expectedAbis: SetProperty<String>
+
+    @TaskAction
+    fun verify() {
+        ZipFile(bundle.get().asFile).use { zip ->
+            verifyRequiredLibraries(zip, "base/lib", expectedAbis.get())
+        }
+    }
+}
+
+private fun verifyRequiredLibraries(zip: ZipFile, prefix: String, expectedAbis: Set<String>) {
+    for (abi in expectedAbis) {
+        for (name in listOf("libkiwix_app.so", "libsherpa-onnx-c-api.so", "libonnxruntime.so")) {
+            val path = "$prefix/$abi/$name"
+            val entry = zip.getEntry(path)
+            if (entry == null || entry.size <= 0 || entry.isDirectory) {
+                throw GradleException(
+                    "$path is missing or empty in ${File(zip.name).name}. " +
+                        "Build the selected ABI and prepare the pinned speech libraries in the " +
+                        "Android project with Cargo's target directory directly under src-tauri."
+                )
+            }
+        }
     }
 }
