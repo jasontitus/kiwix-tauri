@@ -1,0 +1,580 @@
+{
+  "base": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "host": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "program_sha256": {
+    "libzim": "c6026b2323b46f33c1df18f3b49f04361c27a146bf85579adaabdf11c68e2c7a",
+    "zimru": "1659d163a0fce6fdcb5549a1ca6c8bb2d46e66ce4f7be7b6cfe6897f4e9817bc",
+    "lanes": "a2a86180c72bbaa94fdbbe632243d6e5bd3815f7a2a6e6d448a6953f5557e656"
+  },
+  "patch_sha256": {
+    "lanes": "72817f9e7b78edcc08bfe58f66bea56400db76a22b498b83e239b5104ffad43b"
+  },
+  "rounds": 12,
+  "policy": {
+    "cacheBytes": 4194304,
+    "preloadNativeIndex": false,
+    "freshProcess": true,
+    "fileCache": "OS warmed",
+    "memory": "wait4 of tiny native C launcher child"
+  },
+  "archives": [
+    {
+      "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "phases": {
+        "random_articles": {
+          "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 29543506,
+                "openNs": 3121726,
+                "rssKiB": 21140,
+                "userUs": 17134,
+                "systemUs": 19150
+              },
+              {
+                "apiNs": 29690959,
+                "openNs": 3232690,
+                "rssKiB": 21324,
+                "userUs": 24747,
+                "systemUs": 11878
+              },
+              {
+                "apiNs": 29999933,
+                "openNs": 3212083,
+                "rssKiB": 21240,
+                "userUs": 14010,
+                "systemUs": 23017
+              },
+              {
+                "apiNs": 29846501,
+                "openNs": 3141094,
+                "rssKiB": 21332,
+                "userUs": 18765,
+                "systemUs": 17777
+              },
+              {
+                "apiNs": 30122498,
+                "openNs": 3204633,
+                "rssKiB": 21460,
+                "userUs": 15883,
+                "systemUs": 20847
+              },
+              {
+                "apiNs": 29683423,
+                "openNs": 3208418,
+                "rssKiB": 21208,
+                "userUs": 20803,
+                "systemUs": 15850
+              },
+              {
+                "apiNs": 29433339,
+                "openNs": 3122345,
+                "rssKiB": 21464,
+                "userUs": 18562,
+                "systemUs": 17585
+              },
+              {
+                "apiNs": 29996373,
+                "openNs": 3147657,
+                "rssKiB": 21208,
+                "userUs": 16764,
+                "systemUs": 19723
+              },
+              {
+                "apiNs": 29676169,
+                "openNs": 3148752,
+                "rssKiB": 21340,
+                "userUs": 22130,
+                "systemUs": 14083
+              },
+              {
+                "apiNs": 29754963,
+                "openNs": 3128369,
+                "rssKiB": 21208,
+                "userUs": 18140,
+                "systemUs": 18140
+              },
+              {
+                "apiNs": 29683358,
+                "openNs": 3184324,
+                "rssKiB": 21336,
+                "userUs": 19170,
+                "systemUs": 17152
+              },
+              {
+                "apiNs": 29970865,
+                "openNs": 3183144,
+                "rssKiB": 21336,
+                "userUs": 13828,
+                "systemUs": 22717
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 57588423,
+                "openNs": 35973,
+                "rssKiB": 15300,
+                "userUs": 50334,
+                "systemUs": 9060
+              },
+              {
+                "apiNs": 59158076,
+                "openNs": 39565,
+                "rssKiB": 15468,
+                "userUs": 49364,
+                "systemUs": 11847
+              },
+              {
+                "apiNs": 58880642,
+                "openNs": 32093,
+                "rssKiB": 15348,
+                "userUs": 47819,
+                "systemUs": 12950
+              },
+              {
+                "apiNs": 57844975,
+                "openNs": 30370,
+                "rssKiB": 15344,
+                "userUs": 50465,
+                "systemUs": 9083
+              },
+              {
+                "apiNs": 58650168,
+                "openNs": 32668,
+                "rssKiB": 15348,
+                "userUs": 49526,
+                "systemUs": 10895
+              },
+              {
+                "apiNs": 58363553,
+                "openNs": 36137,
+                "rssKiB": 15472,
+                "userUs": 50089,
+                "systemUs": 10017
+              },
+              {
+                "apiNs": 58069075,
+                "openNs": 32925,
+                "rssKiB": 15344,
+                "userUs": 46953,
+                "systemUs": 12987
+              },
+              {
+                "apiNs": 58699091,
+                "openNs": 34319,
+                "rssKiB": 15412,
+                "userUs": 51614,
+                "systemUs": 8933
+              },
+              {
+                "apiNs": 59394965,
+                "openNs": 33400,
+                "rssKiB": 15472,
+                "userUs": 50220,
+                "systemUs": 11048
+              },
+              {
+                "apiNs": 58926740,
+                "openNs": 35038,
+                "rssKiB": 15344,
+                "userUs": 50546,
+                "systemUs": 10109
+              },
+              {
+                "apiNs": 57638126,
+                "openNs": 35425,
+                "rssKiB": 15344,
+                "userUs": 53451,
+                "systemUs": 6051
+              },
+              {
+                "apiNs": 58711866,
+                "openNs": 32101,
+                "rssKiB": 15472,
+                "userUs": 52270,
+                "systemUs": 7889
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 51547429,
+                "openNs": 31702,
+                "rssKiB": 15420,
+                "userUs": 42306,
+                "systemUs": 11080
+              },
+              {
+                "apiNs": 52167843,
+                "openNs": 40374,
+                "rssKiB": 15476,
+                "userUs": 47930,
+                "systemUs": 5991
+              },
+              {
+                "apiNs": 51766313,
+                "openNs": 63314,
+                "rssKiB": 15472,
+                "userUs": 42732,
+                "systemUs": 10931
+              },
+              {
+                "apiNs": 52175607,
+                "openNs": 38791,
+                "rssKiB": 15336,
+                "userUs": 47747,
+                "systemUs": 5968
+              },
+              {
+                "apiNs": 51913934,
+                "openNs": 38439,
+                "rssKiB": 15348,
+                "userUs": 40645,
+                "systemUs": 12887
+              },
+              {
+                "apiNs": 52973907,
+                "openNs": 31482,
+                "rssKiB": 15472,
+                "userUs": 44925,
+                "systemUs": 9983
+              },
+              {
+                "apiNs": 51557879,
+                "openNs": 36482,
+                "rssKiB": 15472,
+                "userUs": 44314,
+                "systemUs": 9064
+              },
+              {
+                "apiNs": 52173060,
+                "openNs": 34496,
+                "rssKiB": 15468,
+                "userUs": 41734,
+                "systemUs": 11924
+              },
+              {
+                "apiNs": 52687055,
+                "openNs": 34631,
+                "rssKiB": 15344,
+                "userUs": 45664,
+                "systemUs": 8934
+              },
+              {
+                "apiNs": 52657020,
+                "openNs": 33748,
+                "rssKiB": 15476,
+                "userUs": 47104,
+                "systemUs": 7015
+              },
+              {
+                "apiNs": 51858060,
+                "openNs": 32416,
+                "rssKiB": 15476,
+                "userUs": 40433,
+                "systemUs": 13140
+              },
+              {
+                "apiNs": 51864025,
+                "openNs": 36327,
+                "rssKiB": 15472,
+                "userUs": 47746,
+                "systemUs": 5968
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 29.723,
+            "zimru": 58.6746,
+            "lanes": 52.0409
+          },
+          "cpuMs": {
+            "libzim": 36.5145,
+            "zimru": 60.29,
+            "lanes": 53.6885
+          }
+        }
+      }
+    },
+    {
+      "file": "wikipedia_en_100_maxi_2024-01.zim",
+      "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "phases": {
+        "random_articles": {
+          "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 53199192,
+                "openNs": 2989935,
+                "rssKiB": 24832,
+                "userUs": 29977,
+                "systemUs": 29977
+              },
+              {
+                "apiNs": 53096807,
+                "openNs": 2968274,
+                "rssKiB": 24648,
+                "userUs": 28959,
+                "systemUs": 30956
+              },
+              {
+                "apiNs": 53368057,
+                "openNs": 2973614,
+                "rssKiB": 24648,
+                "userUs": 30971,
+                "systemUs": 29972
+              },
+              {
+                "apiNs": 53242999,
+                "openNs": 3116755,
+                "rssKiB": 24712,
+                "userUs": 34932,
+                "systemUs": 24658
+              },
+              {
+                "apiNs": 53292385,
+                "openNs": 3010330,
+                "rssKiB": 24648,
+                "userUs": 36905,
+                "systemUs": 22941
+              },
+              {
+                "apiNs": 52566124,
+                "openNs": 3011295,
+                "rssKiB": 24584,
+                "userUs": 23627,
+                "systemUs": 35441
+              },
+              {
+                "apiNs": 54290768,
+                "openNs": 2982062,
+                "rssKiB": 24708,
+                "userUs": 33601,
+                "systemUs": 26881
+              },
+              {
+                "apiNs": 53072679,
+                "openNs": 2984271,
+                "rssKiB": 24744,
+                "userUs": 32388,
+                "systemUs": 28339
+              },
+              {
+                "apiNs": 53970827,
+                "openNs": 2999412,
+                "rssKiB": 24840,
+                "userUs": 29586,
+                "systemUs": 30540
+              },
+              {
+                "apiNs": 53597244,
+                "openNs": 3030077,
+                "rssKiB": 24628,
+                "userUs": 30750,
+                "systemUs": 29758
+              },
+              {
+                "apiNs": 53881470,
+                "openNs": 2976172,
+                "rssKiB": 24820,
+                "userUs": 24860,
+                "systemUs": 35798
+              },
+              {
+                "apiNs": 53929442,
+                "openNs": 3011344,
+                "rssKiB": 24704,
+                "userUs": 35912,
+                "systemUs": 24264
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 79155258,
+                "openNs": 37773,
+                "rssKiB": 13944,
+                "userUs": 73370,
+                "systemUs": 7931
+              },
+              {
+                "apiNs": 78209049,
+                "openNs": 33486,
+                "rssKiB": 13948,
+                "userUs": 67392,
+                "systemUs": 12883
+              },
+              {
+                "apiNs": 81842028,
+                "openNs": 33508,
+                "rssKiB": 13948,
+                "userUs": 74103,
+                "systemUs": 9880
+              },
+              {
+                "apiNs": 79908075,
+                "openNs": 38400,
+                "rssKiB": 13948,
+                "userUs": 74704,
+                "systemUs": 7066
+              },
+              {
+                "apiNs": 78146431,
+                "openNs": 34337,
+                "rssKiB": 13948,
+                "userUs": 73402,
+                "systemUs": 6943
+              },
+              {
+                "apiNs": 79295067,
+                "openNs": 34271,
+                "rssKiB": 13948,
+                "userUs": 74335,
+                "systemUs": 7031
+              },
+              {
+                "apiNs": 78376595,
+                "openNs": 40899,
+                "rssKiB": 13948,
+                "userUs": 69770,
+                "systemUs": 10809
+              },
+              {
+                "apiNs": 78258020,
+                "openNs": 37741,
+                "rssKiB": 13948,
+                "userUs": 73351,
+                "systemUs": 7033
+              },
+              {
+                "apiNs": 78867196,
+                "openNs": 33844,
+                "rssKiB": 13752,
+                "userUs": 71027,
+                "systemUs": 10003
+              },
+              {
+                "apiNs": 78754989,
+                "openNs": 33074,
+                "rssKiB": 13952,
+                "userUs": 72920,
+                "systemUs": 7991
+              },
+              {
+                "apiNs": 79015710,
+                "openNs": 33383,
+                "rssKiB": 13952,
+                "userUs": 72324,
+                "systemUs": 8916
+              },
+              {
+                "apiNs": 78518725,
+                "openNs": 37320,
+                "rssKiB": 13756,
+                "userUs": 70855,
+                "systemUs": 9979
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 69887367,
+                "openNs": 59341,
+                "rssKiB": 13948,
+                "userUs": 64032,
+                "systemUs": 8004
+              },
+              {
+                "apiNs": 70135906,
+                "openNs": 33825,
+                "rssKiB": 13944,
+                "userUs": 59173,
+                "systemUs": 13038
+              },
+              {
+                "apiNs": 69790323,
+                "openNs": 37052,
+                "rssKiB": 13944,
+                "userUs": 67029,
+                "systemUs": 4928
+              },
+              {
+                "apiNs": 69987332,
+                "openNs": 34016,
+                "rssKiB": 13952,
+                "userUs": 62992,
+                "systemUs": 8998
+              },
+              {
+                "apiNs": 71045347,
+                "openNs": 52944,
+                "rssKiB": 13944,
+                "userUs": 66426,
+                "systemUs": 6940
+              },
+              {
+                "apiNs": 71870629,
+                "openNs": 33529,
+                "rssKiB": 14048,
+                "userUs": 64013,
+                "systemUs": 10002
+              },
+              {
+                "apiNs": 69983246,
+                "openNs": 32284,
+                "rssKiB": 13952,
+                "userUs": 65044,
+                "systemUs": 7004
+              },
+              {
+                "apiNs": 70293188,
+                "openNs": 77764,
+                "rssKiB": 13952,
+                "userUs": 63353,
+                "systemUs": 9050
+              },
+              {
+                "apiNs": 70871731,
+                "openNs": 36360,
+                "rssKiB": 13752,
+                "userUs": 64075,
+                "systemUs": 9010
+              },
+              {
+                "apiNs": 70506429,
+                "openNs": 51026,
+                "rssKiB": 13824,
+                "userUs": 68542,
+                "systemUs": 4031
+              },
+              {
+                "apiNs": 70582239,
+                "openNs": 35143,
+                "rssKiB": 13948,
+                "userUs": 65695,
+                "systemUs": 6967
+              },
+              {
+                "apiNs": 71240928,
+                "openNs": 37635,
+                "rssKiB": 14024,
+                "userUs": 67507,
+                "systemUs": 5956
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 53.3302,
+            "zimru": 78.8111,
+            "lanes": 70.3998
+          },
+          "cpuMs": {
+            "libzim": 60.151,
+            "zimru": 80.9705,
+            "lanes": 72.488
+          }
+        }
+      }
+    }
+  ]
+}

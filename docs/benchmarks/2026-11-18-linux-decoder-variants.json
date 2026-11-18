@@ -1,0 +1,2184 @@
+{
+  "base": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "host": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "program_sha256": {
+    "libzim": "c6026b2323b46f33c1df18f3b49f04361c27a146bf85579adaabdf11c68e2c7a",
+    "zimru": "1659d163a0fce6fdcb5549a1ca6c8bb2d46e66ce4f7be7b6cfe6897f4e9817bc",
+    "lanes": "a2a86180c72bbaa94fdbbe632243d6e5bd3815f7a2a6e6d448a6953f5557e656",
+    "long": "e528af453735fe37867d3360b0442b9e1cdd17cf051e3ff82eea8ddfa844fbe2"
+  },
+  "patch_sha256": {
+    "lanes": "72817f9e7b78edcc08bfe58f66bea56400db76a22b498b83e239b5104ffad43b",
+    "long": "5c1d15a0ffdca2820a230889acf5e880f35964ed79f33f44193a02a837705127"
+  },
+  "rounds": 8,
+  "policy": {
+    "cacheBytes": 4194304,
+    "preloadNativeIndex": false,
+    "freshProcess": true,
+    "fileCache": "OS warmed",
+    "memory": "wait4 of tiny native C launcher child"
+  },
+  "archives": [
+    {
+      "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "phases": {
+        "open": {
+          "response_sha256": "36949a688cc7ba42f310039dac3bf1f0a6b76284e40b03a68ad6999a9b207723",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 3143163,
+                "openNs": 3143163,
+                "rssKiB": 7524
+              },
+              {
+                "apiNs": 3187195,
+                "openNs": 3187195,
+                "rssKiB": 7776
+              },
+              {
+                "apiNs": 3160330,
+                "openNs": 3160330,
+                "rssKiB": 7400
+              },
+              {
+                "apiNs": 3197822,
+                "openNs": 3197822,
+                "rssKiB": 7648
+              },
+              {
+                "apiNs": 3247125,
+                "openNs": 3247125,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 3217709,
+                "openNs": 3217709,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 3260493,
+                "openNs": 3260493,
+                "rssKiB": 7776
+              },
+              {
+                "apiNs": 3367193,
+                "openNs": 3367193,
+                "rssKiB": 7552
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 28401,
+                "openNs": 28401,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 31167,
+                "openNs": 31167,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 39389,
+                "openNs": 39389,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29542,
+                "openNs": 29542,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32552,
+                "openNs": 32552,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 33174,
+                "openNs": 33174,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 61467,
+                "openNs": 61467,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 62994,
+                "openNs": 62994,
+                "rssKiB": 2432
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 28006,
+                "openNs": 28006,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32997,
+                "openNs": 32997,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29968,
+                "openNs": 29968,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 32111,
+                "openNs": 32111,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 36217,
+                "openNs": 36217,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32239,
+                "openNs": 32239,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 30182,
+                "openNs": 30182,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32421,
+                "openNs": 32421,
+                "rssKiB": 2176
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 29541,
+                "openNs": 29541,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29970,
+                "openNs": 29970,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 34389,
+                "openNs": 34389,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 68417,
+                "openNs": 68417,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 31466,
+                "openNs": 31466,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 33980,
+                "openNs": 33980,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 35473,
+                "openNs": 35473,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32995,
+                "openNs": 32995,
+                "rssKiB": 2304
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 3.2078,
+            "zimru": 0.0329,
+            "lanes": 0.0322,
+            "long": 0.0335
+          }
+        },
+        "first_article": {
+          "response_sha256": "c4d559ddc7b643fa6410154efb9cecc59135413f0ea7d7d3256a0338da5e14d1",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 2650811,
+                "openNs": 3228119,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 2637779,
+                "openNs": 3234000,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 2678423,
+                "openNs": 3232878,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 2661545,
+                "openNs": 3191745,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 2627665,
+                "openNs": 3231255,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 2572949,
+                "openNs": 3273732,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 2632270,
+                "openNs": 3383320,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 2689239,
+                "openNs": 3309264,
+                "rssKiB": 10752
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 4254045,
+                "openNs": 37535,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4240887,
+                "openNs": 36194,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4331793,
+                "openNs": 37512,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4230848,
+                "openNs": 36063,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4182927,
+                "openNs": 33284,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4212786,
+                "openNs": 37053,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4327541,
+                "openNs": 33069,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 4319504,
+                "openNs": 38193,
+                "rssKiB": 6528
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 3898749,
+                "openNs": 38025,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 3943800,
+                "openNs": 33335,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 3877580,
+                "openNs": 32021,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3927020,
+                "openNs": 36229,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3892453,
+                "openNs": 34163,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 3919119,
+                "openNs": 33242,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 3949898,
+                "openNs": 37856,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 3962655,
+                "openNs": 35880,
+                "rssKiB": 6656
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 3958329,
+                "openNs": 33053,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3941254,
+                "openNs": 32886,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3942392,
+                "openNs": 37601,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3918150,
+                "openNs": 32102,
+                "rssKiB": 6396
+              },
+              {
+                "apiNs": 3984763,
+                "openNs": 37462,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 3928356,
+                "openNs": 34589,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 4027864,
+                "openNs": 36790,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 4020536,
+                "openNs": 41070,
+                "rssKiB": 6528
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 2.6443,
+            "zimru": 4.2475,
+            "lanes": 3.9231,
+            "long": 3.9504
+          }
+        },
+        "repeat_article_32": {
+          "response_sha256": "7b339a20ff64327c0240984cf274a031a8265fd909d9313fc4091e35dbc5ea9d",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 32588,
+                "openNs": 3394635,
+                "rssKiB": 11008
+              },
+              {
+                "apiNs": 43976,
+                "openNs": 3545501,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 39924,
+                "openNs": 3568916,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 52526,
+                "openNs": 3865716,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 36060,
+                "openNs": 3912839,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 82119,
+                "openNs": 3221890,
+                "rssKiB": 10880
+              },
+              {
+                "apiNs": 38080,
+                "openNs": 3215756,
+                "rssKiB": 10752
+              },
+              {
+                "apiNs": 36404,
+                "openNs": 3228679,
+                "rssKiB": 10752
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 62131,
+                "openNs": 36319,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 73901,
+                "openNs": 37338,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 82503,
+                "openNs": 41333,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 98791,
+                "openNs": 37322,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 81069,
+                "openNs": 41607,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 81677,
+                "openNs": 33590,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 73981,
+                "openNs": 36924,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 59482,
+                "openNs": 40762,
+                "rssKiB": 6528
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 69364,
+                "openNs": 37568,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 60233,
+                "openNs": 34918,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 69005,
+                "openNs": 39272,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 88734,
+                "openNs": 40576,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 70193,
+                "openNs": 43150,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 57172,
+                "openNs": 36332,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 61679,
+                "openNs": 35348,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 70243,
+                "openNs": 34798,
+                "rssKiB": 6528
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 71329,
+                "openNs": 34170,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 72482,
+                "openNs": 41066,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 79870,
+                "openNs": 35982,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 91552,
+                "openNs": 37874,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 69940,
+                "openNs": 40504,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 56715,
+                "openNs": 37628,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 62107,
+                "openNs": 32300,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 73538,
+                "openNs": 33464,
+                "rssKiB": 6400
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 0.039,
+            "zimru": 0.0775,
+            "lanes": 0.0692,
+            "long": 0.0719
+          }
+        },
+        "random_articles": {
+          "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 29467298,
+                "openNs": 3119761,
+                "rssKiB": 21436
+              },
+              {
+                "apiNs": 29765741,
+                "openNs": 3163015,
+                "rssKiB": 21336
+              },
+              {
+                "apiNs": 30092203,
+                "openNs": 3138957,
+                "rssKiB": 21204
+              },
+              {
+                "apiNs": 29406112,
+                "openNs": 3200837,
+                "rssKiB": 21464
+              },
+              {
+                "apiNs": 30409952,
+                "openNs": 3172748,
+                "rssKiB": 21464
+              },
+              {
+                "apiNs": 30793383,
+                "openNs": 3172201,
+                "rssKiB": 21236
+              },
+              {
+                "apiNs": 29366211,
+                "openNs": 3134098,
+                "rssKiB": 21164
+              },
+              {
+                "apiNs": 29780701,
+                "openNs": 3283403,
+                "rssKiB": 21468
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 58726298,
+                "openNs": 40249,
+                "rssKiB": 15464
+              },
+              {
+                "apiNs": 58618611,
+                "openNs": 35240,
+                "rssKiB": 15476
+              },
+              {
+                "apiNs": 58286181,
+                "openNs": 43813,
+                "rssKiB": 15340
+              },
+              {
+                "apiNs": 59015070,
+                "openNs": 32606,
+                "rssKiB": 15472
+              },
+              {
+                "apiNs": 58453121,
+                "openNs": 33940,
+                "rssKiB": 15420
+              },
+              {
+                "apiNs": 58791896,
+                "openNs": 40392,
+                "rssKiB": 15472
+              },
+              {
+                "apiNs": 59676469,
+                "openNs": 33958,
+                "rssKiB": 15344
+              },
+              {
+                "apiNs": 58975273,
+                "openNs": 32731,
+                "rssKiB": 15472
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 51714691,
+                "openNs": 32457,
+                "rssKiB": 15340
+              },
+              {
+                "apiNs": 52027688,
+                "openNs": 34870,
+                "rssKiB": 15344
+              },
+              {
+                "apiNs": 51968944,
+                "openNs": 37636,
+                "rssKiB": 15344
+              },
+              {
+                "apiNs": 51395045,
+                "openNs": 36640,
+                "rssKiB": 15472
+              },
+              {
+                "apiNs": 52436008,
+                "openNs": 37206,
+                "rssKiB": 15472
+              },
+              {
+                "apiNs": 51494835,
+                "openNs": 33869,
+                "rssKiB": 15472
+              },
+              {
+                "apiNs": 51767334,
+                "openNs": 34081,
+                "rssKiB": 15348
+              },
+              {
+                "apiNs": 51601283,
+                "openNs": 33478,
+                "rssKiB": 15452
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 53376439,
+                "openNs": 40161,
+                "rssKiB": 15468
+              },
+              {
+                "apiNs": 53154086,
+                "openNs": 33543,
+                "rssKiB": 15476
+              },
+              {
+                "apiNs": 54816027,
+                "openNs": 36399,
+                "rssKiB": 15348
+              },
+              {
+                "apiNs": 53986411,
+                "openNs": 41205,
+                "rssKiB": 15344
+              },
+              {
+                "apiNs": 53625065,
+                "openNs": 34510,
+                "rssKiB": 15348
+              },
+              {
+                "apiNs": 53492156,
+                "openNs": 37867,
+                "rssKiB": 15476
+              },
+              {
+                "apiNs": 53476425,
+                "openNs": 33200,
+                "rssKiB": 15468
+              },
+              {
+                "apiNs": 53558759,
+                "openNs": 36750,
+                "rssKiB": 15344
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 29.7732,
+            "zimru": 58.7591,
+            "lanes": 51.741,
+            "long": 53.5255
+          }
+        },
+        "title_prefixes": {
+          "response_sha256": "7b7f6560143fd11b0cbfa415e7d297a7b41a1514372a6d0d8dcf5c7741eca0fa",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 173376,
+                "openNs": 3187923,
+                "rssKiB": 7804
+              },
+              {
+                "apiNs": 170400,
+                "openNs": 3218365,
+                "rssKiB": 7804
+              },
+              {
+                "apiNs": 174524,
+                "openNs": 3245258,
+                "rssKiB": 7528
+              },
+              {
+                "apiNs": 177439,
+                "openNs": 3237563,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 177028,
+                "openNs": 3288392,
+                "rssKiB": 7804
+              },
+              {
+                "apiNs": 175744,
+                "openNs": 3245163,
+                "rssKiB": 7536
+              },
+              {
+                "apiNs": 216733,
+                "openNs": 3203060,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 174932,
+                "openNs": 3216194,
+                "rssKiB": 7552
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 336946,
+                "openNs": 35256,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 291530,
+                "openNs": 34518,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 365667,
+                "openNs": 36456,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 299741,
+                "openNs": 45466,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 299742,
+                "openNs": 35078,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 353358,
+                "openNs": 32378,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 296338,
+                "openNs": 32636,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 337439,
+                "openNs": 36985,
+                "rssKiB": 2816
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 279703,
+                "openNs": 27452,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 358683,
+                "openNs": 33748,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 359040,
+                "openNs": 34288,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 301032,
+                "openNs": 30221,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 355570,
+                "openNs": 29242,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 305511,
+                "openNs": 34989,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 296692,
+                "openNs": 33721,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 345451,
+                "openNs": 31932,
+                "rssKiB": 2816
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 322763,
+                "openNs": 33705,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 299695,
+                "openNs": 29515,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 353941,
+                "openNs": 37121,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 302603,
+                "openNs": 34637,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 303353,
+                "openNs": 46540,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 303991,
+                "openNs": 31525,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 338732,
+                "openNs": 32460,
+                "rssKiB": 2816
+              },
+              {
+                "apiNs": 300958,
+                "openNs": 33448,
+                "rssKiB": 2688
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 0.1753,
+            "zimru": 0.3183,
+            "lanes": 0.3255,
+            "long": 0.3037
+          }
+        },
+        "media_ranges": {
+          "response_sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 4114459,
+                "openNs": 3401559,
+                "rssKiB": 11520
+              },
+              {
+                "apiNs": 4109683,
+                "openNs": 3390235,
+                "rssKiB": 11648
+              },
+              {
+                "apiNs": 4112159,
+                "openNs": 3353911,
+                "rssKiB": 11648
+              },
+              {
+                "apiNs": 3909219,
+                "openNs": 3235705,
+                "rssKiB": 11520
+              },
+              {
+                "apiNs": 4018151,
+                "openNs": 3222321,
+                "rssKiB": 11520
+              },
+              {
+                "apiNs": 3858902,
+                "openNs": 3262769,
+                "rssKiB": 11520
+              },
+              {
+                "apiNs": 3947246,
+                "openNs": 3245453,
+                "rssKiB": 11648
+              },
+              {
+                "apiNs": 3940939,
+                "openNs": 3219972,
+                "rssKiB": 11648
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 5117144,
+                "openNs": 34894,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5375503,
+                "openNs": 37144,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5175581,
+                "openNs": 33759,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5085446,
+                "openNs": 36275,
+                "rssKiB": 6500
+              },
+              {
+                "apiNs": 5133957,
+                "openNs": 32398,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5253604,
+                "openNs": 65100,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5080329,
+                "openNs": 35234,
+                "rssKiB": 6500
+              },
+              {
+                "apiNs": 5178031,
+                "openNs": 33463,
+                "rssKiB": 6400
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 4833634,
+                "openNs": 33815,
+                "rssKiB": 6500
+              },
+              {
+                "apiNs": 5016670,
+                "openNs": 35883,
+                "rssKiB": 6372
+              },
+              {
+                "apiNs": 4790435,
+                "openNs": 33255,
+                "rssKiB": 6244
+              },
+              {
+                "apiNs": 4772694,
+                "openNs": 32921,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 4800574,
+                "openNs": 30636,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 4853602,
+                "openNs": 36318,
+                "rssKiB": 6500
+              },
+              {
+                "apiNs": 4818708,
+                "openNs": 34983,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 4803926,
+                "openNs": 31163,
+                "rssKiB": 6400
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 5035012,
+                "openNs": 37848,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5261433,
+                "openNs": 41900,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5275123,
+                "openNs": 38074,
+                "rssKiB": 6372
+              },
+              {
+                "apiNs": 5033861,
+                "openNs": 33937,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 4925730,
+                "openNs": 34390,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5028316,
+                "openNs": 35675,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 4988806,
+                "openNs": 32991,
+                "rssKiB": 6372
+              },
+              {
+                "apiNs": 4945388,
+                "openNs": 32497,
+                "rssKiB": 6528
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 3.9827,
+            "zimru": 5.1548,
+            "lanes": 4.8113,
+            "long": 5.0311
+          }
+        }
+      }
+    },
+    {
+      "file": "wikipedia_en_100_maxi_2024-01.zim",
+      "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "phases": {
+        "open": {
+          "response_sha256": "1cedf2a54ce349c8cde927ffe5a9311e9060556bc4afde27cc9366f71c1aecd6",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 2979504,
+                "openNs": 2979504,
+                "rssKiB": 7424
+              },
+              {
+                "apiNs": 3011154,
+                "openNs": 3011154,
+                "rssKiB": 7296
+              },
+              {
+                "apiNs": 2996575,
+                "openNs": 2996575,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 3112395,
+                "openNs": 3112395,
+                "rssKiB": 7296
+              },
+              {
+                "apiNs": 3010241,
+                "openNs": 3010241,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 3041257,
+                "openNs": 3041257,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 3158160,
+                "openNs": 3158160,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 3040900,
+                "openNs": 3040900,
+                "rssKiB": 7424
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 31673,
+                "openNs": 31673,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 35497,
+                "openNs": 35497,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32273,
+                "openNs": 32273,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 33311,
+                "openNs": 33311,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32927,
+                "openNs": 32927,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 73136,
+                "openNs": 73136,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 32447,
+                "openNs": 32447,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 29816,
+                "openNs": 29816,
+                "rssKiB": 2304
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 28121,
+                "openNs": 28121,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29766,
+                "openNs": 29766,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 33309,
+                "openNs": 33309,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 29295,
+                "openNs": 29295,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 34613,
+                "openNs": 34613,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 62125,
+                "openNs": 62125,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 29581,
+                "openNs": 29581,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 32578,
+                "openNs": 32578,
+                "rssKiB": 2432
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 29620,
+                "openNs": 29620,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 34384,
+                "openNs": 34384,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29544,
+                "openNs": 29544,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 29782,
+                "openNs": 29782,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 31959,
+                "openNs": 31959,
+                "rssKiB": 2304
+              },
+              {
+                "apiNs": 33085,
+                "openNs": 33085,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 30659,
+                "openNs": 30659,
+                "rssKiB": 2432
+              },
+              {
+                "apiNs": 33179,
+                "openNs": 33179,
+                "rssKiB": 2432
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 3.026,
+            "zimru": 0.0327,
+            "lanes": 0.0312,
+            "long": 0.0313
+          }
+        },
+        "first_article": {
+          "response_sha256": "1e7b748c5c9bbf68f732946b053ed4bd28d3bbfdb151b0b7a3781f9f29da1a33",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 1936104,
+                "openNs": 3054813,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 1924299,
+                "openNs": 3056674,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 1952539,
+                "openNs": 3147696,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 1926542,
+                "openNs": 3069120,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 1893864,
+                "openNs": 3097915,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 1937711,
+                "openNs": 3041376,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 1969061,
+                "openNs": 3128669,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 1974850,
+                "openNs": 3134236,
+                "rssKiB": 9216
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 5539971,
+                "openNs": 36251,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5530608,
+                "openNs": 36740,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5555955,
+                "openNs": 31938,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5494724,
+                "openNs": 33972,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5553605,
+                "openNs": 38322,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5707943,
+                "openNs": 35107,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5710998,
+                "openNs": 36583,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5788835,
+                "openNs": 35708,
+                "rssKiB": 6528
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 5190392,
+                "openNs": 35210,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5158559,
+                "openNs": 70464,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5144366,
+                "openNs": 32636,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5144998,
+                "openNs": 33825,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5160932,
+                "openNs": 32874,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5252458,
+                "openNs": 43159,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5315430,
+                "openNs": 40014,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5245644,
+                "openNs": 40335,
+                "rssKiB": 6656
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 5504740,
+                "openNs": 34467,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5482112,
+                "openNs": 40734,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5507052,
+                "openNs": 33718,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5524057,
+                "openNs": 32593,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5460588,
+                "openNs": 33564,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 5603229,
+                "openNs": 63486,
+                "rssKiB": 6400
+              },
+              {
+                "apiNs": 5641942,
+                "openNs": 34696,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 5647499,
+                "openNs": 36317,
+                "rssKiB": 6528
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 1.9369,
+            "zimru": 5.5548,
+            "lanes": 5.1757,
+            "long": 5.5156
+          }
+        },
+        "repeat_article_32": {
+          "response_sha256": "93862d1a24696b4b15f39cde3dd42f5da09f27fcf4f77079ec064c8a3cafb4f8",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 101770,
+                "openNs": 3359408,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 104704,
+                "openNs": 3394414,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 129827,
+                "openNs": 3362842,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 104784,
+                "openNs": 3363277,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 105581,
+                "openNs": 3381150,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 98571,
+                "openNs": 3403031,
+                "rssKiB": 9088
+              },
+              {
+                "apiNs": 113082,
+                "openNs": 3410391,
+                "rssKiB": 9216
+              },
+              {
+                "apiNs": 110540,
+                "openNs": 3404484,
+                "rssKiB": 9216
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 133645,
+                "openNs": 42958,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 119485,
+                "openNs": 43202,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 122323,
+                "openNs": 41962,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 120221,
+                "openNs": 38452,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 116976,
+                "openNs": 41539,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 125773,
+                "openNs": 42701,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 117921,
+                "openNs": 41700,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 128395,
+                "openNs": 40304,
+                "rssKiB": 6528
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 133566,
+                "openNs": 36445,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 119257,
+                "openNs": 41192,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 130296,
+                "openNs": 40869,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 113889,
+                "openNs": 38172,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 118891,
+                "openNs": 39093,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 123942,
+                "openNs": 46721,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 124772,
+                "openNs": 38874,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 126747,
+                "openNs": 38293,
+                "rssKiB": 6528
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 131480,
+                "openNs": 37962,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 124664,
+                "openNs": 36402,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 119895,
+                "openNs": 48535,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 123430,
+                "openNs": 36998,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 123531,
+                "openNs": 42775,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 118769,
+                "openNs": 38779,
+                "rssKiB": 6528
+              },
+              {
+                "apiNs": 115259,
+                "openNs": 38862,
+                "rssKiB": 6656
+              },
+              {
+                "apiNs": 122764,
+                "openNs": 39247,
+                "rssKiB": 6528
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 0.1052,
+            "zimru": 0.1213,
+            "lanes": 0.1244,
+            "long": 0.1231
+          }
+        },
+        "random_articles": {
+          "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 53593611,
+                "openNs": 2975684,
+                "rssKiB": 24576
+              },
+              {
+                "apiNs": 53880947,
+                "openNs": 3039698,
+                "rssKiB": 24580
+              },
+              {
+                "apiNs": 52421668,
+                "openNs": 2953709,
+                "rssKiB": 24964
+              },
+              {
+                "apiNs": 53891414,
+                "openNs": 2983986,
+                "rssKiB": 24828
+              },
+              {
+                "apiNs": 52849593,
+                "openNs": 2990507,
+                "rssKiB": 24832
+              },
+              {
+                "apiNs": 53336074,
+                "openNs": 3051582,
+                "rssKiB": 24576
+              },
+              {
+                "apiNs": 53445682,
+                "openNs": 3054804,
+                "rssKiB": 24824
+              },
+              {
+                "apiNs": 53817580,
+                "openNs": 3005574,
+                "rssKiB": 24836
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 78097786,
+                "openNs": 32379,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 78374002,
+                "openNs": 31691,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 80008383,
+                "openNs": 100431,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 77436897,
+                "openNs": 33437,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 80631623,
+                "openNs": 37023,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 78906760,
+                "openNs": 38386,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 78880680,
+                "openNs": 34021,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 78696627,
+                "openNs": 33879,
+                "rssKiB": 13948
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 71134565,
+                "openNs": 34029,
+                "rssKiB": 13820
+              },
+              {
+                "apiNs": 70259340,
+                "openNs": 35136,
+                "rssKiB": 14080
+              },
+              {
+                "apiNs": 70566772,
+                "openNs": 61942,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 71154425,
+                "openNs": 46021,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 70803058,
+                "openNs": 37064,
+                "rssKiB": 13948
+              },
+              {
+                "apiNs": 71877107,
+                "openNs": 36620,
+                "rssKiB": 13696
+              },
+              {
+                "apiNs": 70836417,
+                "openNs": 33011,
+                "rssKiB": 14080
+              },
+              {
+                "apiNs": 71227068,
+                "openNs": 34838,
+                "rssKiB": 14080
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 77977670,
+                "openNs": 34741,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 76544729,
+                "openNs": 39341,
+                "rssKiB": 14076
+              },
+              {
+                "apiNs": 77089152,
+                "openNs": 65633,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 76466743,
+                "openNs": 34700,
+                "rssKiB": 13824
+              },
+              {
+                "apiNs": 76712732,
+                "openNs": 33795,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 76143430,
+                "openNs": 37099,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 77885690,
+                "openNs": 38281,
+                "rssKiB": 13952
+              },
+              {
+                "apiNs": 76548154,
+                "openNs": 38924,
+                "rssKiB": 13816
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 53.5196,
+            "zimru": 78.7887,
+            "lanes": 70.9855,
+            "long": 76.6304
+          }
+        },
+        "title_prefixes": {
+          "response_sha256": "fc206633143ad6a13a64398ef40f9048ea96e3cf0eadb87df2e68c7327bcc116",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 235446,
+                "openNs": 3033552,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 234356,
+                "openNs": 3038377,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 237891,
+                "openNs": 3014088,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 273086,
+                "openNs": 3034547,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 292303,
+                "openNs": 3058773,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 297111,
+                "openNs": 3015033,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 295299,
+                "openNs": 3035139,
+                "rssKiB": 7808
+              },
+              {
+                "apiNs": 234935,
+                "openNs": 3017429,
+                "rssKiB": 7552
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 215335,
+                "openNs": 30101,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 219662,
+                "openNs": 32930,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 282446,
+                "openNs": 32199,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 212905,
+                "openNs": 33194,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 217377,
+                "openNs": 33422,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 220183,
+                "openNs": 30360,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 218170,
+                "openNs": 36914,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 238086,
+                "openNs": 33518,
+                "rssKiB": 2560
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 213725,
+                "openNs": 29913,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 215818,
+                "openNs": 33704,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 221288,
+                "openNs": 31847,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 255172,
+                "openNs": 28626,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 281151,
+                "openNs": 30810,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 219820,
+                "openNs": 32786,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 218214,
+                "openNs": 35829,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 233770,
+                "openNs": 38265,
+                "rssKiB": 2688
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 218938,
+                "openNs": 30187,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 216072,
+                "openNs": 30470,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 260456,
+                "openNs": 30742,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 219870,
+                "openNs": 31553,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 264719,
+                "openNs": 37450,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 278799,
+                "openNs": 31342,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 279871,
+                "openNs": 32100,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 261740,
+                "openNs": 36588,
+                "rssKiB": 2688
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 0.2555,
+            "zimru": 0.2189,
+            "lanes": 0.2206,
+            "long": 0.2611
+          }
+        },
+        "media_ranges": {
+          "response_sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+          "samples": {
+            "libzim": [
+              {
+                "apiNs": 319355,
+                "openNs": 3401845,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 314729,
+                "openNs": 3370332,
+                "rssKiB": 7808
+              },
+              {
+                "apiNs": 312119,
+                "openNs": 3371868,
+                "rssKiB": 7680
+              },
+              {
+                "apiNs": 334532,
+                "openNs": 3339810,
+                "rssKiB": 7808
+              },
+              {
+                "apiNs": 315838,
+                "openNs": 3360325,
+                "rssKiB": 7552
+              },
+              {
+                "apiNs": 309458,
+                "openNs": 3407002,
+                "rssKiB": 7808
+              },
+              {
+                "apiNs": 379827,
+                "openNs": 3355271,
+                "rssKiB": 7808
+              },
+              {
+                "apiNs": 317556,
+                "openNs": 3369632,
+                "rssKiB": 7680
+              }
+            ],
+            "zimru": [
+              {
+                "apiNs": 195104,
+                "openNs": 37650,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 202477,
+                "openNs": 44508,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 203729,
+                "openNs": 36223,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 210869,
+                "openNs": 34933,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 202771,
+                "openNs": 38213,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 221317,
+                "openNs": 36007,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 202468,
+                "openNs": 41650,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 203720,
+                "openNs": 39525,
+                "rssKiB": 2688
+              }
+            ],
+            "lanes": [
+              {
+                "apiNs": 200946,
+                "openNs": 40969,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 216175,
+                "openNs": 33167,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 209425,
+                "openNs": 36815,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 201555,
+                "openNs": 36933,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 206766,
+                "openNs": 35760,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 204501,
+                "openNs": 38209,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 199001,
+                "openNs": 40300,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 201640,
+                "openNs": 39442,
+                "rssKiB": 2560
+              }
+            ],
+            "long": [
+              {
+                "apiNs": 201993,
+                "openNs": 35253,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 210130,
+                "openNs": 35816,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 206801,
+                "openNs": 38121,
+                "rssKiB": 2560
+              },
+              {
+                "apiNs": 207581,
+                "openNs": 39770,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 206430,
+                "openNs": 34741,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 202505,
+                "openNs": 40098,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 204391,
+                "openNs": 41412,
+                "rssKiB": 2688
+              },
+              {
+                "apiNs": 198495,
+                "openNs": 37416,
+                "rssKiB": 2688
+              }
+            ]
+          },
+          "apiMs": {
+            "libzim": 0.3167,
+            "zimru": 0.2032,
+            "lanes": 0.2031,
+            "long": 0.2054
+          }
+        }
+      }
+    }
+  ]
+}

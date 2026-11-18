@@ -1,0 +1,77 @@
+{
+  "archive": "wikipedia_en_simple_all_nopic_2026-05.zim",
+  "archive_sha256": "503b74027d101ec13b272f1ebbd23473e1d260be71a35a71141dfc985fd20d0a",
+  "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7",
+  "macos": "27.2.1",
+  "binaries": {
+    "native": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+    "optimized": "0e936026346ddeba540028c06b26d836d4350e7664152c723aa89ff71b1c2990"
+  },
+  "runs": [
+    {
+      "build": "native",
+      "round": 1,
+      "ready_ms": 9512.347667012364,
+      "cpu_s": 9.442525,
+      "peak_bytes": 32768000,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "optimized",
+      "round": 1,
+      "ready_ms": 9815.104333916679,
+      "cpu_s": 22.443893000000003,
+      "peak_bytes": 94896128,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "optimized",
+      "round": 2,
+      "ready_ms": 9739.959832979366,
+      "cpu_s": 22.188636000000002,
+      "peak_bytes": 90963968,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "native",
+      "round": 2,
+      "ready_ms": 8090.296249953099,
+      "cpu_s": 8.075756,
+      "peak_bytes": 32997376,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "native",
+      "round": 3,
+      "ready_ms": 7264.180750004016,
+      "cpu_s": 7.2431280000000005,
+      "peak_bytes": 32522240,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "optimized",
+      "round": 3,
+      "ready_ms": 5947.609249968082,
+      "cpu_s": 13.93268,
+      "peak_bytes": 77971456,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "optimized",
+      "round": 4,
+      "ready_ms": 6089.491292019375,
+      "cpu_s": 13.887074,
+      "peak_bytes": 85311488,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    },
+    {
+      "build": "native",
+      "round": 4,
+      "ready_ms": 5397.123958915472,
+      "cpu_s": 5.099224,
+      "peak_bytes": 30294016,
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+    }
+  ],
+  "darwin_kernel": "27.2.0"
+}

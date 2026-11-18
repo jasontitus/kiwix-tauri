@@ -1,0 +1,964 @@
+{
+  "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "start": "2026-11-18T21:51:25.125007+00:00",
+  "cache_bytes": 33554432,
+  "libzim": "9.8.2",
+  "baseline": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "binary_sha256": {
+    "libzim": "eadffafccbfe23eae1c0c82fdec589afcaf9ec64a661c5b8cbbe7ea34e074a77",
+    "previous": "fd05899c4a6d3f4f45ef7a054ec10d03652aaa5ac68a9e74f0ff4638c844105d",
+    "candidate": "7388229ced3867f853709f069c7b805de5e496ec9649dbc104bcd98204b4c136"
+  },
+  "order": [
+    [
+      "libzim",
+      "previous",
+      "candidate"
+    ],
+    [
+      "libzim",
+      "candidate",
+      "previous"
+    ],
+    [
+      "previous",
+      "libzim",
+      "candidate"
+    ],
+    [
+      "previous",
+      "candidate",
+      "libzim"
+    ],
+    [
+      "candidate",
+      "libzim",
+      "previous"
+    ],
+    [
+      "candidate",
+      "previous",
+      "libzim"
+    ]
+  ],
+  "rounds": 12,
+  "rows": [
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "random_articles",
+      "sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+      "samples": {
+        "libzim": [
+          {
+            "api_ns": 20300125,
+            "open_ns": 3191083,
+            "cpu_us": 36550,
+            "rss_bytes": 35291136
+          },
+          {
+            "api_ns": 19776379,
+            "open_ns": 3403334,
+            "cpu_us": 35662,
+            "rss_bytes": 35291136
+          },
+          {
+            "api_ns": 20455043,
+            "open_ns": 3368083,
+            "cpu_us": 36873,
+            "rss_bytes": 35291136
+          },
+          {
+            "api_ns": 18095912,
+            "open_ns": 2891250,
+            "cpu_us": 33691,
+            "rss_bytes": 35307520
+          },
+          {
+            "api_ns": 17823665,
+            "open_ns": 2859000,
+            "cpu_us": 32736,
+            "rss_bytes": 35209216
+          },
+          {
+            "api_ns": 18135581,
+            "open_ns": 3046417,
+            "cpu_us": 33277,
+            "rss_bytes": 35307520
+          },
+          {
+            "api_ns": 18423125,
+            "open_ns": 3094458,
+            "cpu_us": 33384,
+            "rss_bytes": 35340288
+          },
+          {
+            "api_ns": 19050793,
+            "open_ns": 2838209,
+            "cpu_us": 33647,
+            "rss_bytes": 35340288
+          },
+          {
+            "api_ns": 18327705,
+            "open_ns": 2872416,
+            "cpu_us": 32940,
+            "rss_bytes": 35323904
+          },
+          {
+            "api_ns": 17769417,
+            "open_ns": 2844209,
+            "cpu_us": 33155,
+            "rss_bytes": 35192832
+          },
+          {
+            "api_ns": 17901495,
+            "open_ns": 3033166,
+            "cpu_us": 33002,
+            "rss_bytes": 35241984
+          },
+          {
+            "api_ns": 18311626,
+            "open_ns": 2890583,
+            "cpu_us": 33104,
+            "rss_bytes": 35192832
+          }
+        ],
+        "previous": [
+          {
+            "api_ns": 31437543,
+            "open_ns": 71667,
+            "cpu_us": 36976,
+            "rss_bytes": 38830080
+          },
+          {
+            "api_ns": 31173417,
+            "open_ns": 79708,
+            "cpu_us": 36561,
+            "rss_bytes": 39813120
+          },
+          {
+            "api_ns": 31658960,
+            "open_ns": 82583,
+            "cpu_us": 36998,
+            "rss_bytes": 41074688
+          },
+          {
+            "api_ns": 28366669,
+            "open_ns": 72792,
+            "cpu_us": 33388,
+            "rss_bytes": 41664512
+          },
+          {
+            "api_ns": 29507459,
+            "open_ns": 66125,
+            "cpu_us": 34320,
+            "rss_bytes": 43532288
+          },
+          {
+            "api_ns": 28710999,
+            "open_ns": 70041,
+            "cpu_us": 33798,
+            "rss_bytes": 38453248
+          },
+          {
+            "api_ns": 28032627,
+            "open_ns": 74208,
+            "cpu_us": 32909,
+            "rss_bytes": 39141376
+          },
+          {
+            "api_ns": 28639333,
+            "open_ns": 59959,
+            "cpu_us": 33316,
+            "rss_bytes": 40402944
+          },
+          {
+            "api_ns": 28144251,
+            "open_ns": 68375,
+            "cpu_us": 33278,
+            "rss_bytes": 40321024
+          },
+          {
+            "api_ns": 27705624,
+            "open_ns": 67917,
+            "cpu_us": 32428,
+            "rss_bytes": 37093376
+          },
+          {
+            "api_ns": 28591251,
+            "open_ns": 69458,
+            "cpu_us": 33322,
+            "rss_bytes": 41500672
+          },
+          {
+            "api_ns": 28292628,
+            "open_ns": 81833,
+            "cpu_us": 33177,
+            "rss_bytes": 38469632
+          }
+        ],
+        "candidate": [
+          {
+            "api_ns": 24729958,
+            "open_ns": 79708,
+            "cpu_us": 31210,
+            "rss_bytes": 38617088
+          },
+          {
+            "api_ns": 24103584,
+            "open_ns": 89041,
+            "cpu_us": 29675,
+            "rss_bytes": 39092224
+          },
+          {
+            "api_ns": 24294835,
+            "open_ns": 85708,
+            "cpu_us": 30531,
+            "rss_bytes": 38961152
+          },
+          {
+            "api_ns": 22112751,
+            "open_ns": 67250,
+            "cpu_us": 27292,
+            "rss_bytes": 39223296
+          },
+          {
+            "api_ns": 22174999,
+            "open_ns": 65708,
+            "cpu_us": 27205,
+            "rss_bytes": 39108608
+          },
+          {
+            "api_ns": 22023456,
+            "open_ns": 92375,
+            "cpu_us": 27517,
+            "rss_bytes": 39108608
+          },
+          {
+            "api_ns": 22740665,
+            "open_ns": 62625,
+            "cpu_us": 27666,
+            "rss_bytes": 40288256
+          },
+          {
+            "api_ns": 21900208,
+            "open_ns": 66292,
+            "cpu_us": 26713,
+            "rss_bytes": 37142528
+          },
+          {
+            "api_ns": 21466000,
+            "open_ns": 70417,
+            "cpu_us": 26241,
+            "rss_bytes": 37027840
+          },
+          {
+            "api_ns": 21857747,
+            "open_ns": 74708,
+            "cpu_us": 26658,
+            "rss_bytes": 38584320
+          },
+          {
+            "api_ns": 21622002,
+            "open_ns": 69542,
+            "cpu_us": 26386,
+            "rss_bytes": 38338560
+          },
+          {
+            "api_ns": 22054253,
+            "open_ns": 76083,
+            "cpu_us": 27499,
+            "rss_bytes": 39305216
+          }
+        ]
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "media_ranges",
+      "sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+      "samples": {
+        "libzim": [
+          {
+            "api_ns": 2923084,
+            "open_ns": 2879042,
+            "cpu_us": 16735,
+            "rss_bytes": 8273920
+          },
+          {
+            "api_ns": 2977833,
+            "open_ns": 2818792,
+            "cpu_us": 16644,
+            "rss_bytes": 8306688
+          },
+          {
+            "api_ns": 2901421,
+            "open_ns": 2927625,
+            "cpu_us": 16558,
+            "rss_bytes": 8372224
+          },
+          {
+            "api_ns": 3202209,
+            "open_ns": 2989291,
+            "cpu_us": 16794,
+            "rss_bytes": 8437760
+          },
+          {
+            "api_ns": 2919499,
+            "open_ns": 2812959,
+            "cpu_us": 15657,
+            "rss_bytes": 8355840
+          },
+          {
+            "api_ns": 2960915,
+            "open_ns": 2694417,
+            "cpu_us": 15492,
+            "rss_bytes": 8339456
+          },
+          {
+            "api_ns": 2831122,
+            "open_ns": 2657792,
+            "cpu_us": 15519,
+            "rss_bytes": 8306688
+          },
+          {
+            "api_ns": 2841666,
+            "open_ns": 2568042,
+            "cpu_us": 15559,
+            "rss_bytes": 8273920
+          },
+          {
+            "api_ns": 2778957,
+            "open_ns": 2693833,
+            "cpu_us": 16147,
+            "rss_bytes": 8355840
+          },
+          {
+            "api_ns": 2884627,
+            "open_ns": 2560625,
+            "cpu_us": 15513,
+            "rss_bytes": 8372224
+          },
+          {
+            "api_ns": 3302042,
+            "open_ns": 2711083,
+            "cpu_us": 17012,
+            "rss_bytes": 8355840
+          },
+          {
+            "api_ns": 2681748,
+            "open_ns": 2592625,
+            "cpu_us": 15078,
+            "rss_bytes": 8323072
+          }
+        ],
+        "previous": [
+          {
+            "api_ns": 3260375,
+            "open_ns": 69583,
+            "cpu_us": 7755,
+            "rss_bytes": 6832128
+          },
+          {
+            "api_ns": 3213084,
+            "open_ns": 63083,
+            "cpu_us": 7403,
+            "rss_bytes": 6848512
+          },
+          {
+            "api_ns": 3227124,
+            "open_ns": 64542,
+            "cpu_us": 7620,
+            "rss_bytes": 6832128
+          },
+          {
+            "api_ns": 3252293,
+            "open_ns": 67708,
+            "cpu_us": 7748,
+            "rss_bytes": 6848512
+          },
+          {
+            "api_ns": 3186544,
+            "open_ns": 55417,
+            "cpu_us": 7388,
+            "rss_bytes": 8257536
+          },
+          {
+            "api_ns": 3068333,
+            "open_ns": 56292,
+            "cpu_us": 7376,
+            "rss_bytes": 7028736
+          },
+          {
+            "api_ns": 3065958,
+            "open_ns": 69708,
+            "cpu_us": 7485,
+            "rss_bytes": 6832128
+          },
+          {
+            "api_ns": 3067999,
+            "open_ns": 60375,
+            "cpu_us": 7304,
+            "rss_bytes": 6832128
+          },
+          {
+            "api_ns": 3077498,
+            "open_ns": 58750,
+            "cpu_us": 7325,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 3044832,
+            "open_ns": 62750,
+            "cpu_us": 8018,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 3273044,
+            "open_ns": 70208,
+            "cpu_us": 7675,
+            "rss_bytes": 8306688
+          },
+          {
+            "api_ns": 3227414,
+            "open_ns": 64000,
+            "cpu_us": 7705,
+            "rss_bytes": 8273920
+          }
+        ],
+        "candidate": [
+          {
+            "api_ns": 2715083,
+            "open_ns": 71625,
+            "cpu_us": 7382,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 2718497,
+            "open_ns": 62792,
+            "cpu_us": 7175,
+            "rss_bytes": 6799360
+          },
+          {
+            "api_ns": 2752666,
+            "open_ns": 65250,
+            "cpu_us": 7197,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 2962168,
+            "open_ns": 71583,
+            "cpu_us": 7445,
+            "rss_bytes": 8257536
+          },
+          {
+            "api_ns": 2465210,
+            "open_ns": 64250,
+            "cpu_us": 6963,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 2509915,
+            "open_ns": 66209,
+            "cpu_us": 6829,
+            "rss_bytes": 6815744
+          },
+          {
+            "api_ns": 2552209,
+            "open_ns": 99583,
+            "cpu_us": 6957,
+            "rss_bytes": 6848512
+          },
+          {
+            "api_ns": 2491126,
+            "open_ns": 66208,
+            "cpu_us": 6696,
+            "rss_bytes": 6799360
+          },
+          {
+            "api_ns": 2878208,
+            "open_ns": 68125,
+            "cpu_us": 8020,
+            "rss_bytes": 8273920
+          },
+          {
+            "api_ns": 2531375,
+            "open_ns": 65500,
+            "cpu_us": 6849,
+            "rss_bytes": 6799360
+          },
+          {
+            "api_ns": 2618585,
+            "open_ns": 86084,
+            "cpu_us": 7056,
+            "rss_bytes": 6848512
+          },
+          {
+            "api_ns": 2559542,
+            "open_ns": 97958,
+            "cpu_us": 7257,
+            "rss_bytes": 6848512
+          }
+        ]
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "random_articles",
+      "sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+      "samples": {
+        "libzim": [
+          {
+            "api_ns": 33036459,
+            "open_ns": 2452667,
+            "cpu_us": 45500,
+            "rss_bytes": 47726592
+          },
+          {
+            "api_ns": 34178999,
+            "open_ns": 2494791,
+            "cpu_us": 47103,
+            "rss_bytes": 47824896
+          },
+          {
+            "api_ns": 33947293,
+            "open_ns": 2478792,
+            "cpu_us": 46985,
+            "rss_bytes": 47775744
+          },
+          {
+            "api_ns": 31596958,
+            "open_ns": 2247083,
+            "cpu_us": 44790,
+            "rss_bytes": 47710208
+          },
+          {
+            "api_ns": 33359793,
+            "open_ns": 2403458,
+            "cpu_us": 45988,
+            "rss_bytes": 47677440
+          },
+          {
+            "api_ns": 31971917,
+            "open_ns": 2232500,
+            "cpu_us": 44266,
+            "rss_bytes": 47693824
+          },
+          {
+            "api_ns": 32939462,
+            "open_ns": 2209875,
+            "cpu_us": 44841,
+            "rss_bytes": 47775744
+          },
+          {
+            "api_ns": 32305499,
+            "open_ns": 2210750,
+            "cpu_us": 45321,
+            "rss_bytes": 47759360
+          },
+          {
+            "api_ns": 31138751,
+            "open_ns": 2186208,
+            "cpu_us": 44395,
+            "rss_bytes": 47644672
+          },
+          {
+            "api_ns": 32503831,
+            "open_ns": 2663458,
+            "cpu_us": 47888,
+            "rss_bytes": 47726592
+          },
+          {
+            "api_ns": 30933791,
+            "open_ns": 2265333,
+            "cpu_us": 43831,
+            "rss_bytes": 47775744
+          },
+          {
+            "api_ns": 30912042,
+            "open_ns": 2198875,
+            "cpu_us": 44932,
+            "rss_bytes": 47710208
+          }
+        ],
+        "previous": [
+          {
+            "api_ns": 43072539,
+            "open_ns": 64875,
+            "cpu_us": 47838,
+            "rss_bytes": 39354368
+          },
+          {
+            "api_ns": 42032626,
+            "open_ns": 56167,
+            "cpu_us": 47090,
+            "rss_bytes": 39403520
+          },
+          {
+            "api_ns": 44108458,
+            "open_ns": 62000,
+            "cpu_us": 49034,
+            "rss_bytes": 38748160
+          },
+          {
+            "api_ns": 43524333,
+            "open_ns": 61833,
+            "cpu_us": 48419,
+            "rss_bytes": 39141376
+          },
+          {
+            "api_ns": 39093378,
+            "open_ns": 55041,
+            "cpu_us": 44565,
+            "rss_bytes": 39321600
+          },
+          {
+            "api_ns": 40207500,
+            "open_ns": 56125,
+            "cpu_us": 44970,
+            "rss_bytes": 39501824
+          },
+          {
+            "api_ns": 41057793,
+            "open_ns": 59250,
+            "cpu_us": 45878,
+            "rss_bytes": 41189376
+          },
+          {
+            "api_ns": 40271709,
+            "open_ns": 85417,
+            "cpu_us": 46338,
+            "rss_bytes": 41320448
+          },
+          {
+            "api_ns": 41081376,
+            "open_ns": 50084,
+            "cpu_us": 47138,
+            "rss_bytes": 43483136
+          },
+          {
+            "api_ns": 39507793,
+            "open_ns": 58875,
+            "cpu_us": 44115,
+            "rss_bytes": 39354368
+          },
+          {
+            "api_ns": 39933917,
+            "open_ns": 53458,
+            "cpu_us": 47407,
+            "rss_bytes": 42221568
+          },
+          {
+            "api_ns": 39962125,
+            "open_ns": 59458,
+            "cpu_us": 45965,
+            "rss_bytes": 43188224
+          }
+        ],
+        "candidate": [
+          {
+            "api_ns": 35443334,
+            "open_ns": 66333,
+            "cpu_us": 41547,
+            "rss_bytes": 37371904
+          },
+          {
+            "api_ns": 35691379,
+            "open_ns": 57334,
+            "cpu_us": 41068,
+            "rss_bytes": 41271296
+          },
+          {
+            "api_ns": 36948039,
+            "open_ns": 54458,
+            "cpu_us": 42883,
+            "rss_bytes": 41385984
+          },
+          {
+            "api_ns": 34346500,
+            "open_ns": 54625,
+            "cpu_us": 39763,
+            "rss_bytes": 41402368
+          },
+          {
+            "api_ns": 34637459,
+            "open_ns": 53167,
+            "cpu_us": 40366,
+            "rss_bytes": 37928960
+          },
+          {
+            "api_ns": 33229500,
+            "open_ns": 62000,
+            "cpu_us": 38151,
+            "rss_bytes": 41336832
+          },
+          {
+            "api_ns": 33311290,
+            "open_ns": 59959,
+            "cpu_us": 39236,
+            "rss_bytes": 38944768
+          },
+          {
+            "api_ns": 33320376,
+            "open_ns": 59042,
+            "cpu_us": 38962,
+            "rss_bytes": 40681472
+          },
+          {
+            "api_ns": 33764459,
+            "open_ns": 50125,
+            "cpu_us": 38605,
+            "rss_bytes": 39387136
+          },
+          {
+            "api_ns": 33610501,
+            "open_ns": 115250,
+            "cpu_us": 39348,
+            "rss_bytes": 41320448
+          },
+          {
+            "api_ns": 33946332,
+            "open_ns": 60458,
+            "cpu_us": 38955,
+            "rss_bytes": 39485440
+          },
+          {
+            "api_ns": 32788253,
+            "open_ns": 56041,
+            "cpu_us": 39238,
+            "rss_bytes": 41435136
+          }
+        ]
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "media_ranges",
+      "sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+      "samples": {
+        "libzim": [
+          {
+            "api_ns": 251460,
+            "open_ns": 2416375,
+            "cpu_us": 11430,
+            "rss_bytes": 4456448
+          },
+          {
+            "api_ns": 212000,
+            "open_ns": 2278500,
+            "cpu_us": 11482,
+            "rss_bytes": 4308992
+          },
+          {
+            "api_ns": 326920,
+            "open_ns": 2175291,
+            "cpu_us": 11347,
+            "rss_bytes": 4456448
+          },
+          {
+            "api_ns": 302788,
+            "open_ns": 2187208,
+            "cpu_us": 11540,
+            "rss_bytes": 4423680
+          },
+          {
+            "api_ns": 317167,
+            "open_ns": 2224875,
+            "cpu_us": 12940,
+            "rss_bytes": 4407296
+          },
+          {
+            "api_ns": 225582,
+            "open_ns": 2399625,
+            "cpu_us": 11328,
+            "rss_bytes": 4407296
+          },
+          {
+            "api_ns": 228501,
+            "open_ns": 2447417,
+            "cpu_us": 12028,
+            "rss_bytes": 4390912
+          },
+          {
+            "api_ns": 211001,
+            "open_ns": 2210833,
+            "cpu_us": 11020,
+            "rss_bytes": 4325376
+          },
+          {
+            "api_ns": 369629,
+            "open_ns": 2192167,
+            "cpu_us": 11116,
+            "rss_bytes": 4374528
+          },
+          {
+            "api_ns": 240713,
+            "open_ns": 2281209,
+            "cpu_us": 12013,
+            "rss_bytes": 4374528
+          },
+          {
+            "api_ns": 228418,
+            "open_ns": 2224916,
+            "cpu_us": 11280,
+            "rss_bytes": 4358144
+          },
+          {
+            "api_ns": 216709,
+            "open_ns": 2247333,
+            "cpu_us": 11127,
+            "rss_bytes": 4358144
+          }
+        ],
+        "previous": [
+          {
+            "api_ns": 111958,
+            "open_ns": 51083,
+            "cpu_us": 4321,
+            "rss_bytes": 2637824
+          },
+          {
+            "api_ns": 269874,
+            "open_ns": 122958,
+            "cpu_us": 4301,
+            "rss_bytes": 2654208
+          },
+          {
+            "api_ns": 108791,
+            "open_ns": 54166,
+            "cpu_us": 4353,
+            "rss_bytes": 2621440
+          },
+          {
+            "api_ns": 115414,
+            "open_ns": 58750,
+            "cpu_us": 4054,
+            "rss_bytes": 2637824
+          },
+          {
+            "api_ns": 132954,
+            "open_ns": 85083,
+            "cpu_us": 4744,
+            "rss_bytes": 2654208
+          },
+          {
+            "api_ns": 148040,
+            "open_ns": 68875,
+            "cpu_us": 4665,
+            "rss_bytes": 2670592
+          },
+          {
+            "api_ns": 150294,
+            "open_ns": 59375,
+            "cpu_us": 4218,
+            "rss_bytes": 2654208
+          },
+          {
+            "api_ns": 127416,
+            "open_ns": 70792,
+            "cpu_us": 4561,
+            "rss_bytes": 2654208
+          },
+          {
+            "api_ns": 125957,
+            "open_ns": 91000,
+            "cpu_us": 3831,
+            "rss_bytes": 2670592
+          },
+          {
+            "api_ns": 166666,
+            "open_ns": 57000,
+            "cpu_us": 4344,
+            "rss_bytes": 2670592
+          },
+          {
+            "api_ns": 127708,
+            "open_ns": 59125,
+            "cpu_us": 4308,
+            "rss_bytes": 2637824
+          },
+          {
+            "api_ns": 211792,
+            "open_ns": 66167,
+            "cpu_us": 3913,
+            "rss_bytes": 2670592
+          }
+        ],
+        "candidate": [
+          {
+            "api_ns": 154751,
+            "open_ns": 64167,
+            "cpu_us": 4303,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 113252,
+            "open_ns": 54708,
+            "cpu_us": 3999,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 117128,
+            "open_ns": 56250,
+            "cpu_us": 4335,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 110874,
+            "open_ns": 50209,
+            "cpu_us": 4101,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 107500,
+            "open_ns": 52333,
+            "cpu_us": 4287,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 161709,
+            "open_ns": 49584,
+            "cpu_us": 3844,
+            "rss_bytes": 2637824
+          },
+          {
+            "api_ns": 218835,
+            "open_ns": 54417,
+            "cpu_us": 3952,
+            "rss_bytes": 2621440
+          },
+          {
+            "api_ns": 122332,
+            "open_ns": 58875,
+            "cpu_us": 3893,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 115083,
+            "open_ns": 56500,
+            "cpu_us": 4640,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 123959,
+            "open_ns": 65166,
+            "cpu_us": 3912,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 115168,
+            "open_ns": 63750,
+            "cpu_us": 3871,
+            "rss_bytes": 2605056
+          },
+          {
+            "api_ns": 126379,
+            "open_ns": 87791,
+            "cpu_us": 4278,
+            "rss_bytes": 2605056
+          }
+        ]
+      }
+    }
+  ],
+  "end": "2026-11-18T21:51:29.668175+00:00"
+}
