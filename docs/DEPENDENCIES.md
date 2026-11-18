@@ -2,6 +2,16 @@
 
 Snapshot taken 2026-11-05, before and after the reductions under "Done", from `src-tauri/Cargo.lock` and `package-lock.json`. Re-run the commands below to refresh it. Vendored forks and native patches are covered in [FORKS.md](FORKS.md).
 
+## Spelling index update, 2026-11-18
+
+The app builds and queries a checked Rust word index from archive titles. The
+application lockfile drops `rusqlite` and `libsqlite3-sys`. The spelling
+format uses the already-locked pure Rust `chksum-hash-sha2-256` 0.0.1 for
+installation and file identity binding and page checks. The standalone
+comparison driver still builds the previous SQLite reader and writer in a
+temporary workspace. The app's About panel identifies the spelling format.
+[Implementation limits and comparison](benchmarks/2026-11-18-spelling-index.md)
+
 ## 2026-11-17 review
 
 The application now uses its already-locked `time` crate directly for timestamps. Chrono remains a transitive dependency of the torrent stack. The workspace policy treats its maintenance advisory as blocking for direct dependencies. The November 17 run passed the native policy for seven application and four connector targets. The npm build-tool audit still reports an open picomatch advisory. [Review and verification](reviews/2026-11-17/PROJECT-REVIEW.md)
@@ -58,7 +68,6 @@ Fixed when cargo-deny was introduced: `rustls-pemfile` (unmaintained) was replac
 | snow 0.10 | 13 | 79 | Noise protocol for private reading-data sync |
 | tauri-plugin-updater | 10 | 474 | Desktop self-update |
 | rust-embed 8 | 9 | 25 | Embedded frontend for headless mode, plus locale catalogs |
-| rusqlite (bundled SQLite) | 8 | 44 | Offline spelling dictionary built from archive titles |
 | notify 8 | 7 | 55 | Watched library folders |
 | mdns-sd (vendored) | 5 | 37 | Nearby discovery on non-Apple platforms |
 
@@ -122,10 +131,8 @@ On 2026-11-05 every registry crate in the lockfile was checked against crates.io
 - serde_urlencoded
 - urlencoding
 - untrusted 0.9
-- fallible-iterator and fallible-streaming-iterator (rusqlite)
 - maybe-owned and ambient-authority (cap-std)
 - iana-time-zone-haiku
-- vcpkg (a libsqlite3-sys build dependency on every target; only consulted for MSVC builds)
 
 **Upstream only:**
 - *Tauri and the GTK3 stack:* cesu8 (2016, via jni), vswhom, foreign-types, embed_plist, ndk-context, field-offset, x11 and x11-dl, winapi 0.3 with its two target shims, and proc-macro-error (RUSTSEC-2024-0370, through `glib-macros` 0.18). These leave when Tauri moves to gtk-rs ≥ 0.20 and drops winapi.

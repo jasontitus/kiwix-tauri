@@ -1,0 +1,1303 @@
+{
+  "base": "96e7afce109a1b753213caf601a4b8586d948313",
+  "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)",
+  "archives": [
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "bytes": 8978471,
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "titleStreamSha256": "31cb4ab10677dbf9419ddd1536408cbfee4f52ed6bd6b250cf8a7147ced884fc",
+      "samples": [
+        {
+          "backend": "sqlite",
+          "round": 1,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": null,
+            "wall": 0.11871695797890425,
+            "cpu": 0.110511,
+            "rssBytes": 5816320,
+            "observedWorkingBytes": 1656840,
+            "fileBytes": 917504
+          },
+          "query": {
+            "firstBatchMicros": 1303,
+            "openMicros": 4408,
+            "warmMicros": 29231,
+            "warmQueries": 1023,
+            "wall": 0.04407000006176531,
+            "cpu": 0.038807999999999995,
+            "rssBytes": 5652480,
+            "observedWorkingBytes": 917504,
+            "fileBytes": 917504
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 1,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": 245824,
+            "wall": 0.05351366603281349,
+            "cpu": 0.018893999999999998,
+            "rssBytes": 5750784,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          },
+          "query": {
+            "firstBatchMicros": 1057,
+            "openMicros": 1850,
+            "warmMicros": 3461,
+            "warmQueries": 1023,
+            "wall": 0.015813332982361317,
+            "cpu": 0.010950999999999999,
+            "rssBytes": 3194880,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 2,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": 245824,
+            "wall": 0.034948915941640735,
+            "cpu": 0.019912,
+            "rssBytes": 5734400,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          },
+          "query": {
+            "firstBatchMicros": 1027,
+            "openMicros": 1790,
+            "warmMicros": 3684,
+            "warmQueries": 1023,
+            "wall": 0.01571908302139491,
+            "cpu": 0.010933,
+            "rssBytes": 3227648,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 2,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": null,
+            "wall": 0.10731516708619893,
+            "cpu": 0.099822,
+            "rssBytes": 5881856,
+            "observedWorkingBytes": 1603488,
+            "fileBytes": 917504
+          },
+          "query": {
+            "firstBatchMicros": 1194,
+            "openMicros": 6201,
+            "warmMicros": 27207,
+            "warmQueries": 1023,
+            "wall": 0.04431120806839317,
+            "cpu": 0.036738999999999994,
+            "rssBytes": 5636096,
+            "observedWorkingBytes": 917504,
+            "fileBytes": 917504
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 3,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": null,
+            "wall": 0.10702875000424683,
+            "cpu": 0.10024,
+            "rssBytes": 5799936,
+            "observedWorkingBytes": 1710088,
+            "fileBytes": 917504
+          },
+          "query": {
+            "firstBatchMicros": 1177,
+            "openMicros": 5428,
+            "warmMicros": 27714,
+            "warmQueries": 1023,
+            "wall": 0.04365516605321318,
+            "cpu": 0.036923,
+            "rssBytes": 5718016,
+            "observedWorkingBytes": 917504,
+            "fileBytes": 917504
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 3,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": 245824,
+            "wall": 0.04063295805826783,
+            "cpu": 0.01792,
+            "rssBytes": 5750784,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          },
+          "query": {
+            "firstBatchMicros": 967,
+            "openMicros": 1651,
+            "warmMicros": 3210,
+            "warmQueries": 1023,
+            "wall": 0.012602999922819436,
+            "cpu": 0.009814999999999999,
+            "rssBytes": 3178496,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 4,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": 245824,
+            "wall": 0.03657245810609311,
+            "cpu": 0.017615,
+            "rssBytes": 5718016,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          },
+          "query": {
+            "firstBatchMicros": 971,
+            "openMicros": 1671,
+            "warmMicros": 3198,
+            "warmQueries": 1023,
+            "wall": 0.012410666095092893,
+            "cpu": 0.009682,
+            "rssBytes": 3178496,
+            "observedWorkingBytes": 163936,
+            "fileBytes": 163936
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 4,
+          "build": {
+            "titles": 3821,
+            "words": 4204,
+            "workingBytes": null,
+            "wall": 0.10411470802500844,
+            "cpu": 0.099128,
+            "rssBytes": 5865472,
+            "observedWorkingBytes": 1656840,
+            "fileBytes": 917504
+          },
+          "query": {
+            "firstBatchMicros": 1122,
+            "openMicros": 4977,
+            "warmMicros": 27906,
+            "warmQueries": 1023,
+            "wall": 0.04050304100383073,
+            "cpu": 0.036779,
+            "rssBytes": 5636096,
+            "observedWorkingBytes": 917504,
+            "fileBytes": 917504
+          }
+        }
+      ],
+      "medians": {
+        "sqlite": {
+          "build": {
+            "titles": 3821.0,
+            "words": 4204.0,
+            "wall": 0.10717195854522288,
+            "cpu": 0.100031,
+            "rssBytes": 5840896.0,
+            "observedWorkingBytes": 1656840.0,
+            "fileBytes": 917504.0
+          },
+          "query": {
+            "firstBatchMicros": 1185.5,
+            "openMicros": 5202.5,
+            "warmMicros": 27810.0,
+            "warmQueries": 1023.0,
+            "wall": 0.043862583057489246,
+            "cpu": 0.036850999999999995,
+            "rssBytes": 5644288.0,
+            "observedWorkingBytes": 917504.0,
+            "fileBytes": 917504.0
+          }
+        },
+        "checked": {
+          "build": {
+            "titles": 3821.0,
+            "words": 4204.0,
+            "workingBytes": 245824.0,
+            "wall": 0.03860270808218047,
+            "cpu": 0.018407,
+            "rssBytes": 5742592.0,
+            "observedWorkingBytes": 163936.0,
+            "fileBytes": 163936.0
+          },
+          "query": {
+            "firstBatchMicros": 999.0,
+            "openMicros": 1730.5,
+            "warmMicros": 3335.5,
+            "warmQueries": 1023.0,
+            "wall": 0.014161041472107172,
+            "cpu": 0.010374,
+            "rssBytes": 3186688.0,
+            "observedWorkingBytes": 163936.0,
+            "fileBytes": 163936.0
+          }
+        }
+      },
+      "expected": [
+        3821,
+        4204,
+        [
+          [
+            "climtae",
+            [
+              "climate"
+            ]
+          ],
+          [
+            "achange",
+            [
+              "change"
+            ]
+          ],
+          [
+            "plnaet",
+            [
+              "planet"
+            ]
+          ],
+          [
+            "kingdm",
+            [
+              "kingdom"
+            ]
+          ],
+          [
+            "chnge",
+            [
+              "change"
+            ]
+          ],
+          [
+            "xt",
+            []
+          ],
+          [
+            "aks",
+            [
+              "as",
+              "ask"
+            ]
+          ],
+          [
+            "wn",
+            []
+          ],
+          [
+            "qz",
+            []
+          ],
+          [
+            "suj",
+            [
+              "sun",
+              "sur"
+            ]
+          ],
+          [
+            "sciencee",
+            [
+              "science",
+              "sciences"
+            ]
+          ],
+          [
+            "agencxy",
+            [
+              "agency"
+            ]
+          ],
+          [
+            "universitx",
+            [
+              "university"
+            ]
+          ],
+          [
+            "universitxy",
+            [
+              "university"
+            ]
+          ],
+          [
+            "geograhpy",
+            [
+              "geography"
+            ]
+          ],
+          [
+            "wikipedia",
+            []
+          ],
+          [
+            "sünd",
+            []
+          ],
+          [
+            "Reversë",
+            []
+          ],
+          [
+            "Abuja",
+            []
+          ],
+          [
+            "Afrcia",
+            [
+              "Africa"
+            ]
+          ],
+          [
+            "ab",
+            []
+          ],
+          [
+            "abc",
+            [
+              "abu"
+            ]
+          ],
+          [
+            "stx",
+            [
+              "six"
+            ]
+          ],
+          [
+            "Plnaet, EARHT!",
+            [
+              "Planet, EARTH!"
+            ]
+          ],
+          [
+            "climtae change",
+            [
+              "climate change"
+            ]
+          ],
+          [
+            "a plnaet",
+            [
+              "a planet"
+            ]
+          ],
+          [
+            "Café",
+            []
+          ],
+          [
+            "STRASSE",
+            []
+          ],
+          [
+            "nothign fits here",
+            []
+          ],
+          [
+            "commonprefixaaaaxending",
+            []
+          ],
+          [
+            "commonprefixzzazending",
+            []
+          ],
+          [
+            "commonprefxaaaending",
+            []
+          ],
+          [
+            "commonprefixaxazending",
+            []
+          ]
+        ]
+      ]
+    },
+    {
+      "archive": "wikipedia_en_simple_all_nopic_2026-05.zim",
+      "bytes": 982788870,
+      "sha256": "503b74027d101ec13b272f1ebbd23473e1d260be71a35a71141dfc985fd20d0a",
+      "titleStreamSha256": "4decbe47b438ed09b0d438b78c21e1f587638cddcc5ed9041683926530041a82",
+      "samples": [
+        {
+          "backend": "sqlite",
+          "round": 1,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": null,
+            "wall": 51.83007629192434,
+            "cpu": 38.689006,
+            "rssBytes": 7372800,
+            "observedWorkingBytes": 44723880,
+            "fileBytes": 41885696
+          },
+          "query": {
+            "firstBatchMicros": 4418,
+            "openMicros": 450868,
+            "warmMicros": 100549,
+            "warmQueries": 1023,
+            "wall": 0.5932387500070035,
+            "cpu": 0.538735,
+            "rssBytes": 9863168,
+            "observedWorkingBytes": 41885696,
+            "fileBytes": 41885696
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 1,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": 10002496,
+            "wall": 6.934781625051983,
+            "cpu": 6.001557999999999,
+            "rssBytes": 10600448,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          },
+          "query": {
+            "firstBatchMicros": 9002,
+            "openMicros": 184142,
+            "warmMicros": 20590,
+            "warmQueries": 1023,
+            "wall": 0.23320354195311666,
+            "cpu": 0.167176,
+            "rssBytes": 4308992,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 2,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": 10002496,
+            "wall": 7.378110749996267,
+            "cpu": 4.772751,
+            "rssBytes": 9830400,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          },
+          "query": {
+            "firstBatchMicros": 12046,
+            "openMicros": 161296,
+            "warmMicros": 17625,
+            "warmQueries": 1023,
+            "wall": 0.2093943340005353,
+            "cpu": 0.148912,
+            "rssBytes": 4390912,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 2,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": null,
+            "wall": 99.14398891699966,
+            "cpu": 66.728777,
+            "rssBytes": 7176192,
+            "observedWorkingBytes": 44723880,
+            "fileBytes": 41885696
+          },
+          "query": {
+            "firstBatchMicros": 4758,
+            "openMicros": 450989,
+            "warmMicros": 91822,
+            "warmQueries": 1023,
+            "wall": 0.5706703750183806,
+            "cpu": 0.528353,
+            "rssBytes": 9912320,
+            "observedWorkingBytes": 41885696,
+            "fileBytes": 41885696
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 3,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": null,
+            "wall": 78.48355562495999,
+            "cpu": 60.967935000000004,
+            "rssBytes": 7421952,
+            "observedWorkingBytes": 44723880,
+            "fileBytes": 41885696
+          },
+          "query": {
+            "firstBatchMicros": 4236,
+            "openMicros": 420144,
+            "warmMicros": 93862,
+            "warmQueries": 1023,
+            "wall": 0.533552167005837,
+            "cpu": 0.517119,
+            "rssBytes": 9830400,
+            "observedWorkingBytes": 41885696,
+            "fileBytes": 41885696
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 3,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": 10002496,
+            "wall": 6.485242874943651,
+            "cpu": 6.321074,
+            "rssBytes": 10469376,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          },
+          "query": {
+            "firstBatchMicros": 12244,
+            "openMicros": 172631,
+            "warmMicros": 27321,
+            "warmQueries": 1023,
+            "wall": 0.22820875002071261,
+            "cpu": 0.21860599999999997,
+            "rssBytes": 4374528,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 4,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": 10002496,
+            "wall": 6.4436432080110535,
+            "cpu": 6.3261069999999995,
+            "rssBytes": 10436608,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          },
+          "query": {
+            "firstBatchMicros": 12550,
+            "openMicros": 174231,
+            "warmMicros": 26452,
+            "warmQueries": 1023,
+            "wall": 0.22592304192949086,
+            "cpu": 0.219087,
+            "rssBytes": 4358144,
+            "observedWorkingBytes": 6668384,
+            "fileBytes": 6668384
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 4,
+          "build": {
+            "titles": 394563,
+            "words": 179182,
+            "workingBytes": null,
+            "wall": 61.43068733299151,
+            "cpu": 49.918298,
+            "rssBytes": 7389184,
+            "observedWorkingBytes": 44723880,
+            "fileBytes": 41885696
+          },
+          "query": {
+            "firstBatchMicros": 2709,
+            "openMicros": 258155,
+            "warmMicros": 52653,
+            "warmQueries": 1023,
+            "wall": 0.3230181250255555,
+            "cpu": 0.31868399999999997,
+            "rssBytes": 9830400,
+            "observedWorkingBytes": 41885696,
+            "fileBytes": 41885696
+          }
+        }
+      ],
+      "medians": {
+        "sqlite": {
+          "build": {
+            "titles": 394563.0,
+            "words": 179182.0,
+            "wall": 69.95712147897575,
+            "cpu": 55.4431165,
+            "rssBytes": 7380992.0,
+            "observedWorkingBytes": 44723880.0,
+            "fileBytes": 41885696.0
+          },
+          "query": {
+            "firstBatchMicros": 4327.0,
+            "openMicros": 435506.0,
+            "warmMicros": 92842.0,
+            "warmQueries": 1023.0,
+            "wall": 0.5521112710121088,
+            "cpu": 0.522736,
+            "rssBytes": 9846784.0,
+            "observedWorkingBytes": 41885696.0,
+            "fileBytes": 41885696.0
+          }
+        },
+        "checked": {
+          "build": {
+            "titles": 394563.0,
+            "words": 179182.0,
+            "workingBytes": 10002496.0,
+            "wall": 6.710012249997817,
+            "cpu": 6.161315999999999,
+            "rssBytes": 10452992.0,
+            "observedWorkingBytes": 6668384.0,
+            "fileBytes": 6668384.0
+          },
+          "query": {
+            "firstBatchMicros": 12145.0,
+            "openMicros": 173431.0,
+            "warmMicros": 23521.0,
+            "warmQueries": 1023.0,
+            "wall": 0.22706589597510174,
+            "cpu": 0.19289099999999998,
+            "rssBytes": 4366336.0,
+            "observedWorkingBytes": 6668384.0,
+            "fileBytes": 6668384.0
+          }
+        }
+      },
+      "expected": [
+        394563,
+        179182,
+        [
+          [
+            "climtae",
+            [
+              "climate"
+            ]
+          ],
+          [
+            "achange",
+            [
+              "change",
+              "archange"
+            ]
+          ],
+          [
+            "plnaet",
+            [
+              "planet"
+            ]
+          ],
+          [
+            "kingdm",
+            [
+              "kingdom",
+              "kingda"
+            ]
+          ],
+          [
+            "chnge",
+            [
+              "change"
+            ]
+          ],
+          [
+            "xt",
+            []
+          ],
+          [
+            "aks",
+            [
+              "as",
+              "ahs",
+              "oaks",
+              "ask",
+              "ks"
+            ]
+          ],
+          [
+            "wn",
+            []
+          ],
+          [
+            "qz",
+            []
+          ],
+          [
+            "suj",
+            [
+              "sur",
+              "sun",
+              "su",
+              "sue",
+              "sub"
+            ]
+          ],
+          [
+            "sciencee",
+            [
+              "science",
+              "sciences"
+            ]
+          ],
+          [
+            "agencxy",
+            [
+              "agency"
+            ]
+          ],
+          [
+            "universitx",
+            [
+              "university",
+              "université",
+              "università",
+              "universiti"
+            ]
+          ],
+          [
+            "universitxy",
+            [
+              "university"
+            ]
+          ],
+          [
+            "geograhpy",
+            [
+              "geography"
+            ]
+          ],
+          [
+            "wikipedia",
+            []
+          ],
+          [
+            "sünd",
+            [
+              "sand",
+              "send",
+              "sind",
+              "sund",
+              "süd"
+            ]
+          ],
+          [
+            "Reversë",
+            [
+              "Reverse"
+            ]
+          ],
+          [
+            "Abuja",
+            []
+          ],
+          [
+            "Afrcia",
+            [
+              "Africa"
+            ]
+          ],
+          [
+            "ab",
+            []
+          ],
+          [
+            "abc",
+            []
+          ],
+          [
+            "stx",
+            [
+              "st",
+              "sex",
+              "six",
+              "tx",
+              "styx"
+            ]
+          ],
+          [
+            "Plnaet, EARHT!",
+            [
+              "Planet, EARTH!"
+            ]
+          ],
+          [
+            "climtae change",
+            [
+              "climate change"
+            ]
+          ],
+          [
+            "a plnaet",
+            [
+              "a planet"
+            ]
+          ],
+          [
+            "Café",
+            []
+          ],
+          [
+            "STRASSE",
+            [
+              "STRASSEN",
+              "STRASS",
+              "STRASSER"
+            ]
+          ],
+          [
+            "nothign fits here",
+            [
+              "nothing fits here",
+              "nothin fits here"
+            ]
+          ],
+          [
+            "commonprefixaaaaxending",
+            []
+          ],
+          [
+            "commonprefixzzazending",
+            []
+          ],
+          [
+            "commonprefxaaaending",
+            []
+          ],
+          [
+            "commonprefixaxazending",
+            []
+          ]
+        ]
+      ]
+    },
+    {
+      "synthetic": "synthetic-common-affixes",
+      "titleStreamSha256": "12ac85872d2b301ac88d79527efb91c57d9c3ef4d9a288a35bad0334e7c29aca",
+      "samples": [
+        {
+          "backend": "sqlite",
+          "round": 1,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": null,
+            "wall": 2.287385334027931,
+            "cpu": 1.911645,
+            "rssBytes": 7012352,
+            "observedWorkingBytes": 33612544,
+            "fileBytes": 32247808
+          },
+          "query": {
+            "firstBatchMicros": 1615,
+            "openMicros": 80225,
+            "warmMicros": 33777,
+            "warmQueries": 1023,
+            "wall": 0.12482395803090185,
+            "cpu": 0.12062300000000001,
+            "rssBytes": 9764864,
+            "observedWorkingBytes": 32247808,
+            "fileBytes": 32247808
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 1,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": 2490368,
+            "wall": 0.18306670791935176,
+            "cpu": 0.14881,
+            "rssBytes": 7471104,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          },
+          "query": {
+            "firstBatchMicros": 503,
+            "openMicros": 20516,
+            "warmMicros": 2899,
+            "warmQueries": 1023,
+            "wall": 0.033974750083871186,
+            "cpu": 0.029318,
+            "rssBytes": 3080192,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 2,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": 2490368,
+            "wall": 0.18018300004769117,
+            "cpu": 0.149418,
+            "rssBytes": 7454720,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          },
+          "query": {
+            "firstBatchMicros": 505,
+            "openMicros": 19848,
+            "warmMicros": 2988,
+            "warmQueries": 1023,
+            "wall": 0.0320166249293834,
+            "cpu": 0.028344999999999995,
+            "rssBytes": 3063808,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 2,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": null,
+            "wall": 2.1621190829901025,
+            "cpu": 1.804506,
+            "rssBytes": 7012352,
+            "observedWorkingBytes": 33612544,
+            "fileBytes": 32247808
+          },
+          "query": {
+            "firstBatchMicros": 1440,
+            "openMicros": 81080,
+            "warmMicros": 32793,
+            "warmQueries": 1023,
+            "wall": 0.1254562500398606,
+            "cpu": 0.119934,
+            "rssBytes": 9666560,
+            "observedWorkingBytes": 32247808,
+            "fileBytes": 32247808
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 3,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": null,
+            "wall": 2.325104249990545,
+            "cpu": 1.962558,
+            "rssBytes": 7012352,
+            "observedWorkingBytes": 33612544,
+            "fileBytes": 32247808
+          },
+          "query": {
+            "firstBatchMicros": 1645,
+            "openMicros": 86189,
+            "warmMicros": 34864,
+            "warmQueries": 1023,
+            "wall": 0.13247066701296717,
+            "cpu": 0.127613,
+            "rssBytes": 9830400,
+            "observedWorkingBytes": 32247808,
+            "fileBytes": 32247808
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 3,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": 2490368,
+            "wall": 0.20550362509675324,
+            "cpu": 0.152326,
+            "rssBytes": 7520256,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          },
+          "query": {
+            "firstBatchMicros": 533,
+            "openMicros": 20484,
+            "warmMicros": 2942,
+            "warmQueries": 1023,
+            "wall": 0.0315462090075016,
+            "cpu": 0.028756,
+            "rssBytes": 3096576,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          }
+        },
+        {
+          "backend": "checked",
+          "round": 4,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": 2490368,
+            "wall": 0.176743375021033,
+            "cpu": 0.150364,
+            "rssBytes": 7454720,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          },
+          "query": {
+            "firstBatchMicros": 543,
+            "openMicros": 20496,
+            "warmMicros": 3110,
+            "warmQueries": 1023,
+            "wall": 0.033753416035324335,
+            "cpu": 0.028851999999999996,
+            "rssBytes": 3096576,
+            "observedWorkingBytes": 1654880,
+            "fileBytes": 1654880
+          }
+        },
+        {
+          "backend": "sqlite",
+          "round": 4,
+          "build": {
+            "titles": 25000,
+            "words": 25000,
+            "workingBytes": null,
+            "wall": 2.034242457943037,
+            "cpu": 1.762642,
+            "rssBytes": 6979584,
+            "observedWorkingBytes": 33612544,
+            "fileBytes": 32247808
+          },
+          "query": {
+            "firstBatchMicros": 1347,
+            "openMicros": 75622,
+            "warmMicros": 31106,
+            "warmQueries": 1023,
+            "wall": 0.11784237495157868,
+            "cpu": 0.112238,
+            "rssBytes": 9699328,
+            "observedWorkingBytes": 32247808,
+            "fileBytes": 32247808
+          }
+        }
+      ],
+      "medians": {
+        "sqlite": {
+          "build": {
+            "titles": 25000.0,
+            "words": 25000.0,
+            "wall": 2.224752208509017,
+            "cpu": 1.8580755,
+            "rssBytes": 7012352.0,
+            "observedWorkingBytes": 33612544.0,
+            "fileBytes": 32247808.0
+          },
+          "query": {
+            "firstBatchMicros": 1527.5,
+            "openMicros": 80652.5,
+            "warmMicros": 33285.0,
+            "warmQueries": 1023.0,
+            "wall": 0.12514010403538123,
+            "cpu": 0.12027850000000001,
+            "rssBytes": 9732096.0,
+            "observedWorkingBytes": 32247808.0,
+            "fileBytes": 32247808.0
+          }
+        },
+        "checked": {
+          "build": {
+            "titles": 25000.0,
+            "words": 25000.0,
+            "workingBytes": 2490368.0,
+            "wall": 0.18162485398352146,
+            "cpu": 0.149891,
+            "rssBytes": 7462912.0,
+            "observedWorkingBytes": 1654880.0,
+            "fileBytes": 1654880.0
+          },
+          "query": {
+            "firstBatchMicros": 519.0,
+            "openMicros": 20490.0,
+            "warmMicros": 2965.0,
+            "warmQueries": 1023.0,
+            "wall": 0.032885020482353866,
+            "cpu": 0.028803999999999996,
+            "rssBytes": 3088384.0,
+            "observedWorkingBytes": 1654880.0,
+            "fileBytes": 1654880.0
+          }
+        }
+      },
+      "expected": [
+        25000,
+        25000,
+        [
+          [
+            "climtae",
+            []
+          ],
+          [
+            "achange",
+            []
+          ],
+          [
+            "plnaet",
+            []
+          ],
+          [
+            "kingdm",
+            []
+          ],
+          [
+            "chnge",
+            []
+          ],
+          [
+            "xt",
+            []
+          ],
+          [
+            "aks",
+            []
+          ],
+          [
+            "wn",
+            []
+          ],
+          [
+            "qz",
+            []
+          ],
+          [
+            "suj",
+            []
+          ],
+          [
+            "sciencee",
+            []
+          ],
+          [
+            "agencxy",
+            []
+          ],
+          [
+            "universitx",
+            []
+          ],
+          [
+            "universitxy",
+            []
+          ],
+          [
+            "geograhpy",
+            []
+          ],
+          [
+            "wikipedia",
+            []
+          ],
+          [
+            "sünd",
+            []
+          ],
+          [
+            "Reversë",
+            []
+          ],
+          [
+            "Abuja",
+            []
+          ],
+          [
+            "Afrcia",
+            []
+          ],
+          [
+            "ab",
+            []
+          ],
+          [
+            "abc",
+            []
+          ],
+          [
+            "stx",
+            []
+          ],
+          [
+            "Plnaet, EARHT!",
+            []
+          ],
+          [
+            "climtae change",
+            []
+          ],
+          [
+            "a plnaet",
+            []
+          ],
+          [
+            "Café",
+            []
+          ],
+          [
+            "STRASSE",
+            []
+          ],
+          [
+            "nothign fits here",
+            []
+          ],
+          [
+            "commonprefixaaaaxending",
+            [
+              "commonprefixaaaaending",
+              "commonprefixaaaxending"
+            ]
+          ],
+          [
+            "commonprefixzzazending",
+            [
+              "commonprefixazazending"
+            ]
+          ],
+          [
+            "commonprefxaaaending",
+            []
+          ],
+          [
+            "commonprefixaxazending",
+            []
+          ]
+        ]
+      ]
+    }
+  ],
+  "binarySha256": "3b74ad3a5475314a7f9cbc055ad745e80009b03be67b417dca12d93f49252a94",
+  "sourceSha256": {
+    "src-tauri/src/spelling.rs": "56e63edb0dadfcc0b1f61d1eee67a8a687c679b164bfd74ecfb31c6705511efc",
+    "src-tauri/src/spelling/index.rs": "2c802f81510f46d35c12d87a78be71c8ed2c6d4eaa4f6ca1f83d36cbcdef1d71",
+    "scripts/bench-spelling-index/driver.rs": "e2c31407a2fba5c696bafcc71f18c10aae0cce945253e9a1577a85fc89055495",
+    "scripts/bench-spelling-index/compare.py": "1c1f14465cd9c6d7198d7673f9068bb877ac9959a46e0a48eccccd403a6e8e96"
+  }
+}

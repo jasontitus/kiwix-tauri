@@ -42,6 +42,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = "2"
 sha1 = "0.11"
 sha2 = "0.10"
+# Archive-derived spelling index pages use the checked Zimru SHA-256 backend.
+chksum-hash-sha2-256 = "=0.0.1"
 md5 = "0.8.1"
 hex = "0.4"
 base64 = "0.22"
@@ -73,7 +75,6 @@ icu_decimal = { version = "2.4", features = ["alloc"] }
 icu_locale = "2.4"
 # Sharing handlers cache formatters across Tokio threads.
 icu_provider = { version = "2.4", features = ["sync"] }
-rusqlite = { version = "0.41", features = ["bundled", "fallible_uint"] }
 unicode-normalization = "0.1"
 socket2 = { version = "0.6", features = ["all"] }
 sys-locale = "0.3"

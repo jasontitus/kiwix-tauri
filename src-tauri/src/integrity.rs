@@ -23,10 +23,16 @@ pub struct FileIdentity {
 pub struct ContentIdentity(Vec<FileIdentity>);
 impl ContentIdentity {
     pub(crate) fn from_files(files: &[(String, std::fs::File)]) -> Result<Self, String> {
+        Self::from_handles(files.iter().map(|(_, file)| file))
+    }
+
+    pub(crate) fn from_handles<'a>(
+        files: impl ExactSizeIterator<Item = &'a std::fs::File>,
+    ) -> Result<Self, String> {
         #[cfg(unix)]
         use std::os::unix::fs::MetadataExt;
         let mut parts = Vec::with_capacity(files.len());
-        for (_, file) in files {
+        for file in files {
             let metadata = file.metadata().map_err(|e| e.to_string())?;
             #[cfg(unix)]
             let (device, inode) = (metadata.dev(), metadata.ino());

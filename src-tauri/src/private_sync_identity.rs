@@ -239,6 +239,17 @@ fn load_or_create_before_publish(data_dir: &Path, before_publish: impl FnOnce())
     }
 }
 
+// Cache data may inherit the standard private Windows profile ACL. Only the
+// file owner, LocalSystem and Builtin Administrators may hold allow entries.
+#[cfg(windows)]
+pub(crate) fn check_cache_directory_access(dir: &Dir) -> Result<(), String> {
+    windows_acl::check_directory(dir, true)
+}
+#[cfg(windows)]
+pub(crate) fn check_cache_file_access(file: &cap_std::fs::File) -> Result<(), String> {
+    windows_acl::check(file, true, false)
+}
+
 #[cfg(windows)]
 mod windows_acl {
     use super::{err, Dir, OpenOptions};
@@ -331,7 +342,7 @@ mod windows_acl {
     }
     pub(super) fn check_file(file: &File) -> Result<(), String> { check(file, false, false) }
 
-    fn check(file: &File, profile: bool, directory: bool) -> Result<(), String> {
+    pub(super) fn check(file: &File, profile: bool, directory: bool) -> Result<(), String> {
         let user = User::current()?;
         let mut owner = PSID::default();
         let mut dacl: *mut ACL = std::ptr::null_mut();

@@ -240,6 +240,7 @@
   "Reader font": "リーダーのフォント",
   "Reading list": "リーディングリスト",
   "Real progress, resumable transfers. Completed archives are added to your library automatically.": "進捗を確認でき、転送は再開可能です。完了したアーカイブはライブラリに自動追加されます。",
+  "Rebuild the spelling index for this version. Your previous index is kept.": "このバージョン用にスペルチェックのインデックスを作成し直してください。以前のインデックスは保持されます。",
   "Recently added": "最近追加した項目",
   "Region": "地域",
   "Regions": "地域",

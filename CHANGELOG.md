@@ -6,6 +6,8 @@ This changelog records source changes, not release certification. Only unsigned 
 
 ### Latest implementation and adversarial corrections
 
+- Build spelling suggestions in a checked Rust file format tied to the actual installed archive. Existing SQLite spelling files are preserved. A user can rebuild suggestions from the archive's titles after a zero-result search. [Storage, verification and measurements](docs/benchmarks/2026-11-18-spelling-index.md)
+
 - Preserve unrelated files when an interrupted library move resumes or rolls back. A downloaded archive remains available when only its final history update fails, and Downloads shows the warning separately.
 - Cancel stale reader exports when the archive installation or privacy context changes. Reading history and search now show 50 results per section while continuing to search the entire collection.
 - Harden local connector startup and cleanup, release signing, and Windows installer resource checks. The November 17 review records the fixes, independent checks, and remaining platform and dependency limits. [Project review](docs/reviews/2026-11-17/PROJECT-REVIEW.md)

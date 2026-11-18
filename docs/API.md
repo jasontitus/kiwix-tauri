@@ -174,6 +174,7 @@ with a "session expired" error. Book IDs and installation IDs come from
 | `random_article` | same as `open_article`; `path` ignored | Same, resolving a random article. |
 | `article_preview` | `bookId`, `path` | `{title, path, excerpt, mime, thumbnail}`. |
 | `search` | search handshake plus `privacyGeneration`, `query`; optional `bookIds`, `mode`, `offset`, `limit` | Search page `{hits, total, hasMore, errors, corrections, spellingStatus}`. |
+| `spelling_status`, `spelling_build`, `spelling_cancel` | `bookId`, `installationId`, `sourceKey`, `privacyGeneration` | Current spelling row for the selected archive files. |
 | `suggest` | search handshake plus `privacyGeneration`, `prefix`, `bookIds`; optional `limit`, `token` | `{suggestions, hasMore, nextToken, errors}`. |
 | `downloads` | none | Array of current transfer job rows. |
 | `catalog` | `url`, `locale`, `privacyGeneration` | Catalog page `{entries, next, total, cache}`. |
@@ -325,6 +326,27 @@ main match; the remaining work is dispatched by `search` and `suggest` in
   `errors` is a per-book array (`{bookId, error}`) and does not fail the whole
   request. `corrections`/`spellingStatus` are populated only when there are no
   hits and spelling is enabled outside private/read-only mode.
+
+#### Spelling dictionaries
+
+Use a row from the latest zero-result search for the same window. Pass its
+`bookId`, `installationId` and opaque `sourceKey` together with the current
+`privacyGeneration`. A replaced or unavailable archive, closed window, or
+changed privacy policy requires a new search. The key binds the row to the
+registered installation and its ordered set of retained archive files.
+
+`spelling_status` can start background validation of an existing index. A
+lookup leaves the filesystem unchanged. `spelling_build` is an explicit user
+action. `spelling_cancel` stops an explicit build for that same source.
+States are `missing`, `rebuild`, `building`, `ready`, `cancelled` and `error`.
+The `cancellable` flag distinguishes an active build from a read-only load.
+Rows also report `processed`, `total`, `words` and an optional `error`.
+
+A previous SQLite dictionary has no source binding. The app recognizes its
+filename and offers to rebuild from public archive titles. The original file
+is preserved. Spelling commands require a writable session with the feature
+enabled. Turning on private or read-only mode stops the writer before the
+transition completes.
 
 #### suggest
 

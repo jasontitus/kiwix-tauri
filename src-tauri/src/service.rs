@@ -2037,6 +2037,9 @@ impl Service {
         Ok((resolved, duplicates))
     }
     fn forget_installation(&self, installation_id: &str) {
+        if let Err(error) = self.spelling.retire_installation(installation_id) {
+            eprintln!("Stopping the removed installation's spelling index: {error}");
+        }
         let _speech = self.mobile_speech_block(mobile_speech::Scope::Installation(installation_id.into()));
         if let Ok(managers) = self.sensors.lock() {
             for manager in managers.values() {

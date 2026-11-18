@@ -1,5 +1,10 @@
 {
   "fr": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Reconstruisez l’index orthographique pour cette version. Votre ancien index est conservé.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Un espace de lecture agréable, dans votre langue.",
       "service": "Language-model translation (session default model)",
@@ -6728,6 +6733,11 @@
     }
   },
   "ar": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "أعِد إنشاء فهرس التدقيق الإملائي لهذا الإصدار. سيُحتفظ بالفهرس السابق.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "مكان مريح للقراءة بلغتك.",
       "service": "Language-model translation (session default model)",
@@ -20339,6 +20349,11 @@
     }
   },
   "ca": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Torneu a crear l’índex ortogràfic per a aquesta versió. Es conservarà l’índex anterior.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Un lloc acollidor per llegir, en la teva llengua.",
       "service": "Language-model translation (session default model)",
@@ -27152,6 +27167,11 @@
     }
   },
   "cs": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Pro tuto verzi znovu vytvořte rejstřík pravopisu. Předchozí rejstřík zůstane zachován.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Příjemné místo ke čtení ve vašem jazyce.",
       "service": "Language-model translation (session default model)",
@@ -33950,6 +33970,11 @@
     }
   },
   "da": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Opbyg staveindekset igen til denne version. Dit tidligere indeks bevares.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Et behageligt sted at læse på dit sprog.",
       "service": "Language-model translation (session default model)",
@@ -40698,6 +40723,11 @@
     }
   },
   "de": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Erstellen Sie den Rechtschreibindex für diese Version neu. Der bisherige Index bleibt erhalten.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Ein angenehmer Ort zum Lesen – in deiner Sprache.",
       "service": "Language-model translation (session default model)",
@@ -47451,6 +47481,11 @@
     }
   },
   "el": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Δημιουργήστε ξανά το ευρετήριο ορθογραφίας για αυτή την έκδοση. Το προηγούμενο ευρετήριο διατηρείται.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Ένας άνετος χώρος ανάγνωσης, στη γλώσσα σας.",
       "service": "Language-model translation (session default model)",
@@ -61052,6 +61087,11 @@
     }
   },
   "es": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Vuelve a crear el índice ortográfico para esta versión. Se conservará el índice anterior.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Un lugar cómodo para leer, en tu idioma.",
       "service": "Language-model translation (session default model)",
@@ -74588,6 +74628,11 @@
     }
   },
   "fi": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Luo oikeinkirjoitushakemisto uudelleen tätä versiota varten. Aiempi hakemisto säilytetään.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Mukava paikka lukea omalla kielelläsi.",
       "service": "Language-model translation (session default model)",
@@ -81351,6 +81396,11 @@
     }
   },
   "he": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "יש ליצור מחדש את אינדקס האיות עבור גרסה זו. האינדקס הקודם יישמר.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "מקום נעים לקרוא בו, בשפה שלך.",
       "service": "Language-model translation (session default model)",
@@ -88089,6 +88139,11 @@
     }
   },
   "hi": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "इस संस्करण के लिए वर्तनी की अनुक्रमणिका फिर से बनाएँ। आपकी पिछली अनुक्रमणिका सुरक्षित रहेगी।",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "आपकी भाषा में पढ़ने की एक आरामदायक जगह।",
       "service": "Language-model translation (session default model)",
@@ -101670,6 +101725,11 @@
     }
   },
   "id": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Buat ulang indeks ejaan untuk versi ini. Indeks sebelumnya tetap disimpan.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Tempat nyaman untuk membaca dalam bahasa Anda.",
       "service": "Language-model translation (session default model)",
@@ -108408,6 +108468,11 @@
     }
   },
   "it": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Ricrea l’indice ortografico per questa versione. L’indice precedente viene conservato.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Un luogo accogliente per leggere, nella tua lingua.",
       "service": "Language-model translation (session default model)",
@@ -133250,6 +133315,11 @@
     }
   },
   "ja": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "このバージョン用にスペルチェックのインデックスを作成し直してください。以前のインデックスは保持されます。",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "あなたの言葉で、心地よく読める場所。",
       "service": "Language-model translation (session default model)",
@@ -140028,6 +140098,11 @@
     }
   },
   "ko": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "이 버전에 맞게 맞춤법 색인을 다시 만드세요. 이전 색인은 유지됩니다.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "내 언어로 편안하게 읽는 공간.",
       "service": "Language-model translation (session default model)",
@@ -160202,6 +160277,11 @@
     }
   },
   "ms": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Bina semula indeks ejaan untuk versi ini. Indeks terdahulu dikekalkan.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Tempat membaca yang selesa, dalam bahasa anda.",
       "service": "Language-model translation (session default model)",
@@ -167025,6 +167105,11 @@
     }
   },
   "nb": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Bygg opp staveindeksen på nytt for denne versjonen. Den forrige indeksen beholdes.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Et behagelig sted å lese, på ditt språk.",
       "service": "Language-model translation (session default model)",
@@ -173808,6 +173893,11 @@
     }
   },
   "nl": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Bouw de spellingindex opnieuw op voor deze versie. De vorige index blijft bewaard.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Een fijne plek om te lezen, in jouw taal.",
       "service": "Language-model translation (session default model)",
@@ -187289,6 +187379,11 @@
     }
   },
   "pl": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Utwórz ponownie indeks pisowni dla tej wersji. Poprzedni indeks zostanie zachowany.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Wygodne miejsce do czytania w Twoim języku.",
       "service": "Language-model translation (session default model)",
@@ -200840,6 +200935,11 @@
     }
   },
   "pt": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Volte a criar o índice ortográfico para esta versão. O índice anterior é mantido.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Um lugar confortável para ler, na sua língua.",
       "service": "Language-model translation (session default model)",
@@ -207658,6 +207758,11 @@
     }
   },
   "pt-BR": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Crie novamente o índice ortográfico para esta versão. O índice anterior será mantido.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Um lugar confortável para ler, no seu idioma.",
       "service": "Language-model translation (session default model)",
@@ -214401,6 +214506,11 @@
     }
   },
   "ro": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Reconstruiți indexul ortografic pentru această versiune. Indexul anterior este păstrat.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Un loc confortabil pentru lectură, în limba ta.",
       "service": "Language-model translation (session default model)",
@@ -221139,6 +221249,11 @@
     }
   },
   "ru": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Создайте индекс проверки правописания заново для этой версии. Прежний индекс будет сохранён.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Удобное место для чтения на вашем языке.",
       "service": "Language-model translation (session default model)",
@@ -254894,6 +255009,11 @@
     }
   },
   "sv": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Bygg om stavningsindexet för den här versionen. Ditt tidigare index sparas.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "En bekväm plats att läsa på, på ditt språk.",
       "service": "Language-model translation (session default model)",
@@ -288824,6 +288944,11 @@
     }
   },
   "tr": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Bu sürüm için yazım denetimi dizinini yeniden oluşturun. Önceki dizininiz korunur.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Kendi dilinizde, rahatça okuyabileceğiniz bir yer.",
       "service": "Language-model translation (session default model)",
@@ -295557,6 +295682,11 @@
     }
   },
   "uk": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "Створіть індекс перевірки правопису заново для цієї версії. Попередній індекс буде збережено.",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "Зручне місце для читання вашою мовою.",
       "service": "Language-model translation (session default model)",
@@ -309098,6 +309228,11 @@
     }
   },
   "zh-Hans": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "请为此版本重新构建拼写索引。原有索引将保留。",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "用你的语言，享受舒适阅读。",
       "service": "Language-model translation (session default model)",
@@ -315826,6 +315961,11 @@
     }
   },
   "zh-Hant": {
+    "Rebuild the spelling index for this version. Your previous index is kept.": {
+      "text": "請為此版本重新建立拼字索引。原有索引會保留。",
+      "service": "Language-model translation (session default model)",
+      "reviewed": false
+    },
     "A comfortable place to read, in your language.": {
       "text": "用您的語言，享受舒適的閱讀空間。",
       "service": "Language-model translation (session default model)",
