@@ -323,28 +323,31 @@ pub(crate) fn integrity_failure(error: String) -> String {
     CORRUPT_ARCHIVE.to_owned()
 }
 
+// The reader reports exceeding its resource policy and a frame's declared
+// output size through these same pinned decoder diagnostics.
+pub(super) fn decoder_limit(error: &ZimError) -> bool {
+    let ZimError::Decompression(detail) = error else {
+        return false;
+    };
+    matches!(
+        detail.as_str(),
+        "stored cluster exceeds byte limit"
+            | "zstd: window size exceeds decoder limit"
+            | "zstd: output limit exceeded"
+            | "xz: decoded output exceeds byte limit"
+            | "xz: declared output exceeds byte limit"
+            | "xz: declared dictionary exceeds decoder memory limit"
+            | "xz: dictionary growth exceeds decoder memory limit"
+    )
+}
+
 pub(super) fn archive_error(error: ZimError) -> String {
     match error {
         ZimError::EntryNotFound | ZimError::NoMainEntry => ENTRY_NOT_FOUND.to_owned(),
         ZimError::UnsupportedVersion { .. } | ZimError::UnsupportedCompression(_) => {
             UNSUPPORTED_FORMAT.to_owned()
         }
-        // The pinned reader exposes codec admission failures as text. Match its
-        // limit diagnostics. Output can exceed either a frame’s declaration or the reader’s cap.
-        ZimError::Decompression(ref detail)
-            if matches!(
-                detail.as_str(),
-                "stored cluster exceeds byte limit"
-                    | "zstd: window size exceeds decoder limit"
-                    | "zstd: output limit exceeded"
-                    | "xz: decoded output exceeds byte limit"
-                    | "xz: declared output exceeds byte limit"
-                    | "xz: declared dictionary exceeds decoder memory limit"
-                    | "xz: dictionary growth exceeds decoder memory limit"
-            ) =>
-        {
-            CODEC_LIMIT.to_owned()
-        }
+        ref error if decoder_limit(error) => CODEC_LIMIT.to_owned(),
         ZimError::Io(ref e) if e.kind() == std::io::ErrorKind::InvalidData => {
             match e.to_string().as_str() {
                 "archive counts exceed configured limits" => CLUSTER_LIMIT.to_owned(),

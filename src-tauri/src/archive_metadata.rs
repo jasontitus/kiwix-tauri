@@ -2,6 +2,8 @@
 //! Metadata, title enumeration and structural checks for the application reader.
 #![forbid(unsafe_code)]
 
+mod clusters;
+
 use crate::archive::{
     archive_error, public_path, resolve, ArchiveMetadata, TitleBatch, ENTRY_NOT_FOUND,
 };
@@ -366,20 +368,7 @@ fn check_structure(z: &Archive, cancel: Option<&CancellationToken>) -> Result<bo
             }
         }
     }
-    for idx in 0..h.cluster_count {
-        check_cancel(cancel)?;
-        let off = z.cluster_offset(idx).map_err(archive_error)?;
-        if off < 80 || off >= end {
-            return Ok(false);
-        }
-        let greatest = referenced[idx as usize].checked_sub(1);
-        match z.validate_cluster_references(idx, greatest.as_slice()) {
-            Err(Error::BadBlobIndex { .. }) => return Ok(false),
-            result => result.map_err(archive_error)?,
-        }
-    }
-    check_cancel(cancel)?;
-    Ok(true)
+    clusters::check(z, &referenced, cancel)
 }
 
 #[cfg(test)]
