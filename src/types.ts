@@ -125,7 +125,9 @@ export interface LibraryFilters {
 }
 export interface SpellingIndexStatus {
   bookId: string;
-  state: "missing" | "building" | "ready" | "cancelled" | "error";
+  installationId: string;
+  sourceKey: string;
+  state: "missing" | "rebuild" | "building" | "ready" | "cancelled" | "error";
   processed: number;
   total: number;
   words: number;

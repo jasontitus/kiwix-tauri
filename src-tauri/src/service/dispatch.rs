@@ -784,30 +784,25 @@ impl Service {
                 let request_cancel = cancel.clone();
                 let result = blocking(move || {
                     let mut archives = Vec::new();
+                    let mut dictionaries = Vec::new();
+                    let spelling_enabled = state.settings.spelling_enabled
+                        && !state.settings.private_mode
+                        && !state.settings.read_only;
                     for book in state.books.into_iter().filter(|book| {
                         book.available && (requested.is_empty() || requested.contains(&book.metadata.id))
                     }) {
                         crate::search::check_cancel(&cancel)?;
-                        let archive = service.archive(&book.metadata.id);
+                        let id = book.metadata.id.clone();
+                        let spelling_book = spelling_enabled.then(|| (
+                            book.installation_id.clone(), book.metadata.clone()
+                        ));
+                        let archive = service.archive_for_book(book);
                         crate::search::check_cancel(&cancel)?;
-                        archives.push((book.metadata.id, archive));
+                        if let (Some((installation, metadata)), Ok(reader)) = (spelling_book, &archive) {
+                            dictionaries.push((id.clone(), installation, metadata, reader.clone()));
+                        }
+                        archives.push((id, archive));
                     }
-                    let spelling_enabled = state.settings.spelling_enabled
-                        && !state.settings.private_mode
-                        && !state.settings.read_only;
-                    let dictionaries: Vec<_> = if spelling_enabled {
-                        archives
-                            .iter()
-                            .filter_map(|(id, archive)| {
-                                archive
-                                    .as_ref()
-                                    .ok()
-                                    .map(|archive| (id.clone(), archive.clone()))
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
                     let mut result = crate::search::run(archives, &query, mode, offset, limit, show_snippets, &cancel)?;
                     let count = result["hits"].as_array().map_or(0, Vec::len);
                     let total = result["total"]
@@ -826,11 +821,21 @@ impl Service {
                         && !state.settings.private_mode
                         && !state.settings.read_only
                     {
-                        for (id, archive) in dictionaries {
+                        for (id, installation, metadata, archive) in &dictionaries {
                             crate::search::check_cancel(&cancel)?;
-                            statuses.push(value(service.spelling.status(&archive)?)?);
-                            crate::search::check_cancel(&cancel)?;
-                            match service.spelling.corrections(&archive, &query, total, true) {
+                            let spelling = (|| -> Result<_, String> {
+                                let identity = crate::spelling::Identity::from_archive(archive, metadata, installation)?;
+                                let status = service.spelling.status(&identity)?;
+                                crate::search::check_cancel(&cancel)?;
+                                let values = service.spelling.corrections(&identity, &query, total, true, &cancel);
+                                identity.confirm(archive)?;
+                                Ok((value(status)?, values))
+                            })();
+                            let values = spelling.and_then(|(status, values)| {
+                                statuses.push(status);
+                                values
+                            });
+                            match values {
                                 Ok(values) => {
                                     for correction in values {
                                         let correction = value(correction)?;
@@ -845,6 +850,15 @@ impl Service {
                                     .push(json!({"bookId":id,"error":error})),
                             }
                             crate::search::check_cancel(&cancel)?;
+                        }
+                    }
+                    if !statuses.is_empty() {
+                        // The archive may have been replaced during dictionary I/O.
+                        let live = service.store.read()?;
+                        if dictionaries.iter().any(|(id, installation, _, _)| !live.books.iter().any(|book|
+                            book.available && book.metadata.id == *id && book.installation_id == *installation))
+                        {
+                            return Err("The archive installation changed or is unavailable; open it again".into());
                         }
                     }
                     result["corrections"] = json!(corrections);
@@ -1623,12 +1637,34 @@ impl Service {
                 let command = command.to_owned();
                 blocking(move || {
                     service.ensure_window_active(&label)?;
-                    let archive = service.archive(&id)?;
-                    match command.as_str() {
-                        "spelling_build" => value(service.spelling.build(archive)?),
-                        "spelling_cancel" => value(service.spelling.cancel(&id)?),
-                        _ => value(service.spelling.status(&archive)?),
+                    service.ensure_generation(&args)?;
+                    let installation = text(&args, "installationId")?;
+                    let book = service.store.book(&id)?.filter(|book|
+                        book.available && book.installation_id == installation)
+                        .ok_or("The archive installation changed or is unavailable; open it again")?;
+                    let metadata = book.metadata.clone();
+                    let archive = service.archive_for_book(book)?;
+                    let identity = crate::spelling::Identity::from_archive(&archive, &metadata, installation)?;
+                    let source_key = text(&args, "sourceKey")?;
+                    if source_key != identity.key() {
+                        return Err("The archive contents changed. Search again.".into());
                     }
+                    if command == "spelling_build" {
+                        let _window = service.active_window_guard(&label)?;
+                        return service.store.with_current_installation(&id, installation, ||
+                            value(service.spelling.build(archive, identity)?));
+                    }
+                    if command == "spelling_cancel" {
+                        let _window = service.active_window_guard(&label)?;
+                        let status = service.spelling.cancel(installation, source_key)?;
+                        service.ensure_generation(&args)?;
+                        return service.store.with_current_installation(&id, installation, || value(status));
+                    }
+                    let status = service.spelling.status(&identity)?;
+                    identity.confirm(&archive)?;
+                    service.ensure_generation(&args)?;
+                    let _window = service.active_window_guard(&label)?;
+                    service.store.with_current_installation(&id, installation, || value(status))
                 })
                 .await
             }
@@ -1876,7 +1912,7 @@ impl Service {
                 "glassVersion": env!("KIWIX_GLASS"),
                 "zimruRevision": option_env!("KIWIX_ZIMRU_REVISION"),
                 "glassRevision": option_env!("KIWIX_GLASS_REVISION"),
-                "sqliteVersion": rusqlite::version(),
+                "spellingIndexVersion": "Kiwix Words v2",
                 "platform": std::env::consts::OS,
                 "architecture": std::env::consts::ARCH,
             })),

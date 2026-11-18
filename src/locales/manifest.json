@@ -20,7 +20,7 @@
       "name": "العربية",
       "resourceName": "العربية",
       "direction": "rtl",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:ar"
@@ -31,7 +31,7 @@
       "name": "Bikol",
       "resourceName": "Ingles",
       "direction": "ltr",
-      "coverage": 0.7981947130883301,
+      "coverage": 0.7976804123711341,
       "machineTranslated": true,
       "resources": [
         "Qt:bcl"
@@ -42,7 +42,7 @@
       "name": "বাংলা",
       "resourceName": "বাংলা",
       "direction": "ltr",
-      "coverage": 0.7981947130883301,
+      "coverage": 0.7976804123711341,
       "machineTranslated": true,
       "resources": [
         "Qt:bn"
@@ -53,7 +53,7 @@
       "name": "Brezhoneg",
       "resourceName": "Brezhoneg",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:br",
@@ -65,7 +65,7 @@
       "name": "Català",
       "resourceName": "Català",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ca"
@@ -76,7 +76,7 @@
       "name": "Čeština",
       "resourceName": "Čeština",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:cs"
@@ -87,7 +87,7 @@
       "name": "Dansk",
       "resourceName": "Dansk",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:da",
@@ -99,7 +99,7 @@
       "name": "Dagbanli",
       "resourceName": "Silimiinsili",
       "direction": "ltr",
-      "coverage": 0.041263700838168924,
+      "coverage": 0.041237113402061855,
       "machineTranslated": false,
       "resources": [
         "Qt:dag",
@@ -112,7 +112,7 @@
       "name": "Deutsch",
       "resourceName": "Deutsch",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:de",
@@ -124,7 +124,7 @@
       "name": "Ελληνικά",
       "resourceName": "Ελληνικά",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:el"
@@ -135,7 +135,7 @@
       "name": "English",
       "resourceName": "English",
       "direction": "ltr",
-      "coverage": 1,
+      "coverage": 1.0,
       "machineTranslated": false,
       "resources": [
         "Qt:en",
@@ -147,7 +147,7 @@
       "name": "Esperanto",
       "resourceName": "Esperanto",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:eo"
@@ -158,7 +158,7 @@
       "name": "Español",
       "resourceName": "Español",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:es",
@@ -170,7 +170,7 @@
       "name": "فارسی",
       "resourceName": "انگلیسی",
       "direction": "rtl",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:fa"
@@ -181,7 +181,7 @@
       "name": "suomi",
       "resourceName": "suomi",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:fi",
@@ -193,7 +193,7 @@
       "name": "Français",
       "resourceName": "Français",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:fr",
@@ -205,7 +205,7 @@
       "name": "Schwiizerdütsch",
       "resourceName": "Schwiizerdütsch",
       "direction": "ltr",
-      "coverage": 0.559638942617666,
+      "coverage": 0.5592783505154639,
       "machineTranslated": true,
       "resources": [
         "Qt:gsw"
@@ -216,7 +216,7 @@
       "name": "Hausa",
       "resourceName": "turanci",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ha",
@@ -228,7 +228,7 @@
       "name": "עברית",
       "resourceName": "עברית",
       "direction": "rtl",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:he",
@@ -240,7 +240,7 @@
       "name": "हिन्दी",
       "resourceName": "हिन्दी",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:hi",
@@ -252,7 +252,7 @@
       "name": "Հայերեն",
       "resourceName": "Հայերեն",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:hy"
@@ -263,7 +263,7 @@
       "name": "Interlingua",
       "resourceName": "Interlingua",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ia",
@@ -275,7 +275,7 @@
       "name": "Bahasa Indonesia",
       "resourceName": "Bahasa Indonesia",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:id",
@@ -287,7 +287,7 @@
       "name": "Interlingue",
       "resourceName": "Interlingue",
       "direction": "ltr",
-      "coverage": 0.013539651837524178,
+      "coverage": 0.013530927835051547,
       "machineTranslated": false,
       "resources": [
         "Qt:ie",
@@ -299,7 +299,7 @@
       "name": "Igbo",
       "resourceName": "Bekee",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ig",
@@ -311,7 +311,7 @@
       "name": "Igala",
       "resourceName": "Enéfu",
       "direction": "ltr",
-      "coverage": 0.029013539651837523,
+      "coverage": 0.028994845360824743,
       "machineTranslated": false,
       "resources": [
         "Qt:igl",
@@ -324,7 +324,7 @@
       "name": "Ido",
       "resourceName": "io",
       "direction": "ltr",
-      "coverage": 0.006447453255963894,
+      "coverage": 0.006443298969072165,
       "machineTranslated": false,
       "resources": [
         "Qt:io"
@@ -335,7 +335,7 @@
       "name": "italiano",
       "resourceName": "italiano",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:it",
@@ -347,7 +347,7 @@
       "name": "日本語",
       "resourceName": "英語",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:ja",
@@ -359,7 +359,7 @@
       "name": "Taqbaylit",
       "resourceName": "Taqbaylit",
       "direction": "ltr",
-      "coverage": 0.036105738233397806,
+      "coverage": 0.03608247422680412,
       "machineTranslated": false,
       "resources": [
         "Qt:kab",
@@ -372,7 +372,7 @@
       "name": "한국어",
       "resourceName": "한국어",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:ko",
@@ -384,7 +384,7 @@
       "name": "Kurdî",
       "resourceName": "Kurdî",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:ku-latn"
@@ -395,7 +395,7 @@
       "name": "Lëtzebuergesch",
       "resourceName": "Lëtzebuergesch",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:lb",
@@ -407,7 +407,7 @@
       "name": "lingála",
       "resourceName": "lingála",
       "direction": "ltr",
-      "coverage": 0.7981947130883301,
+      "coverage": 0.7976804123711341,
       "machineTranslated": true,
       "resources": [
         "Apple:ln"
@@ -418,7 +418,7 @@
       "name": "македонски",
       "resourceName": "македонски",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:mk",
@@ -430,7 +430,7 @@
       "name": "Bahasa Melayu",
       "resourceName": "Bahasa Melayu",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ms"
@@ -441,7 +441,7 @@
       "name": "မြန်မာဘာသာ",
       "resourceName": "မြန်မာဘာသာ",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:my"
@@ -452,7 +452,7 @@
       "name": "norsk bokmål",
       "resourceName": "Engelsk",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:nb"
@@ -463,7 +463,7 @@
       "name": "Nederlands",
       "resourceName": "Nederlands",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:nl",
@@ -475,7 +475,7 @@
       "name": "ߒߞߏ",
       "resourceName": "ߒߞߏ",
       "direction": "rtl",
-      "coverage": 0.027724049000644745,
+      "coverage": 0.027706185567010308,
       "machineTranslated": false,
       "resources": [
         "Qt:nqo",
@@ -487,7 +487,7 @@
       "name": "ଓଡି଼ଆ",
       "resourceName": "ଓଡି଼ଆ",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:or"
@@ -498,7 +498,7 @@
       "name": "ਪੰਜਾਬੀ",
       "resourceName": "ਅੰਗਰੇਜ਼ੀ",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:pa",
@@ -510,7 +510,7 @@
       "name": "Polski",
       "resourceName": "Polski",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:pl",
@@ -522,7 +522,7 @@
       "name": "پښتو",
       "resourceName": "پښتو",
       "direction": "rtl",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:ps",
@@ -534,7 +534,7 @@
       "name": "português",
       "resourceName": "português",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:pt"
@@ -545,7 +545,7 @@
       "name": "Português do Brasil",
       "resourceName": "Português do Brasil",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:pt-br",
@@ -557,7 +557,7 @@
       "name": "Română",
       "resourceName": "Română",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:ro",
@@ -569,7 +569,7 @@
       "name": "Tarandíne",
       "resourceName": "Tarandíne",
       "direction": "ltr",
-      "coverage": 0.015473887814313346,
+      "coverage": 0.015463917525773196,
       "machineTranslated": false,
       "resources": [
         "Qt:roa-tara",
@@ -581,7 +581,7 @@
       "name": "русский",
       "resourceName": "русский",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:ru",
@@ -593,7 +593,7 @@
       "name": "Sardu",
       "resourceName": "Sardu",
       "direction": "ltr",
-      "coverage": 0.030947775628626693,
+      "coverage": 0.030927835051546393,
       "machineTranslated": false,
       "resources": [
         "Qt:sc",
@@ -605,7 +605,7 @@
       "name": "Sicilianu",
       "resourceName": "Sicilianu",
       "direction": "ltr",
-      "coverage": 0.7981947130883301,
+      "coverage": 0.7976804123711341,
       "machineTranslated": true,
       "resources": [
         "Qt:scn"
@@ -616,7 +616,7 @@
       "name": "Sassaresu",
       "resourceName": "Sassaresu",
       "direction": "ltr",
-      "coverage": 0.008381689232753063,
+      "coverage": 0.008376288659793814,
       "machineTranslated": false,
       "resources": [
         "Qt:sdc",
@@ -628,7 +628,7 @@
       "name": "davvisámegillii",
       "resourceName": "davvisámegillii",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:se",
@@ -640,7 +640,7 @@
       "name": "Slovenčina",
       "resourceName": "Slovenčina",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:sk",
@@ -652,7 +652,7 @@
       "name": "سرائیکی",
       "resourceName": "سرائیکی",
       "direction": "rtl",
-      "coverage": 0.04384268214055448,
+      "coverage": 0.04381443298969072,
       "machineTranslated": false,
       "resources": [
         "Qt:skr-arab",
@@ -665,7 +665,7 @@
       "name": "slovenščina",
       "resourceName": "slovenščina",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:sl",
@@ -677,7 +677,7 @@
       "name": "sääʹmǩiõll",
       "resourceName": "sääʹmǩiõll",
       "direction": "ltr",
-      "coverage": 0.012894906511927788,
+      "coverage": 0.01288659793814433,
       "machineTranslated": false,
       "resources": [
         "Qt:sms"
@@ -688,7 +688,7 @@
       "name": "Shqip",
       "resourceName": "Shqip",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:sq",
@@ -700,7 +700,7 @@
       "name": "српски",
       "resourceName": "српски",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:sr-ec"
@@ -711,7 +711,7 @@
       "name": "Sardu campidanesu",
       "resourceName": "Sardu campidanesu",
       "direction": "ltr",
-      "coverage": 0.008381689232753063,
+      "coverage": 0.008376288659793814,
       "machineTranslated": false,
       "resources": [
         "Qt:sro",
@@ -723,7 +723,7 @@
       "name": "Svenska",
       "resourceName": "Svenska",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:sv",
@@ -735,7 +735,7 @@
       "name": "Kiswahili",
       "resourceName": "Kiswahili",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:sw"
@@ -746,7 +746,7 @@
       "name": "தமிழ்",
       "resourceName": "தமிழ்",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:ta"
@@ -757,7 +757,7 @@
       "name": "తెలుగు",
       "resourceName": "తెలుగు",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:te"
@@ -768,7 +768,7 @@
       "name": "ภาษาไทย",
       "resourceName": "ภาษาไทย",
       "direction": "ltr",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:th"
@@ -779,7 +779,7 @@
       "name": "Setswana",
       "resourceName": "Setswana",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:tn"
@@ -790,7 +790,7 @@
       "name": "Türkçe",
       "resourceName": "Türkçe",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:tr",
@@ -802,7 +802,7 @@
       "name": "Українська",
       "resourceName": "Українська",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:uk",
@@ -814,7 +814,7 @@
       "name": "ייִדיש",
       "resourceName": "ענגליש",
       "direction": "rtl",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7983247422680413,
       "machineTranslated": true,
       "resources": [
         "Qt:yi"
@@ -825,7 +825,7 @@
       "name": "Èdè Yorùbá",
       "resourceName": "English",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7989690721649485,
       "machineTranslated": true,
       "resources": [
         "Qt:yo"
@@ -836,7 +836,7 @@
       "name": "ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ",
       "resourceName": "ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ",
       "direction": "ltr",
-      "coverage": 0.016118633139909737,
+      "coverage": 0.01610824742268041,
       "machineTranslated": false,
       "resources": [
         "Qt:zgh",
@@ -848,7 +848,7 @@
       "name": "简体中文",
       "resourceName": "简体中文",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:zh-hans",
@@ -860,7 +860,7 @@
       "name": "繁體中文",
       "resourceName": "繁體中文",
       "direction": "ltr",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "machineTranslated": true,
       "resources": [
         "Qt:zh-hant",
@@ -872,7 +872,7 @@
       "name": "Zazaki",
       "resourceName": "Zazaki",
       "direction": "ltr",
-      "coverage": 0.029013539651837523,
+      "coverage": 0.028994845360824743,
       "machineTranslated": false,
       "resources": [
         "Qt:diq",
@@ -1830,6 +1830,7 @@
     "Ready — choose Replace",
     "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
     "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+    "Rebuild the spelling index for this version. Your previous index is kept.",
     "Receive from a nearby device",
     "Recent searches",
     "Recently added",
@@ -2943,6 +2944,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -3258,6 +3260,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -3571,6 +3574,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -5537,6 +5541,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -6941,6 +6946,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -7568,6 +7574,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -8711,6 +8718,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recently read",
       "Recoverable",
@@ -9192,6 +9200,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -10132,6 +10141,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -10445,6 +10455,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -11816,6 +11827,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -12603,6 +12615,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -13643,6 +13656,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -15177,6 +15191,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -17306,6 +17321,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -18404,6 +18420,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -18717,6 +18734,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -19032,6 +19050,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -19345,6 +19364,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -19973,6 +19993,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -21640,6 +21661,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -22422,6 +22444,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -22736,6 +22759,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -23362,6 +23386,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -25358,6 +25383,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -27181,6 +27207,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -27964,6 +27991,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -29028,6 +29056,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -29818,6 +29847,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -30132,6 +30162,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -31153,6 +31184,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -31930,6 +31962,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -32985,6 +33018,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -33776,6 +33810,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -34090,6 +34125,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -35152,6 +35188,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -36256,6 +36293,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -36570,6 +36608,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -36883,6 +36922,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -37197,6 +37237,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -37510,6 +37551,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -38450,6 +38492,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -38763,6 +38806,7 @@
       "Reading width",
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Remove neural voice model",
       "Replacement keeps your original archive. Rollback verifies the retained original and moves reading references back without discarding newer notes or history.",
@@ -39815,6 +39859,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",
@@ -41957,6 +42002,7 @@
       "Ready — choose Replace",
       "Ready — the full archive has been verified. It will not replace your installed edition until you choose Replace.",
       "Real progress, resumable transfers. Completed archives are added to your library automatically.",
+      "Rebuild the spelling index for this version. Your previous index is kept.",
       "Receive from a nearby device",
       "Recent searches",
       "Recently added",

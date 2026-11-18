@@ -1,6 +1,6 @@
 {
   "supportedLocales": 74,
-  "sourceCount": 1551,
+  "sourceCount": 1552,
   "pluralCoverage": {
     "ar": {
       "categories": [
@@ -625,7 +625,7 @@
     {
       "code": "ar",
       "name": "العربية",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -633,31 +633,31 @@
     {
       "code": "bik",
       "name": "Bikol",
-      "coverage": 0.7981947130883301,
-      "missingCount": 313,
+      "coverage": 0.7976804123711341,
+      "missingCount": 314,
       "serviceError": null,
       "modelDecline": "I cannot competently translate this full set of technical UI labels into Bikol (bik) with reliable grammar, terminology, and consistency. I am declining rather than substituting English or another Philippine language. No translations have been produced or native-reviewed."
     },
     {
       "code": "bn",
       "name": "বাংলা",
-      "coverage": 0.7981947130883301,
-      "missingCount": 313,
+      "coverage": 0.7976804123711341,
+      "missingCount": 314,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "br",
       "name": "Brezhoneg",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": "I cannot competently translate this complete set of technical UI labels into Breton (br) with reliable grammar, terminology, and natural phrasing. Rather than provide potentially misleading translations or substitute another language, I am declining. No translations have been produced or native-reviewed."
     },
     {
       "code": "ca",
       "name": "Català",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
@@ -665,7 +665,7 @@
     {
       "code": "cs",
       "name": "Čeština",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
@@ -673,7 +673,7 @@
     {
       "code": "da",
       "name": "Dansk",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -681,15 +681,15 @@
     {
       "code": "dag",
       "name": "Dagbanli",
-      "coverage": 0.041263700838168924,
-      "missingCount": 1487,
+      "coverage": 0.041237113402061855,
+      "missingCount": 1488,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I do not have sufficient competence in Dagbanli (BCP 47: dag) to translate these UI labels reliably, even as unreviewed draft copy. In particular, I cannot confidently maintain standard Dagbanli orthography and accurate technical, privacy, and permission terminology across the full set without inventing wording or substituting a related language."
     },
     {
       "code": "de",
       "name": "Deutsch",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -697,7 +697,7 @@
     {
       "code": "el",
       "name": "Ελληνικά",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -705,15 +705,15 @@
     {
       "code": "eo",
       "name": "Esperanto",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "es",
       "name": "Español",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -721,15 +721,15 @@
     {
       "code": "fa",
       "name": "فارسی",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "fi",
       "name": "suomi",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -737,7 +737,7 @@
     {
       "code": "fr",
       "name": "Français",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -745,23 +745,23 @@
     {
       "code": "gsw",
       "name": "Schwiizerdütsch",
-      "coverage": 0.559638942617666,
-      "missingCount": 683,
+      "coverage": 0.5592783505154639,
+      "missingCount": 684,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": null
     },
     {
       "code": "ha",
       "name": "Hausa",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "he",
       "name": "עברית",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -769,7 +769,7 @@
     {
       "code": "hi",
       "name": "हिन्दी",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -777,23 +777,23 @@
     {
       "code": "hy",
       "name": "Հայերեն",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "ia",
       "name": "Interlingua",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": null
     },
     {
       "code": "id",
       "name": "Bahasa Indonesia",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -801,39 +801,39 @@
     {
       "code": "ie",
       "name": "Interlingue",
-      "coverage": 0.013539651837524178,
-      "missingCount": 1530,
+      "coverage": 0.013530927835051547,
+      "missingCount": 1531,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate this full set of technical UI labels into Interlingue (Occidental, BCP 47: ie) with consistent grammar, established vocabulary, and correct orthography. My competence is insufficient to avoid mixing in Interlingua or inventing technical terms, even for an explicitly unreviewed draft."
     },
     {
       "code": "ig",
       "name": "Igbo",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": "I cannot competently translate this full set of 323 technical UI labels into clear, idiomatic Igbo (ig) with reliable terminology and grammatical accuracy. Rather than provide unreliable translations or substitute English or another language, I am declining. No translations have been produced or native-reviewed."
     },
     {
       "code": "igl",
       "name": "Igala",
-      "coverage": 0.029013539651837523,
-      "missingCount": 1506,
+      "coverage": 0.028994845360824743,
+      "missingCount": 1507,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I do not have sufficient competence in Igala (BCP 47: igl) to translate these 541 UI labels accurately, even as explicitly unreviewed drafts. I cannot reliably produce Igala orthography, grammar, and technical terminology without risking invented forms or substitution from a related language."
     },
     {
       "code": "io",
       "name": "Ido",
-      "coverage": 0.006447453255963894,
-      "missingCount": 1541,
+      "coverage": 0.006443298969072165,
+      "missingCount": 1542,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate this full UI set into Ido (io), including its technical, privacy, and permission wording. My command of Ido vocabulary and grammar is insufficient to produce consistently accurate draft copy without risking invented terminology or interference from Esperanto. I am therefore declining rather than providing unreliable translations, even labelled as unreviewed."
     },
     {
       "code": "it",
       "name": "italiano",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -841,7 +841,7 @@
     {
       "code": "ja",
       "name": "日本語",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -849,15 +849,15 @@
     {
       "code": "kab",
       "name": "Taqbaylit",
-      "coverage": 0.036105738233397806,
-      "missingCount": 1495,
+      "coverage": 0.03608247422680412,
+      "missingCount": 1496,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate this full set into accurate, idiomatic Taqbaylit (kab), particularly the technical, security, permissions, and privacy messages. My competence is insufficient to ensure consistent Kabyle terminology and orthography even for explicitly unreviewed UI drafts, so I will not substitute a related language or invent translations."
     },
     {
       "code": "ko",
       "name": "한국어",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -865,39 +865,39 @@
     {
       "code": "ku-Latn",
       "name": "Kurdî",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": "I cannot reliably translate this entire UI set into Kurmanji Kurdish in Latin script (ku-Latn), even to an unreviewed-draft standard. My command of Kurmanji grammar and specialized terminology for archive handling, permissions, networking, and privacy is not strong enough to avoid potentially misleading wording or inconsistent terminology across these labels."
     },
     {
       "code": "lb",
       "name": "Lëtzebuergesch",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "ln",
       "name": "lingála",
-      "coverage": 0.7981947130883301,
-      "missingCount": 313,
+      "coverage": 0.7976804123711341,
+      "missingCount": 314,
       "serviceError": null,
       "modelDecline": "I cannot competently translate this full set of 323 UI labels into Lingála (ln) with reliable technical terminology, natural phrasing, and consistent short statuses. I am declining rather than supplying potentially misleading translations or substituting another language. No translations have been produced or native-reviewed."
     },
     {
       "code": "mk",
       "name": "македонски",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "ms",
       "name": "Bahasa Melayu",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
@@ -905,15 +905,15 @@
     {
       "code": "my",
       "name": "မြန်မာဘာသာ",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": "I cannot competently translate this full set of 323 UI labels into clear, idiomatic Myanmar (my), particularly the technical terminology for archive integrity, map assembly, and local sharing. I am declining rather than returning unreliable translations or substituting another language. No translations have been produced or native-reviewed."
     },
     {
       "code": "nb",
       "name": "norsk bokmål",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -921,7 +921,7 @@
     {
       "code": "nl",
       "name": "Nederlands",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -929,31 +929,31 @@
     {
       "code": "nqo",
       "name": "ߒߞߏ",
-      "coverage": 0.027724049000644745,
-      "missingCount": 1508,
+      "coverage": 0.027706185567010308,
+      "missingCount": 1509,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I do not have sufficient competence in N’Ko (ߒߞߏ, BCP47 nqo) to translate these 541 UI labels reliably, even as unreviewed drafts. In particular, I cannot ensure accurate N’Ko spelling, grammar, and technical terminology for the reader, privacy, permissions, and download controls. Providing translations would risk invented wording or substitution from a related language."
     },
     {
       "code": "or",
       "name": "ଓଡି଼ଆ",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": "I cannot reliably produce all 539 labels in accurate Odia (or), particularly the technical, permission, and privacy messages, at a quality suitable even for unreviewed draft UI copy. My command of Odia grammar, idiom, and technical terminology is insufficient for this request; I would risk unnatural or misleading translations."
     },
     {
       "code": "pa",
       "name": "ਪੰਜਾਬੀ",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "pl",
       "name": "Polski",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -961,15 +961,15 @@
     {
       "code": "ps",
       "name": "پښتو",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "pt",
       "name": "português",
-      "coverage": 0.7988394584139265,
+      "coverage": 0.7989690721649485,
       "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
@@ -977,7 +977,7 @@
     {
       "code": "pt-BR",
       "name": "Português do Brasil",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -985,7 +985,7 @@
     {
       "code": "ro",
       "name": "Română",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -993,15 +993,15 @@
     {
       "code": "roa-Tara",
       "name": "Tarandíne",
-      "coverage": 0.015473887814313346,
-      "missingCount": 1527,
+      "coverage": 0.015463917525773196,
+      "missingCount": 1528,
       "serviceError": "Service echoed English instead of translating this locale",
       "modelDecline": "I do not have sufficient competence in Tarandíne (roa-Tara) to translate these UI labels accurately, even as explicitly unreviewed drafts. I cannot reliably maintain Tarandíne grammar, established orthography, and technical terminology across the full set without risking invented forms or substitution with Italian or another related language."
     },
     {
       "code": "ru",
       "name": "русский",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1009,95 +1009,95 @@
     {
       "code": "sc",
       "name": "Sardu",
-      "coverage": 0.030947775628626693,
-      "missingCount": 1503,
+      "coverage": 0.030927835051546393,
+      "missingCount": 1504,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably produce all 539 labels in accurate Sardinian (sc), with consistent Sardinian orthography and appropriate technical terminology, even as unreviewed draft UI copy. In particular, I lack sufficient confidence in the longer security, permissions, networking, and read-only-mode messages to avoid misleading wording or interference from Italian. I am therefore declining rather than providing unreliable translations."
     },
     {
       "code": "scn",
       "name": "Sicilianu",
-      "coverage": 0.7981947130883301,
-      "missingCount": 313,
+      "coverage": 0.7976804123711341,
+      "missingCount": 314,
       "serviceError": null,
       "modelDecline": "I cannot reliably translate this full UI into Sicilian (scn) with consistent orthography and accurate technical terminology, particularly for permissions, privacy, networking, and archive operations. My Sicilian competence is insufficient to avoid Italian substitutions or invented forms throughout these 555 labels, even for an explicitly unreviewed draft."
     },
     {
       "code": "sdc",
       "name": "Sassaresu",
-      "coverage": 0.008381689232753063,
-      "missingCount": 1538,
+      "coverage": 0.008376288659793814,
+      "missingCount": 1539,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably produce Sassaresu (BCP 47: sdc) across these 551 UI labels with consistent orthography and accurate technical terminology, even as unreviewed draft copy. My competence is insufficient to avoid introducing Italian, Sardinian, or Corsican forms in place of Sassaresu, so I am declining rather than providing unreliable translations."
     },
     {
       "code": "se",
       "name": "davvisámegillii",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": "I cannot reliably translate this full UI into Northern Sámi (davvisámegiella, BCP 47: se) with sufficiently accurate grammar, inflection, and technical terminology, even for unreviewed draft copy. In particular, the privacy, permissions, networking, and archive-management text exceeds my dependable translation competence. I am returning no translations rather than risking invented terminology or forms from related Sámi languages."
     },
     {
       "code": "sk",
       "name": "Slovenčina",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "skr-Arab",
       "name": "سرائیکی",
-      "coverage": 0.04384268214055448,
-      "missingCount": 1483,
+      "coverage": 0.04381443298969072,
+      "missingCount": 1484,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably produce all 529 labels in idiomatic Saraiki (skr-Arab) with consistent orthography and accurate technical, security, and privacy terminology without risking substitution from Urdu or Punjabi. I therefore cannot meet your requested competence threshold, even for explicitly unreviewed draft UI copy."
     },
     {
       "code": "sl",
       "name": "slovenščina",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "sms",
       "name": "sääʹmǩiõll",
-      "coverage": 0.012894906511927788,
-      "missingCount": 1531,
+      "coverage": 0.01288659793814433,
+      "missingCount": 1532,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate these labels into Skolt Sámi (sääʹmǩiõll, BCP 47: sms). My competence in its orthography, inflection, and technical UI terminology is insufficient to produce this 549-label set accurately enough even as explicitly unreviewed draft copy. Attempting it would risk invented forms or contamination from related Sámi languages."
     },
     {
       "code": "sq",
       "name": "Shqip",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "sr-Cyrl",
       "name": "српски",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "sro",
       "name": "Sardu campidanesu",
-      "coverage": 0.008381689232753063,
-      "missingCount": 1538,
+      "coverage": 0.008376288659793814,
+      "missingCount": 1539,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate this full set of technical UI labels into Campidanese Sardinian (Sardu campidanesu, BCP 47: sro) with consistent, established orthography and terminology. My competence is insufficient to avoid mixing in other Sardinian varieties or Italian, particularly in the detailed permissions, privacy, networking, and archive-management messages. I therefore cannot meet your accuracy requirement even for explicitly unreviewed draft UI copy."
     },
     {
       "code": "sv",
       "name": "Svenska",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1105,47 +1105,47 @@
     {
       "code": "sw",
       "name": "Kiswahili",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "ta",
       "name": "தமிழ்",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "te",
       "name": "తెలుగు",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "th",
       "name": "ภาษาไทย",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "tn",
       "name": "Setswana",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": "I cannot reliably translate this full set into accurate Setswana (tn). My competence is insufficient for consistent Setswana grammar, idiomatic UI terminology, and precise technical wording about archive integrity, permissions, privacy, and networking. Even as unreviewed draft copy, I could introduce misleading wording or forms from related languages, so I am declining rather than supplying unreliable translations."
     },
     {
       "code": "tr",
       "name": "Türkçe",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1153,7 +1153,7 @@
     {
       "code": "uk",
       "name": "Українська",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1161,31 +1161,31 @@
     {
       "code": "yi",
       "name": "ייִדיש",
-      "coverage": 0.7988394584139265,
-      "missingCount": 312,
+      "coverage": 0.7983247422680413,
+      "missingCount": 313,
       "serviceError": null,
       "modelDecline": "I cannot reliably provide competent Yiddish (yi, Hebrew script) translations for this entire technical UI set, especially its archive-management, map-assembly, and network-sharing terminology. Rather than supply potentially misleading or unnatural translations, I am declining this unreviewed machine-translation request."
     },
     {
       "code": "yo",
       "name": "Èdè Yorùbá",
-      "coverage": 0.7994842037395229,
-      "missingCount": 311,
+      "coverage": 0.7989690721649485,
+      "missingCount": 312,
       "serviceError": null,
       "modelDecline": null
     },
     {
       "code": "zgh",
       "name": "ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ",
-      "coverage": 0.016118633139909737,
-      "missingCount": 1526,
+      "coverage": 0.01610824742268041,
+      "missingCount": 1527,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I cannot reliably translate all 551 labels into Standard Moroccan Tamazight (zgh) in Tifinagh with sufficiently accurate grammar, standardized spelling, and technical UI terminology, even for unreviewed draft copy. Attempting this would risk invented terminology or mixing in related Amazigh varieties, contrary to your requirements."
     },
     {
       "code": "zh-Hans",
       "name": "简体中文",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1193,7 +1193,7 @@
     {
       "code": "zh-Hant",
       "name": "繁體中文",
-      "coverage": 0.7994842037395229,
+      "coverage": 0.7996134020618557,
       "missingCount": 311,
       "serviceError": null,
       "modelDecline": null
@@ -1201,8 +1201,8 @@
     {
       "code": "zza",
       "name": "Zazaki",
-      "coverage": 0.029013539651837523,
-      "missingCount": 1506,
+      "coverage": 0.028994845360824743,
+      "missingCount": 1507,
       "serviceError": "Google Translate HTTP 400",
       "modelDecline": "I do not have sufficient competence in Zazaki (BCP 47: zza) to translate these 541 UI labels reliably, even as unreviewed drafts. I cannot confidently maintain accurate Zazaki grammar, established orthography, and technical terminology throughout without risking invented wording or substitution from related languages."
     }

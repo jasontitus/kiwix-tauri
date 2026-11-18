@@ -3976,21 +3976,22 @@ export default function Reader(props: ReaderProps) {
         searchResults: {
           ...previous.searchResults,
           spellingStatus: (previous.searchResults.spellingStatus ?? []).map(
-            (item) => (item.bookId === status.bookId ? status : item),
+            (item) => (item.bookId === status.bookId && item.installationId === status.installationId && item.sourceKey === status.sourceKey ? status : item),
           ),
         },
       };
     });
   }, []);
+  const spellingAllowed = settings.spellingEnabled && !settings.privateMode && !settings.readOnly;
   const changeSpellingIndex = async (status: SpellingIndexStatus) => {
-    if (settings.privateMode || settings.readOnly || !settings.spellingEnabled)
-      return;
+    if (!spellingAllowed || !status.installationId || !status.sourceKey || !availableBooks.some((book) =>
+      book.id === status.bookId && book.installationId === status.installationId)) return;
     const sequence = searchSequence.current;
     setSpellingBusy(status.bookId);
     try {
       const result = await api<SpellingIndexStatus>(
         status.state === "building" ? "spelling_cancel" : "spelling_build",
-        { bookId: status.bookId },
+        { bookId: status.bookId, installationId: status.installationId, sourceKey: status.sourceKey },
       );
       if (alive.current && sequence === searchSequence.current)
         updateSpellingStatus(result);
@@ -4000,10 +4001,16 @@ export default function Reader(props: ReaderProps) {
       if (alive.current) setSpellingBusy(null);
     }
   };
-  const buildingIndexes = settings.spellingEnabled
+  const spellingStatuses = searchResults?.spellingStatus ?? [];
+  const spellingCurrent =
+    (!(searchResults?.corrections?.length) || spellingStatuses.length > 0) &&
+    spellingStatuses.every((status) => status.sourceKey && availableBooks.some((entry) =>
+      entry.id === status.bookId && entry.installationId === status.installationId
+    ));
+  const buildingIndexes = spellingAllowed && spellingCurrent
     ? (searchResults?.spellingStatus ?? [])
-        .filter((status) => status.state === "building")
-        .map((status) => status.bookId)
+        .filter((status) => status.installationId && status.state === "building")
+        .map((status) => JSON.stringify([status.bookId, status.installationId, status.sourceKey]))
         .join("\n")
     : "";
   useEffect(() => {
@@ -4012,10 +4019,11 @@ export default function Reader(props: ReaderProps) {
     const sequence = searchSequence.current;
     const timer = setTimeout(() => {
       void Promise.all(
-        buildingIndexes.split("\n").map(async (bookId) => {
+        buildingIndexes.split("\n").map(async (ref) => {
           try {
+            const [bookId, installationId, sourceKey]: [string, string, string] = JSON.parse(ref);
             const status = await api<SpellingIndexStatus>("spelling_status", {
-              bookId,
+              bookId, installationId, sourceKey,
             });
             if (
               !cancelled &&
@@ -4887,7 +4895,12 @@ export default function Reader(props: ReaderProps) {
               {t("No articles found. Try another word or search more books.")}
             </p>
           )}
-          {settings.spellingEnabled && !searchResults.hits.length && (
+          {spellingAllowed && !searchResults.hits.length && !spellingCurrent && (
+            <button type="button" className="rw-text-button" onClick={() => void runSearch(0)}>
+              {t("Search articles")}
+            </button>
+          )}
+          {spellingAllowed && !searchResults.hits.length && spellingCurrent && (
             <section
               className="rw-spelling"
               aria-label={t("Spelling suggestions")}
@@ -4920,6 +4933,8 @@ export default function Reader(props: ReaderProps) {
                           processed: formatNumber(status.processed),
                           total: formatNumber(status.total),
                         })
+                      : status.state === "rebuild"
+                        ? t("Rebuild the spelling index for this version. Your previous index is kept.")
                       : status.state === "ready"
                         ? t("Spelling index ready")
                         : status.state === "error"

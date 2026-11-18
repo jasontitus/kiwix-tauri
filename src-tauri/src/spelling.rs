@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![deny(unsafe_code)]
-//! Explicit, cancellable spelling dictionaries built from public libzim titles.
+//! Explicit, cancellable spelling dictionaries built from public archive titles.
 //! Existing caches load single-flight in read-only workers; `building` covers
 //! loading as well as explicit indexing. Interactive calls never scan a cache.
 //! No automatic builds. Disabling writes joins indexing before privacy changes;
 //! read-only loaders may finish without creating or modifying filesystem state.
 
 use crate::archive::{Archive, ArchiveMetadata, TitleBatch};
-use rusqlite::{params, params_from_iter, types::Value as SqlValue, Connection, OpenFlags};
+mod index;
+use crate::publication::{publish_verified_noreplace_in, VerifiedFile};
+use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
+use cap_std::fs::{Dir, OpenOptions};
+use chksum_hash_sha2_256 as sha256;
+use index::{Builder, Lexicon};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap, VecDeque};
-use std::fs::{self, OpenOptions};
+use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use unicode_normalization::UnicodeNormalization;
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 const MAX_TITLES: u32 = 20_000_000;
 const MAX_WORDS: u64 = 2_000_000;
 const MAX_DB_BYTES: u64 = 1024 * 1024 * 1024;
@@ -27,19 +32,19 @@ const MAX_QUERY_BYTES: usize = 512;
 const MAX_QUERY_WORDS: usize = 8;
 const MAX_CANDIDATES: usize = 8192;
 const BATCH: u32 = 256;
-// Bounded retained state: an open dictionary owns a SQLite connection (and its
-// descriptors) and a cached status is only advisory, so a library larger than
-// these limits must not pin one of each per archive for the process lifetime.
+// An open dictionary retains a file and checked pages. A larger library must
+// not pin a descriptor or every prior advisory status for the process lifetime.
 const MAX_DICTIONARIES: usize = 8;
+const MAX_COLD_LOADERS: usize = 2;
 const MAX_STATUSES: usize = 256;
 const MAX_FAILURES: usize = 64;
-// `deletion_keys` yields the word itself plus one key per removed scalar.
-const MAX_DELETION_KEYS: usize = MAX_WORD_CHARS + 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpellingStatus {
     pub book_id: String,
+    pub installation_id: String,
+    pub source_key: String,
     pub state: String,
     #[serde(default)]
     pub cancellable: bool,
@@ -57,34 +62,75 @@ pub struct SpellingCorrection {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct Identity {
+pub(crate) struct Identity {
     version: u32,
     uuid: String,
+    installation_id: String,
+    generation: [u8; 32],
     archive_bytes: u64,
     articles: u64,
 }
 
 impl Identity {
-    fn from_metadata(metadata: ArchiveMetadata) -> Self {
-        Self {
+    pub(crate) fn from_archive(
+        archive: &Archive,
+        metadata: &ArchiveMetadata,
+        installation_id: &str,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            generation: Self::generation(archive)?,
             version: VERSION,
-            uuid: metadata.id,
+            uuid: metadata.id.clone(),
+            installation_id: installation_id.to_owned(),
             archive_bytes: metadata.size,
             articles: metadata.article_count,
-        }
+        })
     }
 
-    fn key(&self) -> String {
+    fn generation(archive: &Archive) -> Result<[u8; 32], String> {
+        let bytes = serde_json::to_vec(&archive.content_identity()?).map_err(err)?;
+        Ok(sha256::hash(&bytes).into())
+    }
+
+    pub(crate) fn confirm(&self, archive: &Archive) -> Result<(), String> {
+        if Self::generation(archive)? != self.generation {
+            return Err("The archive contents changed. Search again.".into());
+        }
+        Ok(())
+    }
+
+    fn digest(&self) -> [u8; 32] {
         let data = format!(
-            "{}:{}:{}:{}",
-            self.version, self.uuid, self.archive_bytes, self.articles
+            "{}:{}:{}:{}:{}:{}",
+            self.version,
+            self.uuid,
+            self.archive_bytes,
+            self.articles,
+            self.installation_id,
+            hex::encode(self.generation)
         );
-        hex::encode(Sha256::digest(data.as_bytes()))
+        sha256::hash(data.as_bytes()).into()
+    }
+
+    pub(crate) fn key(&self) -> String {
+        hex::encode(self.digest())
+    }
+
+    // Earlier derived dictionaries have no installation authority. Inspect only
+    // their directory entries to explain why an explicit rebuild is available.
+    fn unbound_key(&self, version: u32) -> String {
+        let data = format!(
+            "{version}:{}:{}:{}",
+            self.uuid, self.archive_bytes, self.articles
+        );
+        hex::encode(<[u8; 32]>::from(sha256::hash(data.as_bytes())))
     }
 
     fn status(&self, state: &str) -> SpellingStatus {
         SpellingStatus {
             book_id: self.uuid.clone(),
+            installation_id: self.installation_id.clone(),
+            source_key: self.key(),
             state: state.into(),
             processed: 0,
             total: 0,
@@ -96,13 +142,29 @@ impl Identity {
 }
 
 struct Dictionary {
-    connection: Connection,
+    index: Mutex<Lexicon>,
     total: u32,
     words: u64,
 }
 
+enum CacheLookup {
+    Missing,
+    Pending,
+    Ready(Arc<Dictionary>),
+}
+
+impl CacheLookup {
+    fn ready(self) -> Option<Arc<Dictionary>> {
+        match self {
+            Self::Ready(dictionary) => Some(dictionary),
+            _ => None,
+        }
+    }
+}
+
 struct Job {
-    book_id: String,
+    installation_id: String,
+    source_key: String,
     cancel: Arc<AtomicBool>,
     handle: JoinHandle<()>,
 }
@@ -115,13 +177,11 @@ struct Inner {
     // lifetime without making an interactive request or privacy cutover join.
     // A loader removes its own entry when it publishes.
     loads: HashMap<String, JoinHandle<()>>,
-    // Every archive ever consulted must not retain a SQLite handle (and its
-    // descriptors) for the process lifetime, so dictionaries, statuses and
-    // failures are bounded and evicted oldest-first. In-flight loaders and the
+    // Dictionaries, statuses and failures are bounded and evicted oldest-first. In-flight loaders and the
     // active build keep their status entry; dropping an evicted dictionary
-    // closes its connection once the last query releases it.
+    // closes its file once the last query releases it.
     statuses: HashMap<String, SpellingStatus>,
-    dictionaries: HashMap<String, Arc<Mutex<Dictionary>>>,
+    dictionaries: HashMap<String, Arc<Dictionary>>,
     failures: HashMap<String, String>,
     dictionary_order: VecDeque<String>,
     status_order: VecDeque<String>,
@@ -129,18 +189,28 @@ struct Inner {
 }
 
 impl Inner {
-    fn insert_dictionary(&mut self, key: String, dictionary: Arc<Mutex<Dictionary>>) {
+    fn insert_dictionary(&mut self, key: String, dictionary: Arc<Dictionary>) {
         self.dictionaries.insert(key.clone(), dictionary);
         remember(&mut self.dictionary_order, key);
         while self.dictionaries.len() > MAX_DICTIONARIES {
-            let Some(key) = self.dictionary_order.pop_front() else { break };
+            let Some(key) = self.dictionary_order.pop_front() else {
+                break;
+            };
             self.dictionaries.remove(&key);
+            if self.statuses.get(&key).is_some_and(|s| s.state == "ready") {
+                self.statuses.remove(&key);
+                self.status_order.retain(|s| s != &key);
+            }
         }
     }
 
     /// Mark an eviction-protected dictionary as recently used.
     fn touch_dictionary(&mut self, key: &str) {
-        if let Some(position) = self.dictionary_order.iter().position(|entry| entry.as_str() == key) {
+        if let Some(position) = self
+            .dictionary_order
+            .iter()
+            .position(|entry| entry.as_str() == key)
+        {
             if let Some(key) = self.dictionary_order.remove(position) {
                 self.dictionary_order.push_back(key);
             }
@@ -151,21 +221,35 @@ impl Inner {
         self.statuses.insert(key.clone(), status);
         remember(&mut self.status_order, key);
         while self.statuses.len() > MAX_STATUSES {
-            let Some(position) = self.status_order.iter().position(|key| self.status_evictable(key))
-            else { break };
-            let Some(key) = self.status_order.remove(position) else { break };
+            let Some(position) = self
+                .status_order
+                .iter()
+                .position(|key| self.status_evictable(key))
+            else {
+                break;
+            };
+            let Some(key) = self.status_order.remove(position) else {
+                break;
+            };
             self.statuses.remove(&key);
         }
     }
 
     /// A loader still publishing, or the active build, must keep reporting.
     fn status_evictable(&self, key: &str) -> bool {
-        if self.loads.get(key).is_some_and(|handle| !handle.is_finished()) {
+        if self
+            .loads
+            .get(key)
+            .is_some_and(|handle| !handle.is_finished())
+        {
             return false;
         }
         !self.job.as_ref().is_some_and(|job| {
             !job.handle.is_finished()
-                && self.statuses.get(key).is_some_and(|status| status.book_id == job.book_id)
+                && self
+                    .statuses
+                    .get(key)
+                    .is_some_and(|status| status.installation_id == job.installation_id)
         })
     }
 
@@ -173,7 +257,9 @@ impl Inner {
         self.failures.insert(key.clone(), error);
         remember(&mut self.failure_order, key);
         while self.failures.len() > MAX_FAILURES {
-            let Some(key) = self.failure_order.pop_front() else { break };
+            let Some(key) = self.failure_order.pop_front() else {
+                break;
+            };
             self.failures.remove(&key);
         }
     }
@@ -225,15 +311,11 @@ impl SpellingManager {
         Ok(())
     }
 
-    fn dictionary(&self, identity: &Identity) -> Result<Option<Arc<Mutex<Dictionary>>>, String> {
+    fn dictionary(&self, identity: &Identity) -> Result<CacheLookup, String> {
         self.dictionary_with_loader(identity, open_verified)
     }
 
-    fn dictionary_with_loader<F>(
-        &self,
-        identity: &Identity,
-        load: F,
-    ) -> Result<Option<Arc<Mutex<Dictionary>>>, String>
+    fn dictionary_with_loader<F>(&self, identity: &Identity, load: F) -> Result<CacheLookup, String>
     where
         F: FnOnce(&Path, &Identity) -> Result<Dictionary, String> + Send + 'static,
     {
@@ -242,7 +324,7 @@ impl SpellingManager {
         if let Some(dictionary) = inner.dictionaries.get(&key).cloned() {
             // Keep the dictionaries in active use from being evicted first.
             inner.touch_dictionary(&key);
-            return Ok(Some(dictionary));
+            return Ok(CacheLookup::Ready(dictionary));
         }
         if let Some(error) = inner.failures.get(&key) {
             return Err(error.clone());
@@ -252,16 +334,26 @@ impl SpellingManager {
             .get(&key)
             .is_some_and(|handle| !handle.is_finished())
         {
-            return Ok(None);
+            return Ok(CacheLookup::Pending);
         }
-        let path = self.directory.join(format!("{key}.sqlite"));
-        match fs::symlink_metadata(&path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.to_string()),
+        let name = format!("{key}.words");
+        let path = self.directory.join(&name);
+        let found =
+            open_directory(&self.directory, false).and_then(|dir| dir.symlink_metadata(&name));
+        match found {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(CacheLookup::Missing)
+            }
+            Err(error) => return Err(err(error)),
             Ok(metadata) if !metadata.is_file() || metadata.len() > MAX_DB_BYTES => {
                 return Err("Invalid or oversized spelling cache file".into());
             }
             Ok(_) => {}
+        }
+        // Interactive polling will retry this existing file as soon as a slot
+        // opens. A deferred validation never starts an index build.
+        if inner.loads.len() >= MAX_COLD_LOADERS {
+            return Ok(CacheLookup::Pending);
         }
         // The lock covers both reservation and handle insertion. Concurrent
         // cold requests return immediately instead of validating the same file.
@@ -282,8 +374,7 @@ impl SpellingManager {
                             status.processed = dictionary.total;
                             status.total = dictionary.total;
                             status.words = dictionary.words;
-                            inner.insert_dictionary(
-                                worker_key.clone(), Arc::new(Mutex::new(dictionary)));
+                            inner.insert_dictionary(worker_key.clone(), Arc::new(dictionary));
                         }
                         Err(error) => {
                             status.state = "error".into();
@@ -302,35 +393,51 @@ impl SpellingManager {
         // Reserve the loader status only once its handle is retained: eviction
         // never drops the status of an in-flight load.
         inner.insert_status(key, building);
-        Ok(None)
+        Ok(CacheLookup::Pending)
     }
 
-    pub fn status(&self, archive: &Archive) -> Result<SpellingStatus, String> {
-        self.status_for_identity(&Identity::from_metadata(archive.metadata()?))
-    }
-
-    fn status_for_identity(&self, identity: &Identity) -> Result<SpellingStatus, String> {
+    pub(crate) fn status(&self, identity: &Identity) -> Result<SpellingStatus, String> {
         let key = identity.key();
         if let Some(status) = self.inner.lock().map_err(err)?.statuses.get(&key) {
             return Ok(status.clone());
         }
         match self.dictionary(identity) {
-            Ok(Some(dictionary)) => {
-                let dictionary = dictionary.lock().map_err(err)?;
+            Ok(CacheLookup::Ready(dictionary)) => {
                 let mut status = identity.status("ready");
                 status.processed = dictionary.total;
                 status.total = dictionary.total;
                 status.words = dictionary.words;
                 Ok(status)
             }
-            Ok(None) => Ok(self
+            Ok(CacheLookup::Pending) => Ok(self
                 .inner
                 .lock()
                 .map_err(err)?
                 .statuses
                 .get(&key)
                 .cloned()
-                .unwrap_or_else(|| identity.status("missing"))),
+                .unwrap_or_else(|| identity.status("building"))),
+            Ok(CacheLookup::Missing) => {
+                let inner = self.inner.lock().map_err(err)?;
+                if let Some(status) = inner.statuses.get(&key) {
+                    return Ok(status.clone());
+                }
+                if inner.writable {
+                    for (version, extension) in [(1, "sqlite"), (2, "words")] {
+                        let name = format!("{}.{extension}", identity.unbound_key(version));
+                        match open_directory(&self.directory, false)
+                            .and_then(|dir| dir.symlink_metadata(name))
+                        {
+                            Ok(metadata) if metadata.is_file() => {
+                                return Ok(identity.status("rebuild"))
+                            }
+                            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(err(e)),
+                            _ => {}
+                        }
+                    }
+                }
+                Ok(identity.status("missing"))
+            }
             Err(error) => {
                 let mut status = identity.status("error");
                 status.error = Some(error);
@@ -340,9 +447,12 @@ impl SpellingManager {
     }
 
     /// Only an explicit trusted application command may call this method.
-    pub fn build(self: &Arc<Self>, archive: Archive) -> Result<SpellingStatus, String> {
+    pub(crate) fn build(
+        self: &Arc<Self>,
+        archive: Archive,
+        identity: Identity,
+    ) -> Result<SpellingStatus, String> {
         let _lifecycle = self.lifecycle.lock().map_err(err)?;
-        let identity = Identity::from_metadata(archive.metadata()?);
         let key = identity.key();
         let inner = self.inner.lock().map_err(err)?;
         if !inner.writable {
@@ -350,7 +460,7 @@ impl SpellingManager {
         }
         if let Some(job) = inner.job.as_ref() {
             if !job.handle.is_finished() {
-                if job.book_id == identity.uuid {
+                if job.source_key == key {
                     return inner
                         .statuses
                         .get(&key)
@@ -361,8 +471,18 @@ impl SpellingManager {
             }
         }
         drop(inner);
-        if let Ok(Some(dictionary)) = self.dictionary(&identity) {
-            let dictionary = dictionary.lock().map_err(err)?;
+        let lookup = self.dictionary(&identity);
+        if matches!(lookup, Ok(CacheLookup::Pending)) {
+            return Ok(self
+                .inner
+                .lock()
+                .map_err(err)?
+                .statuses
+                .get(&key)
+                .cloned()
+                .unwrap_or_else(|| identity.status("building")));
+        }
+        if let Ok(CacheLookup::Ready(dictionary)) = lookup {
             let mut status = identity.status("ready");
             status.processed = dictionary.total;
             status.total = dictionary.total;
@@ -399,7 +519,7 @@ impl SpellingManager {
         let worker_cancel = cancel.clone();
         let directory = self.directory.clone();
         let shared = self.inner.clone();
-        let book_id = identity.uuid.clone();
+        let installation_id = identity.installation_id.clone();
         let worker_key = key.clone();
         let handle = std::thread::Builder::new()
             .name("spelling-index".into())
@@ -430,7 +550,8 @@ impl SpellingManager {
                 error.to_string()
             })?;
         inner.job = Some(Job {
-            book_id,
+            installation_id,
+            source_key: key,
             cancel,
             handle,
         });
@@ -441,10 +562,19 @@ impl SpellingManager {
     /// moves use this because the build holds its archive open.
     #[cfg_attr(not(windows), allow(dead_code))]
     pub fn cancel_running(&self) -> Result<(), String> {
-        // Same order as `cancel` and `start`: lifecycle, then inner. Holding
-        // lifecycle means no build can start between the take and the join.
+        self.stop_build(None)
+    }
+
+    pub fn retire_installation(&self, installation: &str) -> Result<(), String> {
+        self.stop_build(Some(installation))
+    }
+
+    fn stop_build(&self, installation: Option<&str>) -> Result<(), String> {
+        // Holding lifecycle prevents another build starting between take and join.
         let _lifecycle = self.lifecycle.lock().map_err(err)?;
-        let job = self.inner.lock().map_err(err)?.job.take();
+        let job = self.inner.lock().map_err(err)?.job.take_if(|job| {
+            installation.is_none_or(|installation| job.installation_id == installation)
+        });
         if let Some(job) = job {
             job.cancel.store(true, Ordering::Release);
             job.handle
@@ -454,15 +584,23 @@ impl SpellingManager {
         Ok(())
     }
 
-    pub fn cancel(&self, book_id: &str) -> Result<SpellingStatus, String> {
+    pub fn cancel(
+        &self,
+        installation_id: &str,
+        source_key: &str,
+    ) -> Result<SpellingStatus, String> {
         let _lifecycle = self.lifecycle.lock().map_err(err)?;
         let job = {
             let mut inner = self.inner.lock().map_err(err)?;
-            if inner.job.as_ref().is_some_and(|job| job.book_id == book_id) {
+            if inner.job.as_ref().is_some_and(|job| {
+                job.installation_id == installation_id && job.source_key == source_key
+            }) {
                 inner.job.take()
             } else {
-                if inner.statuses.values().any(|status| {
-                    status.book_id == book_id && status.state == "building" && !status.cancellable
+                if inner.statuses.get(source_key).is_some_and(|status| {
+                    status.installation_id == installation_id
+                        && status.state == "building"
+                        && !status.cancellable
                 }) {
                     return Err("Spelling cache loading cannot be cancelled".into());
                 }
@@ -479,34 +617,36 @@ impl SpellingManager {
             .lock()
             .map_err(err)?
             .statuses
-            .values()
-            .find(|status| status.book_id == book_id)
+            .get(source_key)
+            .filter(|status| status.installation_id == installation_id)
             .cloned()
             .ok_or_else(|| "No spelling job exists for this archive".into())
     }
 
-    pub fn corrections(
+    pub(crate) fn corrections(
         &self,
-        archive: &Archive,
+        identity: &Identity,
         query: &str,
         ordinary_total: u64,
         enabled: bool,
+        cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<Vec<SpellingCorrection>, String> {
         if !eligible_query(query, ordinary_total, enabled) {
             return Ok(Vec::new());
         }
-        let identity = Identity::from_metadata(archive.metadata()?);
-        let Some(dictionary) = self.dictionary(&identity)? else {
+        crate::search::check_cancel(cancel)?;
+        let Some(dictionary) = self.dictionary(identity)?.ready() else {
             return Ok(Vec::new());
         };
-        let dictionary = dictionary.lock().map_err(err)?;
-        query_corrections(&dictionary.connection, query)
+        let index =
+            crate::archive::archive_lock(&dictionary.index, Some((cancel, "Search cancelled")))?;
+        corrections_while(&index, query, || cancel.is_cancelled())
     }
 }
 
 impl Drop for SpellingManager {
     fn drop(&mut self) {
-        // Read-only loaders retain only shared state and their file connection,
+        // Read-only loaders retain only shared state and a read-only descriptor,
         // never the manager. They may finish after drop without publishing files.
         if let Ok(mut inner) = self.inner.lock() {
             inner.writable = false;
@@ -564,78 +704,163 @@ fn valid_word(word: &str) -> bool {
         && word.chars().any(char::is_alphabetic)
 }
 
-fn deletion_keys(word: &str) -> BTreeSet<String> {
-    let chars: Vec<char> = word.chars().collect();
-    let mut keys = BTreeSet::new();
-    keys.insert(word.to_string());
-    for removed in 0..chars.len() {
-        keys.insert(
-            chars
-                .iter()
-                .enumerate()
-                .filter_map(|(index, ch)| (index != removed).then_some(*ch))
-                .collect(),
-        );
-    }
-    keys
-}
-
-fn create_schema(connection: &Connection) -> Result<(), String> {
-    connection.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
-        PRAGMA page_size=4096; PRAGMA max_page_count=262144; PRAGMA trusted_schema=OFF;
-        CREATE TABLE words(word TEXT PRIMARY KEY, length INTEGER NOT NULL, frequency INTEGER NOT NULL) WITHOUT ROWID;
-        CREATE INDEX word_lengths ON words(length,word);
-        CREATE TABLE deletes(key TEXT NOT NULL, word TEXT NOT NULL, PRIMARY KEY(key,word)) WITHOUT ROWID;
-        CREATE TABLE identity(value TEXT NOT NULL, total INTEGER NOT NULL, words INTEGER NOT NULL);")
-        .map_err(err)
-}
-
-fn add_titles(
-    connection: &mut Connection,
-    titles: &[String],
-    cancel: &AtomicBool,
-) -> Result<u64, String> {
-    let transaction = connection.transaction().map_err(err)?;
-    let mut added = 0;
-    {
-        let mut insert = transaction.prepare_cached("INSERT INTO words VALUES(?1,?2,1) ON CONFLICT(word) DO UPDATE SET frequency=frequency+1").map_err(err)?;
-        let mut exists = transaction
-            .prepare_cached("SELECT EXISTS(SELECT 1 FROM words WHERE word=?1)")
-            .map_err(err)?;
-        let mut delete = transaction
-            .prepare_cached("INSERT OR IGNORE INTO deletes VALUES(?1,?2)")
-            .map_err(err)?;
-        for title in titles {
-            check_cancel(cancel)?;
-            for (start, end) in tokens(title) {
-                let word = normalize(&title[start..end]);
-                if !valid_word(&word) {
-                    continue;
-                }
-                let present: bool = exists.query_row([&word], |row| row.get(0)).map_err(err)?;
-                insert
-                    .execute(params![word, word.chars().count() as u32])
-                    .map_err(err)?;
-                if !present {
-                    added += 1;
-                    for key in deletion_keys(&word) {
-                        delete.execute(params![key, word]).map_err(err)?;
-                    }
-                }
+fn open_directory(path: &Path, create: bool) -> io::Result<Dir> {
+    let parent = path.parent().ok_or(io::ErrorKind::InvalidInput)?;
+    let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
+    let profile = crate::storage::open_directory_nofollow(parent)?;
+    if create {
+        let mut builder = cap_std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        cap_std::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        if let Err(error) = profile.create_dir_with(name, &builder) {
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error);
             }
         }
     }
-    transaction.commit().map_err(err)?;
-    Ok(added)
+    let directory = profile.open_dir_nofollow(name)?;
+    check_cache_directory(&directory)?;
+    Ok(directory)
 }
 
-struct Temporary(PathBuf);
-impl Drop for Temporary {
+// Scratch and staging cleanup uses names relative to this retained directory.
+// The directory itself must exclude writers from other accounts.
+fn cache_permissions_error() -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied,
+        "Spelling storage has unsafe permissions. Use a local, account-owned spelling folder and files with write access restricted to your account or system administrators. On Apple platforms, use a folder without an extended access list.")
+}
+
+fn check_cache_directory(directory: &Dir) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use cap_std::fs::MetadataExt as UnixMetadata;
+        let metadata = directory.dir_metadata()?;
+        if metadata.uid() != crate::fs_ext::effective_uid() || metadata.mode() & 0o022 != 0 {
+            return Err(cache_permissions_error());
+        }
+    }
+    #[cfg(target_vendor = "apple")]
+    if crate::storage::has_extended_file_security(directory)? {
+        return Err(cache_permissions_error());
+    }
+    #[cfg(windows)]
+    crate::private_sync_identity::check_cache_directory_access(directory)
+        .map_err(|_| cache_permissions_error())?;
+    Ok(())
+}
+
+fn check_cache_file(file: &cap_std::fs::File) -> io::Result<()> {
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.is_symlink() || metadata.nlink() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Spelling cache must be a regular file with a single link",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use cap_std::fs::MetadataExt as UnixMetadata;
+        if metadata.uid() != crate::fs_ext::effective_uid() || metadata.mode() & 0o022 != 0 {
+            return Err(cache_permissions_error());
+        }
+    }
+    #[cfg(target_vendor = "apple")]
+    if crate::storage::has_extended_file_security(file)? {
+        return Err(cache_permissions_error());
+    }
+    #[cfg(windows)]
+    crate::private_sync_identity::check_cache_file_access(file)
+        .map_err(|_| cache_permissions_error())?;
+    Ok(())
+}
+
+fn read_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    {
+        // A raced FIFO must not turn a read-only background load into a permanent wait.
+        use cap_std::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    options
+}
+
+fn scratch_file(directory: &Dir) -> io::Result<fs::File> {
+    let name = PathBuf::from(format!(".spelling-{}.run", uuid::Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    #[cfg(windows)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        // FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE. Refuse other opens.
+        options.share_mode(0).custom_flags(0x100 | 0x0400_0000);
+    }
+    let file = directory.open_with(&name, &options)?.into_std();
+    #[cfg(unix)]
+    {
+        // Unlink the fresh empty file before writing a single archive-derived byte.
+        let empty = VerifiedFile::new(file.try_clone()?, 0)?;
+        check_cache_directory(directory)?;
+        if !empty.matches_in(directory, &name)? {
+            return Err(io::Error::other("Spelling scratch file changed"));
+        }
+        directory.remove_file(name)?;
+    }
+    Ok(file)
+}
+
+struct Staging<'a> {
+    directory: &'a Dir,
+    name: PathBuf,
+    file: fs::File,
+}
+
+impl Drop for Staging<'_> {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        if let Ok(owned) = self
+            .file
+            .try_clone()
+            .and_then(|f| VerifiedFile::new(f, self.file.metadata()?.len()))
+        {
+            if check_cache_directory(self.directory).is_ok()
+                && owned
+                    .matches_in(self.directory, &self.name)
+                    .unwrap_or(false)
+            {
+                let _ = self.directory.remove_file(&self.name);
+            }
+        }
     }
 }
 
+fn open_verified(path: &Path, identity: &Identity) -> Result<Dictionary, String> {
+    let directory =
+        open_directory(path.parent().ok_or("Missing spelling directory")?, false).map_err(err)?;
+    let file = directory
+        .open_with(
+            path.file_name().ok_or("Missing spelling file")?,
+            &read_options(),
+        )
+        .map_err(err)?;
+    check_cache_file(&file).map_err(err)?;
+    let (index, total, words) =
+        Lexicon::open(file.into_std(), identity.digest(), &AtomicBool::new(false)).map_err(err)?;
+    Ok(Dictionary {
+        index: Mutex::new(index),
+        total,
+        words,
+    })
+}
 fn build_archive(
     archive: &Archive,
     directory: &Path,
@@ -643,12 +868,19 @@ fn build_archive(
     cancel: &AtomicBool,
     shared: &Mutex<Inner>,
 ) -> Result<(), String> {
-    build_with_batches(directory, identity, cancel, shared, |offset| {
-        archive.title_batch(offset, BATCH)
-    })
+    identity.confirm(archive)?;
+    build_with_batches(
+        Some(archive),
+        directory,
+        identity,
+        cancel,
+        shared,
+        |offset| archive.spelling_titles(offset, BATCH, cancel),
+    )
 }
 
 fn build_with_batches<F>(
+    archive: Option<&Archive>,
     directory: &Path,
     identity: &Identity,
     cancel: &AtomicBool,
@@ -662,20 +894,40 @@ where
     if !shared.lock().map_err(err)?.writable {
         return Err("Spelling builds are disabled in private or read-only mode".into());
     }
-    fs::create_dir_all(directory).map_err(err)?;
-    let temporary =
-        Temporary(directory.join(format!(".{}.{}.tmp", identity.key(), uuid::Uuid::new_v4())));
-    OpenOptions::new()
-        .create_new(true)
+    let dir = open_directory(directory, true).map_err(err)?;
+    let key = identity.key();
+    let final_name = PathBuf::from(format!("{key}.words"));
+    let existing = match dir.open_with(&final_name, &read_options()) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(err(error)),
+        Ok(file) => {
+            check_cache_file(&file).map_err(err)?;
+            let len = file.metadata().map_err(err)?.len();
+            let file = file.into_std();
+            Some(VerifiedFile::new(file, len).map_err(err)?)
+        }
+    };
+    let temp_name = PathBuf::from(format!(".{key}.{}.tmp", uuid::Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options
+        .read(true)
         .write(true)
-        .open(&temporary.0)
-        .map_err(err)?;
-    let mut connection =
-        Connection::open_with_flags(&temporary.0, OpenFlags::SQLITE_OPEN_READ_WRITE)
-            .map_err(err)?;
-    create_schema(&connection)?;
+        .create_new(true)
+        .follow(FollowSymlinks::No);
+    #[cfg(unix)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = dir.open_with(&temp_name, &options).map_err(err)?.into_std();
+    let staged = Staging {
+        directory: &dir,
+        name: temp_name,
+        file,
+    };
+    let scratch = || scratch_file(&dir);
+    let mut builder = Builder::new(&scratch, cancel);
     let mut processed: u32 = 0;
-    let mut words: u64 = 0;
     let mut total = None;
     loop {
         check_cancel(cancel)?;
@@ -690,7 +942,16 @@ where
             return Err("Invalid, changing, or oversized spelling title listing (maximum 20 million titles)".into());
         }
         total = Some(page.total);
-        words += add_titles(&mut connection, &page.titles, cancel)?;
+        for title in &page.titles {
+            check_cancel(cancel)?;
+            for (start, end) in tokens(title) {
+                let word = normalize(&title[start..end]);
+                if valid_word(&word) {
+                    builder.add(word).map_err(err)?;
+                }
+            }
+        }
+        let words = builder.words;
         processed += page.titles.len() as u32;
         if words > MAX_WORDS {
             return Err("Spelling dictionary exceeds 2 million distinct words".into());
@@ -706,141 +967,108 @@ where
             status.words = words;
         }
         if processed == page.total {
-            connection
-                .execute(
-                    "INSERT INTO identity VALUES(?1,?2,?3)",
-                    params![
-                        serde_json::to_string(identity).map_err(err)?,
-                        processed,
-                        words
-                    ],
-                )
-                .map_err(err)?;
             break;
         }
     }
     check_cancel(cancel)?;
-    connection.close().map_err(|(_, error)| error.to_string())?;
-    let verified = open_verified(&temporary.0, identity)?;
-    let total = verified.total;
-    let words = verified.words;
-    // SQLite's Windows VFS does not promise FILE_SHARE_DELETE. Close the
-    // verifier before moving the file; reopen the same verified bytes after it.
-    drop(verified);
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&temporary.0)
-        .and_then(|file| file.sync_all())
+    builder
+        .finish(
+            staged.file.try_clone().map_err(err)?,
+            identity.digest(),
+            processed,
+        )
         .map_err(err)?;
-    // Publication and policy changes share a lock. set_writable(false) waits for
-    // this section and joins before returning, so private mode cannot publish.
+    let readonly = dir
+        .open_with(&staged.name, &read_options())
+        .map_err(err)?
+        .into_std();
+    let verified = VerifiedFile::new(
+        readonly.try_clone().map_err(err)?,
+        staged.file.metadata().map_err(err)?.len(),
+    )
+    .map_err(err)?;
+    let source = VerifiedFile::new(
+        staged.file.try_clone().map_err(err)?,
+        verified.file().metadata().map_err(err)?.len(),
+    )
+    .map_err(err)?;
+    if !source.matches_in(&dir, &staged.name).map_err(err)?
+        || !verified.matches_in(&dir, &staged.name).map_err(err)?
+    {
+        return Err("Spelling staging file changed during validation".into());
+    }
+    let (index, total, words) = Lexicon::open(readonly, identity.digest(), cancel).map_err(err)?;
+    let dictionary = Dictionary {
+        index: Mutex::new(index),
+        total,
+        words,
+    };
+    if let Some(archive) = archive {
+        identity.confirm(archive)?;
+    }
     let mut inner = shared.lock().map_err(err)?;
     check_cancel(cancel)?;
     if !inner.writable {
         return Err("Spelling cache publication disabled by privacy policy".into());
     }
-    let key = identity.key();
-    let final_path = directory.join(format!("{key}.sqlite"));
-    fs::rename(&temporary.0, &final_path).map_err(err)?;
-    let dictionary = Dictionary {
-        connection: open_readonly(&final_path)?,
-        total,
-        words,
+    let confirm_directory = || -> Result<(), String> {
+        let current = open_directory(directory, false)
+            .map_err(err)?
+            .dir_metadata()
+            .map_err(err)?;
+        let retained = dir.dir_metadata().map_err(err)?;
+        if current.dev() != retained.dev() || current.ino() != retained.ino() {
+            return Err("Spelling directory changed before publication".into());
+        }
+        Ok(())
     };
+    confirm_directory()?;
+    // Explicit recovery retains the previous generation. A concurrent publisher,
+    // symlink or hardlink is never overwritten.
+    let backup = PathBuf::from(format!(".{key}.{}.previous", uuid::Uuid::new_v4()));
+    if let Some(old) = &existing {
+        publish_verified_noreplace_in(&dir, &final_name, &backup, old).map_err(err)?;
+    }
+    if let Err(error) = publish_verified_noreplace_in(&dir, &staged.name, &final_name, &verified) {
+        if let Some(old) = &existing {
+            if let Err(restore) = publish_verified_noreplace_in(&dir, &backup, &final_name, old) {
+                return Err(format!(
+                    "Spelling publication failed: {error}; previous file retained at {}: {restore}",
+                    backup.display()
+                ));
+            }
+        }
+        return Err(err(error));
+    }
+    confirm_directory()?;
     #[cfg(unix)]
-    fs::File::open(directory)
-        .and_then(|file| file.sync_all())
+    dir.try_clone()
+        .and_then(|d| d.into_std_file().sync_all())
         .map_err(err)?;
     let mut status = identity.status("ready");
     status.processed = dictionary.total;
     status.total = dictionary.total;
     status.words = dictionary.words;
-    inner.insert_dictionary(key.clone(), Arc::new(Mutex::new(dictionary)));
+    inner.insert_dictionary(key.clone(), Arc::new(dictionary));
     inner.failures.remove(&key);
     inner.insert_status(key, status);
     Ok(())
 }
 
-fn open_readonly(path: &Path) -> Result<Connection, String> {
-    // Published dictionaries are immutable snapshots. READ_ONLY alone can still
-    // create WAL shared-memory files in a writable directory; immutable also
-    // prevents those side effects during private/read-only background loading.
-    let absolute;
-    let path = if path.is_absolute() {
-        path
-    } else {
-        absolute = std::env::current_dir().map_err(err)?.join(path);
-        &absolute
-    };
-    let mut uri =
-        url::Url::from_file_path(path).map_err(|_| "Invalid spelling cache path".to_string())?;
-    uri.query_pairs_mut().append_pair("immutable", "1");
-    let connection = Connection::open_with_flags(
-        uri.as_str(),
-        OpenFlags::SQLITE_OPEN_READ_ONLY
-            | OpenFlags::SQLITE_OPEN_URI
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(err)?;
-    connection.execute_batch("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA cache_size=-4096; PRAGMA temp_store=MEMORY;").map_err(err)?;
-    Ok(connection)
-}
-
-fn open_verified(path: &Path, identity: &Identity) -> Result<Dictionary, String> {
-    let metadata = fs::symlink_metadata(path).map_err(err)?;
-    if !metadata.is_file() || metadata.len() > MAX_DB_BYTES {
-        return Err("Invalid or oversized spelling cache".into());
-    }
-    let connection = open_readonly(path)?;
-    let check: String = connection
-        .query_row("PRAGMA quick_check", [], |row| row.get(0))
-        .map_err(err)?;
-    if check != "ok" {
-        return Err("Spelling cache integrity verification failed".into());
-    }
-    let schema_valid: bool = connection.query_row("SELECT
-        (SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('words','deletes','identity'))=3
-        AND (SELECT group_concat(name,',') FROM (SELECT name FROM pragma_index_info('word_lengths') ORDER BY seqno))='length,word'
-        AND EXISTS(SELECT 1 FROM pragma_table_info('words') WHERE name='word' AND pk=1)
-        AND EXISTS(SELECT 1 FROM pragma_table_info('deletes') WHERE name='key' AND pk=1)
-        AND EXISTS(SELECT 1 FROM pragma_table_info('deletes') WHERE name='word' AND pk=2)",
-        [], |row| row.get(0)).map_err(err)?;
-    if !schema_valid {
-        return Err("The spelling dictionary is damaged. Rebuild it in Settings".into());
-    }
-    let (stored, total, words): (String, u32, u64) = connection
-        .query_row(
-            "SELECT substr(value,1,4097),total,words FROM identity",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .map_err(err)?;
-    if stored.len() > 4096
-        || serde_json::from_str::<Identity>(&stored).map_err(err)? != *identity
-        || total > MAX_TITLES
-        || words > MAX_WORDS
-    {
-        return Err("Spelling cache archive identity/version or bounds mismatch".into());
-    }
-    let actual: u64 = connection
-        .query_row("SELECT count(*) FROM words", [], |row| row.get(0))
-        .map_err(err)?;
-    if actual != words {
-        return Err("Incomplete spelling cache dictionary".into());
-    }
-    Ok(Dictionary {
-        connection,
-        total,
-        words,
-    })
-}
-
 /// Optimal-string-alignment distance <= 1: insert/delete/substitute or transpose
 /// two adjacent Unicode scalars. No byte-distance corruption for non-ASCII text.
 fn distance_one(left: &str, right: &str) -> bool {
-    let left: Vec<char> = left.chars().collect();
-    let right: Vec<char> = right.chars().collect();
+    if left.is_ascii() && right.is_ascii() {
+        adjacent(left.as_bytes(), right.as_bytes())
+    } else {
+        adjacent(
+            &left.chars().collect::<Vec<_>>(),
+            &right.chars().collect::<Vec<_>>(),
+        )
+    }
+}
+
+fn adjacent<T: Eq>(left: &[T], right: &[T]) -> bool {
     if left.len().abs_diff(right.len()) > 1 {
         return false;
     }
@@ -864,62 +1092,6 @@ fn distance_one(left: &str, right: &str) -> bool {
     }
 }
 
-fn candidates(connection: &Connection, word: &str) -> Result<Vec<(String, u64)>, String> {
-    // The statement cache is keyed by SQL text, so building the IN list from the
-    // deletion-key count re-prepares on nearly every keystroke. Bind a fixed
-    // 65-slot list instead: unused slots bind the empty string, which is never a
-    // deletion key (valid words hold 2..=64 scalars), and the length bounds are
-    // bound too. The final ordering is applied below, so the query plan's row
-    // order stays irrelevant.
-    static SQL: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-        let placeholders = std::iter::repeat_n("?", MAX_DELETION_KEYS)
-            .collect::<Vec<_>>()
-            .join(",");
-        // No SQL LIMIT: the deletion-key join returns a distance-two superset, so
-        // capping rows before the distance filter would fail (or drop real
-        // candidates) for a word with many non-adjacent matches. The join itself
-        // is tight — each key of length k only matches words of length k or k+1 —
-        // and the filtered cap is applied below.
-        format!("SELECT DISTINCT substr(w.word,1,257),w.frequency FROM deletes d JOIN words w ON w.word=d.word
-        WHERE d.key IN ({placeholders}) AND w.length BETWEEN ? AND ?")
-    });
-    let keys = deletion_keys(word);
-    if keys.len() > MAX_DELETION_KEYS {
-        return Err("Invalid spelling query length".into());
-    }
-    let length = word.chars().count() as i64;
-    let mut bound: Vec<SqlValue> = keys.into_iter().map(SqlValue::Text).collect();
-    bound.resize(MAX_DELETION_KEYS, SqlValue::Text(String::new()));
-    bound.push(SqlValue::Integer(length.saturating_sub(1)));
-    bound.push(SqlValue::Integer(length + 1));
-    let mut statement = connection.prepare_cached(&SQL).map_err(err)?;
-    let rows = statement
-        .query_map(params_from_iter(bound.iter()), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
-        })
-        .map_err(err)?;
-    let mut result = Vec::new();
-    for row in rows {
-        let (candidate, frequency) = row.map_err(err)?;
-        if candidate.len() > 256 || !valid_word(&candidate) {
-            return Err("Invalid spelling dictionary word".into());
-        }
-        if !distance_one(word, &candidate) {
-            continue;
-        }
-        // The cap counts adjacent candidates only: a large superset of distant
-        // words is not a failure.
-        if result.len() >= MAX_CANDIDATES {
-            return Err("Spelling candidate limit exceeded".into());
-        }
-        result.push((candidate, frequency));
-    }
-    // Deterministic result order: most frequent first, then by word.
-    result.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    result.truncate(5);
-    Ok(result)
-}
-
 fn match_case(original: &str, replacement: &str) -> String {
     if original
         .chars()
@@ -938,9 +1110,14 @@ fn match_case(original: &str, replacement: &str) -> String {
     }
 }
 
-fn query_corrections(
-    connection: &Connection,
+#[cfg(test)]
+fn query_corrections(index: &Lexicon, query: &str) -> Result<Vec<SpellingCorrection>, String> {
+    corrections_while(index, query, || false)
+}
+fn corrections_while(
+    index: &Lexicon,
     query: &str,
+    is_cancelled: impl Fn() -> bool,
 ) -> Result<Vec<SpellingCorrection>, String> {
     if query.len() > MAX_QUERY_BYTES || query.chars().count() <= 2 {
         return Ok(Vec::new());
@@ -955,19 +1132,15 @@ fn query_corrections(
     let mut cursor = 0;
     let mut changed = 0;
     for (start, end) in words {
+        if is_cancelled() {
+            return Err("Search cancelled".into());
+        }
         let original = &query[start..end];
         let word = normalize(original);
         if word.len() > 256 || word.chars().count() > MAX_WORD_CHARS {
             return Ok(Vec::new());
         }
-        let known: bool = !valid_word(&word)
-            || connection
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM words WHERE word=?1)",
-                    [&word],
-                    |row| row.get(0),
-                )
-                .map_err(err)?;
+        let known = !valid_word(&word) || index.known(&word).map_err(err)?;
         let replacements = if known {
             vec![(original.to_string(), 0)]
         } else {
@@ -975,7 +1148,9 @@ fn query_corrections(
             if changed > 2 {
                 return Ok(Vec::new());
             }
-            candidates(connection, &word)?
+            index
+                .candidates(&word, &is_cancelled)
+                .map_err(err)?
                 .into_iter()
                 .map(|(word, score)| (match_case(original, &word), score))
                 .collect()
@@ -1017,10 +1192,15 @@ fn query_corrections(
 mod tests {
     use super::*;
 
-    struct TestDirectory(PathBuf);
+    pub(super) struct TestDirectory(pub(super) PathBuf);
     impl TestDirectory {
-        fn new() -> Self {
-            Self(std::env::temp_dir().join(format!("kiwix-spelling-{}", uuid::Uuid::new_v4())))
+        pub(super) fn new() -> Self {
+            Self(
+                std::env::temp_dir()
+                    .canonicalize()
+                    .unwrap()
+                    .join(format!("kiwix-spelling-{}", uuid::Uuid::new_v4())),
+            )
         }
     }
     impl Drop for TestDirectory {
@@ -1032,6 +1212,8 @@ mod tests {
     fn identity() -> Identity {
         Identity {
             version: VERSION,
+            generation: [0; 32],
+            installation_id: "fixture-installation".into(),
             uuid: "11111111-2222-3333-4444-555555555555".into(),
             archive_bytes: 12345,
             articles: 257,
@@ -1060,8 +1242,7 @@ mod tests {
         handle.join().unwrap();
     }
 
-    fn fixture(connection: &mut Connection) {
-        create_schema(connection).unwrap();
+    fn fixture(directory: &Path) -> Dictionary {
         let mut titles = vec!["Planet Earth".to_string(); 12];
         titles.extend(
             [
@@ -1081,7 +1262,22 @@ mod tests {
             .into_iter()
             .map(str::to_string),
         );
-        add_titles(connection, &titles, &AtomicBool::new(false)).unwrap();
+        let id = identity();
+        build_with_batches(
+            None,
+            directory,
+            &id,
+            &AtomicBool::new(false),
+            &writable(&id),
+            |_| {
+                Ok(TitleBatch {
+                    titles: titles.clone(),
+                    total: titles.len() as u32,
+                })
+            },
+        )
+        .unwrap();
+        open_verified(&directory.join(format!("{}.words", id.key())), &id).unwrap()
     }
 
     #[test]
@@ -1090,7 +1286,10 @@ mod tests {
         assert_eq!(normalize("Cafe\u{301}"), normalize("CAFÉ"));
         assert_eq!(normalize("ΚΌΣΜΟΣ"), normalize("κόσμος"));
         // Georgian Mtavruli (Unicode 11) folds to Mkhedruli.
-        assert_eq!(normalize("\u{1C90}\u{1C91}\u{1C92}"), "\u{10D0}\u{10D1}\u{10D2}");
+        assert_eq!(
+            normalize("\u{1C90}\u{1C91}\u{1C92}"),
+            "\u{10D0}\u{10D1}\u{10D2}"
+        );
         for (left, right) in [
             ("plnaet", "planet"),
             ("cafe", "café"),
@@ -1107,9 +1306,10 @@ mod tests {
 
     #[test]
     fn consumer_queries_preserve_original_case_and_separators_and_rank_frequency() {
-        let mut connection = Connection::open_in_memory().unwrap();
-        fixture(&mut connection);
-        let typo = query_corrections(&connection, "Planer EARHT!").unwrap();
+        let dir = TestDirectory::new();
+        let fixture = fixture(&dir.0);
+        let connection = &*fixture.index.lock().unwrap();
+        let typo = query_corrections(connection, "Planer EARHT!").unwrap();
         assert_eq!(
             typo[0],
             SpellingCorrection {
@@ -1117,40 +1317,38 @@ mod tests {
                 corrected_query: "Planer EARTH!".into(),
             }
         );
-        let two = query_corrections(&connection, "Plnaet, earht").unwrap();
+        let two = query_corrections(connection, "Plnaet, earht").unwrap();
         assert_eq!(two[0].corrected_query, "Planet, earth");
         assert_eq!(
-            query_corrections(&connection, "planrt").unwrap()[0].corrected_query,
+            query_corrections(connection, "planrt").unwrap()[0].corrected_query,
             "planet"
         );
         assert_eq!(
-            query_corrections(&connection, "cafè").unwrap()[0].corrected_query,
+            query_corrections(connection, "cafè").unwrap()[0].corrected_query,
             "café"
         );
         assert_eq!(
-            query_corrections(&connection, "a plnaet").unwrap()[0].corrected_query,
+            query_corrections(connection, "a plnaet").unwrap()[0].corrected_query,
             "a planet"
         );
-        assert!(query_corrections(&connection, "Cafe\u{301}")
+        assert!(query_corrections(connection, "Cafe\u{301}")
             .unwrap()
             .is_empty());
-        assert!(query_corrections(&connection, "STRASSE")
-            .unwrap()
-            .is_empty());
+        assert!(query_corrections(connection, "STRASSE").unwrap().is_empty());
         assert!(
-            query_corrections(&connection, "no plausible correction whatsoever")
+            query_corrections(connection, "no plausible correction whatsoever")
                 .unwrap()
                 .is_empty()
         );
-        assert!(query_corrections(&connection, "a b c d e f g h i")
+        assert!(query_corrections(connection, "a b c d e f g h i")
             .unwrap()
             .is_empty());
         assert!(
-            query_corrections(&connection, &"a".repeat(MAX_QUERY_BYTES + 1))
+            query_corrections(connection, &"a".repeat(MAX_QUERY_BYTES + 1))
                 .unwrap()
                 .is_empty()
         );
-        assert_eq!(query_corrections(&connection, "dat").unwrap().len(), 5);
+        assert_eq!(query_corrections(connection, "dat").unwrap().len(), 5);
     }
 
     #[test]
@@ -1160,6 +1358,7 @@ mod tests {
         let shared = writable(&identity);
         let mut offsets = Vec::new();
         build_with_batches(
+            None,
             &directory.0,
             &identity,
             &AtomicBool::new(false),
@@ -1191,11 +1390,12 @@ mod tests {
             shared.lock().unwrap().statuses[&identity.key()].state,
             "ready"
         );
-        let final_path = directory.0.join(format!("{}.sqlite", identity.key()));
+        let final_path = directory.0.join(format!("{}.words", identity.key()));
         let dictionary = open_verified(&final_path, &identity).unwrap();
         assert_eq!((dictionary.total, dictionary.words), (BATCH + 1, 3));
         assert_eq!(
-            query_corrections(&dictionary.connection, "plnaet").unwrap()[0].corrected_query,
+            query_corrections(&dictionary.index.lock().unwrap(), "plnaet").unwrap()[0]
+                .corrected_query,
             "planet"
         );
         let mut wrong = identity.clone();
@@ -1215,10 +1415,11 @@ mod tests {
         let identity = identity();
         let manager = SpellingManager::new(directory.0.clone());
         manager.set_writable(false).unwrap();
-        assert!(manager.dictionary(&identity).unwrap().is_none());
+        assert!(manager.dictionary(&identity).unwrap().ready().is_none());
         assert!(!directory.0.exists());
         let denied = Mutex::new(Inner::default());
         assert!(build_with_batches(
+            None,
             &directory.0,
             &identity,
             &AtomicBool::new(false),
@@ -1228,6 +1429,7 @@ mod tests {
         .is_err());
         assert!(!directory.0.exists());
         build_with_batches(
+            None,
             &directory.0,
             &identity,
             &AtomicBool::new(false),
@@ -1240,20 +1442,17 @@ mod tests {
             },
         )
         .unwrap();
-        let path = directory.0.join(format!("{}.sqlite", identity.key()));
+        let path = directory.0.join(format!("{}.words", identity.key()));
         let before = fs::read(&path).unwrap();
-        assert!(manager.dictionary(&identity).unwrap().is_none());
+        assert!(manager.dictionary(&identity).unwrap().ready().is_none());
         finish_load(&manager, &identity);
-        let dictionary = manager.dictionary(&identity).unwrap().unwrap();
-        let dictionary = dictionary.lock().unwrap();
+        let dictionary = manager.dictionary(&identity).unwrap().ready().unwrap();
         assert_eq!(
-            query_corrections(&dictionary.connection, "plnaet").unwrap()[0].corrected_query,
+            query_corrections(&dictionary.index.lock().unwrap(), "plnaet").unwrap()[0]
+                .corrected_query,
             "planet"
         );
-        assert!(dictionary
-            .connection
-            .execute("DELETE FROM words", [])
-            .is_err());
+
         assert_eq!(fs::read(path).unwrap(), before);
     }
 
@@ -1265,6 +1464,7 @@ mod tests {
         let directory = TestDirectory::new();
         let identity = identity();
         build_with_batches(
+            None,
             &directory.0,
             &identity,
             &AtomicBool::new(false),
@@ -1277,7 +1477,7 @@ mod tests {
             },
         )
         .unwrap();
-        let path = directory.0.join(format!("{}.sqlite", identity.key()));
+        let path = directory.0.join(format!("{}.words", identity.key()));
         let before = fs::read(&path).unwrap();
         let manager = Arc::new(SpellingManager::new(directory.0.clone()));
         manager.set_writable(true).unwrap();
@@ -1297,6 +1497,7 @@ mod tests {
                 open_verified(path, identity)
             })
             .unwrap()
+            .ready()
             .is_none());
         assert_ne!(started.recv_timeout(timeout).unwrap(), caller);
 
@@ -1317,11 +1518,9 @@ mod tests {
                         "cold cache validation must be single-flight"
                     ))
                     .unwrap()
+                    .ready()
                     .is_none());
-                assert_eq!(
-                    manager.status_for_identity(&identity).unwrap().state,
-                    "building"
-                );
+                assert_eq!(manager.status(&identity).unwrap().state, "building");
                 completed.send(()).unwrap();
             }));
         }
@@ -1333,9 +1532,9 @@ mod tests {
             request.join().unwrap();
         }
         assert_eq!(calls.load(Ordering::Acquire), 1);
-        assert!(!manager.status_for_identity(&identity).unwrap().cancellable);
+        assert!(!manager.status(&identity).unwrap().cancellable);
         assert!(manager
-            .cancel(&identity.uuid)
+            .cancel(&identity.installation_id, &identity.key())
             .unwrap_err()
             .contains("cannot be cancelled"));
 
@@ -1344,67 +1543,121 @@ mod tests {
         manager.set_writable(false).unwrap();
         release.send(()).unwrap();
         finish_load(&manager, &identity);
-        let status = manager.status_for_identity(&identity).unwrap();
+        let status = manager.status(&identity).unwrap();
         assert_eq!(
             (status.state.as_str(), status.total, status.words),
             ("ready", 1, 1)
         );
         assert!(!status.cancellable);
-        let dictionary = manager.dictionary(&identity).unwrap().unwrap();
-        let dictionary = dictionary.lock().unwrap();
+        let dictionary = manager.dictionary(&identity).unwrap().ready().unwrap();
         assert_eq!(
-            query_corrections(&dictionary.connection, "plnaet").unwrap()[0].corrected_query,
+            query_corrections(&dictionary.index.lock().unwrap(), "plnaet").unwrap()[0]
+                .corrected_query,
             "planet"
         );
-        assert!(dictionary
-            .connection
-            .execute("DELETE FROM words", [])
-            .is_err());
+
         assert_eq!(fs::read(&path).unwrap(), before);
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
     }
 
     #[test]
-    fn readonly_wal_cache_validation_never_creates_sidecar_files() {
+    fn legacy_cache_is_only_identified_by_name_and_requires_explicit_rebuild() {
         let directory = TestDirectory::new();
-        let identity = identity();
-        build_with_batches(
-            &directory.0,
-            &identity,
-            &AtomicBool::new(false),
-            &writable(&identity),
-            |_| {
-                Ok(TitleBatch {
-                    titles: vec!["Planet".into()],
-                    total: 1,
-                })
-            },
-        )
-        .unwrap();
-        let path = directory.0.join(format!("{}.sqlite", identity.key()));
-        let connection = Connection::open(&path).unwrap();
-        let journal: String = connection
-            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(journal, "wal");
-        connection
-            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
-            .unwrap();
-        drop(connection);
+        open_directory(&directory.0, true).unwrap();
+        let id = identity();
+        let path = directory.0.join(format!("{}.sqlite", id.unbound_key(1)));
+        let marker = b"Legacy file is preserved without parsing";
+        fs::write(&path, marker).unwrap();
+        let manager = SpellingManager::new(directory.0.clone());
+        manager.set_writable(false).unwrap();
+        assert_eq!(manager.status(&id).unwrap().state, "missing");
+        manager.set_writable(true).unwrap();
+        assert_eq!(manager.status(&id).unwrap().state, "rebuild");
+        assert!(manager.dictionary(&id).unwrap().ready().is_none());
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
-        let before = fs::read(&path).unwrap();
-
-        let dictionary = open_verified(&path, &identity).unwrap();
+        let dictionary = fixture(&directory.0);
         assert_eq!(
-            query_corrections(&dictionary.connection, "plnaet").unwrap()[0].corrected_query,
+            query_corrections(&dictionary.index.lock().unwrap(), "plnaet").unwrap()[0]
+                .corrected_query,
             "planet"
         );
-        assert!(dictionary
-            .connection
-            .execute("DELETE FROM words", [])
-            .is_err());
-        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
-        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::read(path).unwrap(), marker);
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn spelling_refuses_extended_apple_acls_on_private_mode_files_and_directories() {
+        let directory = TestDirectory::new();
+        let id = identity();
+        drop(fixture(&directory.0));
+        let words = directory.0.join(format!("{}.words", id.key()));
+        let before = fs::read(&words).unwrap();
+        for (path, acl) in [
+            (&words, "group:staff allow write"),
+            (&directory.0, "group:staff allow add_file,delete_child"),
+        ] {
+            assert!(std::process::Command::new("/bin/chmod")
+                .args(["+a", acl])
+                .arg(path)
+                .status()
+                .unwrap()
+                .success());
+            assert!(open_verified(&words, &id)
+                .err()
+                .unwrap()
+                .contains("write access"));
+            assert_eq!(fs::read(&words).unwrap(), before);
+            assert!(std::process::Command::new("/bin/chmod")
+                .arg("-N")
+                .arg(path)
+                .status()
+                .unwrap()
+                .success());
+        }
+        open_verified(&words, &id).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shared_spelling_storage_is_refused_without_modifying_existing_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = TestDirectory::new();
+        let id = identity();
+        let dictionary = fixture(&directory.0);
+        drop(dictionary);
+        let words = directory.0.join(format!("{}.words", id.key()));
+        let before = fs::read(&words).unwrap();
+        let sentinel = directory.0.join("unrelated");
+        fs::write(&sentinel, b"preserved").unwrap();
+        for (dir_mode, file_mode) in [(0o775, 0o600), (0o700, 0o664)] {
+            fs::set_permissions(&directory.0, fs::Permissions::from_mode(dir_mode)).unwrap();
+            fs::set_permissions(&words, fs::Permissions::from_mode(file_mode)).unwrap();
+            assert!(open_verified(&words, &id)
+                .err()
+                .unwrap()
+                .contains("write access"));
+            let result = build_with_batches(
+                None,
+                &directory.0,
+                &id,
+                &AtomicBool::new(false),
+                &writable(&id),
+                |_| panic!("insecure cache input must not start a build"),
+            );
+            assert!(result.unwrap_err().contains("write access"));
+            assert_eq!(fs::read(&words).unwrap(), before);
+            assert_eq!(fs::read(&sentinel).unwrap(), b"preserved");
+            assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
+            assert_eq!(
+                fs::metadata(&directory.0).unwrap().permissions().mode() & 0o777,
+                dir_mode
+            );
+            assert_eq!(
+                fs::metadata(&words).unwrap().permissions().mode() & 0o777,
+                file_mode
+            );
+        }
     }
 
     #[test]
@@ -1414,23 +1667,23 @@ mod tests {
         let shared = writable(&identity);
         let cancel = AtomicBool::new(true);
         assert!(
-            build_with_batches(&directory.0, &identity, &cancel, &shared, |_| panic!(
+            build_with_batches(None, &directory.0, &identity, &cancel, &shared, |_| panic!(
                 "pre-cancelled build must not enumerate"
             ))
             .is_err()
         );
         assert!(!directory.0.exists());
         cancel.store(false, Ordering::Release);
-        build_with_batches(&directory.0, &identity, &cancel, &shared, |_| {
+        build_with_batches(None, &directory.0, &identity, &cancel, &shared, |_| {
             Ok(TitleBatch {
                 titles: vec!["Planet".into()],
                 total: 1,
             })
         })
         .unwrap();
-        let path = directory.0.join(format!("{}.sqlite", identity.key()));
+        let path = directory.0.join(format!("{}.words", identity.key()));
         let before = fs::read(&path).unwrap();
-        let result = build_with_batches(&directory.0, &identity, &cancel, &shared, |_| {
+        let result = build_with_batches(None, &directory.0, &identity, &cancel, &shared, |_| {
             cancel.store(true, Ordering::Release);
             Ok(TitleBatch {
                 titles: vec!["Replacement".into()],
@@ -1446,21 +1699,20 @@ mod tests {
     fn malformed_or_incomplete_cache_and_listing_are_rejected_without_publication() {
         let directory = TestDirectory::new();
         let identity = identity();
-        fs::create_dir_all(&directory.0).unwrap();
-        let path = directory.0.join(format!("{}.sqlite", identity.key()));
+        open_directory(&directory.0, true).unwrap();
+        let path = directory.0.join(format!("{}.words", identity.key()));
         fs::write(&path, b"not a database").unwrap();
         let manager = SpellingManager::new(directory.0.clone());
-        assert!(manager.dictionary(&identity).unwrap().is_none());
+        assert!(manager.dictionary(&identity).unwrap().ready().is_none());
         finish_load(&manager, &identity);
         assert!(manager.dictionary(&identity).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"not a database");
         fs::remove_file(&path).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        create_schema(&connection).unwrap();
-        drop(connection);
+        fs::write(&path, b"KIWISPL2").unwrap();
         assert!(open_verified(&path, &identity).is_err());
         fs::remove_file(&path).unwrap();
         let result = build_with_batches(
+            None,
             &directory.0,
             &identity,
             &AtomicBool::new(false),
@@ -1486,6 +1738,114 @@ mod tests {
         assert!(!eligible_query(&"x".repeat(MAX_QUERY_BYTES + 1), 0, true));
     }
 
+    /// Run against the pinned English Climate mini archive. This exercises the
+    /// actual archive-title producer and the consumer's zero-ordinary-hit gate.
+    #[test]
+    #[ignore = "requires KIWIX_SPELLING_TEST_ZIM pointing to the English Climate archive"]
+    fn real_archive_build_correct_search_and_reopen() {
+        let source = std::env::var_os("KIWIX_SPELLING_TEST_ZIM").expect("KIWIX_SPELLING_TEST_ZIM");
+        let archive = Archive::open(Path::new(&source)).unwrap();
+        let identity =
+            Identity::from_archive(&archive, &archive.metadata().unwrap(), "test-installation")
+                .unwrap();
+        let dir = TestDirectory::new();
+        let manager = Arc::new(SpellingManager::new(dir.0.clone()));
+        manager.set_writable(true).unwrap();
+        assert_eq!(
+            manager
+                .build(archive.clone(), identity.clone())
+                .unwrap()
+                .state,
+            "building"
+        );
+        let job = manager.inner.lock().unwrap().job.take().unwrap();
+        job.handle.join().unwrap();
+        let status = manager.status(&identity).unwrap();
+        assert_eq!(status.state, "ready", "{:?}", status.error);
+        assert_eq!((status.total, status.words), (3821, 4204));
+        let none = archive.search("climtae", false, 0, 5).unwrap();
+        assert_eq!(none.total, 0);
+        let token = tokio_util::sync::CancellationToken::new();
+        for stage in 0..2 {
+            let current = if stage == 0 {
+                manager.clone()
+            } else {
+                let reloaded = Arc::new(SpellingManager::new(dir.0.clone()));
+                assert!(reloaded.dictionary(&identity).unwrap().ready().is_none());
+                finish_load(&reloaded, &identity);
+                reloaded
+            };
+            let guesses = current
+                .corrections(&identity, "climtae", none.total, true, &token)
+                .unwrap();
+            assert_eq!(guesses[0].corrected_query, "climate");
+            let hits = archive
+                .search(&guesses[0].corrected_query, false, 0, 5)
+                .unwrap();
+            assert!(!hits.hits.is_empty() && hits.total > 0);
+            assert!(current
+                .corrections(&identity, "climate", hits.total, true, &token)
+                .unwrap()
+                .is_empty());
+        }
+    }
+
+    #[test]
+    fn reopened_archive_replacement_cannot_reuse_spelling_from_the_same_registration() {
+        let profile = TestDirectory::new();
+        open_directory(&profile.0, true).unwrap();
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
+        let stored = profile.0.join("book.zim");
+        fs::copy(&input, &stored).unwrap();
+        let original = Archive::open(&stored).unwrap();
+        let metadata = original.metadata().unwrap();
+        let first = Identity::from_archive(&original, &metadata, "same-registration").unwrap();
+        let reopened = Archive::open(&stored).unwrap();
+        assert_eq!(
+            first,
+            Identity::from_archive(&reopened, &metadata, "same-registration").unwrap()
+        );
+        let cache = profile.0.join("spelling");
+        build_archive(
+            &original,
+            &cache,
+            &first,
+            &AtomicBool::new(false),
+            &writable(&first),
+        )
+        .unwrap();
+        drop(original);
+        drop(reopened);
+        fs::rename(&stored, profile.0.join("previous.zim")).unwrap();
+        fs::copy(&input, &stored).unwrap();
+        let replacement = Archive::open(&stored).unwrap();
+        let next = Identity::from_archive(&replacement, &metadata, "same-registration").unwrap();
+        assert_ne!(first.key(), next.key());
+        assert!(first.confirm(&replacement).is_err());
+        let manager = SpellingManager::new(cache);
+        assert_eq!(manager.status(&next).unwrap().state, "missing");
+        assert!(manager.dictionary(&next).unwrap().ready().is_none());
+    }
+
+    #[test]
+    fn replacement_installation_cannot_reuse_disk_or_memory_dictionary() {
+        let directory = TestDirectory::new();
+        open_directory(&directory.0, true).unwrap();
+        let first = identity();
+        let mut replacement = first.clone();
+        replacement.installation_id = "replacement-installation".into();
+        let _built = fixture(&directory.0);
+        let manager = SpellingManager::new(directory.0.clone());
+        assert!(manager.dictionary(&first).unwrap().ready().is_none());
+        finish_load(&manager, &first);
+        assert!(manager.dictionary(&first).unwrap().ready().is_some());
+        assert_eq!(manager.status(&replacement).unwrap().state, "missing");
+        assert!(manager.dictionary(&replacement).unwrap().ready().is_none());
+        let first_file = directory.0.join(format!("{}.words", first.key()));
+        assert!(open_verified(&first_file, &replacement).is_err());
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
+    }
+
     #[test]
     fn disabling_writes_cancels_and_joins_owned_worker_before_returning() {
         let directory = TestDirectory::new();
@@ -1496,7 +1856,7 @@ mod tests {
         let shared = manager.inner.clone();
         let identity = identity();
         let key = identity.key();
-        let book_id = identity.uuid.clone();
+        let installation_id = identity.installation_id.clone();
         let handle = std::thread::spawn(move || {
             while !worker_cancel.load(Ordering::Acquire) {
                 std::thread::yield_now();
@@ -1509,11 +1869,19 @@ mod tests {
                 .statuses
                 .insert(identity.key(), identity.status("building"));
             inner.job = Some(Job {
-                book_id,
+                installation_id,
+                source_key: identity.key(),
                 cancel,
                 handle,
             });
         }
+        manager
+            .retire_installation("replacement-installation")
+            .unwrap();
+        assert!(manager
+            .cancel("replacement-installation", &identity.key())
+            .is_err());
+        assert!(manager.inner.lock().unwrap().job.is_some());
         manager.set_writable(false).unwrap();
         let inner = manager.inner.lock().unwrap();
         assert!(!inner.writable);

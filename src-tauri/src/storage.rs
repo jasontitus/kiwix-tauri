@@ -4,6 +4,31 @@ use std::path::{Path, PathBuf};
 
 pub const FAT_MAX_FILE_SIZE: u64 = 4 * 1024 * 1024 * 1024 - 1;
 
+/// Apple extended ACLs can grant write access independently of POSIX mode.
+/// Ask the OS only for the length of the security attribute on the retained
+/// descriptor. No ACL bytes or principal identifiers enter the application.
+#[cfg(target_vendor = "apple")]
+pub(crate) fn has_extended_file_security(file: &impl std::os::fd::AsFd) -> std::io::Result<bool> {
+    use std::os::fd::AsRawFd;
+    let mut requested = libc::attrlist {
+        bitmapcount: libc::ATTR_BIT_MAP_COUNT, reserved: 0,
+        commonattr: libc::ATTR_CMN_EXTENDED_SECURITY,
+        volattr: 0, dirattr: 0, fileattr: 0, forkattr: 0,
+    };
+    // The returned attribute consists of the packed length and one
+    // attrreference_t (offset and byte length). The syscall reports the full
+    // required size even when the variable-length ACL exceeds our buffer.
+    let mut header = [0u32; 3];
+    // SAFETY: fd is borrowed for this call. Both the fixed attribute request
+    // and initialized, aligned output array live through the call; the passed
+    // output capacity is exactly that of the array.
+    let result = unsafe { libc::fgetattrlist(file.as_fd().as_raw_fd(),
+        std::ptr::from_mut(&mut requested).cast(), header.as_mut_ptr().cast(),
+        std::mem::size_of_val(&header), libc::FSOPT_REPORT_FULLSIZE) };
+    if result != 0 { return Err(std::io::Error::last_os_error()); }
+    Ok(header != [12, 8, 0])
+}
+
 /// Open normalized absolute paths without following any caller-controlled component.
 /// iOS cannot open `/` or other ancestors outside its sandbox: start at the
 /// OS-provided, retained application container instead.

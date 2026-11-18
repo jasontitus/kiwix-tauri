@@ -2344,6 +2344,46 @@ async fn failed_verification_requires_explicit_retry_before_repaired_archive_imp
 }
 
 #[tokio::test]
+async fn spelling_commands_require_the_selected_live_installation() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let book = load_book(fixture().to_str().unwrap(), true, false).unwrap();
+    let id = book.metadata.id.clone();
+    service.register_books(&[book], None).unwrap();
+    service.store.update(|state| { state.settings.spelling_enabled = true; Ok(()) }).unwrap();
+    service.spelling.set_writable(true).unwrap();
+    let original = service.store.book(&id).unwrap().unwrap().installation_id;
+    let replacement = Uuid::new_v4().to_string();
+    service.store.update(|state| {
+        state.books.iter_mut().find(|book| book.metadata.id == id).unwrap().installation_id = replacement.clone();
+        Ok(())
+    }).unwrap();
+    for command in ["spelling_status", "spelling_build", "spelling_cancel"] {
+        let stale = service.clone().dispatch(command, json!({
+            "bookId":id,"installationId":original,"privacyGeneration":service.launch_generation(),
+        })).await.unwrap_err();
+        assert!(stale.contains("installation changed"), "{command}: {stale}");
+    }
+    let book = service.store.book(&id).unwrap().unwrap();
+    let archive = service.archive_for_book(book.clone()).unwrap();
+    let key = crate::spelling::Identity::from_archive(&archive, &book.metadata, &replacement).unwrap().key();
+    for command in ["spelling_status", "spelling_build", "spelling_cancel"] {
+        let error = service.clone().dispatch(command, json!({
+            "bookId":id,"installationId":replacement,"sourceKey":"retired-source",
+            "privacyGeneration":service.launch_generation(),
+        })).await.unwrap_err();
+        assert!(error.contains("contents changed"), "{command}: {error}");
+    }
+    let current = service.clone().dispatch("spelling_status", json!({
+        "bookId":id,"installationId":replacement,"sourceKey":key,"privacyGeneration":service.launch_generation(),
+    })).await.unwrap();
+    assert_eq!(current["installationId"], replacement);
+    assert_eq!(current["state"], "missing");
+    assert!(!profile.0.join("spelling").exists());
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn spelling_commands_reject_stale_generation_and_closed_windows_before_io() {
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();

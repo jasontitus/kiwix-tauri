@@ -80,7 +80,7 @@ interface AboutInfo {
   glassVersion: string;
   zimruRevision: string | null;
   glassRevision: string | null;
-  sqliteVersion: string;
+  spellingIndexVersion: string;
   platform: string;
   architecture: string;
 }
@@ -999,8 +999,8 @@ export default function Settings({
                 <dd>{about.glassVersion}</dd>
               </div>
               <div>
-                <dt>{t("SQLite")}</dt>
-                <dd>{about.sqliteVersion}</dd>
+                <dt>{t("Spelling suggestions")}</dt>
+                <dd>{about.spellingIndexVersion}</dd>
               </div>
             </dl>
           ) : aboutUnavailable ? (

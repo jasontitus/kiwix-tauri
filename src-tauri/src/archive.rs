@@ -27,16 +27,22 @@ pub(super) fn archive_lock<'a, T>(
     mutex: &'a std::sync::Mutex<T>,
     cancel: Option<(&CancellationToken, &'static str)>,
 ) -> Result<std::sync::MutexGuard<'a, T>, String> {
-    let unavailable = || "Archive reader unavailable. Reopen the archive.".to_string();
     let Some((token, reason)) = cancel else {
-        return mutex.lock().map_err(|_| unavailable());
+        return mutex.lock().map_err(|_| "Archive reader unavailable. Reopen the archive.".to_string());
     };
+    interruptible_lock(mutex, reason, || token.is_cancelled())
+}
+
+fn interruptible_lock<'a, T>(
+    mutex: &'a std::sync::Mutex<T>, reason: &str, stopped: impl Fn() -> bool,
+) -> Result<std::sync::MutexGuard<'a, T>, String> {
+    let unavailable = || "Archive reader unavailable. Reopen the archive.".to_string();
     loop {
-        if token.is_cancelled() {
+        if stopped() {
             return Err(reason.into());
         }
         match mutex.try_lock() {
-            Ok(_) if token.is_cancelled() => return Err(reason.into()),
+            Ok(_) if stopped() => return Err(reason.into()),
             Ok(guard) => return Ok(guard),
             Err(std::sync::TryLockError::Poisoned(_)) => return Err(unavailable()),
             Err(std::sync::TryLockError::WouldBlock) => {
@@ -852,10 +858,20 @@ impl Archive {
         action: impl FnOnce(&Zim) -> Result<T, String>,
     ) -> Result<T, String> {
         let _guard = self.lock_reader(cancel)?;
+        self.with_retained_parts(action)
+    }
+
+    fn with_retained_parts<T>(&self, action: impl FnOnce(&Zim) -> Result<T, String>) -> Result<T, String> {
         self.parts.unchanged()?;
         let result = action(&self.archive)?;
         self.parts.unchanged()?;
         Ok(result)
+    }
+
+    /// Identify the actual retained files, including each part of a split archive.
+    /// Reading filesystem metadata here never waits for the archive decoder.
+    pub(crate) fn content_identity(&self) -> Result<crate::integrity::ContentIdentity, String> {
+        crate::integrity::ContentIdentity::from_handles(self.parts.files().iter().map(|(file, _)| file))
     }
 
     pub fn metadata(&self) -> Result<ArchiveMetadata, String> {
@@ -990,6 +1006,14 @@ impl Archive {
         })
     }
 
+    pub(crate) fn spelling_titles(
+        &self, offset: u32, limit: u32, cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<TitleBatch, String> {
+        let _guard = interruptible_lock(&self.read_lock, "Spelling indexing cancelled", ||
+            cancel.load(std::sync::atomic::Ordering::Acquire))?;
+        self.with_retained_parts(|z| crate::archive_metadata::title_batch(z, offset, limit))
+    }
+
     /// Validate the retained archive checksum and structural integrity.
     pub fn check_integrity(&self) -> Result<bool, String> {
         self.check_integrity_with_cancel(None, &mut |_, _| {})
@@ -1095,6 +1119,52 @@ mod tests {
             assert_eq!(with_snippet.title, without_snippet.title);
             assert_eq!(with_snippet.score, without_snippet.score);
             assert!(without_snippet.snippet.is_empty());
+        }
+    }
+
+    #[test]
+    fn spelling_can_cancel_or_enter_private_mode_while_reader_is_held() {
+        use crate::spelling::{Identity, SpellingManager};
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
+        let archive = Archive::open(&fixture).unwrap();
+        let identity = Identity::from_archive(&archive, &archive.metadata().unwrap(), "test-installation").unwrap();
+        for privacy in [false, true] {
+            let cache = std::env::temp_dir().canonicalize().unwrap()
+                .join(format!("kiwix-spelling-gate-{}", uuid::Uuid::new_v4()));
+            let manager = Arc::new(SpellingManager::new(cache.clone()));
+            manager.set_writable(true).unwrap();
+            let gate = archive.read_lock.lock().unwrap();
+            let status = manager.build(archive.clone(), identity.clone()).unwrap();
+            assert!(status.cancellable);
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let staged = loop {
+                if std::fs::read_dir(&cache).is_ok_and(|mut entries| entries.any(|entry|
+                    entry.is_ok_and(|e| e.path().extension().is_some_and(|ext| ext == "tmp")))) {
+                    break true;
+                }
+                if Instant::now() >= deadline { break false; }
+                std::thread::sleep(Duration::from_millis(5));
+            };
+            let (tx, rx) = mpsc::channel();
+            let worker = Arc::clone(&manager);
+            let source_key = identity.key();
+            let handle = std::thread::spawn(move || {
+                let result = if privacy { worker.set_writable(false) } else {
+                    worker.cancel("test-installation", &source_key).map(|_| ())
+                };
+                let _ = tx.send(result);
+            });
+            let result = rx.recv_timeout(Duration::from_secs(2));
+            drop(gate);
+            handle.join().unwrap();
+            assert!(staged, "worker must reach the archive input before cancellation");
+            result.expect("cancellation must finish while the reader is held").unwrap();
+            assert_eq!(manager.status(&identity).unwrap().state, "cancelled");
+            assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 0);
+            std::fs::remove_dir(cache).unwrap();
         }
     }
 
