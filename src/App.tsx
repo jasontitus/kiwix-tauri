@@ -287,6 +287,12 @@ export default function App() {
   );
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [pane, setPane] = useState<Pane>("library");
+  const hydrated = useRef(false);
+  const startupNavigation = useRef<Pane | null>(null);
+  const navigate = useCallback((destination: Pane) => {
+    if (!hydrated.current) startupNavigation.current = destination;
+    setPane(destination);
+  }, []);
   const [nearbyDiscoveryIntent, setNearbyDiscoveryIntent] = useState(0);
   const [webSharingIntent, setWebSharingIntent] = useState(0);
   const webSharingSequence = useRef(0);
@@ -405,6 +411,7 @@ export default function App() {
     tabId: string;
   } | null>(null);
   const mobileReconcile = useRef<(() => void) | null>(null);
+  const mobileIntentsAwaitingSnapshot = useRef(false);
   const mobileExternalSelection = useRef<{ book: Book; privacy: PrivacyContext } | null>(null);
   const mobileManagedImport = useRef<MobileManagedImport | null>(null);
   const mobileManagedBusy = useRef(false);
@@ -479,9 +486,9 @@ export default function App() {
   } | null>(null);
   const libraryCommandId = useRef(0);
   const requestLibraryCommand = useCallback((kind: "search" | "scope") => {
-    setPane("library");
+    navigate("library");
     setLibraryCommand({ id: ++libraryCommandId.current, kind });
-  }, []);
+  }, [navigate]);
   const requestLibrarySearch = useCallback((query: string, record = true) => {
     setPane("library");
     setLibraryCommand({
@@ -518,7 +525,6 @@ export default function App() {
   const quitEventSerial = useRef(0);
   const sessionTimer = useRef<number | undefined>(undefined);
   const sessionFlushes = useRef(0);
-  const hydrated = useRef(false);
   const mounted = useRef(true);
   const refreshSerial = useRef(0);
   // A suspended snapshot is retried by the API boundary itself; the resume
@@ -859,6 +865,7 @@ export default function App() {
       setInitialError("");
       snapshotSuspended.current = false;
       const initial = !hydrated.current;
+      const selectedAtStartup = initial ? startupNavigation.current : null;
       const restore = initial || boundaryChanged || modeChanged;
       if (restore) {
         hydrated.current = true;
@@ -955,15 +962,9 @@ export default function App() {
         data.activeSurface === "reader" && !active
           ? "library"
           : data.activeSurface || (active ? "reader" : "library");
-      const surface: Pane = normalizePane(
-        opened
-          ? "reader"
-          : restore
-            ? adoptSaved
-              ? requestedSurface
-              : "library"
-            : previous.activeSurface,
-      );
+      const restoredSurface = adoptSaved ? requestedSurface : "library";
+      const sessionSurface = restore ? restoredSurface : previous.activeSurface;
+      const surface = normalizePane(opened ? "reader" : selectedAtStartup ?? sessionSurface);
       latestSession.current = {
         tabs: next,
         activeTab: active,
@@ -976,7 +977,7 @@ export default function App() {
         setTabs(next);
       if (restore || active !== previous.activeTab) setActiveTab(active);
       if (restore || opened) {
-        setNearbyDiscoveryIntent(0);
+        if (selectedAtStartup !== "nearby" || opened || data.launchSearch) setNearbyDiscoveryIntent(0);
         setPane(surface);
       }
       // Desktop "Look up in Kiwix". Rust keeps only the latest request, under
@@ -996,6 +997,11 @@ export default function App() {
           privacyGeneration: data.privacyGeneration,
         }).catch(onError);
       privacyPending.current = false;
+      startupNavigation.current = null;
+      if (mobileIntentsAwaitingSnapshot.current) {
+        mobileIntentsAwaitingSnapshot.current = false;
+        mobileReconcile.current?.();
+      }
       window.clearTimeout(privacyRetry.current.timer);
       privacyRetry.current = { ...privacyRetry.current, attempt: 0, timer: undefined };
       reportFrontendReady();
@@ -1392,6 +1398,7 @@ export default function App() {
     mobileSuspended,
   ]);
   const newTab = useCallback(() => {
+    if (!hydrated.current) return;
     appendTab({
       id: crypto.randomUUID(),
       bookId: null,
@@ -2060,6 +2067,11 @@ export default function App() {
           // intents. Apply each only while the shell is genuinely interactive,
           // then acknowledge the native copy so it is never replayed.
           if (readyState.interactive && document.visibilityState === "visible") {
+            // Acknowledge shortcuts only after tab restoration and the first policy snapshot.
+            if (!hydrated.current && readyState.entries.length) {
+              mobileIntentsAwaitingSnapshot.current = true;
+              return;
+            }
             // Acknowledgements and the notification-actions state are applied
             // once after the drain instead of per entry: a backlog of N intents
             // must not cost N sequential round trips before the rest apply.
@@ -2618,8 +2630,8 @@ export default function App() {
       )
         closeTab(latestSession.current.activeTab);
       else if (action === "import") void importFiles();
-      else if (action === "reading-list") setPane("bookmarks");
-      else if (action === "settings") setPane("settings");
+      else if (action === "reading-list") navigate("bookmarks");
+      else if (action === "settings") navigate("settings");
       else if (action === "library-search" || action === "search-scope")
         requestLibraryCommand(action === "library-search" ? "search" : "scope");
       else if (action === "new-window" && isDesktop) void newWindow();
@@ -2642,6 +2654,7 @@ export default function App() {
     [
       selectTab,
       pane,
+      navigate,
       importFiles,
       newTab,
       newWindow,
@@ -2965,7 +2978,7 @@ export default function App() {
           )}
           <button
             className="brand"
-            onClick={() => setPane("library")}
+            onClick={() => navigate("library")}
             aria-label={t("Kiwix home")}
           >
             <span className="brand-mark">
@@ -2982,7 +2995,7 @@ export default function App() {
                 className={pane === item.id ? "active" : ""}
                 onClick={() => {
                   if (item.id === "nearby") setNearbyDiscoveryIntent((intent) => intent + 1);
-                  setPane(item.id);
+                  navigate(item.id);
                 }}
                 aria-label={item.label}
                 title={item.label}
@@ -3001,7 +3014,7 @@ export default function App() {
                   ? "sidebar-settings active"
                   : "sidebar-settings"
               }
-              onClick={() => setPane("settings")}
+              onClick={() => navigate("settings")}
               aria-label={t("Settings")}
               title={t("Settings")}
               aria-current={pane === "settings" ? "page" : undefined}
@@ -3317,6 +3330,7 @@ export default function App() {
             <button
               className="icon-button new-tab"
               ref={newTabButton}
+              disabled={!snapshot}
               onClick={newTab}
               aria-label={t("New tab")}
               title={t("New tab")}
