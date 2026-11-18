@@ -1,0 +1,140 @@
+{
+  "date": "2026-11-18",
+  "scope": "Fresh-profile Wikipedia import and first article on one desktop host.",
+  "host": {
+    "chip": "Apple M1 Ultra",
+    "os": "macOS 27.2.1 arm64",
+    "rust": "1.99.1",
+    "build": "Release with custom-protocol and the checked-in dependency lock."
+  },
+  "input": {
+    "archive": "wikipedia_en_simple_all_nopic_2026-05.zim",
+    "bytes": 982788870,
+    "sha256": "503b74027d101ec13b272f1ebbd23473e1d260be71a35a71141dfc985fd20d0a",
+    "directory_entries": 399853,
+    "clusters": {
+      "zstandard": 3707,
+      "uncompressed": 4
+    }
+  },
+  "builds": {
+    "native": {
+      "app_commit": "f2875d097225509c75a884739960cdf0951ef9fd",
+      "reader": "libzim 9.8.2",
+      "executable_sha256": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f"
+    },
+    "serial": {
+      "app_commit": "9c0325bf1674267268ddbf7472228eea8b19e637",
+      "executable_sha256": "35b02c57b980e2b32428bdf8a445ee03eb762a68cc276f3717c8003cfcd4dfb2",
+      "zimru": "a6d1b4ccd968c29420135fa3b70ced578509a1e8"
+    },
+    "candidate": {
+      "app_base": "9c0325bf1674267268ddbf7472228eea8b19e637",
+      "changed_source_sha256": {
+        "src-tauri/src/archive.rs": "ab0697e12e15a1501584e8bf07521d9710a32b008756977988050f59bfb7be9a",
+        "src-tauri/src/archive_metadata.rs": "85217cc32ae60c49eba6e5ecbd324e6678c797162fecf71b76ddadcc374df74d",
+        "src-tauri/src/archive_metadata/clusters.rs": "f3989a5748b1402e974ba60b817a468c5035c8fb28fc40f1cbbbc7bcc9b2dcbe"
+      },
+      "executable_sha256": "519880abb00890379d46371d88051919e7f06fdd66a67326a8d263d5da614cf7",
+      "zimru": "a6d1b4ccd968c29420135fa3b70ced578509a1e8"
+    }
+  },
+  "method": {
+    "sequence": "Three rotations, one process at a time in a new temporary profile. The archive was read-only. The operating system retained its file cache.",
+    "entry_point": "kiwix-workbench --headless --data-dir <fresh-directory> --port 0 <archive>",
+    "ready_ms": "Elapsed from launching the app until its local service announced readiness after import, including verification and startup.",
+    "cpu_s": "User plus system CPU consumed by the app subprocess through the subsequent article check and exit.",
+    "peak_bytes": "Peak process resident memory in bytes over the same complete subprocess lifetime, reported by macOS getrusage.",
+    "verification": "Checked the sole registered book and opened Solar_System. Removing the app-injected article bridge yielded the same bytes as native zimdump for all nine runs.",
+    "coverage": "The native structural pass reads cluster offset headers. Both Rust variants validate full compressed clusters and their referenced blob indices. This comparison exercised one desktop, one archive and warm operating-system file caches. It does not measure mobile power, a cold disk, or performance under memory pressure."
+  },
+  "runs": [
+    {
+      "ready_ms": 3269.129,
+      "peak_bytes": 32292864,
+      "cpu_s": 3.2535,
+      "mode": "native"
+    },
+    {
+      "ready_ms": 7697.483,
+      "peak_bytes": 60801024,
+      "cpu_s": 7.6002,
+      "mode": "serial"
+    },
+    {
+      "ready_ms": 4219.019,
+      "peak_bytes": 73695232,
+      "cpu_s": 7.7539,
+      "mode": "candidate"
+    },
+    {
+      "ready_ms": 7729.783,
+      "peak_bytes": 54329344,
+      "cpu_s": 7.6887,
+      "mode": "serial"
+    },
+    {
+      "ready_ms": 3399.897,
+      "peak_bytes": 67665920,
+      "cpu_s": 7.9778,
+      "mode": "candidate"
+    },
+    {
+      "ready_ms": 3255.212,
+      "peak_bytes": 32571392,
+      "cpu_s": 3.2376,
+      "mode": "native"
+    },
+    {
+      "ready_ms": 3387.506,
+      "peak_bytes": 77299712,
+      "cpu_s": 7.9368,
+      "mode": "candidate"
+    },
+    {
+      "ready_ms": 3266.365,
+      "peak_bytes": 32604160,
+      "cpu_s": 3.2468,
+      "mode": "native"
+    },
+    {
+      "ready_ms": 7589.018,
+      "peak_bytes": 55967744,
+      "cpu_s": 7.5331,
+      "mode": "serial"
+    }
+  ],
+  "medians": {
+    "native": {
+      "ready_ms": 3266.365,
+      "cpu_s": 3.2468,
+      "peak_bytes": 32571392
+    },
+    "serial": {
+      "ready_ms": 7697.483,
+      "cpu_s": 7.6002,
+      "peak_bytes": 55967744
+    },
+    "candidate": {
+      "ready_ms": 3399.897,
+      "cpu_s": 7.9368,
+      "peak_bytes": 73695232
+    }
+  },
+  "verified_result": {
+    "all_nine_matched": true,
+    "book": {
+      "id": "3611c6e7-9e5c-8a8e-a180-b88fe51367c5",
+      "title": "Wikipedia in simple English",
+      "language": "eng",
+      "articleCount": 394563,
+      "mediaCount": 5229,
+      "size": 982788870,
+      "available": true,
+      "hasTitleIndex": true,
+      "hasFulltextIndex": true
+    },
+    "article_path": "Solar_System",
+    "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+  }
+}
