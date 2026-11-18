@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! A receipt belongs to its selected interface and local address, not the
 //! inventory of unrelated cellular, VPN, or other LAN interfaces on the device.
+#![forbid(unsafe_code)]
 use crate::transfer_policy::{self, LocalBinding};
 use std::{net::IpAddr, sync::{Arc, Mutex}};
 #[derive(Clone, Default)]
@@ -19,18 +20,14 @@ struct SelectedInterface {
 }
 #[cfg(unix)]
 fn interface_index(name: &str) -> Result<u32, String> {
-    let name = std::ffi::CString::new(name).map_err(|_| "Invalid selected interface")?;
-    let index = unsafe { libc::if_nametoindex(name.as_ptr()) };
-    if index == 0 { return Err("The selected Nearby interface retired".into()); }
-    Ok(index)
+    if name.as_bytes().contains(&0) { return Err("Invalid selected interface".into()); }
+    nix::net::if_::if_nametoindex(name).map_err(|_| "The selected Nearby interface retired".to_string())
 }
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 fn native_name(index: u32) -> Result<String, String> {
-    let mut name = [0 as libc::c_char; libc::IF_NAMESIZE];
-    if unsafe { libc::if_indextoname(index, name.as_mut_ptr()) }.is_null() {
-        return Err("The selected native QUIC interface retired".into());
-    }
-    unsafe { std::ffi::CStr::from_ptr(name.as_ptr()) }.to_str().map(str::to_string).map_err(|e| e.to_string())
+    nix::net::if_::if_indextoname(index)
+        .map_err(|_| "The selected native QUIC interface retired".to_string())?
+        .into_string().map_err(|error| error.to_string())
 }
 impl SelectedInterface {
     fn from_local_ip(local_ip: IpAddr) -> Result<Self, String> {
@@ -142,27 +139,21 @@ mod tests {
 #[test]
 #[ignore = "Requires an active native interface with an IPv6 link-local address"]
 fn native_link_local_receipt_uses_unfiltered_os_addresses() {
-    let mut addresses = std::ptr::null_mut();
-    assert_eq!(unsafe { libc::getifaddrs(&mut addresses) }, 0);
-    let mut current = addresses;
-    let mut selected = None;
-    while !current.is_null() {
-        let item = unsafe { &*current };
-        if !item.ifa_name.is_null() && !item.ifa_addr.is_null()
-            && item.ifa_flags & libc::IFF_UP as u32 != 0
-            && unsafe { (*item.ifa_addr).sa_family as i32 } == libc::AF_INET6 {
-            let address = unsafe { &*item.ifa_addr.cast::<libc::sockaddr_in6>() };
-            let mut bytes = address.sin6_addr.s6_addr;
-            if std::net::Ipv6Addr::from(bytes).is_unicast_link_local() {
-                bytes[2] = 0; bytes[3] = 0;
-                let name = unsafe { std::ffi::CStr::from_ptr(item.ifa_name) }.to_str().unwrap().to_string();
-                selected = Some(SelectedInterface { index: Some(interface_index(&name).unwrap()), name, local_ip: std::net::Ipv6Addr::from(bytes).into() });
-                break;
-            }
+    let selected = nix::ifaddrs::getifaddrs().unwrap().find_map(|interface| {
+        if !interface.flags.contains(nix::net::if_::InterfaceFlags::IFF_UP) {
+            return None;
         }
-        current = item.ifa_next;
-    }
-    unsafe { libc::freeifaddrs(addresses); }
+        let ip = interface.address?.as_sockaddr_in6()?.ip();
+        if !ip.is_unicast_link_local() {
+            return None;
+        }
+        // Darwin embeds the scope index into the second octet pair.
+        let mut bytes = ip.octets();
+        bytes[2..4].fill(0);
+        let name = interface.interface_name;
+        Some(SelectedInterface { index: Some(interface_index(&name).unwrap()), name,
+            local_ip: std::net::Ipv6Addr::from(bytes).into() })
+    });
     let selected = selected.expect("An active IPv6 link-local interface is required for this native regression");
     selected.check().expect("A native link-local receipt must not depend on if-addrs feature filtering");
     let mut missing = selected.clone();

@@ -26,6 +26,14 @@ At `eccfcbe`, Kiwix opened the embedded Glass index on retained archive files th
 
 `fs_ext.rs` now forbids unsafe Rust on Unix. Advisory locks use typed `rustix::fs::flock` operations with a borrowed file, and volume space comes from `rustix::fs::statvfs`. Windows uses standard-library nonblocking file locks, preserving error 33 for contention. The Windows volume lookup still calls the OS through an app-owned unsafe wrapper. Both paths reject embedded NUL characters. macOS exercised lock contention and release, volume queries, and path errors. Windows, Linux, iOS and Android ARM64 were type-checked. Windows and mobile behavior still need execution on those targets.
 
+## Nearby interface authority
+
+Android's hotspot controller owns the reservation. The Rust socket owner checks its receipt against the kernel interface name and index, link flags, IPv4 address and netmask. It binds a new UDP socket to that device, reads the binding back, binds the local address, checks the live interface again and asks the controller to confirm the lease. A failed check discards the socket. The interface name must be ASCII without an embedded NUL, so lossy conversion of an unrelated kernel name cannot match it.
+
+The app's Nearby route and library interface modules forbid unsafe Rust. The locked `nix` 0.31.3 wrappers perform the OS name/index lookups, own the `getifaddrs` allocation and read its typed addresses. The existing `socket2` 0.6.5 wrappers perform the socket type read and `SO_BINDTODEVICE` write/read. Those dependencies contain unsafe OS adapters. This path supplies an app-owned descriptor and a validated name to those adapters and receives kernel-provided address records. The Apple QUIC adapter and native Android lease callbacks remain separate boundaries.
+
+Focused tests cover route flags, address family, netmask, interface identity and peer subnet rules. ARMv7 and ARM64 Android executables built for API 24 with the NDK verified the socket type, bound interface name and local address on an isolated, emulated Android API 34 kernel. A substituted interface index failed. This used a private virtual interface and a synthetic controller receipt. App-sandbox permissions, real hotspots, and native lease revocation still require device testing.
+
 ## Inventory baseline, 2026-11-17
 
 **Start with the bytes an archive supplies.** Opening a ZIM, decoding a cluster, querying an embedded index, and rendering the resulting article are four separate operations. Switching to the Rust ZIM and Xapian readers would retire the current C++ reader and search code once every consumer switches. The baseline Zimru file mapping and codecs, and the platform rendering engines, need their own decisions.
