@@ -4,6 +4,10 @@ The Android runner replays the recorded archive requests on a named, task-owned 
 
 The November 18 run used the ARM64 Android 15/API 35 image with 4 KiB pages and the public Climate change mini and Wikipedia 100 maxi archives. The production Rust reader was `a6d1b4ccd968c29420135fa3b70ced578509a1e8`. A third driver added an experimental fixed-width copy in the Avarok Zstandard decoder. The receipt identifies the patch and modified source by SHA-256. This experiment was isolated from the APK. [Results and binary hashes](../../docs/benchmarks/2026-11-18-android-archive-readers.json)
 
+A later run tested the promoted reader `ff8b0ab5e561b0019151d6d614131f59920ff2ee` on the same emulator while the host was building the app. Its 24 random article reads took a median 92.59 ms on Climate, compared with 102.67 ms for the previous Rust reader and 50.81 ms for libzim. On Wikipedia 100, the medians were 118.51 ms, 126.88 ms and 72.28 ms respectively. Each reader returned the same bytes. The `promoted_pin_repeat` section records the 432 measured samples and binary hashes for this repeat.
+
+The `app_cache_control` section repeats the random article and media requests with the 32 MiB cluster cache used by the app. For 24 random articles, the promoted reader took 69.77 ms on Climate and 137.54 ms on Wikipedia 100, compared with 76.65 ms and 147.96 ms for previous Rust, and 37.66 ms and 91.07 ms for libzim. Peak resident memory for the promoted reader was 27.73 MiB on Climate and 32.58 MiB on Wikipedia 100. Libzim used 32.06 MiB and 30.95 MiB. All 156 measured and warm-up responses matched the reference. To repeat this control, use `--cache-bytes 33554432` and supply a copy of the reference manifest containing just its `random_articles` and `media_ranges` phases for both archives.
+
 ## Preparation
 
 Use the project’s `scripts/build-android-sdk.py --target aarch64-linux-android` to prepare the historical patched libzim 9.8.2 SDK. Build the existing `native.cpp` benchmark with the NDK API 24 ARM64 C++ compiler and the static library group in the generated manifest. Use the Android NDK path and SDK prefix from your environment.
