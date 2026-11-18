@@ -95,10 +95,8 @@ fn short_text_snippet(html: &str) -> Option<String> {
             ('&', rest)
         } else if let Some(rest) = part.strip_prefix("lt;") {
             ('<', rest)
-        } else if let Some(rest) = part.strip_prefix("gt;") {
-            ('>', rest)
         } else {
-            return None;
+            ('>', part.strip_prefix("gt;")?)
         };
         text.push(decoded);
         text.push_str(rest);
