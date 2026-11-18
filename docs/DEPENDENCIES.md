@@ -146,7 +146,7 @@ The GPL Workbench app links two independent Rust libraries. Each Cargo dependenc
 
 | Library | Source history | License and build |
 |---|---|---|
-| Zimru | [Positioned archive reader](https://github.com/jasontitus/zimru-xapian/tree/a6d1b4ccd968c29420135fa3b70ced578509a1e8) | MIT. Split input uses bounded reads from retained files. |
+| Zimru | [Positioned archive reader](https://github.com/jasontitus/zimru-xapian/tree/ff8b0ab5e561b0019151d6d614131f59920ff2ee) | MIT. Split input uses bounded reads from retained files. |
 | zimfile-xapian | [Glass engine](https://github.com/jasontitus/zimru-xapian/tree/380d84d7bb4ba9f30144462fd6bb18e932493fc0/engine) | GPL-3.0-or-later. The app reads indexes. The companion workspace separately provides its index builder. |
 | Zstandard | Zimru's own `vendor/zstd-rs`, based on Avarok 0.1.0 at `bac4c37d86e5307537c145823a106f7ed8f386d7` | MIT OR Apache-2.0. The fork supplies bounded streaming decode and a single-frame writer. Use the vendored revision for comparisons. |
 

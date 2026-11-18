@@ -8173,7 +8173,7 @@ dependencies = [
 [[package]]
 name = "zimru"
 version = "0.1.0"
-source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=a6d1b4ccd968c29420135fa3b70ced578509a1e8#a6d1b4ccd968c29420135fa3b70ced578509a1e8"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=ff8b0ab5e561b0019151d6d614131f59920ff2ee#ff8b0ab5e561b0019151d6d614131f59920ff2ee"
 dependencies = [
  "chksum-hash-sha2-256",
  "crc",
@@ -8252,7 +8252,7 @@ dependencies = [
 [[package]]
 name = "zstd-rs"
 version = "0.1.0"
-source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=a6d1b4ccd968c29420135fa3b70ced578509a1e8#a6d1b4ccd968c29420135fa3b70ced578509a1e8"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=ff8b0ab5e561b0019151d6d614131f59920ff2ee#ff8b0ab5e561b0019151d6d614131f59920ff2ee"
 
 [[package]]
 name = "zstd-safe"
