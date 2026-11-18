@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Retained OS association or app-owned AP interface authority for QUIC UDP.
+#![forbid(unsafe_code)]
+
+#[cfg(any(target_os = "android", all(test, unix)))]
+#[path = "nearby_hotspot.rs"]
+mod hotspot;
 use std::{net::{Ipv4Addr, SocketAddr, UdpSocket}, sync::Arc};
 use tokio_util::sync::CancellationToken;
 const LOST: &str = "The selected Nearby connection is no longer available. Connect again.";
@@ -107,70 +112,12 @@ impl JoinedRoute {
     /// SDK methods, reflection, process binding, or weaker default-route fallback.
     #[cfg(target_os = "android")]
     pub(crate) fn hotspot_socket(reply: &serde_json::Value, peer: Option<Ipv4Addr>) -> Result<UdpSocket,String> {
-        use std::{ffi::{CStr,CString},os::fd::AsRawFd};
-        let field = |key|reply.get(key).and_then(serde_json::Value::as_str).ok_or("Invalid native hotspot interface receipt");
-        let address: Ipv4Addr = field("address")?.parse().map_err(|_|"Invalid native hotspot IPv4 address")?;
-        if !(address.is_private() || address.is_link_local()) { return Err("Invalid native hotspot IPv4 address".into()); }
-        let lease = field("lease")?;
-        if uuid::Uuid::parse_str(lease).is_err() { return Err("Invalid native hotspot lease".into()); }
-        let name = field("interfaceName")?;
-        if name.is_empty() || name.len()>=libc::IF_NAMESIZE || !name.is_ascii() { return Err("Invalid native hotspot interface name".into()); }
-        let name = CString::new(name).map_err(|_|"Invalid native hotspot interface name")?;
-        let index = reply.get("interfaceIndex").and_then(serde_json::Value::as_u64).and_then(|index|u32::try_from(index).ok()).filter(|index|*index>0)
-            .ok_or("Invalid native hotspot interface index")?;
-        let prefix = reply.get("prefixLength").and_then(serde_json::Value::as_u64).filter(|prefix|(1..=32).contains(prefix))
-            .ok_or("Invalid native hotspot IPv4 prefix")? as u32;
-        let mask = u32::MAX << (32-prefix);
-        if let Some(peer) = peer {
-            let number = u32::from(peer); let host = number & !mask;
-            if peer==address || number & mask != u32::from(address) & mask || (prefix<31 && (host==0 || host==!mask)) {
-                return Err("The selected peer is not on the owned hotspot interface".into());
-            }
-        }
-        struct Interfaces(*mut libc::ifaddrs);
-        impl Drop for Interfaces { fn drop(&mut self) { unsafe { libc::freeifaddrs(self.0) }; } }
-        let matches = || -> Result<(),String> {
-            if unsafe { libc::if_nametoindex(name.as_ptr()) }!=index { return Err(LOST.into()); }
-            let mut first = std::ptr::null_mut();
-            if unsafe { libc::getifaddrs(&mut first) }!=0 { return Err(std::io::Error::last_os_error().to_string()); }
-            let interfaces = Interfaces(first);
-            let mut current = interfaces.0;
-            while !current.is_null() {
-                let entry = unsafe { &*current };
-                current = entry.ifa_next;
-                if entry.ifa_name.is_null() || entry.ifa_addr.is_null() || entry.ifa_netmask.is_null()
-                    || unsafe { CStr::from_ptr(entry.ifa_name) }!=name.as_c_str()
-                    || entry.ifa_flags & (libc::IFF_UP | libc::IFF_RUNNING) as u32 != (libc::IFF_UP | libc::IFF_RUNNING) as u32
-                    || entry.ifa_flags & (libc::IFF_LOOPBACK | libc::IFF_POINTOPOINT) as u32 != 0
-                    || unsafe { (*entry.ifa_addr).sa_family as i32 }!=libc::AF_INET { continue; }
-                let local = unsafe { &*entry.ifa_addr.cast::<libc::sockaddr_in>() };
-                let netmask = unsafe { &*entry.ifa_netmask.cast::<libc::sockaddr_in>() };
-                if local.sin_addr.s_addr==u32::from_ne_bytes(address.octets()) && netmask.sin_addr.s_addr==mask.to_be() { return Ok(()); }
-            }
-            Err(LOST.into())
-        };
-        matches()?;
-        let socket = socket2::Socket::new(socket2::Domain::IPV4,socket2::Type::DGRAM,Some(socket2::Protocol::UDP)).map_err(|error|error.to_string())?;
-        let fd = socket.as_raw_fd();
-        let mut kind: libc::c_int = 0;
-        let mut length = std::mem::size_of_val(&kind) as libc::socklen_t;
-        if unsafe { libc::getsockopt(fd,libc::SOL_SOCKET,libc::SO_TYPE,(&mut kind as *mut libc::c_int).cast(),&mut length) }!=0 || kind!=libc::SOCK_DGRAM {
-            return Err("The owned hotspot requires a UDP socket".into());
-        }
-        if unsafe { libc::setsockopt(fd,libc::SOL_SOCKET,libc::SO_BINDTODEVICE,name.as_ptr().cast(),name.as_bytes_with_nul().len() as libc::socklen_t) }!=0 {
-            return Err(format!("Android cannot bind QUIC to the exact temporary-hotspot interface: {}",std::io::Error::last_os_error()));
-        }
-        let mut bound = [0u8;libc::IF_NAMESIZE];
-        let mut length = bound.len() as libc::socklen_t;
-        if unsafe { libc::getsockopt(fd,libc::SOL_SOCKET,libc::SO_BINDTODEVICE,bound.as_mut_ptr().cast(),&mut length) }!=0
-            || length as usize>bound.len() || CStr::from_bytes_until_nul(&bound[..length as usize]).ok()!=Some(name.as_c_str()) {
-            return Err("Android did not retain the exact hotspot interface binding".into());
-        }
-        socket.bind(&std::net::SocketAddrV4::new(address,0).into()).map_err(|error|error.to_string())?;
-        matches()?;
+        let receipt = hotspot::Receipt::parse(reply, peer)?;
+        let socket = receipt.bind_socket()?;
+        let lease = receipt.lease;
         let state = native("hotspotQuicState",serde_json::json!({"lease":lease}))?;
         if state.get("available").and_then(serde_json::Value::as_bool)!=Some(true) { return Err(LOST.into()); }
-        Ok(socket.into())
+        Ok(socket)
     }
 }
 impl Drop for JoinOwner {

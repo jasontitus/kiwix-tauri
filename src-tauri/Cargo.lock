@@ -3159,6 +3159,7 @@ dependencies = [
  "mime_guess",
  "misaki-rs",
  "ndk-context",
+ "nix 0.31.3",
  "notify",
  "objc2",
  "objc2-app-kit",
@@ -3973,6 +3974,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+ "memoffset",
 ]
 
 [[package]]

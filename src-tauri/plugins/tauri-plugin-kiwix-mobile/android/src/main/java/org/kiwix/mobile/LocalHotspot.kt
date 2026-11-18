@@ -91,7 +91,7 @@ internal class LocalHotspot(
                     (hostBits <= 1 || (number and hostMask) != 0L && (number and hostMask) != hostMask), "NEARBY_ENDPOINT_NOT_ON_HOTSPOT")
             }
             nearbyRequire(currentQuicInterface() == iface, "NEARBY_HOTSPOT_ROUTE_LOST")
-            // The trusted Rust socket owner performs public libc fd validation
+            // The Rust socket owner checks the socket type through the OS
             // and exact SO_BINDTODEVICE + address binding. Android's Java Os
             // interface-binding/type-inspection methods are not public SDK APIs.
             invoke.resolve(JSObject().put("address", iface.address.hostAddress).put("lease", quicLease)
