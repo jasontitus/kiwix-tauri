@@ -82,7 +82,7 @@ pub(crate) fn open_directory_nofollow(path: &Path) -> std::io::Result<cap_std::f
 /// metadata only, and the request must still name the opened directory.
 #[cfg(target_os = "macos")]
 fn open_sandboxed_directory(path: &Path) -> std::io::Result<cap_std::fs::Dir> {
-    use std::os::{fd::AsRawFd, unix::{ffi::OsStrExt, fs::{MetadataExt, OpenOptionsExt}}};
+    use std::os::unix::{ffi::OsStrExt, fs::{MetadataExt, OpenOptionsExt}};
     // Normalize trailing separators/dots before O_NOFOLLOW: Darwin otherwise
     // follows an alias in both "alias/" and "alias/." spellings.
     let path = path.components().as_path();
@@ -90,13 +90,7 @@ fn open_sandboxed_directory(path: &Path) -> std::io::Result<cap_std::fs::Dir> {
         .read(true)
         .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path)?;
-    let mut buffer = vec![0u8; libc::PATH_MAX as usize];
-    // SAFETY: F_GETPATH writes at most PATH_MAX bytes, including the NUL, into the buffer.
-    if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buffer.as_mut_ptr()) } == -1 {
-        return Err(std::io::Error::last_os_error());
-    }
-    let resolved = std::ffi::CStr::from_bytes_until_nul(&buffer)
-        .map_err(|_| std::io::Error::other("Resolved directory path is not terminated"))?;
+    let resolved = rustix::fs::getpath(&file)?;
     if !same_path_spelling(resolved.to_bytes(), path.as_os_str().as_bytes()) {
         let linked = std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
@@ -485,38 +479,26 @@ fn existing_directory(path: &Path) -> Result<PathBuf, String> {
     Err("Download directory has no accessible filesystem ancestor".into())
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn fat_filesystem(directory: &Path) -> Result<bool, String> {
-    use std::os::unix::ffi::OsStrExt;
-    let path =
-        std::ffi::CString::new(directory.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    let mut info = std::mem::MaybeUninit::<libc::statfs>::uninit();
-    // SAFETY: statfs initializes info on success and path is NUL-terminated.
-    if unsafe { libc::statfs(path.as_ptr(), info.as_mut_ptr()) } != 0 {
-        return Err(format!(
-            "Inspecting download filesystem: {}",
-            std::io::Error::last_os_error()
-        ));
+    let info = rustix::fs::statfs(directory)
+        .map_err(|error| format!("Inspecting download filesystem: {error}"))?;
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        fat_apple_name(&info.f_fstypename.map(|byte| byte as u8))
     }
-    let info = unsafe { info.assume_init() };
-    let name = unsafe { std::ffi::CStr::from_ptr(info.f_fstypename.as_ptr()) };
-    Ok(matches!(name.to_bytes(), b"msdos" | b"fat" | b"vfat"))
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        // The vfat driver reports MSDOS_SUPER_MAGIC. exFAT has its own type.
+        Ok(info.f_type == 0x4d44)
+    }
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn fat_filesystem(directory: &Path) -> Result<bool, String> {
-    use std::os::unix::ffi::OsStrExt;
-    let path =
-        std::ffi::CString::new(directory.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    let mut info = std::mem::MaybeUninit::<libc::statfs>::uninit();
-    if unsafe { libc::statfs(path.as_ptr(), info.as_mut_ptr()) } != 0 {
-        return Err(format!(
-            "Inspecting download filesystem: {}",
-            std::io::Error::last_os_error()
-        ));
-    }
-    // MSDOS_SUPER_MAGIC covers the vfat driver; exFAT has a distinct magic.
-    Ok(unsafe { info.assume_init() }.f_type == 0x4d44)
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn fat_apple_name(field: &[u8]) -> Result<bool, String> {
+    let name = std::ffi::CStr::from_bytes_until_nul(field)
+        .map_err(|_| "Inspecting download filesystem: unterminated filesystem name")?;
+    Ok(matches!(name.to_bytes(), b"msdos" | b"fat" | b"vfat"))
 }
 
 #[cfg(windows)]
@@ -630,6 +612,18 @@ mod tests {
         assert!(free <= total);
         assert!(!missing.exists());
     }
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[test]
+    fn apple_fat_name_is_bounded_by_the_kernel_field() {
+        for name in [&b"msdos\0unused"[..], b"fat\0", b"vfat\0"] {
+            assert_eq!(fat_apple_name(name), Ok(true));
+        }
+        for name in [&b"exfat\0"[..], b"apfs\0", b"msdosx\0"] {
+            assert_eq!(fat_apple_name(name), Ok(false));
+        }
+        assert!(fat_apple_name(b"msdos").is_err());
+    }
+
     #[test]
     fn exfat_is_not_subject_to_the_fat32_limit() {
         assert!(fat_windows_name(&[70, 65, 84]));
