@@ -5,6 +5,7 @@
 //! Cross-volume cleanup captures sources in journal-owned private staging before
 //! checking their identities and unlinking; failed first renames keep the library
 //! pointed at the intact source.
+#![cfg_attr(unix, forbid(unsafe_code))]
 use crate::{
     archive::Archive,
     store::{Book, Store},
@@ -2382,42 +2383,14 @@ fn move_exclusive(
     destination: &Directory,
     to: &str,
 ) -> Result<(), String> {
-    use std::os::fd::AsRawFd;
     filename(from)?;
     filename(to)?;
     #[cfg(test)]
     simulated_move_failure()?;
     let from = std::ffi::CString::new(from).map_err(err)?;
     let to = std::ffi::CString::new(to).map_err(err)?;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result = unsafe {
-        libc::renameatx_np(
-            source.dir.as_raw_fd(),
-            from.as_ptr(),
-            destination.dir.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            source.dir.as_raw_fd(),
-            from.as_ptr(),
-            destination.dir.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(format!(
-            "Exclusive archive rename: {}",
-            std::io::Error::last_os_error()
-        ))
-    }
+    crate::publication::rename_noreplace_at(&source.dir, &from, &destination.dir, &to)
+        .map_err(|error| format!("Exclusive archive rename: {error}"))
 }
 #[cfg(windows)]
 fn move_exclusive(

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Capability-bound private staging. Persisted names never grant ownership.
+#![cfg_attr(unix, forbid(unsafe_code))]
 use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, DirBuilder, Metadata, OpenOptions};
 use crate::fs_ext::FileExt;
@@ -426,15 +427,9 @@ pub(super) fn chunk_position(manifest: &Manifest, index: u32) -> Result<(usize, 
 
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn rename_directory_noreplace(directory: &Dir, source: &str, target: &str, _expected: &Identity) -> Result<(), String> {
-    use std::os::fd::AsRawFd;
     let source = std::ffi::CString::new(source).map_err(err)?;
     let target = std::ffi::CString::new(target).map_err(err)?;
-    let fd = directory.as_raw_fd();
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result = unsafe { libc::renameatx_np(fd, source.as_ptr(), fd, target.as_ptr(), libc::RENAME_EXCL) };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe { libc::syscall(libc::SYS_renameat2, fd, source.as_ptr(), fd, target.as_ptr(), libc::RENAME_NOREPLACE) };
-    if result == 0 { Ok(()) } else { Err(err(std::io::Error::last_os_error())) }
+    crate::publication::rename_noreplace_at(directory, &source, directory, &target).map_err(err)
 }
 
 #[cfg(windows)]
