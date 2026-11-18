@@ -45,6 +45,13 @@
     "resources": {
       "src/localswarm/NOTICE": "licenses/localswarm/NOTICE",
       "src/localswarm/LICENSE-APACHE": "licenses/localswarm/LICENSE-APACHE",
+      "vendor/cssparser-0.37.0/KIWIX-SOURCE.txt": "licenses/cssparser/SOURCE.txt",
+      "vendor/cssparser-0.37.0/Cargo.toml": "licenses/cssparser/source/Cargo.toml",
+      "vendor/cssparser-0.37.0/Cargo.toml.orig": "licenses/cssparser/source/Cargo.toml.orig",
+      "vendor/cssparser-0.37.0/Cargo.lock": "licenses/cssparser/source/Cargo.lock",
+      "vendor/cssparser-0.37.0/LICENSE": "licenses/cssparser/source/LICENSE",
+      "vendor/cssparser-0.37.0/README.md": "licenses/cssparser/source/README.md",
+      "vendor/cssparser-0.37.0/src": "licenses/cssparser/source/src",
       "licenses/zimru/LICENSE": "licenses/zimru/LICENSE",
       "licenses/zimru/zstd-rs-MIT": "licenses/zimru/zstd-rs-MIT",
       "licenses/zimru/zstd-rs-Apache-2.0": "licenses/zimru/zstd-rs-Apache-2.0",

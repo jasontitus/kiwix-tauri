@@ -204,6 +204,8 @@ android-evaluation = ["dep:jni"]
 localswarm-profiling = []
 
 [patch.crates-io]
+# Shared checked token strings across exports, PDF validation and selector consumers.
+cssparser = { path = "vendor/cssparser-0.37.0" }
 # 0.7.0 selects Linux interface binding on iOS; use Apple's indexed binding.
 librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
 # Wry's fresh incognito GTK contexts must each receive the app/IPC protocols.
