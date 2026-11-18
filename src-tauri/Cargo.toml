@@ -118,10 +118,8 @@ sha2 = { version = "0.10", features = ["asm"] }
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 sherpa-onnx = "2.0.1"
 
-# Safe effective-UID and CPU-clock reads for ownership checks and diagnostics
-# (`fs_ext::effective_uid`, `cpu_time`). `libc` stays for the calls rustix does
-# not wrap: flock/statvfs and macOS/iOS/BSD getpeereid; Linux SO_PEERCRED uses
-# rustix's `net` feature. Already in the graph through cap-std; no default
+# Typed Unix filesystem, ownership, clock and socket operations.
+# Apple/BSD peer credentials still use libc getpeereid. Already in the graph through cap-std; no default
 # features so only these modules compile.
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", default-features = false, features = ["fs", "process", "time", "net"] }

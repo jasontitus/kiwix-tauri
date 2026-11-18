@@ -2,13 +2,15 @@
 //! Advisory whole-file locks and volume space queries.
 //!
 //! This replaces the `fs2` crate, which has had no release since 2018. It keeps
-//! fs2's exact system calls so lock semantics and error codes are unchanged:
+//! the platform lock semantics and contention error codes that callers expect:
 //! `flock(2)` on Unix (including Android and iOS), `LockFileEx` over the whole
 //! file on Windows, and `statvfs(3)` for space on Unix.
 //!
 //! `std::fs::File::try_lock` (Rust 1.89) is not a substitute yet: through at
 //! least Rust 1.97 it returns `Unsupported` on Android, where these locks guard
 //! profile, download and archive ownership.
+
+#![cfg_attr(unix, forbid(unsafe_code))]
 
 use std::fs::File;
 use std::io;
@@ -56,51 +58,33 @@ pub fn is_lock_contention(error: &io::Error) -> bool {
 #[cfg(unix)]
 impl FileExt for File {
     fn try_flock_exclusive(&self) -> io::Result<()> {
-        flock(self, libc::LOCK_EX | libc::LOCK_NB)
+        rustix::fs::flock(self, rustix::fs::FlockOperation::NonBlockingLockExclusive)
+            .map_err(Into::into)
     }
 
     fn try_flock_shared(&self) -> io::Result<()> {
-        flock(self, libc::LOCK_SH | libc::LOCK_NB)
-    }
-}
-
-#[cfg(unix)]
-fn flock(file: &File, operation: libc::c_int) -> io::Result<()> {
-    use std::os::unix::io::AsRawFd;
-    // SAFETY: the descriptor is owned by `file`, which outlives the call.
-    if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
+        rustix::fs::flock(self, rustix::fs::FlockOperation::NonBlockingLockShared)
+            .map_err(Into::into)
     }
 }
 
 #[cfg(windows)]
 impl FileExt for File {
     fn try_flock_exclusive(&self) -> io::Result<()> {
-        use windows::Win32::Storage::FileSystem::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
-        lock_file(self, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY)
+        self.try_lock().map_err(windows_lock_error)
     }
 
     fn try_flock_shared(&self) -> io::Result<()> {
-        use windows::Win32::Storage::FileSystem::LOCKFILE_FAIL_IMMEDIATELY;
-        lock_file(self, LOCKFILE_FAIL_IMMEDIATELY)
+        self.try_lock_shared().map_err(windows_lock_error)
     }
 }
 
 #[cfg(windows)]
-fn lock_file(file: &File, flags: windows::Win32::Storage::FileSystem::LOCK_FILE_FLAGS) -> io::Result<()> {
-    use std::os::windows::io::AsRawHandle;
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::Storage::FileSystem::LockFileEx;
-    use windows::Win32::System::IO::OVERLAPPED;
-
-    let mut overlapped = OVERLAPPED::default();
-    // SAFETY: the handle is owned by `file`, which outlives the call, and the
-    // zeroed OVERLAPPED (offset 0) is only used for this synchronous request.
-    // The range covers the whole file, as fs2 did.
-    unsafe { LockFileEx(HANDLE(file.as_raw_handle()), flags, None, u32::MAX, u32::MAX, &mut overlapped) }
-        .map_err(win32_error)
+fn windows_lock_error(error: std::fs::TryLockError) -> io::Error {
+    match error {
+        std::fs::TryLockError::WouldBlock => io::Error::from_raw_os_error(33),
+        std::fs::TryLockError::Error(error) => error,
+    }
 }
 
 /// Bytes available to unprivileged callers on the volume holding `path`.
@@ -120,19 +104,11 @@ struct VolumeSpace {
 
 #[cfg(unix)]
 fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
-    use std::os::unix::ffi::OsStrExt;
-    let path = std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))?;
-    // SAFETY: `statvfs` is plain old data and the call fully initializes it on
-    // success; `path` is a valid NUL-terminated string for the call.
-    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(path.as_ptr(), &mut stat) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // Field widths differ by platform; the casts are widening where needed.
-    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
-    let (fragment, available, total) = (stat.f_frsize as u64, stat.f_bavail as u64, stat.f_blocks as u64);
-    Ok(VolumeSpace { available: fragment.saturating_mul(available), total: fragment.saturating_mul(total) })
+    let stat = rustix::fs::statvfs(path)?;
+    Ok(VolumeSpace {
+        available: stat.f_frsize.saturating_mul(stat.f_bavail),
+        total: stat.f_frsize.saturating_mul(stat.f_blocks),
+    })
 }
 
 #[cfg(windows)]
@@ -141,7 +117,11 @@ fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
     use windows::core::PCWSTR;
     use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetVolumePathNameW};
 
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if wide.contains(&0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
+    }
+    wide.push(0);
     // As fs2 did, query the volume root: it accepts file paths and yields UNC
     // share roots with the trailing separator GetDiskFreeSpaceExW requires. The
     // root is at most the input plus that separator (`wide` already counts the
@@ -203,6 +183,12 @@ mod tests {
         assert!(open().try_flock_exclusive().is_err());
         drop((first, second));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn volume_query_rejects_an_embedded_path_terminator() {
+        let path = std::env::temp_dir().join("archive\0trailing");
+        assert_eq!(available_space(path).unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
