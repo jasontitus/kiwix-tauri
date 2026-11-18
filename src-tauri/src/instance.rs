@@ -22,6 +22,8 @@
 //! profile lock. The lock itself remains the single source of ownership, so a
 //! crashed owner releases the profile without this endpoint's help.
 
+#![forbid(unsafe_code)]
+
 #[cfg(unix)]
 pub(crate) mod socket;
 
@@ -456,14 +458,8 @@ fn reply(mut stream: std::os::unix::net::UnixStream, result: Result<(), &str>) {
     target_os = "dragonfly"
 ))]
 fn peer_is_owner(stream: &std::os::unix::net::UnixStream) -> bool {
-    use std::os::fd::AsRawFd;
-
-    let mut uid: libc::uid_t = 0;
-    let mut gid: libc::gid_t = 0;
-    // SAFETY: the descriptor is owned by `stream`, which outlives the call, and
-    // `uid`/`gid` are live writable locals that the call fills on success.
-    let same = unsafe { libc::getpeereid(stream.as_raw_fd(), &mut uid, &mut gid) } == 0;
-    same && uid == crate::fs_ext::effective_uid()
+    nix::unistd::getpeereid(stream)
+        .is_ok_and(|(uid, _)| uid.as_raw() == crate::fs_ext::effective_uid())
 }
 
 #[cfg(target_os = "linux")]
@@ -574,6 +570,17 @@ mod tests {
         let socket_mode = std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777;
         assert_eq!(directory_mode, 0o700);
         assert_eq!(socket_mode, 0o600);
+        let outgoing = std::os::unix::net::UnixStream::connect(&socket).unwrap();
+        let (incoming, _) = rendezvous.listener.accept().unwrap();
+        let supports_peer_credentials = cfg!(any(
+            target_os = "macos", target_os = "ios", target_os = "linux", target_os = "freebsd",
+            target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"
+        ));
+        assert_eq!(peer_is_owner(&outgoing), supports_peer_credentials);
+        assert_eq!(peer_is_owner(&incoming), supports_peer_credentials);
+        let file: std::os::fd::OwnedFd = std::fs::File::open(&root).unwrap().into();
+        assert!(!peer_is_owner(&std::os::unix::net::UnixStream::from(file)));
+        drop((outgoing, incoming));
         assert!(Rendezvous::bind(&root).is_err(), "must preserve a live listener");
         drop(rendezvous);
 

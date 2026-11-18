@@ -752,6 +752,7 @@ mod transport {
     //! macOS App Sandbox, `<container>/tmp/kiwix-mcp/` so the path stays under
     //! the local socket limit. The directory is 0700 and the socket 0600; each
     //! client is checked against this process's uid.
+    #![forbid(unsafe_code)]
 
     use super::super::Service;
     use serde_json::json;

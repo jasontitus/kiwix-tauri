@@ -118,12 +118,14 @@ sha2 = { version = "0.10", features = ["asm"] }
 sherpa-onnx = "2.0.1"
 
 # Typed Unix filesystem, ownership, clock and socket operations.
-# Apple/BSD peer credentials still use libc getpeereid. Already in the graph through cap-std; no default
-# features so only these modules compile.
 [target.'cfg(unix)'.dependencies]
 # Preserve kernel interface flags, addresses, netmasks and exact name/index receipts.
 nix = { version = "0.32.0", default-features = false, features = ["net"] }
 rustix = { version = "1", default-features = false, features = ["fs", "process", "time", "net"] }
+
+# The typed getpeereid wrapper is used only on the Apple/BSD rendezvous path.
+[target.'cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
+nix = { version = "0.32.0", default-features = false, features = ["user"] }
 
 # Iteration builds keep line tables so backtraces stay actionable, but skip the
 # full variable/type debug info that dominates debug-object size and link time.
