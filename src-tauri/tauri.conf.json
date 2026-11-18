@@ -45,6 +45,12 @@
     "resources": {
       "src/localswarm/NOTICE": "licenses/localswarm/NOTICE",
       "src/localswarm/LICENSE-APACHE": "licenses/localswarm/LICENSE-APACHE",
+      "licenses/zimru/LICENSE": "licenses/zimru/LICENSE",
+      "licenses/zimru/zstd-rs-MIT": "licenses/zimru/zstd-rs-MIT",
+      "licenses/zimru/zstd-rs-Apache-2.0": "licenses/zimru/zstd-rs-Apache-2.0",
+      "licenses/glass/LICENSE": "licenses/zimru-xapian/LICENSE",
+      "licenses/glass/Stopwords-ISO-gu-MIT.txt": "licenses/zimru-xapian/Stopwords-ISO-gu-MIT.txt",
+      "licenses/glass/Stopwords-ISO-MIT.txt": "licenses/zimru-xapian/Stopwords-ISO-MIT.txt",
       "vendor/mdns-sd/LICENSE-APACHE": "licenses/mdns-sd/LICENSE-APACHE",
       "vendor/mdns-sd/LICENSE-MIT": "licenses/mdns-sd/LICENSE-MIT"
     },

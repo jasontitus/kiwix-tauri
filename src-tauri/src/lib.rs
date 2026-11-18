@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 mod acquisition;
 mod archive;
+mod archive_search;
 mod archive_source;
 mod casefold;
 mod catalog;

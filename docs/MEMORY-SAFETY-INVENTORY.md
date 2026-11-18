@@ -1,12 +1,18 @@
 # Memory-safety worklist
 
-**Start with the bytes an archive supplies.** Opening a ZIM, decoding a cluster, querying an embedded index, and rendering the resulting article are four separate operations. Switching to the Rust ZIM and Xapian readers would retire the current C++ reader and search code once every consumer switches. Zimru's current file mapping and codecs, and the platform rendering engines, need their own decisions.
+## Search integration update, 2026-11-18
+
+Kiwix now opens the embedded Glass index on retained archive files through the Rust APIs of the MIT Zimru reader and the separate GPL-3.0-or-later search engine. Full-text search, indexed suggestions and title-prefix fallback use this path. Kiwix resolves redirects, reads article prefixes for excerpts and validates the checksum against the retained parts. The native bridge still opens the archive and handles article and media reads, metadata, title iteration and structural integrity checks. The historical A1–A5 rows below describe the starting point. See the [private dependency pins and verification instructions](DEPENDENCIES.md#rust-archive-search).
+
+## Inventory baseline, 2026-11-17
+
+**Start with the bytes an archive supplies.** Opening a ZIM, decoding a cluster, querying an embedded index, and rendering the resulting article are four separate operations. Switching to the Rust ZIM and Xapian readers would retire the current C++ reader and search code once every consumer switches. The baseline Zimru file mapping and codecs, and the platform rendering engines, need their own decisions.
 
 This is a source inventory of Kiwix Workbench at `921327a76df2167d570d9f88f7a14e5c8009bfd5` (2026-11-17). An open box identifies a boundary to work on. It does not identify a confirmed memory bug. Bare Rust module paths in the tables refer to `src-tauri/src/`. The `native/` and `vendor/` directories sit under `src-tauri/`. Swift and Kotlin plugin filenames refer to [the mobile plugin](../src-tauri/plugins/tauri-plugin-kiwix-mobile).
 
 ## Archive and article paths
 
-| Work item | What handles the data today | Candidate change and evidence needed to close |
+| Work item | Implementation at the baseline | Candidate change and evidence needed to close |
 |---|---|---|
 | ☐ A1. Archive access | `archive.rs` owns the opaque handle and result buffers from [archive.cpp](../src-tauri/native/archive.cpp) through [archive.h](../src-tauri/native/archive.h). Metadata, redirects, resources, ranges, title iteration and integrity checks use this interface. `archive_source.rs` supplies retained files, including split archives and leased mobile documents. | Integrate Zimru's Rust library directly, with default features disabled for the reader. Preserve descriptor identity, ordered split parts, provider lease lifetime, cancellation, errors and bounded range reads. Compare actual contents, ranges across part boundaries, redirects, titles and checksums before retiring the C ABI. Include multi-GB inputs on 32-bit Android. |
 | ☐ A2. Search and suggestions | `archive.cpp` uses libzim's Searcher and SuggestionSearcher, backed by Xapian. Title-prefix fallback also matters when an index is absent. The SDK has a patch for embedded databases opened at a file offset. | Integrate the planned Rust **query reader** and record its exact revision, features, unsafe sites and decoder dependencies. Compare full-text and title searches, paging, result ordering/snippets, missing indexes, cancellation and concurrent queries on retained files. Verify no query falls back to C++ on any shipping target. Index creation is separate. |

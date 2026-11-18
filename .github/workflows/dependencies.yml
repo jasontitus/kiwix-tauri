@@ -73,9 +73,17 @@ jobs:
           - aarch64-apple-ios
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: cargo-deny (advisories, licenses, sources, bans)
         uses: EmbarkStudios/cargo-deny-action@v2
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: credential.useHttpPath
+          GIT_CONFIG_VALUE_0: 'true'
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
         with:
+          credentials: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.ZIMRU_READ_TOKEN && format('https://x-access-token:{0}@github.com/jasontitus/zimru-xapian.git', secrets.ZIMRU_READ_TOKEN) || '' }}
           manifest-path: src-tauri/Cargo.toml
           arguments: --config src-tauri/deny.toml --all-features --target ${{ matrix.target }}
           command: check

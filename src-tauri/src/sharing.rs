@@ -1125,7 +1125,11 @@ impl SharingServer {
             let stamp = archive_stamp(&book).map_err(|error| error.message)?;
             let id = book.metadata.id.clone();
             let s = service.clone();
-            let archive = tokio::task::spawn_blocking(move || s.archive(&id))
+            let (archive, fulltext) = tokio::task::spawn_blocking(move || {
+                let archive = s.archive(&id)?;
+                let (fulltext, _) = archive.search_capabilities()?;
+                Ok::<_, String>((archive, fulltext))
+            })
                 .await
                 .map_err(|e| e.to_string())??;
             let archive = Arc::new(archive);
@@ -1141,7 +1145,7 @@ impl SharingServer {
                 title: book.metadata.title,
                 port: book_port,
                 archive: Arc::downgrade(&archive),
-                fulltext: book.metadata.has_fulltext_index,
+                fulltext,
             });
             book_ids.push(book.metadata.id);
             prepared.push((
@@ -1732,19 +1736,25 @@ async fn index_request(
                 // Still search every chosen archive after the display budget is
                 // exhausted, so later books are not silently omitted.
                 let archive = book.archive.upgrade().ok_or("This shared file is no longer available. Stop sharing and start again")?;
-                let mut result = match cancellation.native(|| {
-                    archive.search(
+                let result = match cancellation.native(|| {
+                    let mut matches = archive.search_cancellable(
                         &search_query,
                         book.fulltext,
                         0,
                         RESULTS_PER_BOOK.min(remaining.max(1) as u32),
-                    )
+                        true,
+                        &cancellation.0.search_cancel,
+                    )?;
+                    matches.hits.truncate(remaining);
+                    for hit in &mut matches.hits {
+                        hit.snippet = crate::search::snippet_text(&hit.snippet, &cancellation.0.search_cancel)?;
+                    }
+                    Ok::<_, String>(matches)
                 }) {
                     Ok(result) => result,
                     Err(_) => break,
                 };
-                if let Ok(results) = &mut result {
-                    results.hits.truncate(remaining);
+                if let Ok(results) = &result {
                     remaining = remaining.saturating_sub(results.hits.len());
                 }
                 found.push((index, result));

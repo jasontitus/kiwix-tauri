@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Rank-fused, title-inclusive search with bounded native page buffers.
+//! Rank-fused, title-inclusive search with bounded result pages.
 //!
 //! Title suggestions page book-major through the resolved archive scope. The
 //! continuation token binds the prefix, scope, archive cursor, and local offset,
@@ -77,23 +77,27 @@ pub(crate) fn check_cancel(cancel: &CancellationToken) -> Result<(), String> {
     }
 }
 
+pub(crate) fn snippet_text(html: &str, cancel: &CancellationToken) -> Result<String, String> {
+    // Archive-supplied snippets are parsed under a snippet-sized work
+    // budget and the request's cancellation token, so a hostile result
+    // cannot hold the search request after it was retired.
+    let fragment = crate::exports::html::Html::parse_fragment_bounded(
+        html,
+        &crate::exports::html::SNIPPET_BOUNDS,
+        Some(cancel),
+    )
+    .map_err(|refused| match refused {
+        crate::exports::html::Refused::Cancelled => "Search cancelled".to_string(),
+        crate::exports::html::Refused::TooComplex => "A search result snippet was too complex to display".to_string(),
+    })?;
+    check_cancel(cancel)?;
+    Ok(crate::exports::html::text(&fragment.root_element()))
+}
+
 fn row(id: &str, rank: u32, hit: SearchHit, show_snippets: bool, cancel: &CancellationToken) -> Result<Value, String> {
     check_cancel(cancel)?;
     let snippet = if show_snippets {
-        // Archive-supplied snippets are parsed under a snippet-sized work
-        // budget and the request's cancellation token, so a hostile result
-        // cannot hold the search request after it was retired.
-        let fragment = crate::exports::html::Html::parse_fragment_bounded(
-            &hit.snippet,
-            &crate::exports::html::SNIPPET_BOUNDS,
-            Some(cancel),
-        )
-        .map_err(|refused| match refused {
-            crate::exports::html::Refused::Cancelled => "Search cancelled".to_string(),
-            crate::exports::html::Refused::TooComplex => "A search result snippet was too complex to display".to_string(),
-        })?;
-        check_cancel(cancel)?;
-        crate::exports::html::text(&fragment.root_element())
+        snippet_text(&hit.snippet, cancel)?
     } else {
         String::new()
     };
@@ -124,7 +128,7 @@ pub fn run(
     cancel: &CancellationToken,
 ) -> Result<Value, String> {
     check_cancel(cancel)?;
-    // Native page buffers are bounded; a caller-supplied limit must never
+    // A caller-supplied limit must never
     // reserve or request an unbounded page.
     let limit = limit.clamp(1, PAGE);
     if mode == Mode::Combined {
@@ -137,8 +141,6 @@ pub fn run(
     let first_page = offset.saturating_add(limit).clamp(1, PAGE);
     if archives.len() == 1 {
         let (id, result) = archives.into_iter().next().unwrap();
-        // libzim/Xapian exposes no interruption hook. Cancelled archive-lock
-        // waiters skip the native call; a call already in progress must return.
         let page = result.and_then(|archive| archive.search_cancellable(query, fulltext, offset, limit, show_snippets, cancel));
         check_cancel(cancel)?;
         match page {
@@ -255,7 +257,7 @@ struct CombinedPage {
     errors: Vec<(usize, String)>,
 }
 
-/// Merge native index streams by rank/title/scope order. Replaying the same
+/// Merge index streams by rank/title/scope order. Replaying the same
 /// bounded streams for each offset makes pages deterministic without retaining
 /// request-global state. Deduplication precedes offset/limit and is scoped to
 /// archive identity: identical paths in different archives remain distinct.

@@ -61,6 +61,9 @@ html5ever = "0.39.0"
 # text with it to tell a CSS `<` delimiter from a `<` inside a string or URL.
 cssparser = "0.37.0"
 librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
+zimfile-xapian = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "700791140150142445a5861c5118614a56130dbd" }
+zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "30e171038660edcac518e6144be2466dd8084d8f", default-features = false }
+parking_lot = "0.12"
 cap-std = "4"
 same-file = "1"
 cap-fs-ext = "4"

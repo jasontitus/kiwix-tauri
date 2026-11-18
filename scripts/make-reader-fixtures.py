@@ -66,10 +66,13 @@ class TextItem(Item):
         return {Hint.FRONT_ARTICLE: self._front_article, Hint.COMPRESS: self._compress}
 
 
-def build(name, items, main_path=None, redirects=(), metadata=()):
+def build(name, items, main_path=None, redirects=(), metadata=(), fulltext=False):
     if os.path.exists(name):
         os.remove(name)
-    with Creator(name).config_compression(Compression.zstd) as creator:
+    writer = Creator(name).config_compression(Compression.zstd)
+    if fulltext:
+        writer.config_indexing(True, "eng")
+    with writer as creator:
         if main_path:
             creator.set_mainpath(main_path)
         for key, value in (
@@ -88,6 +91,26 @@ def build(name, items, main_path=None, redirects=(), metadata=()):
             creator.add_redirection(path, path, target, {})
 
 
+def search_fixture(output):
+    # Native Xapian writes both Glass indexes. Three hits exercise a second
+    # page, punctuation in a public path, snippets, and compressed article data.
+    build(
+        os.path.join(output, "indexed_search.zim"),
+        [
+            TextItem(path, title, "text/html",
+                     f"<html><title>{title}</title><body>{text}</body></html>",
+                     front_article=True, compress=True)
+            for path, title, text in [
+                ("Earth & sky", "Earth & sky", "Basalt forms part of the crust on Earth."),
+                ("Mars%20", "Mars", "A probe measured basalt on Mars."),
+                ("Venus", "Venus", "Lava cools into basalt on Venus."),
+            ]
+        ],
+        main_path="Earth & sky",
+        fulltext=True,
+    )
+
+
 def main():
     output = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -96,6 +119,7 @@ def main():
         "fixtures",
     )
     os.makedirs(output, exist_ok=True)
+    search_fixture(output)
 
     png = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAACgAAAAYCAIAAAAH5iiXAAAAK0lEQVR4nGMUqNjCMBCAaUBsHbV41OJRi0ctHrV41OJRi0ctHrV41GKaAAAZ/QFsMC3okAAAAABJRU5ErkJggg=="

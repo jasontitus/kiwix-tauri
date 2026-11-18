@@ -1,0 +1,27 @@
+name: Fetch locked archive libraries
+description: Fetch private Rust dependencies before compiling the app
+inputs:
+  token:
+    description: Contents-read token for jasontitus/zimru-xapian
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ARCHIVE_READER_TOKEN: ${{ inputs.token }}
+        CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+        GIT_TERMINAL_PROMPT: '0'
+        FORK_REQUEST: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+      run: |
+        if [[ "$FORK_REQUEST" == true || -z "$ARCHIVE_READER_TOKEN" ]]; then
+          echo "::error::This build needs read access to the pinned private archive libraries."
+          exit 1
+        fi
+        # Restrict the credential to the exact dependency repository. Git's
+        # environment configuration lasts only for this fetch step.
+        export GIT_CONFIG_COUNT=2
+        export GIT_CONFIG_KEY_0=credential.useHttpPath GIT_CONFIG_VALUE_0=true
+        export GIT_CONFIG_KEY_1=credential.https://github.com/jasontitus/zimru-xapian.git.helper
+        export GIT_CONFIG_VALUE_1='!f() { if test "$1" = get; then printf "username=x-access-token\npassword=%s\n" "$ARCHIVE_READER_TOKEN"; fi; }; f'
+        cargo fetch --locked --manifest-path src-tauri/Cargo.toml

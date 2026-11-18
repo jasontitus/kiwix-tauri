@@ -45,24 +45,20 @@ enum kz_operation {
     KZ_ENTRY = 1,
     KZ_MAIN = 2,
     KZ_RANDOM = 3,
-    KZ_SEARCH = 4,
-    KZ_INTEGRITY = 5,
     KZ_ILLUSTRATION = 6,
     KZ_TITLE_BATCH = 7,
     /* Structural checks only; Rust verifies the checksum over retained handles. */
     KZ_STRUCTURAL_INTEGRITY = 8
 };
 
-kz_result kz_open(const uint8_t *path, size_t path_len, kz_archive **out) KZ_NOEXCEPT;
 /* Retained regular file handles in exact split order. POSIX requires the patched
  * descriptor-preserving libzim FdInput; Windows also leases names against rename. */
 kz_result kz_open_files(const kz_file_input *files, size_t count, kz_archive **out) KZ_NOEXCEPT;
 void kz_close(kz_archive *archive) KZ_NOEXCEPT;
 void kz_free(uint8_t *data) KZ_NOEXCEPT;
-/* snippets controls KZ_SEARCH extraction only; other operations ignore it. */
 kz_result kz_query(kz_archive *archive, int operation,
-                   const uint8_t *input, size_t input_len, int fulltext,
-                   uint32_t offset, uint32_t limit, int snippets) KZ_NOEXCEPT;
+                   const uint8_t *input, size_t input_len,
+                   uint32_t offset, uint32_t limit) KZ_NOEXCEPT;
 kz_result kz_read(kz_archive *archive, const uint8_t *path, size_t path_len,
                   uint64_t offset, uint64_t length, uint8_t *destination,
                   size_t capacity, int illustration) KZ_NOEXCEPT;

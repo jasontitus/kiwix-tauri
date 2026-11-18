@@ -5,8 +5,6 @@
 #include <zim/blob.h>
 #include <zim/error.h>
 #include <zim/item.h>
-#include <zim/search.h>
-#include <zim/suggestion.h>
 
 #include <algorithm>
 #include <climits>
@@ -36,9 +34,6 @@ struct WindowsPathLease {
 #endif
 
 struct kz_archive {
-    // Keep full-text initialization on first search, not every archive open.
-    explicit kz_archive(const std::string &path)
-        : archive(path, zim::OpenConfig().preloadXapianDb(false)) {}
 #ifndef _WIN32
     explicit kz_archive(const std::vector<zim::FdInput> &files)
         : archive(files, zim::OpenConfig().preloadXapianDb(false)) {}
@@ -56,8 +51,6 @@ struct kz_archive {
 namespace {
 constexpr uint64_t MAX_READ = 16 * 1024 * 1024;
 constexpr size_t MAX_STRING = 1024 * 1024;
-constexpr size_t MAX_QUERY = 64 * 1024;
-constexpr uint32_t MAX_HITS = 1000;
 constexpr size_t MAX_JSON = 32 * 1024 * 1024;
 constexpr size_t MAX_REDIRECTS = 256;
 
@@ -143,11 +136,7 @@ void number(std::string &out, const char *key, uint64_t value) {
     out += ':';
     out += std::to_string(value);
 }
-void boolean(std::string &out, const char *key, bool value) {
-    if (out.back() != '{') out += ',';
-    quoted(out, key);
-    out += value ? ":true" : ":false";
-}
+
 
 zim::Archive &archive_of(kz_archive *handle) {
     if (!handle) throw BridgeError(KZ_INVALID_ARGUMENT, "Null archive handle");
@@ -228,82 +217,9 @@ std::string metadata(zim::Archive &archive) {
     }
     number(out, "articleCount", archive.getArticleCount());
     number(out, "mediaCount", archive.getMediaCount());
-    boolean(out, "hasFulltextIndex", archive.hasFulltextIndex());
-    boolean(out, "hasTitleIndex", archive.hasTitleIndex());
     std::string main_path;
     if (archive.hasMainEntry()) main_path = resolved(archive.getMainEntry()).getPath();
     field(out, "mainPath", main_path);
-    out += '}';
-    return out;
-}
-
-void hit(std::string &out, const std::string &path, const std::string &title,
-         const std::string &snippet, uint64_t score, bool &first) {
-    if (!first) out += ',';
-    first = false;
-    out += '{';
-    field(out, "path", path);
-    field(out, "title", title);
-    field(out, "snippet", snippet);
-    number(out, "score", score);
-    out += '}';
-}
-
-std::string search(zim::Archive &archive, const std::string &query, bool fulltext,
-                   uint32_t offset, uint32_t limit, bool snippets) {
-    if (limit > MAX_HITS || offset > static_cast<uint32_t>(INT_MAX) ||
-        limit > static_cast<uint32_t>(INT_MAX) - offset)
-        throw BridgeError(KZ_INVALID_ARGUMENT, "Search limit must be at most 1000; pagination must fit signed 32 bits");
-    std::string out = "{\"hits\":[";
-    bool first = true;
-    int total = 0;
-    if (fulltext) {
-        if (!archive.hasFulltextIndex())
-            throw BridgeError(KZ_UNSUPPORTED, "Archive has no full-text search index");
-#if defined(LIBZIM_WITH_XAPIAN)
-        zim::Searcher searcher(archive);
-        searcher.setVerbose(false);
-        const auto search = searcher.search(zim::Query(query));
-        total = search.getEstimatedMatches();
-        if (limit) {
-            const auto results = search.getResults(static_cast<int>(offset), static_cast<int>(limit));
-            // libzim constructs heap-owned iterator state in end(); reuse it.
-            const auto end = results.end();
-            for (auto it = results.begin(); it != end; ++it) {
-                const auto path = resolved(*it).getPath();
-                hit(out, path, it.getTitle(), snippets ? it.getSnippet() : std::string(), std::max(0, it.getScore()), first);
-            }
-        }
-#else
-        throw BridgeError(KZ_UNSUPPORTED, "libzim was built without full-text search support");
-#endif
-    } else {
-        // libzim uses its suggestion index when available, otherwise its
-        // logarithmic title-prefix range. No full-archive scan or silent FT fallback.
-        zim::SuggestionSearcher searcher(archive);
-        searcher.setVerbose(false);
-        const auto search = searcher.suggest(query);
-        total = search.getEstimatedMatches();
-        if (limit) {
-            const auto results = search.getResults(static_cast<int>(offset), static_cast<int>(limit));
-            const auto end = results.end();
-            for (auto it = results.begin(); it != end; ++it) {
-                if (snippets) {
-                    const auto path = resolved(it.getEntry()).getPath();
-                    hit(out, path, it->getTitle(), it->getSnippet(), 0, first);
-                } else {
-                    // SuggestionIterator::operator-> materializes a snippet even
-                    // for getTitle(). Read the entry directly in title-only mode.
-                    auto entry = it.getEntry();
-                    const auto title = entry.getTitle();
-                    const auto path = resolved(std::move(entry)).getPath();
-                    hit(out, path, title, "", 0, first);
-                }
-            }
-        }
-    }
-    out += "],\"total\":";
-    out += std::to_string(std::max(0, total));
     out += '}';
     return out;
 }
@@ -345,19 +261,6 @@ zim::Item illustration_item(zim::Archive &archive) {
     }
 }
 } // namespace
-
-extern "C" kz_result kz_open(const uint8_t *path, size_t path_len, kz_archive **out) noexcept {
-    if (!out) return failure(KZ_INVALID_ARGUMENT, "Null archive output pointer");
-    *out = nullptr;
-    return guarded([&]() -> kz_result {
-        const auto filename = input_string(path, path_len);
-        if (filename.empty() || filename.find('\0') != std::string::npos)
-            throw BridgeError(KZ_INVALID_ARGUMENT, "Archive filesystem path is empty or contains NUL");
-        auto handle = std::make_unique<kz_archive>(filename);
-        *out = handle.release();
-        return {nullptr, 0, KZ_OK};
-    });
-}
 
 extern "C" kz_result kz_open_files(const kz_file_input *files, size_t count, kz_archive **out) noexcept {
     if (!out) return failure(KZ_INVALID_ARGUMENT, "Null archive output pointer");
@@ -501,8 +404,8 @@ extern "C" void kz_close(kz_archive *archive) noexcept {
 extern "C" void kz_free(uint8_t *data) noexcept { std::free(data); }
 
 extern "C" kz_result kz_query(kz_archive *handle, int operation,
-                                const uint8_t *input, size_t input_len, int fulltext,
-                                uint32_t offset, uint32_t limit, int snippets) noexcept {
+                                const uint8_t *input, size_t input_len,
+                                uint32_t offset, uint32_t limit) noexcept {
     return guarded([&]() -> kz_result {
         auto &archive = archive_of(handle);
         switch (operation) {
@@ -511,16 +414,13 @@ extern "C" kz_result kz_query(kz_archive *handle, int operation,
             return result(item_json(resolved(archive.getEntryByPath(input_string(input, input_len))).getItem()));
         case KZ_MAIN: return result(item_json(resolved(archive.getMainEntry()).getItem()));
         case KZ_RANDOM: return result(item_json(resolved(archive.getRandomEntry()).getItem()));
-        case KZ_SEARCH:
-            return result(search(archive, input_string(input, input_len, MAX_QUERY), fulltext != 0, offset, limit, snippets != 0));
-        case KZ_INTEGRITY:
         case KZ_STRUCTURAL_INTEGRITY:
             // Retained inputs use Rust's descriptor-bound checksum, because
             // libzim's checksum implementation reopens filenames. Keep every
             // stock structural check, and still reject missing checksums.
             if (!archive.hasChecksum()) return result("false");
             for (int check = 0; check < static_cast<int>(zim::IntegrityCheck::COUNT); ++check) {
-                if (operation == KZ_STRUCTURAL_INTEGRITY && check == static_cast<int>(zim::IntegrityCheck::CHECKSUM)) continue;
+                if (check == static_cast<int>(zim::IntegrityCheck::CHECKSUM)) continue;
                 if (!archive.checkIntegrity(static_cast<zim::IntegrityCheck>(check))) return result("false");
             }
             return result("true");

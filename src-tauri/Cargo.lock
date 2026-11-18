@@ -905,6 +905,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "chksum-hash-core"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "221456234d441c788a2c51a27b91c4380f499de560670a67d3303e621d37b3bd"
+
+[[package]]
+name = "chksum-hash-sha2-256"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8231bf5c173db494835789e73fce310773f8f623c65989bb346d52b809e5e2f8"
+dependencies = [
+ "chksum-hash-core",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1149,6 +1165,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eb8a2a1cd12ab0d987a5d5e825195d372001a4094a0376319d5a0ad71c1ba0d"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
+
+[[package]]
 name = "crc32fast"
 version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1162,6 +1193,25 @@ name = "crossbeam-channel"
 version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-deque"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -2627,6 +2677,9 @@ dependencies = [
  "icu_properties",
  "icu_provider",
  "smallvec",
+ "utf16_iter",
+ "utf8_iter",
+ "write16",
  "zerovec",
 ]
 
@@ -3114,6 +3167,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "opener",
+ "parking_lot",
  "percent-encoding",
  "quinn",
  "regex",
@@ -3154,6 +3208,8 @@ dependencies = [
  "windows 0.62.2",
  "zbus",
  "zeroize",
+ "zimfile-xapian",
+ "zimru",
 ]
 
 [[package]]
@@ -3625,6 +3681,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "lru"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9f71e3591c7ec44d3e563e87bf14ddc2bada8519dca046e5b0e560cd004e2d"
+dependencies = [
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3680,6 +3745,12 @@ dependencies = [
  "cfg-if",
  "digest 0.10.7",
 ]
+
+[[package]]
+name = "md5"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 
 [[package]]
 name = "mdns-sd"
@@ -4906,6 +4977,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
+name = "rayon"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5190,6 +5281,16 @@ checksum = "915e33dccbe7deb2b8a342dc4c517503fe85e0230ddbae40a4fb0220493dad9b"
 dependencies = [
  "sha2 0.11.1",
  "walkdir",
+]
+
+[[package]]
+name = "rust-stemmers"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e46a2036019fdb888131db7a4c847a1063a7493f971ed94ea82c67eada63ca54"
+dependencies = [
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -5726,6 +5827,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
 dependencies = [
  "errno",
+ "libc",
+]
+
+[[package]]
+name = "sigpipe"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5584bfb3e0d348139d8210285e39f6d2f8a1902ac06de343e06357d1d763d8e6"
+dependencies = [
  "libc",
 ]
 
@@ -6991,6 +7101,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "utf16_iter"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c7de35d9d8757dbc1f5125dc8b51438c68b4430546a735c3a9b91aaaaf9a18a"
+dependencies = [
+ "utf_types",
+]
+
+[[package]]
 name = "utf8_iter"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7784,6 +7903,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "write16"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1890f4022759daae28ed4fe62859b1236caebfc61ede2f63ed4e695f3f6d936"
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8061,6 +8186,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "zimfile-xapian"
+version = "0.1.0"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=700791140150142445a5861c5118614a56130dbd#700791140150142445a5861c5118614a56130dbd"
+dependencies = [
+ "icu_normalizer",
+ "icu_properties",
+ "miniz_oxide 0.9.1",
+ "rust-stemmers",
+]
+
+[[package]]
+name = "zimru"
+version = "0.1.0"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=30e171038660edcac518e6144be2466dd8084d8f#30e171038660edcac518e6144be2466dd8084d8f"
+dependencies = [
+ "chksum-hash-sha2-256",
+ "crc",
+ "lru",
+ "lzma-rust2",
+ "md5",
+ "parking_lot",
+ "rayon",
+ "rustix",
+ "sigpipe",
+ "thiserror 2.0.21",
+ "zstd-rs",
+]
+
+[[package]]
 name = "zip"
 version = "9.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8122,6 +8276,11 @@ checksum = "ad5020ab8f27bfc0024ad0a07aed6bf022a16208f479686fbed4fdd0c85eb0b3"
 dependencies = [
  "zstd-safe",
 ]
+
+[[package]]
+name = "zstd-rs"
+version = "0.1.0"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=30e171038660edcac518e6144be2466dd8084d8f#30e171038660edcac518e6144be2466dd8084d8f"
 
 [[package]]
 name = "zstd-safe"

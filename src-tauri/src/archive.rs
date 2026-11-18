@@ -7,12 +7,13 @@
 //! Search pages are capped at 1000 hits, queries at 64 KiB, metadata strings at
 //! 1 MiB, JSON responses at 32 MiB, and redirect chains at 256 hops. These bounds
 //! reject oversized/malformed input explicitly rather than silently truncating it.
-//! Search totals are libzim estimates. Title fallback is case/diacritic-sensitive
+//! Full-text totals count matches. Suggestion totals can include collapsed hits. Title fallback is case/diacritic-sensitive
 //! prefix search when the archive has no suggestion index.
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use md5::{Digest, Md5};
-use std::io::{Read, Seek, SeekFrom};
+use crate::archive_search::{Parts, SearchReader};
+use zimru::archive::PositionedInput;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -68,7 +69,7 @@ pub(crate) const ARCHIVE_OPEN_FAILED: &str = "The archive could not be opened.";
 pub(crate) fn archive_open_error(path: &Path, error: &str) -> String {
     match std::fs::metadata(path) {
         Ok(metadata) if metadata.is_dir() => INVALID_ARCHIVE.into(),
-        Ok(metadata) => match std::fs::File::open(path) {
+        Ok(metadata) => match open_archive_file(path) {
             Ok(_) => classify_archive_failure(Some(metadata.len()), error),
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => MISSING_ARCHIVE.into(),
             Err(failure) if failure.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -82,6 +83,19 @@ pub(crate) fn archive_open_error(path: &Path, error: &str) -> String {
         }
         Err(_) => classify_archive_failure(None, error),
     }
+}
+
+// Opening a discovered split sibling must return even if another process has
+// replaced its name with a pipe. Validate the type on the open handle.
+fn open_archive_file(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    options.open(path)
 }
 
 fn classify_archive_failure(size: Option<u64>, error: &str) -> String {
@@ -110,7 +124,9 @@ pub struct ArchiveMetadata {
     pub size: u64,
     pub article_count: u64,
     pub media_count: u64,
+    #[serde(default)]
     pub has_fulltext_index: bool,
+    #[serde(default)]
     pub has_title_index: bool,
     pub main_path: String,
 }
@@ -168,7 +184,6 @@ struct NativeFileInput {
 }
 
 unsafe extern "C" {
-    fn kz_open(path: *const u8, path_len: usize, out: *mut *mut NativeArchive) -> NativeResult;
     fn kz_open_files(files: *const NativeFileInput, count: usize, out: *mut *mut NativeArchive) -> NativeResult;
     fn kz_close(archive: *mut NativeArchive);
     fn kz_free(data: *mut u8);
@@ -177,10 +192,8 @@ unsafe extern "C" {
         operation: std::ffi::c_int,
         input: *const u8,
         input_len: usize,
-        fulltext: std::ffi::c_int,
         offset: u32,
         limit: u32,
-        snippets: std::ffi::c_int,
     ) -> NativeResult;
     fn kz_read(
         archive: *mut NativeArchive,
@@ -238,14 +251,13 @@ impl Drop for NativeResult {
 #[derive(Debug)]
 struct Handle {
     native: NonNull<NativeArchive>,
-    files: Option<Vec<(std::fs::File, u64)>>,
+    parts: Arc<Parts>,
     /// Retains the caller's path/capability leases until after kz_close.
     _scope: Option<Arc<dyn std::fmt::Debug + Send + Sync>>,
 }
 
 // SAFETY: `Handle` owns the only pointer to its libzim archive. libzim objects
-// are not safe for concurrent use, so every operation — including the
-// non-thread-safe suggestion/search iterators — runs while holding the `Mutex`
+// are not safe for concurrent use, so every native operation runs while holding the `Mutex`
 // inside `Archive::handle`, and no borrowed pointer or iterator outlives that
 // guard. Moving the handle between threads is therefore safe: it holds no
 // thread-affine state, the `Arc` keeps it alive until the last `Archive` clone
@@ -272,78 +284,93 @@ fn integrity_cancel(cancel: Option<&CancellationToken>) -> Result<(), String> {
     } else { Ok(()) }
 }
 
-fn retained_checksum_cancellable(files: &mut [(std::fs::File, u64)],
-    cancel: Option<&CancellationToken>, progress: &mut impl FnMut(u64, u64)) -> Result<bool, String> {
+fn retained_checksum_cancellable(parts: &Parts, cancel: Option<&CancellationToken>,
+    progress: &mut impl FnMut(u64, u64)) -> Result<bool, String> {
     integrity_cancel(cancel)?;
-    let total = files.iter().try_fold(0u64, |total, (_, size)| total.checked_add(*size))
-        .ok_or("Retained archive size overflow")?;
-    let Some(mut remaining) = total.checked_sub(16) else { return Ok(false); };
-    let checksum_bytes = remaining;
-    let mut checked = 0;
-    progress(0, checksum_bytes);
-    let mut digest = Md5::new();
-    let mut buffer = [0u8; 64 * 1024];
-    let mut stored = [0u8; 16];
-    let mut tail_offset = 0usize;
-    for (file, size) in files {
+    for (file, size) in parts.files() {
         if file.metadata().map_err(|e| e.to_string())?.len() != *size {
             return Err("Retained archive part size changed".into());
         }
-        file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
-        let body = remaining.min(*size);
-        let mut left = body;
-        while left != 0 {
-            integrity_cancel(cancel)?;
-            let count = left.min(buffer.len() as u64) as usize;
-            file.read_exact(&mut buffer[..count]).map_err(|e| e.to_string())?;
-            digest.update(&buffer[..count]);
-            left -= count as u64;
-            checked += count as u64;
-            if checked == checksum_bytes || checked % (1024 * 1024) == 0 {
-                progress(checked, checksum_bytes);
-            }
-        }
-        remaining -= body;
-        let tail = usize::try_from(*size - body).map_err(|_| "Invalid retained checksum tail")?;
-        let end = tail_offset.checked_add(tail).filter(|end| *end <= stored.len())
-            .ok_or("Retained archive exceeds its checksum boundary")?;
-        file.read_exact(&mut stored[tail_offset..end]).map_err(|e| e.to_string())?;
-        tail_offset = end;
     }
+    let Some(body) = parts.len().checked_sub(16) else { return Ok(false); };
+    if body < 80 { return Ok(false); }
+    let mut header = [0; 80];
+    parts.read_exact_at(0, &mut header).map_err(|e| e.to_string())?;
+    // The legacy 72-byte header has no checksum offset. For modern headers,
+    // hash only when the declared trailer covers the final 16 bytes.
+    if header[56..64] == 72u64.to_le_bytes() || header[72..80] != body.to_le_bytes() {
+        return Ok(false);
+    }
+    let mut digest = Md5::new();
+    let mut checked = 0;
+    let mut buffer = [0u8; 64 * 1024];
+    progress(0, body);
+    while checked < body {
+        integrity_cancel(cancel)?;
+        let count = (body - checked).min(buffer.len() as u64) as usize;
+        parts.read_exact_at(checked, &mut buffer[..count]).map_err(|e| e.to_string())?;
+        digest.update(&buffer[..count]);
+        checked += count as u64;
+        if checked == body || checked % (1024 * 1024) == 0 { progress(checked, body); }
+    }
+    let mut stored = [0; 16];
+    parts.read_exact_at(body, &mut stored).map_err(|e| e.to_string())?;
     integrity_cancel(cancel)?;
-    Ok(remaining == 0 && tail_offset == stored.len() && digest.finalize().as_slice() == stored)
+    Ok(digest.finalize().as_slice() == stored)
 }
 
 #[derive(Clone, Debug)]
 pub struct Archive {
+    // Drop search caches and their file references before the native provider lease.
+    search_reader: Arc<SearchReader>,
     handle: Arc<Mutex<Handle>>,
 }
 
 impl Archive {
     pub fn open(path: &Path) -> Result<Self, String> {
-        #[cfg(unix)]
-        let bytes = {
-            use std::os::unix::ffi::OsStrExt;
-            path.as_os_str().as_bytes()
+        // Both engines must see the same open objects even if names change during a search.
+        // Preserve libzim's exact-file preference and its base-name / .zimaa split convention.
+        let path = std::path::absolute(path).map_err(|e| e.to_string())?;
+        let directory = path.parent().ok_or_else(|| archive_open_error(&path, "no parent"))?;
+        let split = path.extension().is_some_and(|ext| ext == "zimaa");
+        let mut files = Vec::new();
+        let add = |files: &mut Vec<_>, name: &Path, file: std::fs::File| -> Result<(), String> {
+            let meta = file.metadata().map_err(|e| e.to_string())?;
+            if !meta.is_file() { return Err(INVALID_ARCHIVE.into()); }
+            if meta.len() == 0 { return Err(EMPTY_ARCHIVE.into()); }
+            #[cfg(windows)]
+            let name = name.file_name().and_then(|name| name.to_str()).ok_or("Archive filename must be valid Unicode")?.to_owned();
+            #[cfg(unix)]
+            let name = name.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            files.push((name, file));
+            Ok(())
         };
-        #[cfg(not(unix))]
-        let bytes = path
-            .to_str()
-            .ok_or_else(|| "Archive filesystem path is not valid UTF-8".to_string())?
-            .as_bytes();
-
-        let mut raw = std::ptr::null_mut();
-        // SAFETY: bytes are live for the call and raw is a writable out pointer.
-        // The bridge takes its own copy; no Rust data is retained by C++.
-        let response = unsafe { kz_open(bytes.as_ptr(), bytes.len(), &mut raw) };
-        response
-            .check()
-            .map_err(|error| archive_open_error(path, &error))?;
-        let handle = NonNull::new(raw)
-            .ok_or_else(|| "Native archive open returned a null handle".to_string())?;
-        Ok(Self {
-            handle: Arc::new(Mutex::new(Handle { native: handle, files: None, _scope: None })),
-        })
+        if !split {
+            match open_archive_file(&path) {
+                Ok(file) => add(&mut files, &path, file)?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(archive_open_error(&path, &e.to_string())),
+            }
+        }
+        if files.is_empty() {
+            let base = if split { path.with_extension("zim") } else { path.clone() };
+            for i in 0..676u16 {
+                let mut name = base.as_os_str().to_os_string();
+                name.push(format!("{}{}", char::from(b'a' + (i / 26) as u8), char::from(b'a' + (i % 26) as u8)));
+                let name = std::path::PathBuf::from(name);
+                match open_archive_file(&name) {
+                    Ok(file) => {
+                        let metadata = file.metadata().map_err(|e| e.to_string())?;
+                        if !metadata.is_file() { return Err(INVALID_ARCHIVE.into()); }
+                        if !files.is_empty() && metadata.len() == 0 { break; }
+                        add(&mut files, &name, file)?;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound && !files.is_empty() => break,
+                    Err(e) => return Err(archive_open_error(&path, &e.to_string())),
+                }
+            }
+        }
+        Self::open_files_scoped(directory, &files, None)
     }
 
     /// Open exactly the retained regular files, not whatever their old names
@@ -375,15 +402,21 @@ impl Archive {
         }).collect::<Result<_, _>>()?;
         #[cfg(unix)]
         let _ = directory;
-        // libzim stores descriptor-derived paths for later index opening.
-        // Give it the same descriptors that this Handle owns, not caller-owned
-        // numbers that can close or be reused immediately after this call.
+        // Keep descriptors for the native handle and the Rust positioned source
+        // even when the caller immediately closes its own handles.
         let retained = files.iter().map(|(_, file)| {
+            #[cfg(unix)]
             let file = file.try_clone().map_err(|error| error.to_string())?;
+            // Windows seek_read updates the file object's cursor. Keep our positional
+            // reads independent from consumers of the caller's handle.
+            #[cfg(windows)]
+            let file = cap_fs_ext::Reopen::reopen(file, cap_std::fs::OpenOptions::new().read(true))
+                .map_err(|error| error.to_string())?;
             let size = file.metadata().map_err(|error| error.to_string())?.len();
             Ok((file, size))
         }).collect::<Result<Vec<_>, String>>()?;
-        let inputs: Vec<_> = retained.iter().enumerate().map(|(index, (file, size))| {
+        let parts = Arc::new(Parts::new(retained)?);
+        let inputs: Vec<_> = parts.files().iter().enumerate().map(|(index, (file, size))| {
             #[cfg(unix)]
             let handle = {
                 use std::os::fd::AsRawFd;
@@ -402,17 +435,20 @@ impl Archive {
             NativeFileInput { handle, size: *size, path, path_len }
         }).collect();
         let mut raw = std::ptr::null_mut();
-        // SAFETY: the input descriptors are owned by retained and move into
-        // Handle below; they outlive native use, including index reopening.
+        // SAFETY: parts owns the input descriptors and moves into Handle
+        // below, so they outlive every native operation.
         // Windows additionally retains its identity-checked path leases.
         let response = unsafe { kz_open_files(inputs.as_ptr(), inputs.len(), &mut raw) };
         if let Err(error) = response.check() {
             // The retained descriptors are authoritative here: their directory
             // entries may already have been renamed or replaced.
-            return Err(classify_archive_failure(Some(retained[0].1), &error));
+            return Err(classify_archive_failure(Some(parts.files()[0].1), &error));
         }
         let handle = NonNull::new(raw).ok_or("Native retained archive open returned a null handle")?;
-        Ok(Self { handle: Arc::new(Mutex::new(Handle { native: handle, files: Some(retained), _scope: scope })) })
+        Ok(Self {
+            search_reader: Arc::new(SearchReader::new(parts.clone())),
+            handle: Arc::new(Mutex::new(Handle { native: handle, parts, _scope: scope })),
+        })
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, Handle>, String> {
@@ -421,16 +457,12 @@ impl Archive {
             .map_err(|_| "Archive operation lock is poisoned".to_string())
     }
 
-    // Mirrors kz_query's independent operation/search flags and pagination ABI.
-    #[allow(clippy::too_many_arguments)]
     fn query<T: DeserializeOwned>(
         &self,
         operation: std::ffi::c_int,
         input: &str,
-        fulltext: bool,
         offset: u32,
         limit: u32,
-        snippets: bool,
         cancel: Option<&CancellationToken>,
     ) -> Result<T, String> {
         if cancel.is_some_and(CancellationToken::is_cancelled) { return Err("Search cancelled".into()); }
@@ -447,10 +479,8 @@ impl Archive {
                     operation,
                     input.as_ptr(),
                     input.len(),
-                    i32::from(fulltext),
                     offset,
                     limit,
-                    i32::from(snippets),
                 )
             }
         };
@@ -463,16 +493,27 @@ impl Archive {
     }
 
     pub fn metadata(&self) -> Result<ArchiveMetadata, String> {
-        self.query(0, "", false, 0, 0, true, None)
+        self.read_metadata(None)
     }
 
     pub(crate) fn metadata_cancellable(&self, cancel: &CancellationToken) -> Result<ArchiveMetadata, String> {
-        self.query(0, "", false, 0, 0, true, Some(cancel))
+        self.read_metadata(Some(cancel))
+    }
+
+    pub(crate) fn search_capabilities(&self) -> Result<(bool, bool), String> {
+        self.search_reader.capabilities(None)
+    }
+
+    fn read_metadata(&self, cancel: Option<&CancellationToken>) -> Result<ArchiveMetadata, String> {
+        let mut metadata: ArchiveMetadata = self.query(0, "", 0, 0, cancel)?;
+        (metadata.has_fulltext_index, metadata.has_title_index) = self.search_reader.capabilities(cancel)?;
+        if cancel.is_some_and(CancellationToken::is_cancelled) { return Err("Search cancelled".into()); }
+        Ok(metadata)
     }
 
     /// Resolve redirects and return the canonical item path and MIME type.
     pub fn entry(&self, path: &str) -> Result<EntryInfo, String> {
-        self.query(1, path, false, 0, 0, true, None)
+        self.query(1, path, 0, 0, None)
     }
 
     /// Read at most length bytes. EOF is empty; offsets past EOF are errors.
@@ -525,11 +566,11 @@ impl Archive {
     }
 
     pub fn main_entry(&self) -> Result<EntryInfo, String> {
-        self.query(2, "", false, 0, 0, true, None)
+        self.query(2, "", 0, 0, None)
     }
 
     pub fn random_entry(&self) -> Result<EntryInfo, String> {
-        self.query(3, "", false, 0, 0, true, None)
+        self.query(3, "", 0, 0, None)
     }
 
     /// Whether the archive has at least one front article.
@@ -564,7 +605,8 @@ impl Archive {
     }
 
     /// Full-text mode requires an index; title mode uses suggestions with the
-    /// libzim title-prefix fallback. Snippets contain untrusted archive HTML.
+    /// title-prefix fallback. Snippets contain untrusted archive HTML.
+    #[cfg(any(test, all(feature = "android-evaluation", target_os = "android", debug_assertions)))]
     pub fn search(
         &self,
         query: &str,
@@ -572,11 +614,10 @@ impl Archive {
         offset: u32,
         limit: u32,
     ) -> Result<SearchResults, String> {
-        self.query(4, query, fulltext, offset, limit, true, None)
+        self.search_reader.page(query, fulltext, offset, limit, true, None)
     }
 
-    /// Interactive search checks its owner before and after the archive lock
-    /// and native call. An already running libzim operation cannot be preempted.
+    /// Interactive search observes cancellation while ranking and building the page.
     pub(crate) fn search_cancellable(
         &self,
         query: &str,
@@ -586,13 +627,13 @@ impl Archive {
         snippets: bool,
         cancel: &CancellationToken,
     ) -> Result<SearchResults, String> {
-        self.query(4, query, fulltext, offset, limit, snippets, Some(cancel))
+        self.search_reader.page(query, fulltext, offset, limit, snippets, Some(cancel))
     }
 
     /// Explicit background dictionary builders only, not interactive searches.
     /// Maximum 256 titles, each at most 16 KiB; offsets seek directly.
     pub fn title_batch(&self, offset: u32, limit: u32) -> Result<TitleBatch, String> {
-        self.query(7, "", false, offset, limit, true, None)
+        self.query(7, "", offset, limit, None)
     }
 
     /// Expensive: validates checksum and all libzim structural integrity checks.
@@ -611,18 +652,13 @@ impl Archive {
     fn check_integrity_with_cancel(&self, cancel: Option<&CancellationToken>,
         progress: &mut impl FnMut(u64, u64)) -> Result<bool, String> {
         integrity_cancel(cancel)?;
-        let mut handle = self.lock()?;
+        let handle = self.lock()?;
         integrity_cancel(cancel)?;
-        let operation = if let Some(files) = &mut handle.files {
-            if !retained_checksum_cancellable(files, cancel, progress)? { return Ok(false); }
-            8 // Native structural checks; the retained-byte checksum passed above.
-        } else {
-            5 // Filename-backed archives retain stock libzim's complete check.
-        };
+        if !retained_checksum_cancellable(&handle.parts, cancel, progress)? { return Ok(false); }
         integrity_cancel(cancel)?;
         // SAFETY: the same mutex serializes checksum reads, native checks, and
-        // destruction. No input buffer is required for either integrity opcode.
-        let response = unsafe { kz_query(handle.native.as_ptr(), operation, std::ptr::null(), 0, 0, 0, 0, 0) };
+        // destruction. No input buffer is required for the structural integrity opcode.
+        let response = unsafe { kz_query(handle.native.as_ptr(), 8, std::ptr::null(), 0, 0, 0) };
         integrity_cancel(cancel)?;
         response.check()?;
         serde_json::from_slice(response.bytes()?)
@@ -631,17 +667,17 @@ impl Archive {
 
     #[cfg(all(feature = "android-evaluation", target_os = "android", debug_assertions))]
     pub(crate) fn evaluation_checksum(&self) -> Result<bool, String> {
-        let mut handle = self.lock()?;
-        retained_checksum_cancellable(handle.files.as_mut().ok_or("Evaluation requires retained archive files")?, None, &mut |_, _| {})
+        let handle = self.lock()?;
+        retained_checksum_cancellable(&handle.parts, None, &mut |_, _| {})
     }
 
     #[cfg(all(feature = "android-evaluation", target_os = "android", debug_assertions))]
     pub(crate) fn evaluation_structure(&self) -> Result<bool, String> {
-        self.query(8, "", false, 0, 0, true, None)
+        self.query(8, "", 0, 0, None)
     }
 
     pub fn illustration(&self) -> Result<Option<(String, Vec<u8>)>, String> {
-        let info: Option<EntryInfo> = self.query(6, "", false, 0, 0, true, None)?;
+        let info: Option<EntryInfo> = self.query(6, "", 0, 0, None)?;
         match info {
             Some(info) => {
                 if info.size > 2 * 1024 * 1024 {
@@ -761,7 +797,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn sparse_large_raw_blob_preserves_bounded_u64_reads_and_following_blob() {
-        use std::io::Write;
+        use std::io::{Seek, SeekFrom, Write};
         let directory = std::env::temp_dir().join(format!("kiwix-large-range-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&directory).unwrap();
         struct Cleanup(std::path::PathBuf);
@@ -828,6 +864,28 @@ mod tests {
         assert!(archive.read("A/large.txt", blob_size + 1, 4).is_err());
         assert!(archive.read("A/large.txt", 0, blob_size).is_err());
         assert!(archive.read("A/large.txt", blob_size, 4).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discovered_split_part_must_be_a_regular_file() {
+        let directory = std::env::temp_dir().join(format!("kiwix-split-pipe-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let first = directory.join("book.zimaa");
+        std::fs::write(&first, b"first part").unwrap();
+        let fifo = directory.join("book.zimab");
+        assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+        let (sent, result) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || sent.send(Archive::open(&first)).unwrap());
+        let result = result.recv_timeout(std::time::Duration::from_secs(2));
+        if result.is_err() {
+            // Release a blocking reader so a regression cannot hold the suite.
+            use std::os::unix::fs::OpenOptionsExt;
+            let _ = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&fifo);
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+        assert_eq!(result.unwrap().unwrap_err(), INVALID_ARCHIVE);
+        thread.join().unwrap();
     }
 
     #[test]

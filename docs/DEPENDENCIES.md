@@ -132,3 +132,35 @@ On 2026-11-05 every registry crate in the lockfile was checked against crates.io
 ## Native (non-Rust) dependencies
 
 These do not appear in the Rust lockfile: libzim 9.8.2 and Xapian 1.4.32, which are source-built and pinned by SHA-256 in `scripts/build-android-sdk.py` and `scripts/build-desktop-sdk.py`, plus ICU, zstd, xz and zlib from the platform or SDK build. The iOS route pins libzim's archive in `scripts/build-ios-sdk.py` and takes only Xapian (still 1.4.23) from its pinned kiwix-build checkout. Platform WebViews (WebKitGTK, WebView2, WKWebView, Android System WebView) are runtime dependencies that the OS or the user updates.
+
+## Rust archive search
+
+The GPL Workbench app links two independent Rust libraries. Each Cargo dependency pins a separate history in the same private Git repository. Development of the MIT reader stays in the MIT checkout. Search, ranking and index building stay in the GPL checkout. The app only consumes the engine subcrate and the reader library. The MIT reader has its default writer feature disabled. Its optional C ABI and legacy file mapping are also disabled. The dependency lockfile records both full commit IDs.
+
+| Library | Source history | License and build |
+|---|---|---|
+| Zimru | [Positioned archive reader](https://github.com/jasontitus/zimru-xapian/tree/30e171038660edcac518e6144be2466dd8084d8f) | MIT. Split input uses bounded reads from retained files. |
+| zimfile-xapian | [Glass engine](https://github.com/jasontitus/zimru-xapian/tree/700791140150142445a5861c5118614a56130dbd/engine) | GPL-3.0-or-later. The app reads indexes. The companion workspace separately provides its index builder. |
+| Zstandard | Zimru's own `vendor/zstd-rs`, based on Avarok 0.1.0 at `bac4c37d86e5307537c145823a106f7ed8f386d7` | MIT OR Apache-2.0. The fork supplies bounded streaming decode and a single-frame writer. Use the vendored revision for comparisons. |
+
+The application bundle includes the MIT reader notice, both Avarok license texts, the Glass GPL license, and both Stopwords ISO notices. The MIT crate's normal dependency tree has no Glass edge. The historical Linux comparison used libzstd 1.5.7 and rustc 1.100.0. All ten tested codecs decoded the same 65 frames to 128,005,261 bytes. The zero-unsafe-site observation covered the selected builds of zstd-rs, yolowzstd and ms-compress-ruzstd and their codec runtime dependencies. It does not extend to the full reader, app, platform runtime or optional C ABI. [Codec provenance, measurements and reproduction](https://github.com/jasontitus/zimru-xapian/blob/ca5e62e965e0667120319906af2aee9791dc94fb/docs/rust-codecs.md)
+
+A clean build needs Git read access to the private dependencies and the usual matched native SDK. Developers using Git credential helpers can fetch the exact revisions and verify the boundary with these commands.
+
+```sh
+CARGO_NET_GIT_FETCH_WITH_CLI=true cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+cargo tree --offline --locked --manifest-path src-tauri/Cargo.toml -p zimru --edges normal
+cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib archive_search::
+```
+
+Trusted CI builds require the `ZIMRU_READ_TOKEN` repository secret with contents-read access to the private dependency repository only. The checkout token for Kiwix alone cannot read those dependencies. Forks without access can build the independent connector and frontend. A trusted checkout is required to run the private Rust integration. Private source access must be arranged before publishing a downstream build.
+
+The native CJK repeat on the private GPL commit matched the previous checkpoint. Xapian 1.4 matched all 63 ordinary queries and 6 of 12 rare-Han queries. Xapian 2.0 matched 61 of 63 ordinary queries and 6 of 12 rare-Han queries. The two additional differences were fullwidth queries. The writer's separate experiment rebuilt three whole archives at two levels and two worker counts. Its level-19 output stayed within 0.44% of native archive size on these three inputs. Both the production writer and the app pin exclude that experiment. [Writer measurements, peak memory, extraction and reproduction](https://github.com/jasontitus/zimru-xapian/blob/0a44dcf3740cbe4466903d02e98bb87fd0c189db/docs/writer-benchmark-20261118.md)
+
+A separate MIT decoder experiment used about 6–7% less CPU than production Rust across three Apple Silicon archives. Native decoding was faster on all three. The experimental patch stayed outside the app pin. A level-3 single-worker recheck on this host compressed the first 3 MiB of native-decoded Climate text twice to 719,349 bytes in Rust and 716,882 natively. Nollywood produced 775,446 and 774,167 bytes respectively. All six native, production Rust and experimental writer outputs decoded to their complete source bytes. The earlier Linux run produced much smaller native controls on its repeated input. Reproducing those control settings and bytes remains necessary to explain the reported twofold size gap. [Decoder measurements and reproduction](https://github.com/jasontitus/zimru-xapian/blob/d296c58e5f6bd06f1de683cf725a4f5cac14304c/docs/decoder-benchmark-20261118.md)
+
+Independent reviewers followed search from the app and sharing endpoints through retained file ownership, logical split offsets, index limits, result ranking, title resolution, excerpt generation, cancellation and cleanup. Review fixes included a positional title-table lookup, a limit on the cluster-offset allocation during search, cancellable cache waiters, regular-file checks on discovered split parts and shared snippet escaping. Regression tests exercise truncation after cache warmup, replacement after a named open, cross-part index and checksum reads, redirected index entries, offsets and retained file lifetimes.
+
+The Apple Silicon host run passed 1,183 app library tests with the desktop custom protocol enabled. Twenty tests were marked ignored. Clippy passed with warnings denied. Cargo-deny passed its advisory, source, license and ban policies for all seven configured shipping targets. The desktop build staged six license files byte-for-byte from the reviewed sources. Hosted credential provisioning, installed Windows/mobile app behavior, and physical-device performance remain unverified.
+
+The final macOS release-build comparison found the same ordered paths, titles and next-page flags as native search on all 31 query cases across four archives. Both 50-result pages also matched in full. For the Simple Wikipedia “solar system” page with excerpts, first-request latency went from 104.1 to 95.6 ms and warm median latency from 79.4 to 8.7 ms. For Wikipedia 100 “water”, the corresponding values went from 252.4 to 117.5 ms and from 221.4 to 14.0 ms. These are host measurements with a warm filesystem. The first request refers to application caches. A browser test opened “Ray Charles in Person” from search results and verified the rendered article text. Native estimates and Rust hit counts can differ, particularly for title suggestions. [Host comparison and limitations](benchmarks/2026-11-18-rust-archive-search.json)
