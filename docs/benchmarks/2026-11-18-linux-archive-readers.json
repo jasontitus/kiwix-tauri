@@ -1,0 +1,3296 @@
+{
+ "cache_bytes": "4194304",
+ "native_xapian_preload": false,
+ "host": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+ "rounds": 8,
+ "driver_sha256": {
+  "libzim": "c6026b2323b46f33c1df18f3b49f04361c27a146bf85579adaabdf11c68e2c7a",
+  "zimru": "1659d163a0fce6fdcb5549a1ca6c8bb2d46e66ce4f7be7b6cfe6897f4e9817bc"
+ },
+ "archives": [
+  {
+   "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+   "size": 8978471,
+   "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 8622,
+     "path": "The_Green_Grid",
+     "title": "The Green Grid"
+    },
+    {
+     "kind": "html",
+     "size": 5365,
+     "path": "Leipzig_Declaration",
+     "title": "Leipzig Declaration"
+    },
+    {
+     "kind": "html",
+     "size": 4535,
+     "path": "Drawdown_(book)",
+     "title": "Drawdown (book)"
+    },
+    {
+     "kind": "html",
+     "size": 4720,
+     "path": "Land_cover",
+     "title": "Land cover"
+    },
+    {
+     "kind": "html",
+     "size": 10190,
+     "path": "2015_United_Nations_Climate_Change_Conference",
+     "title": "2015 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 9539,
+     "path": "Öko-Institut",
+     "title": "Öko-Institut"
+    },
+    {
+     "kind": "html",
+     "size": 3778,
+     "path": "Drought_in_Chile",
+     "title": "Drought in Chile"
+    },
+    {
+     "kind": "html",
+     "size": 7447,
+     "path": "Evelyn_Acham",
+     "title": "Evelyn Acham"
+    },
+    {
+     "kind": "html",
+     "size": 7332,
+     "path": "2013_United_Nations_Climate_Change_Conference",
+     "title": "2013 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 11954,
+     "path": "Nature_Climate_Change",
+     "title": "Nature Climate Change"
+    },
+    {
+     "kind": "html",
+     "size": 6733,
+     "path": "Build_Back_Better_World",
+     "title": "Build Back Better World"
+    },
+    {
+     "kind": "html",
+     "size": 6428,
+     "path": "Renewable_energy_in_Kenya",
+     "title": "Renewable energy in Kenya"
+    },
+    {
+     "kind": "html",
+     "size": 6107,
+     "path": "Nationally_determined_contribution",
+     "title": "Nationally determined contribution"
+    },
+    {
+     "kind": "html",
+     "size": 4858,
+     "path": "Esi_Buobasa",
+     "title": "Esi Buobasa"
+    },
+    {
+     "kind": "html",
+     "size": 8826,
+     "path": "Oceanic_Platform_of_the_Canary_Islands",
+     "title": "Oceanic Platform of the Canary Islands"
+    },
+    {
+     "kind": "html",
+     "size": 4293,
+     "path": "Lower_Manhattan_Coastal_Resiliency",
+     "title": "Lower Manhattan Coastal Resiliency"
+    },
+    {
+     "kind": "html",
+     "size": 5165,
+     "path": "Dorjee_Sun",
+     "title": "Dorjee Sun"
+    },
+    {
+     "kind": "html",
+     "size": 5071,
+     "path": "Landfill_gas",
+     "title": "Landfill gas"
+    },
+    {
+     "kind": "html",
+     "size": 5003,
+     "path": "Internal_wave_breaking",
+     "title": "Internal wave breaking"
+    },
+    {
+     "kind": "html",
+     "size": 4353,
+     "path": "Energy_policy_of_Scotland",
+     "title": "Energy policy of Scotland"
+    },
+    {
+     "kind": "html",
+     "size": 14131,
+     "path": "Gina_McCarthy",
+     "title": "Gina McCarthy"
+    },
+    {
+     "kind": "html",
+     "size": 7187,
+     "path": "Greenhouse_gas_emissions_by_Russia",
+     "title": "Greenhouse gas emissions by Russia"
+    },
+    {
+     "kind": "html",
+     "size": 5801,
+     "path": "Jem_Bendell",
+     "title": "Jem Bendell"
+    },
+    {
+     "kind": "html",
+     "size": 27839,
+     "path": "2022_Brazilian_general_election",
+     "title": "2022 Brazilian general election"
+    },
+    {
+     "kind": "media",
+     "size": 8348,
+     "path": "f8aab0483f099f025d5fe7174146ee315f166b31.svg",
+     "title": "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+    },
+    {
+     "kind": "media",
+     "size": 24566,
+     "path": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp",
+     "title": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18074,
+     "path": "Tipping_points_2022_list.jpeg.webp",
+     "title": "Tipping_points_2022_list.jpeg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 43186,
+     "path": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp",
+     "title": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 20486,
+     "path": "Bloczek_betonowy.jpg.webp",
+     "title": "Bloczek_betonowy.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 37446,
+     "path": "Lamb_meat_(1).jpg.webp",
+     "title": "Lamb_meat_(1).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 21312,
+     "path": "District_heating_plant_spittelau_ssw_crop1.png.webp",
+     "title": "District_heating_plant_spittelau_ssw_crop1.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 10504,
+     "path": "World_map_indicating_tropics_and_subtropics.png.webp",
+     "title": "World_map_indicating_tropics_and_subtropics.png.webp"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3130438,
+        "api_open_plus_work_ns": 3130438,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3130438,
+        "process_ns": 5840728,
+        "cpu_ns": 5746000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3161253,
+        "api_open_plus_work_ns": 3161253,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3161253,
+        "process_ns": 5771678,
+        "cpu_ns": 5620000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3181420,
+        "api_open_plus_work_ns": 3181420,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3181420,
+        "process_ns": 5820589,
+        "cpu_ns": 5727000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3138744,
+        "api_open_plus_work_ns": 3138744,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3138744,
+        "process_ns": 5784436,
+        "cpu_ns": 5631000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3140647,
+        "api_open_plus_work_ns": 3140647,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3140647,
+        "process_ns": 5849860,
+        "cpu_ns": 5724000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3069456,
+        "api_open_plus_work_ns": 3069456,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3069456,
+        "process_ns": 5724335,
+        "cpu_ns": 5577000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3248788,
+        "api_open_plus_work_ns": 3248788,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3248788,
+        "process_ns": 5805442,
+        "cpu_ns": 5716000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3410579,
+        "api_open_plus_work_ns": 3410579,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 3410579,
+        "process_ns": 5914722,
+        "cpu_ns": 5796000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 28987,
+        "api_open_plus_work_ns": 28987,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 28987,
+        "process_ns": 854828,
+        "cpu_ns": 760000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 37636,
+        "api_open_plus_work_ns": 37636,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 37636,
+        "process_ns": 877955,
+        "cpu_ns": 775000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 30736,
+        "api_open_plus_work_ns": 30736,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 30736,
+        "process_ns": 801341,
+        "cpu_ns": 706000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34370,
+        "api_open_plus_work_ns": 34370,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 34370,
+        "process_ns": 844332,
+        "cpu_ns": 752000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 28912,
+        "api_open_plus_work_ns": 28912,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 28912,
+        "process_ns": 818174,
+        "cpu_ns": 700000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 35301,
+        "api_open_plus_work_ns": 35301,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 35301,
+        "process_ns": 865855,
+        "cpu_ns": 765000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 28851,
+        "api_open_plus_work_ns": 28851,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 28851,
+        "process_ns": 812695,
+        "cpu_ns": 720000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32402,
+        "api_open_plus_work_ns": 32402,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 32402,
+        "process_ns": 786444,
+        "cpu_ns": 692000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "36949a688cc7ba42f310039dac3bf1f0a6b76284e40b03a68ad6999a9b207723",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3182105,
+        "api_open_plus_work_ns": 5805383,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2623278,
+        "process_ns": 8954693,
+        "cpu_ns": 8767000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3238629,
+        "api_open_plus_work_ns": 5822992,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2584363,
+        "process_ns": 8861848,
+        "cpu_ns": 8745000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3307620,
+        "api_open_plus_work_ns": 5904363,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2596743,
+        "process_ns": 9056765,
+        "cpu_ns": 8938000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3165786,
+        "api_open_plus_work_ns": 5680059,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2514273,
+        "process_ns": 8792233,
+        "cpu_ns": 8617000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3150113,
+        "api_open_plus_work_ns": 5697019,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2546906,
+        "process_ns": 8795713,
+        "cpu_ns": 8680000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3119742,
+        "api_open_plus_work_ns": 5637357,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2517615,
+        "process_ns": 8598184,
+        "cpu_ns": 8480000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3260670,
+        "api_open_plus_work_ns": 5894966,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2634296,
+        "process_ns": 9178449,
+        "cpu_ns": 9016000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3255323,
+        "api_open_plus_work_ns": 5882362,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 2627039,
+        "process_ns": 9012869,
+        "cpu_ns": 8887000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 34523,
+        "api_open_plus_work_ns": 4234042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4199519,
+        "process_ns": 5336064,
+        "cpu_ns": 5167000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 33306,
+        "api_open_plus_work_ns": 4256533,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4223227,
+        "process_ns": 5254632,
+        "cpu_ns": 5118000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32218,
+        "api_open_plus_work_ns": 4352742,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4320524,
+        "process_ns": 5383841,
+        "cpu_ns": 5268000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 38332,
+        "api_open_plus_work_ns": 4129900,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4091568,
+        "process_ns": 5172732,
+        "cpu_ns": 5057000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32551,
+        "api_open_plus_work_ns": 4125712,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4093161,
+        "process_ns": 5125750,
+        "cpu_ns": 5007000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 38041,
+        "api_open_plus_work_ns": 4305713,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4267672,
+        "process_ns": 5304080,
+        "cpu_ns": 5148000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 35109,
+        "api_open_plus_work_ns": 4277642,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4242533,
+        "process_ns": 5349828,
+        "cpu_ns": 5197000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34340,
+        "api_open_plus_work_ns": 4261878,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 4227538,
+        "process_ns": 5302634,
+        "cpu_ns": 5182000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "c4d559ddc7b643fa6410154efb9cecc59135413f0ea7d7d3256a0338da5e14d1",
+     "response_bytes": 8630
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3217324,
+        "api_open_plus_work_ns": 3271144,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 53820,
+        "process_ns": 9290843,
+        "cpu_ns": 9167000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3356857,
+        "api_open_plus_work_ns": 3387506,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30649,
+        "process_ns": 9251576,
+        "cpu_ns": 9055000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3243830,
+        "api_open_plus_work_ns": 3274423,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30593,
+        "process_ns": 9314456,
+        "cpu_ns": 9174000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3271234,
+        "api_open_plus_work_ns": 3315454,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 44220,
+        "process_ns": 9192495,
+        "cpu_ns": 9075000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3253100,
+        "api_open_plus_work_ns": 3284054,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30954,
+        "process_ns": 9409129,
+        "cpu_ns": 9276000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3274469,
+        "api_open_plus_work_ns": 3305071,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30602,
+        "process_ns": 9278342,
+        "cpu_ns": 9147000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3248707,
+        "api_open_plus_work_ns": 3279577,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30870,
+        "process_ns": 9401626,
+        "cpu_ns": 9237000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3264872,
+        "api_open_plus_work_ns": 3295370,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 30498,
+        "process_ns": 9375525,
+        "cpu_ns": 9150000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 29939,
+        "api_open_plus_work_ns": 93165,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 63226,
+        "process_ns": 5646320,
+        "cpu_ns": 5478000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 40820,
+        "api_open_plus_work_ns": 102280,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 61460,
+        "process_ns": 5603308,
+        "cpu_ns": 5483000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 39626,
+        "api_open_plus_work_ns": 101043,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 61417,
+        "process_ns": 5660324,
+        "cpu_ns": 5476000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 40571,
+        "api_open_plus_work_ns": 100703,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 60132,
+        "process_ns": 5581081,
+        "cpu_ns": 5455000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 35074,
+        "api_open_plus_work_ns": 96860,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 61786,
+        "process_ns": 5651499,
+        "cpu_ns": 5534000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 36362,
+        "api_open_plus_work_ns": 98249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 61887,
+        "process_ns": 5671084,
+        "cpu_ns": 5517000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32215,
+        "api_open_plus_work_ns": 100158,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 67943,
+        "process_ns": 5661867,
+        "cpu_ns": 5514000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 35418,
+        "api_open_plus_work_ns": 113687,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 78269,
+        "process_ns": 5622544,
+        "cpu_ns": 5500000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "7b339a20ff64327c0240984cf274a031a8265fd909d9313fc4091e35dbc5ea9d",
+     "response_bytes": 276160
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       5365,
+       "Leipzig_Declaration"
+      ],
+      [
+       0,
+       4535,
+       "Drawdown_(book)"
+      ],
+      [
+       0,
+       4720,
+       "Land_cover"
+      ],
+      [
+       0,
+       10190,
+       "2015_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       9539,
+       "Öko-Institut"
+      ],
+      [
+       0,
+       3778,
+       "Drought_in_Chile"
+      ],
+      [
+       0,
+       7447,
+       "Evelyn_Acham"
+      ],
+      [
+       0,
+       7332,
+       "2013_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       11954,
+       "Nature_Climate_Change"
+      ],
+      [
+       0,
+       6733,
+       "Build_Back_Better_World"
+      ],
+      [
+       0,
+       6428,
+       "Renewable_energy_in_Kenya"
+      ],
+      [
+       0,
+       6107,
+       "Nationally_determined_contribution"
+      ],
+      [
+       0,
+       4858,
+       "Esi_Buobasa"
+      ],
+      [
+       0,
+       8826,
+       "Oceanic_Platform_of_the_Canary_Islands"
+      ],
+      [
+       0,
+       4293,
+       "Lower_Manhattan_Coastal_Resiliency"
+      ],
+      [
+       0,
+       5165,
+       "Dorjee_Sun"
+      ],
+      [
+       0,
+       5071,
+       "Landfill_gas"
+      ],
+      [
+       0,
+       5003,
+       "Internal_wave_breaking"
+      ],
+      [
+       0,
+       4353,
+       "Energy_policy_of_Scotland"
+      ],
+      [
+       0,
+       14131,
+       "Gina_McCarthy"
+      ],
+      [
+       0,
+       7187,
+       "Greenhouse_gas_emissions_by_Russia"
+      ],
+      [
+       0,
+       5801,
+       "Jem_Bendell"
+      ],
+      [
+       0,
+       27839,
+       "2022_Brazilian_general_election"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3189651,
+        "api_open_plus_work_ns": 32961288,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29771637,
+        "process_ns": 37304303,
+        "cpu_ns": 36751000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3391614,
+        "api_open_plus_work_ns": 33615338,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 30223724,
+        "process_ns": 38144987,
+        "cpu_ns": 37634000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3164513,
+        "api_open_plus_work_ns": 32548361,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29383848,
+        "process_ns": 36964550,
+        "cpu_ns": 36374000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3176576,
+        "api_open_plus_work_ns": 32504125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29327549,
+        "process_ns": 36604779,
+        "cpu_ns": 36056000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3220296,
+        "api_open_plus_work_ns": 32371211,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29150915,
+        "process_ns": 36865897,
+        "cpu_ns": 36163000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3191164,
+        "api_open_plus_work_ns": 32715877,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29524713,
+        "process_ns": 36972234,
+        "cpu_ns": 36197000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3210800,
+        "api_open_plus_work_ns": 32760986,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29550186,
+        "process_ns": 36999091,
+        "cpu_ns": 36376000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3376278,
+        "api_open_plus_work_ns": 32971840,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 29595562,
+        "process_ns": 37331170,
+        "cpu_ns": 36853000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 32593,
+        "api_open_plus_work_ns": 57223396,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57190803,
+        "process_ns": 59271499,
+        "cpu_ns": 59104000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 40740,
+        "api_open_plus_work_ns": 61911320,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 61870580,
+        "process_ns": 64113510,
+        "cpu_ns": 63432000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 33032,
+        "api_open_plus_work_ns": 57203856,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57170824,
+        "process_ns": 59229824,
+        "cpu_ns": 59060000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 33129,
+        "api_open_plus_work_ns": 57640464,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57607335,
+        "process_ns": 59727727,
+        "cpu_ns": 59540000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 31589,
+        "api_open_plus_work_ns": 57408892,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57377303,
+        "process_ns": 59483391,
+        "cpu_ns": 59253000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32828,
+        "api_open_plus_work_ns": 57609775,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57576947,
+        "process_ns": 59787285,
+        "cpu_ns": 59630000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 28794,
+        "api_open_plus_work_ns": 57185212,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 57156418,
+        "process_ns": 59249695,
+        "cpu_ns": 59085000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 33662,
+        "api_open_plus_work_ns": 58073738,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 58040076,
+        "process_ns": 60197242,
+        "cpu_ns": 60028000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+     "response_bytes": 185469
+    },
+    "title_prefixes": {
+     "requested": [
+      [
+       0,
+       0,
+       "The"
+      ],
+      [
+       0,
+       0,
+       "Lei"
+      ],
+      [
+       0,
+       0,
+       "Dra"
+      ],
+      [
+       0,
+       0,
+       "Lan"
+      ],
+      [
+       0,
+       0,
+       "201"
+      ],
+      [
+       0,
+       0,
+       "Öko"
+      ],
+      [
+       0,
+       0,
+       "Dro"
+      ],
+      [
+       0,
+       0,
+       "Eve"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3149238,
+        "api_open_plus_work_ns": 3318957,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 169719,
+        "process_ns": 6119224,
+        "cpu_ns": 6022000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3244693,
+        "api_open_plus_work_ns": 3413436,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 168743,
+        "process_ns": 6078649,
+        "cpu_ns": 5943000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3124598,
+        "api_open_plus_work_ns": 3291916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 167318,
+        "process_ns": 6036909,
+        "cpu_ns": 5925000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3145380,
+        "api_open_plus_work_ns": 3369218,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 223838,
+        "process_ns": 6028614,
+        "cpu_ns": 5898000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3142095,
+        "api_open_plus_work_ns": 3311778,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 169683,
+        "process_ns": 6036595,
+        "cpu_ns": 5938000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3176734,
+        "api_open_plus_work_ns": 3417032,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 240298,
+        "process_ns": 6063273,
+        "cpu_ns": 5992000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3154729,
+        "api_open_plus_work_ns": 3322049,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 167320,
+        "process_ns": 6122382,
+        "cpu_ns": 5997000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3106373,
+        "api_open_plus_work_ns": 3276050,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 169677,
+        "process_ns": 5959104,
+        "cpu_ns": 5859000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 26753,
+        "api_open_plus_work_ns": 317109,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 290356,
+        "process_ns": 1176078,
+        "cpu_ns": 1080000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 31214,
+        "api_open_plus_work_ns": 373943,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 342729,
+        "process_ns": 1231019,
+        "cpu_ns": 1128000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 31592,
+        "api_open_plus_work_ns": 315267,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 283675,
+        "process_ns": 1206357,
+        "cpu_ns": 1113000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 36833,
+        "api_open_plus_work_ns": 329744,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 292911,
+        "process_ns": 1283571,
+        "cpu_ns": 1154000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34575,
+        "api_open_plus_work_ns": 316855,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 282280,
+        "process_ns": 1197008,
+        "cpu_ns": 1100000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 31986,
+        "api_open_plus_work_ns": 325905,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 293919,
+        "process_ns": 1305733,
+        "cpu_ns": 1198000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 29144,
+        "api_open_plus_work_ns": 322017,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 292873,
+        "process_ns": 1190678,
+        "cpu_ns": 1093000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 32547,
+        "api_open_plus_work_ns": 323914,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 291367,
+        "process_ns": 1185129,
+        "cpu_ns": 1095000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "7b7f6560143fd11b0cbfa415e7d297a7b41a1514372a6d0d8dcf5c7741eca0fa",
+     "response_bytes": 1344
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4174,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       4252,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       12283,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       20470,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       9037,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       13978,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       21593,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       39090,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       10243,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       16390,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       18723,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       33350,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       10656,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       17216,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       5252,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ],
+      [
+       6408,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3282798,
+        "api_open_plus_work_ns": 7219023,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3936225,
+        "process_ns": 10567742,
+        "cpu_ns": 10436000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3249434,
+        "api_open_plus_work_ns": 7131683,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3882249,
+        "process_ns": 10384076,
+        "cpu_ns": 10256000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3237385,
+        "api_open_plus_work_ns": 7196339,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3958954,
+        "process_ns": 10638374,
+        "cpu_ns": 10523000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3191972,
+        "api_open_plus_work_ns": 7159226,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3967254,
+        "process_ns": 10394508,
+        "cpu_ns": 10185000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3243027,
+        "api_open_plus_work_ns": 7112074,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3869047,
+        "process_ns": 10523817,
+        "cpu_ns": 10378000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3197426,
+        "api_open_plus_work_ns": 7138395,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3940969,
+        "process_ns": 10426412,
+        "cpu_ns": 10283000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3370880,
+        "api_open_plus_work_ns": 7342237,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3971357,
+        "process_ns": 10702506,
+        "cpu_ns": 10549000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 3277317,
+        "api_open_plus_work_ns": 7130324,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 3853007,
+        "process_ns": 10361079,
+        "cpu_ns": 10235000,
+        "peak_rss_bytes": 27656192
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 32049,
+        "api_open_plus_work_ns": 5091464,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5059415,
+        "process_ns": 6231044,
+        "cpu_ns": 6085000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 37115,
+        "api_open_plus_work_ns": 5180394,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5143279,
+        "process_ns": 6312828,
+        "cpu_ns": 6190000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34157,
+        "api_open_plus_work_ns": 5257182,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5223025,
+        "process_ns": 6340414,
+        "cpu_ns": 6151000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 36482,
+        "api_open_plus_work_ns": 5140564,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5104082,
+        "process_ns": 6334657,
+        "cpu_ns": 6165000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34682,
+        "api_open_plus_work_ns": 5176397,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5141715,
+        "process_ns": 6312029,
+        "cpu_ns": 6193000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 37028,
+        "api_open_plus_work_ns": 5130698,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5093670,
+        "process_ns": 6253053,
+        "cpu_ns": 6137000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 28794,
+        "api_open_plus_work_ns": 5165133,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5136339,
+        "process_ns": 6348346,
+        "cpu_ns": 6178000,
+        "peak_rss_bytes": 27656192
+       },
+       {
+        "open_ns": 34225,
+        "api_open_plus_work_ns": 5211001,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 5176776,
+        "process_ns": 6339907,
+        "cpu_ns": 6218000,
+        "peak_rss_bytes": 27656192
+       }
+      ]
+     },
+     "response_sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+     "response_bytes": 65664
+    }
+   }
+  },
+  {
+   "file": "wikipedia_en_100_maxi_2024-01.zim",
+   "size": 36522122,
+   "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+   "selected": [
+    {
+     "kind": "media",
+     "size": 9196,
+     "path": "I/HK_Chater_Road_LegCo_view.jpg.webp",
+     "title": "HK_Chater_Road_LegCo_view.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 15010,
+     "path": "I/Sheldonbasking.JPG.webp",
+     "title": "Sheldonbasking.JPG.webp"
+    },
+    {
+     "kind": "html",
+     "size": 341585,
+     "path": "A/Amazon_(company)",
+     "title": "Amazon (company)"
+    },
+    {
+     "kind": "html",
+     "size": 273079,
+     "path": "A/Solar_eclipse",
+     "title": "Solar eclipse"
+    },
+    {
+     "kind": "media",
+     "size": 15386,
+     "path": "I/Autosomal_recessive_-_mini.svg.png.webp",
+     "title": "Autosomal_recessive_-_mini.svg.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18586,
+     "path": "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp",
+     "title": "Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9320,
+     "path": "I/Virtual-camera-system.png.webp",
+     "title": "Virtual-camera-system.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 11174,
+     "path": "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp",
+     "title": "Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 571067,
+     "path": "A/William_Shakespeare",
+     "title": "William Shakespeare"
+    },
+    {
+     "kind": "media",
+     "size": 8522,
+     "path": "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp",
+     "title": "Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 580073,
+     "path": "A/Elizabeth_II",
+     "title": "Elizabeth II"
+    },
+    {
+     "kind": "media",
+     "size": 11266,
+     "path": "I/Gills1894.jpg.webp",
+     "title": "Gills1894.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 204716,
+     "path": "A/List_of_presidents_of_the_United_States",
+     "title": "List of presidents of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 423983,
+     "path": "A/Tiger",
+     "title": "Tiger"
+    },
+    {
+     "kind": "html",
+     "size": 662946,
+     "path": "A/Evolution",
+     "title": "Evolution"
+    },
+    {
+     "kind": "html",
+     "size": 527339,
+     "path": "A/Aristotle",
+     "title": "Aristotle"
+    },
+    {
+     "kind": "html",
+     "size": 160033,
+     "path": "A/Anatomical_terms_of_location",
+     "title": "Anatomical terms of location"
+    },
+    {
+     "kind": "html",
+     "size": 152636,
+     "path": "A/Midfielder",
+     "title": "Midfielder"
+    },
+    {
+     "kind": "html",
+     "size": 822971,
+     "path": "A/Native_Americans_in_the_United_States",
+     "title": "Native Americans in the United States"
+    },
+    {
+     "kind": "html",
+     "size": 115653,
+     "path": "A/World_Heritage_Site",
+     "title": "World Heritage Site"
+    },
+    {
+     "kind": "html",
+     "size": 281698,
+     "path": "A/List_of_national_parks_of_the_United_States",
+     "title": "List of national parks of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 245866,
+     "path": "A/Anfield",
+     "title": "Anfield"
+    },
+    {
+     "kind": "html",
+     "size": 661825,
+     "path": "A/African_Americans",
+     "title": "African Americans"
+    },
+    {
+     "kind": "html",
+     "size": 423071,
+     "path": "A/Virus",
+     "title": "Virus"
+    },
+    {
+     "kind": "html",
+     "size": 476260,
+     "path": "A/Bat",
+     "title": "Bat"
+    },
+    {
+     "kind": "html",
+     "size": 357162,
+     "path": "A/Rodent",
+     "title": "Rodent"
+    },
+    {
+     "kind": "html",
+     "size": 856565,
+     "path": "A/YouTube",
+     "title": "YouTube"
+    },
+    {
+     "kind": "html",
+     "size": 805848,
+     "path": "A/Martin_Luther_King_Jr.",
+     "title": "Martin Luther King Jr."
+    },
+    {
+     "kind": "html",
+     "size": 462181,
+     "path": "A/Dublin",
+     "title": "Dublin"
+    },
+    {
+     "kind": "html",
+     "size": 614430,
+     "path": "A/Elvis_Presley",
+     "title": "Elvis Presley"
+    },
+    {
+     "kind": "html",
+     "size": 317012,
+     "path": "A/Plant",
+     "title": "Plant"
+    },
+    {
+     "kind": "html",
+     "size": 326611,
+     "path": "A/Carl_Linnaeus",
+     "title": "Carl Linnaeus"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2987867,
+        "api_open_plus_work_ns": 2987867,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2987867,
+        "process_ns": 5623863,
+        "cpu_ns": 5530000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3008060,
+        "api_open_plus_work_ns": 3008060,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3008060,
+        "process_ns": 5546126,
+        "cpu_ns": 5418000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3027726,
+        "api_open_plus_work_ns": 3027726,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3027726,
+        "process_ns": 5622450,
+        "cpu_ns": 5538000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3034961,
+        "api_open_plus_work_ns": 3034961,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3034961,
+        "process_ns": 5629591,
+        "cpu_ns": 5538000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3082676,
+        "api_open_plus_work_ns": 3082676,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3082676,
+        "process_ns": 5669118,
+        "cpu_ns": 5575000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3132321,
+        "api_open_plus_work_ns": 3132321,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3132321,
+        "process_ns": 5678671,
+        "cpu_ns": 5580000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3492829,
+        "api_open_plus_work_ns": 3492829,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3492829,
+        "process_ns": 6304626,
+        "cpu_ns": 6209000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3811233,
+        "api_open_plus_work_ns": 3811233,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 3811233,
+        "process_ns": 6857362,
+        "cpu_ns": 6748000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 26488,
+        "api_open_plus_work_ns": 26488,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 26488,
+        "process_ns": 818471,
+        "cpu_ns": 718000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32604,
+        "api_open_plus_work_ns": 32604,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 32604,
+        "process_ns": 866240,
+        "cpu_ns": 745000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 30525,
+        "api_open_plus_work_ns": 30525,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 30525,
+        "process_ns": 774334,
+        "cpu_ns": 686000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35361,
+        "api_open_plus_work_ns": 35361,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 35361,
+        "process_ns": 824511,
+        "cpu_ns": 727000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 28926,
+        "api_open_plus_work_ns": 28926,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 28926,
+        "process_ns": 793219,
+        "cpu_ns": 705000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33689,
+        "api_open_plus_work_ns": 33689,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 33689,
+        "process_ns": 839893,
+        "cpu_ns": 739000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 36730,
+        "api_open_plus_work_ns": 36730,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 36730,
+        "process_ns": 832440,
+        "cpu_ns": 704000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 40186,
+        "api_open_plus_work_ns": 40186,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 40186,
+        "process_ns": 966765,
+        "cpu_ns": 854000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "1cedf2a54ce349c8cde927ffe5a9311e9060556bc4afde27cc9366f71c1aecd6",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3705932,
+        "api_open_plus_work_ns": 6057154,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 2351222,
+        "process_ns": 9637952,
+        "cpu_ns": 9506000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3701593,
+        "api_open_plus_work_ns": 6024508,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 2322915,
+        "process_ns": 9422310,
+        "cpu_ns": 9297000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 2987072,
+        "api_open_plus_work_ns": 4863699,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1876627,
+        "process_ns": 7840367,
+        "cpu_ns": 7710000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3052854,
+        "api_open_plus_work_ns": 4908643,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1855789,
+        "process_ns": 7701297,
+        "cpu_ns": 7574000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3087152,
+        "api_open_plus_work_ns": 4998438,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1911286,
+        "process_ns": 8165045,
+        "cpu_ns": 8050000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3080363,
+        "api_open_plus_work_ns": 4984408,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1904045,
+        "process_ns": 7835915,
+        "cpu_ns": 7715000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3086288,
+        "api_open_plus_work_ns": 4995108,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1908820,
+        "process_ns": 8007528,
+        "cpu_ns": 7886000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3089001,
+        "api_open_plus_work_ns": 4994861,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1905860,
+        "process_ns": 7897061,
+        "cpu_ns": 7787000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 42062,
+        "api_open_plus_work_ns": 6911944,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 6869882,
+        "process_ns": 8142532,
+        "cpu_ns": 7918000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 44486,
+        "api_open_plus_work_ns": 6199633,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 6155147,
+        "process_ns": 7377912,
+        "cpu_ns": 7218000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 34810,
+        "api_open_plus_work_ns": 5436973,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5402163,
+        "process_ns": 6446374,
+        "cpu_ns": 6333000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 34093,
+        "api_open_plus_work_ns": 5573244,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5539151,
+        "process_ns": 6655721,
+        "cpu_ns": 6533000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31708,
+        "api_open_plus_work_ns": 5580014,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5548306,
+        "process_ns": 6611522,
+        "cpu_ns": 6405000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 34718,
+        "api_open_plus_work_ns": 5608862,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5574144,
+        "process_ns": 6600590,
+        "cpu_ns": 6484000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 80098,
+        "api_open_plus_work_ns": 5650027,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5569929,
+        "process_ns": 6652905,
+        "cpu_ns": 6451000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35940,
+        "api_open_plus_work_ns": 5557229,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 5521289,
+        "process_ns": 6533870,
+        "cpu_ns": 6420000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "1e7b748c5c9bbf68f732946b053ed4bd28d3bbfdb151b0b7a3781f9f29da1a33",
+     "response_bytes": 65544
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3019009,
+        "api_open_plus_work_ns": 3099025,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 80016,
+        "process_ns": 8924142,
+        "cpu_ns": 8799000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3106999,
+        "api_open_plus_work_ns": 3186497,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 79498,
+        "process_ns": 8908084,
+        "cpu_ns": 8672000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3039975,
+        "api_open_plus_work_ns": 3117466,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 77491,
+        "process_ns": 9239864,
+        "cpu_ns": 9065000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3066554,
+        "api_open_plus_work_ns": 3146169,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 79615,
+        "process_ns": 8994220,
+        "cpu_ns": 8868000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3161321,
+        "api_open_plus_work_ns": 3239526,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 78205,
+        "process_ns": 9268487,
+        "cpu_ns": 9121000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3072298,
+        "api_open_plus_work_ns": 3151149,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 78851,
+        "process_ns": 8951437,
+        "cpu_ns": 8829000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3080927,
+        "api_open_plus_work_ns": 3193275,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 112348,
+        "process_ns": 9105922,
+        "cpu_ns": 8983000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3077629,
+        "api_open_plus_work_ns": 3158493,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 80864,
+        "process_ns": 9045935,
+        "cpu_ns": 8865000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 30070,
+        "api_open_plus_work_ns": 126029,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 95959,
+        "process_ns": 7498495,
+        "cpu_ns": 7301000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31667,
+        "api_open_plus_work_ns": 128427,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 96760,
+        "process_ns": 7493579,
+        "cpu_ns": 7365000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 37842,
+        "api_open_plus_work_ns": 133382,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 95540,
+        "process_ns": 7511792,
+        "cpu_ns": 7386000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 38192,
+        "api_open_plus_work_ns": 135510,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 97318,
+        "process_ns": 7560955,
+        "cpu_ns": 7397000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35287,
+        "api_open_plus_work_ns": 134498,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 99211,
+        "process_ns": 7615638,
+        "cpu_ns": 7488000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31636,
+        "api_open_plus_work_ns": 129307,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 97671,
+        "process_ns": 7595929,
+        "cpu_ns": 7469000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 30090,
+        "api_open_plus_work_ns": 138543,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 108453,
+        "process_ns": 7609053,
+        "cpu_ns": 7431000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32875,
+        "api_open_plus_work_ns": 131902,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 99027,
+        "process_ns": 7577650,
+        "cpu_ns": 7452000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "93862d1a24696b4b15f39cde3dd42f5da09f27fcf4f77079ec064c8a3cafb4f8",
+     "response_bytes": 2097408
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Solar_eclipse"
+      ],
+      [
+       0,
+       65536,
+       "A/William_Shakespeare"
+      ],
+      [
+       0,
+       65536,
+       "A/Elizabeth_II"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_presidents_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Tiger"
+      ],
+      [
+       0,
+       65536,
+       "A/Evolution"
+      ],
+      [
+       0,
+       65536,
+       "A/Aristotle"
+      ],
+      [
+       0,
+       65536,
+       "A/Anatomical_terms_of_location"
+      ],
+      [
+       0,
+       65536,
+       "A/Midfielder"
+      ],
+      [
+       0,
+       65536,
+       "A/Native_Americans_in_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/World_Heritage_Site"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_national_parks_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Anfield"
+      ],
+      [
+       0,
+       65536,
+       "A/African_Americans"
+      ],
+      [
+       0,
+       65536,
+       "A/Virus"
+      ],
+      [
+       0,
+       65536,
+       "A/Bat"
+      ],
+      [
+       0,
+       65536,
+       "A/Rodent"
+      ],
+      [
+       0,
+       65536,
+       "A/YouTube"
+      ],
+      [
+       0,
+       65536,
+       "A/Martin_Luther_King_Jr."
+      ],
+      [
+       0,
+       65536,
+       "A/Dublin"
+      ],
+      [
+       0,
+       65536,
+       "A/Elvis_Presley"
+      ],
+      [
+       0,
+       65536,
+       "A/Plant"
+      ],
+      [
+       0,
+       65536,
+       "A/Carl_Linnaeus"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3074851,
+        "api_open_plus_work_ns": 57779930,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 54705079,
+        "process_ns": 63030843,
+        "cpu_ns": 61772000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3116990,
+        "api_open_plus_work_ns": 56193696,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 53076706,
+        "process_ns": 60950531,
+        "cpu_ns": 59600000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3066397,
+        "api_open_plus_work_ns": 55412697,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 52346300,
+        "process_ns": 60384477,
+        "cpu_ns": 59318000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3099505,
+        "api_open_plus_work_ns": 55896472,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 52796967,
+        "process_ns": 60809722,
+        "cpu_ns": 59646000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3262056,
+        "api_open_plus_work_ns": 58890151,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 55628095,
+        "process_ns": 64137635,
+        "cpu_ns": 63054000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3133766,
+        "api_open_plus_work_ns": 56592606,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 53458840,
+        "process_ns": 61937683,
+        "cpu_ns": 61223000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3002537,
+        "api_open_plus_work_ns": 55892231,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 52889694,
+        "process_ns": 60826939,
+        "cpu_ns": 59480000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3028038,
+        "api_open_plus_work_ns": 55858091,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 52830053,
+        "process_ns": 60753984,
+        "cpu_ns": 59507000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 35471,
+        "api_open_plus_work_ns": 79223604,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 79188133,
+        "process_ns": 81713866,
+        "cpu_ns": 81560000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32934,
+        "api_open_plus_work_ns": 78182775,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 78149841,
+        "process_ns": 80671181,
+        "cpu_ns": 80499000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35113,
+        "api_open_plus_work_ns": 78713956,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 78678843,
+        "process_ns": 81280914,
+        "cpu_ns": 81129000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35423,
+        "api_open_plus_work_ns": 77859443,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 77824020,
+        "process_ns": 80329947,
+        "cpu_ns": 80172000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33035,
+        "api_open_plus_work_ns": 82416046,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 82383011,
+        "process_ns": 84899650,
+        "cpu_ns": 84726000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 95953,
+        "api_open_plus_work_ns": 86583688,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 86487735,
+        "process_ns": 89499145,
+        "cpu_ns": 89337000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33704,
+        "api_open_plus_work_ns": 78803448,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 78769744,
+        "process_ns": 81265466,
+        "cpu_ns": 81093000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 35308,
+        "api_open_plus_work_ns": 78171323,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 78136015,
+        "process_ns": 80880023,
+        "cpu_ns": 80727000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+     "response_bytes": 1573056
+    },
+    "title_prefixes": {
+     "requested": [
+      [
+       0,
+       0,
+       "Ama"
+      ],
+      [
+       0,
+       0,
+       "Sol"
+      ],
+      [
+       0,
+       0,
+       "Wil"
+      ],
+      [
+       0,
+       0,
+       "Eli"
+      ],
+      [
+       0,
+       0,
+       "Lis"
+      ],
+      [
+       0,
+       0,
+       "Tig"
+      ],
+      [
+       0,
+       0,
+       "Evo"
+      ],
+      [
+       0,
+       0,
+       "Ari"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3024179,
+        "api_open_plus_work_ns": 3255746,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 231567,
+        "process_ns": 6010084,
+        "cpu_ns": 5913000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 2980450,
+        "api_open_plus_work_ns": 3266434,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 285984,
+        "process_ns": 5843231,
+        "cpu_ns": 5719000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3042231,
+        "api_open_plus_work_ns": 3276402,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 234171,
+        "process_ns": 5977727,
+        "cpu_ns": 5872000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 2989109,
+        "api_open_plus_work_ns": 3216596,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 227487,
+        "process_ns": 5786572,
+        "cpu_ns": 5689000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 2968197,
+        "api_open_plus_work_ns": 3198149,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 229952,
+        "process_ns": 5962628,
+        "cpu_ns": 5866000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3135631,
+        "api_open_plus_work_ns": 3455491,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 319860,
+        "process_ns": 6033014,
+        "cpu_ns": 5930000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3007916,
+        "api_open_plus_work_ns": 3236001,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 228085,
+        "process_ns": 5863172,
+        "cpu_ns": 5783000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3048365,
+        "api_open_plus_work_ns": 3283336,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 234971,
+        "process_ns": 6051096,
+        "cpu_ns": 5930000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 31954,
+        "api_open_plus_work_ns": 243905,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 211951,
+        "process_ns": 1101466,
+        "cpu_ns": 1016000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31912,
+        "api_open_plus_work_ns": 249804,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 217892,
+        "process_ns": 1149680,
+        "cpu_ns": 1034000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33186,
+        "api_open_plus_work_ns": 257424,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 224238,
+        "process_ns": 1124650,
+        "cpu_ns": 1024000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 65159,
+        "api_open_plus_work_ns": 302918,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 237759,
+        "process_ns": 1200280,
+        "cpu_ns": 1099000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 29431,
+        "api_open_plus_work_ns": 246451,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 217020,
+        "process_ns": 1079220,
+        "cpu_ns": 997000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31136,
+        "api_open_plus_work_ns": 249868,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 218732,
+        "process_ns": 1249242,
+        "cpu_ns": 1105000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 29369,
+        "api_open_plus_work_ns": 280076,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 250707,
+        "process_ns": 1152642,
+        "cpu_ns": 1070000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32490,
+        "api_open_plus_work_ns": 255751,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 223261,
+        "process_ns": 1131325,
+        "cpu_ns": 1036000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "fc206633143ad6a13a64398ef40f9048ea96e3cf0eadb87df2e68c7327bcc116",
+     "response_bytes": 1668
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4598,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       5100,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       7505,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       10914,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       7693,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       11290,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       9293,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       14490,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       4660,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5224,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5587,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       7078,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       4261,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       4426,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       5633,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ],
+      [
+       7170,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3091892,
+        "api_open_plus_work_ns": 3371782,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 279890,
+        "process_ns": 6192855,
+        "cpu_ns": 6058000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3117403,
+        "api_open_plus_work_ns": 3445027,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 327624,
+        "process_ns": 6202924,
+        "cpu_ns": 6100000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3053047,
+        "api_open_plus_work_ns": 3340077,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 287030,
+        "process_ns": 6221834,
+        "cpu_ns": 6133000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3309285,
+        "api_open_plus_work_ns": 3590694,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 281409,
+        "process_ns": 6367433,
+        "cpu_ns": 6212000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3074926,
+        "api_open_plus_work_ns": 3406425,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 331499,
+        "process_ns": 6342041,
+        "cpu_ns": 6247000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3060726,
+        "api_open_plus_work_ns": 3340839,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 280113,
+        "process_ns": 6160095,
+        "cpu_ns": 6064000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 2990839,
+        "api_open_plus_work_ns": 3313263,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 322424,
+        "process_ns": 6131113,
+        "cpu_ns": 6030000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 3059374,
+        "api_open_plus_work_ns": 3342551,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 283177,
+        "process_ns": 6062763,
+        "cpu_ns": 5960000,
+        "peak_rss_bytes": 27918336
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 29966,
+        "api_open_plus_work_ns": 243060,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 213094,
+        "process_ns": 1126511,
+        "cpu_ns": 1035000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33304,
+        "api_open_plus_work_ns": 222592,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 189288,
+        "process_ns": 1251963,
+        "cpu_ns": 1096000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32931,
+        "api_open_plus_work_ns": 210575,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 177644,
+        "process_ns": 1126228,
+        "cpu_ns": 1033000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 34922,
+        "api_open_plus_work_ns": 228261,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 193339,
+        "process_ns": 1210528,
+        "cpu_ns": 1113000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33297,
+        "api_open_plus_work_ns": 213010,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 179713,
+        "process_ns": 1177838,
+        "cpu_ns": 1039000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 32699,
+        "api_open_plus_work_ns": 218570,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 185871,
+        "process_ns": 1162875,
+        "cpu_ns": 1062000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 31531,
+        "api_open_plus_work_ns": 229847,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 198316,
+        "process_ns": 1101647,
+        "cpu_ns": 1011000,
+        "peak_rss_bytes": 27918336
+       },
+       {
+        "open_ns": 33178,
+        "api_open_plus_work_ns": 221241,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 188063,
+        "process_ns": 1137765,
+        "cpu_ns": 1039000,
+        "peak_rss_bytes": 27918336
+       }
+      ]
+     },
+     "response_sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+     "response_bytes": 65664
+    }
+   }
+  }
+ ]
+}

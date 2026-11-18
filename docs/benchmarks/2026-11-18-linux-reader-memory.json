@@ -1,0 +1,385 @@
+{
+  "description": "Native Linux wait4 on a fresh one-child C launcher. Child RSS includes loader, libraries, archive and caller. One warm-up and eight retained fresh processes per reader, alternating order. Frames must hash identically to the original data.",
+  "launcherSha256": "b74b7d196bcb0554fd285a58385bffb3676bd726c0a7fa4bcd5831057e7f8175",
+  "launcherSourceSha256": "303154a2c6c060ec9c71a63a58a443673ff011827f59ce640489976d36f64862",
+  "driverSha256": {
+    "libzim": "c6026b2323b46f33c1df18f3b49f04361c27a146bf85579adaabdf11c68e2c7a",
+    "zimru": "1659d163a0fce6fdcb5549a1ca6c8bb2d46e66ce4f7be7b6cfe6897f4e9817bc"
+  },
+  "host": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "rounds": 8,
+  "rows": [
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "open",
+      "sha256": "36949a688cc7ba42f310039dac3bf1f0a6b76284e40b03a68ad6999a9b207723",
+      "peakKiBSamples": {
+        "libzim": [
+          7424,
+          7496,
+          7424,
+          7624,
+          7424,
+          7496,
+          7628,
+          7552
+        ],
+        "zimru": [
+          2432,
+          2432,
+          2304,
+          2432,
+          2432,
+          2432,
+          2432,
+          2432
+        ]
+      },
+      "medianMiB": {
+        "libzim": 7.3203125,
+        "zimru": 2.375
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "first_article",
+      "sha256": "c4d559ddc7b643fa6410154efb9cecc59135413f0ea7d7d3256a0338da5e14d1",
+      "peakKiBSamples": {
+        "libzim": [
+          10752,
+          10752,
+          11008,
+          10880,
+          10496,
+          10752,
+          10880,
+          11008
+        ],
+        "zimru": [
+          6656,
+          6528,
+          6656,
+          6528,
+          6528,
+          6656,
+          6528,
+          6656
+        ]
+      },
+      "medianMiB": {
+        "libzim": 10.5625,
+        "zimru": 6.4375
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "repeat_article_32",
+      "sha256": "7b339a20ff64327c0240984cf274a031a8265fd909d9313fc4091e35dbc5ea9d",
+      "peakKiBSamples": {
+        "libzim": [
+          10752,
+          11008,
+          10752,
+          10880,
+          11008,
+          10752,
+          10880,
+          10880
+        ],
+        "zimru": [
+          6656,
+          6528,
+          6656,
+          6528,
+          6528,
+          6400,
+          6656,
+          6528
+        ]
+      },
+      "medianMiB": {
+        "libzim": 10.625,
+        "zimru": 6.375
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "random_articles",
+      "sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+      "peakKiBSamples": {
+        "libzim": [
+          21208,
+          21336,
+          21336,
+          21336,
+          21332,
+          21336,
+          21332,
+          21464
+        ],
+        "zimru": [
+          15344,
+          15344,
+          15416,
+          15320,
+          15472,
+          15472,
+          15344,
+          15344
+        ]
+      },
+      "medianMiB": {
+        "libzim": 20.8359375,
+        "zimru": 14.984375
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "title_prefixes",
+      "sha256": "7b7f6560143fd11b0cbfa415e7d297a7b41a1514372a6d0d8dcf5c7741eca0fa",
+      "peakKiBSamples": {
+        "libzim": [
+          7808,
+          7652,
+          7532,
+          7776,
+          7528,
+          7552,
+          7808,
+          7808
+        ],
+        "zimru": [
+          2816,
+          2688,
+          2816,
+          2816,
+          2688,
+          2816,
+          2816,
+          2816
+        ]
+      },
+      "medianMiB": {
+        "libzim": 7.533203125,
+        "zimru": 2.75
+      }
+    },
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "phase": "media_ranges",
+      "sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+      "peakKiBSamples": {
+        "libzim": [
+          11520,
+          11520,
+          11520,
+          11520,
+          11392,
+          11520,
+          11392,
+          11648
+        ],
+        "zimru": [
+          6400,
+          6528,
+          6528,
+          6400,
+          6528,
+          6372,
+          6372,
+          6528
+        ]
+      },
+      "medianMiB": {
+        "libzim": 11.25,
+        "zimru": 6.3125
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "open",
+      "sha256": "1cedf2a54ce349c8cde927ffe5a9311e9060556bc4afde27cc9366f71c1aecd6",
+      "peakKiBSamples": {
+        "libzim": [
+          7552,
+          7680,
+          7424,
+          7424,
+          7424,
+          7424,
+          7680,
+          7680
+        ],
+        "zimru": [
+          2304,
+          2432,
+          2304,
+          2432,
+          2304,
+          2304,
+          2432,
+          2432
+        ]
+      },
+      "medianMiB": {
+        "libzim": 7.3125,
+        "zimru": 2.3125
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "first_article",
+      "sha256": "1e7b748c5c9bbf68f732946b053ed4bd28d3bbfdb151b0b7a3781f9f29da1a33",
+      "peakKiBSamples": {
+        "libzim": [
+          9216,
+          9088,
+          9216,
+          9088,
+          9088,
+          8960,
+          9216,
+          9216
+        ],
+        "zimru": [
+          6528,
+          6528,
+          6528,
+          6528,
+          6656,
+          6400,
+          6528,
+          6656
+        ]
+      },
+      "medianMiB": {
+        "libzim": 8.9375,
+        "zimru": 6.375
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "repeat_article_32",
+      "sha256": "93862d1a24696b4b15f39cde3dd42f5da09f27fcf4f77079ec064c8a3cafb4f8",
+      "peakKiBSamples": {
+        "libzim": [
+          9216,
+          9088,
+          9216,
+          9344,
+          9088,
+          9216,
+          9088,
+          9216
+        ],
+        "zimru": [
+          6528,
+          6400,
+          6528,
+          6528,
+          6528,
+          6528,
+          6656,
+          6528
+        ]
+      },
+      "medianMiB": {
+        "libzim": 9.0,
+        "zimru": 6.375
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "random_articles",
+      "sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+      "peakKiBSamples": {
+        "libzim": [
+          24792,
+          24512,
+          24620,
+          24836,
+          24712,
+          24592,
+          24708,
+          24836
+        ],
+        "zimru": [
+          13944,
+          13968,
+          13948,
+          13944,
+          14076,
+          13948,
+          13952,
+          13792
+        ]
+      },
+      "medianMiB": {
+        "libzim": 24.130859375,
+        "zimru": 13.62109375
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "title_prefixes",
+      "sha256": "fc206633143ad6a13a64398ef40f9048ea96e3cf0eadb87df2e68c7327bcc116",
+      "peakKiBSamples": {
+        "libzim": [
+          7552,
+          7808,
+          7680,
+          7552,
+          7552,
+          7552,
+          7808,
+          7680
+        ],
+        "zimru": [
+          2688,
+          2688,
+          2688,
+          2688,
+          2688,
+          2560,
+          2560,
+          2560
+        ]
+      },
+      "medianMiB": {
+        "libzim": 7.4375,
+        "zimru": 2.625
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "phase": "media_ranges",
+      "sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+      "peakKiBSamples": {
+        "libzim": [
+          7808,
+          7808,
+          7552,
+          7808,
+          7680,
+          7808,
+          7552,
+          7680
+        ],
+        "zimru": [
+          2688,
+          2688,
+          2688,
+          2688,
+          2688,
+          2688,
+          2688,
+          2688
+        ]
+      },
+      "medianMiB": {
+        "libzim": 7.5625,
+        "zimru": 2.625
+      }
+    }
+  ]
+}

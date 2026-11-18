@@ -29,6 +29,23 @@ python3 -B "$bench_tools/summarize.py" "$bench_lab/default.json" "$bench_lab/mat
 
 The Python collector uses Unix child resource accounting on macOS and Linux. A Linux replay requires a corresponding native SDK and a matching compiler/linker configuration. Output publication creates new files in the chosen directory and preserves existing files. Native selection and both drivers run with a 90-second timeout per invocation. Use scratch storage that supports hard links and has room for the sampled responses.
 
+## Linux comparison
+
+The x86-64 Linux run used the same libzim upstream revision and patches, with Zimru at `a6d1b4ccd968c29420135fa3b70ced578509a1e8`. Legacy title results include the namespace in the public path. After building those drivers, use Climate mini June 2024 and Wikipedia 100 maxi January 2024 in that order. The output path must be new. [Package checks and timings](../../docs/audit/2026-11-18-reader-platforms.md) · [Raw Linux measurements](../../docs/benchmarks/2026-11-18-linux-archive-readers.json)
+
+```bash
+# Point the scratch driver's sibling zimru checkout at a6d1b4c first.
+# This removes dependencies of the older reader from the scratch lock file.
+cargo update --workspace --offline --manifest-path "$bench_lab/rust-driver/Cargo.toml"
+cargo build --release --locked --manifest-path "$bench_lab/rust-driver/Cargo.toml" --target-dir "$bench_lab/rust-driver/target"
+python3 "$bench_tools/measure.py" "$bench_lab/native" "$bench_rust" \
+  /path/to/wikipedia_en_climate_change_mini_2024-06.zim \
+  /path/to/wikipedia_en_100_maxi_2024-01.zim \
+  --rounds 8 --cache-bytes 4194304 \
+  --phases open first_article repeat_article_32 random_articles title_prefixes media_ranges \
+  --output "$bench_lab/linux.json"
+```
+
 ## Sampling and counters
 
 A fixed random seed selects up to 24 distinct nonredirected HTML entries and eight images, audio or video entries of at least 8 KiB from the native public path listing, outside timing. Both libraries then receive identical paths, offsets, lengths and title prefixes. Each fresh output includes length framing. The harness compares every byte and records a SHA-256 digest. Prefix checks compare the total and the paths/titles of the first four hits.
@@ -42,6 +59,6 @@ A fixed random seed selects up to 24 distinct nonredirected HTML entries and eig
 | Title prefixes | Look up as many as eight distinct three-character prefixes derived from sampled titles and retrieve the first four results. |
 | Media ranges | Resolve each selected media path twice. Copy 4 KiB at halfway and 4 KiB at the end. Compressed clusters can require substantially more internal reading and decoding than the requested payload. |
 
-There is one discarded warm-up and ten measured fresh processes per reader, phase and archive. Alternating order gives each reader five first and five second positions. Checksumming the input and priming each case warms the OS file cache. Machine activity and scheduling can affect timings. Each sample's `api_ns` covers its named archive operation, including lookup and copying. Response serialization happens after each operation's timer. `open_ns` records construction. For a first read, `api_open_plus_work_ns` sums the construction and article operation from that same process. `process_ns`, `cpu_ns` and peak RSS include driver startup, input, output, cleanup and any warm request. Raw RSS units are normalized to bytes.
+The original macOS comparison used one discarded warm-up and ten measured fresh processes per reader, phase and archive. Alternating order gives each reader five first and five second positions. Checksumming the input and priming each case warms the OS file cache. Machine activity and scheduling can affect timings. Each sample's `api_ns` covers its named archive operation, including lookup and copying. Response serialization happens after each operation's timer. `open_ns` records construction. For a first read, `api_open_plus_work_ns` sums the construction and article operation from that same process. `process_ns`, `cpu_ns` and peak RSS include driver startup, input, output, cleanup and any warm request. Raw RSS units are normalized to bytes.
 
-The main comparison disables Xapian preloading in libzim, matching the application’s archive-open setting. The explicit eager-open control enables it. With default cache policies the drivers report a 16 MiB cache budget for libzim and 64 MiB for Zimru. The 4 MiB control applies an equal requested cache target to both libraries. Each library reports its own cluster-cache accounting after the phase. Zimru may retain a final cluster larger than the target. Native accounting also accounts for cluster offsets and a portion of decoder state. The counters and whole-process peak RSS measure different costs. All reads use the libraries directly, including Rust article and media reads, while the application’s article/media route still uses libzim.
+The main comparison disables Xapian preloading in libzim, matching the application’s archive-open setting. The explicit eager-open control enables it. With default cache policies the drivers report a 16 MiB cache budget for libzim and 64 MiB for Zimru. The 4 MiB control applies an equal requested cache target to both libraries. Each library reports its own cluster-cache accounting after the phase. Zimru may retain a final cluster larger than the target. Native accounting also accounts for cluster offsets and a portion of decoder state. The counters and whole-process peak RSS measure different costs. Both drivers read article and media bytes directly from their respective libraries. The original macOS benchmark predates the migration of the application’s article and media routes to Zimru.

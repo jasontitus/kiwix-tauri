@@ -63,7 +63,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let mut rows = Vec::new();
                     for row in range.take(4) {
                         let entry = archive.entry_by_title_index(row)?;
-                        rows.push((entry.path().to_owned(), entry.title().to_owned()));
+                        let path = if archive.header().uses_new_namespaces() {
+                            entry.path().to_owned()
+                        } else {
+                            format!("{}/{}", char::from(entry.namespace()), entry.path())
+                        };
+                        rows.push((path, entry.title().to_owned()));
                     }
                     elapsed += before.elapsed();
                     stdout.write_all(&count.to_le_bytes())?;
