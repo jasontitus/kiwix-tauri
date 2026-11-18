@@ -262,6 +262,8 @@ class Build:
             signing = {'main': main, 'widget': widget, 'signer_sha1': signer, 'widget_name': extensions[0].name}
         require(signing or self.args.prepare_only or self.args.unsigned or self.simulator, 'Pass --signing-source pointing to an accepted signed app')
         self.identity = {'schema': 1, 'platform': self.args.platform, 'rust_target': self.target, 'architectures': ['arm64'], 'source_commit': self.commit, 'cargo_lock_sha256': hashlib.sha256(archive_lock).hexdigest(),
+                         'cargo_codegen_units_override': self.env.get('CARGO_PROFILE_RELEASE_CODEGEN_UNITS'),
+                         'cargo_incremental': self.env['CARGO_INCREMENTAL'],
                          'tooling': tooling, 'npm_installed_lock_sha256': digest(installed_lock),
                          'npm_committed_lock_sha256': hashlib.sha256(canonical(lock)).hexdigest(), 'signing': signing,
                          'helper_sha256': digest(Path(__file__).resolve())}

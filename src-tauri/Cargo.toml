@@ -144,6 +144,11 @@ strip = "symbols"
 # Preserve optimization and unwinding while allowing whole-crate optimization.
 codegen-units = 1
 
+# Compile the archive decoder in smaller units. The archive reader benchmarks
+# exercise this setting with the same decoded-cache budget as the app.
+[profile.release.package.zstd-rs]
+codegen-units = 16
+
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 # Signed desktop updates. The frontend never calls the plugin's JS commands;
 # the app's own commands enforce privacy, transfer and confirmation gates.
