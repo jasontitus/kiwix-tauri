@@ -1,0 +1,1347 @@
+{
+ "cache_bytes": "33554432",
+ "native_xapian_preload": false,
+ "promoted_mit_git": "ff8b0ab5e561b0019151d6d614131f59920ff2ee",
+ "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+ "runtime": "arm64 iOS 26.5 Simulator; neither hardware timing nor device memory",
+ "native_archive_library": "libzim 9.6.0, merged CoreKiwix iOS Simulator static slice",
+ "zimru_git": "ff8b0ab5e561b0019151d6d614131f59920ff2ee",
+ "method": "One discarded then alternating fresh-process trials. CPU and peak RSS come from wait4 in simulator, API timers from each process. Host command overhead is separate.",
+ "rounds": 6,
+ "driver_sha256": {
+  "libzim": "f5e30bf9025cd1ce15d6d29a70aa9673e6d504455ab3e7f04cd8f709fc7bd498",
+  "zimru": "842304c7883529b25202cf1ea6ed11a9d4b53a79a1ba5eb400e50628dbde5eac"
+ },
+ "archives": [
+  {
+   "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+   "size": 8978471,
+   "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 8622,
+     "path": "The_Green_Grid",
+     "title": "The Green Grid"
+    },
+    {
+     "kind": "html",
+     "size": 5365,
+     "path": "Leipzig_Declaration",
+     "title": "Leipzig Declaration"
+    },
+    {
+     "kind": "html",
+     "size": 4535,
+     "path": "Drawdown_(book)",
+     "title": "Drawdown (book)"
+    },
+    {
+     "kind": "html",
+     "size": 4720,
+     "path": "Land_cover",
+     "title": "Land cover"
+    },
+    {
+     "kind": "html",
+     "size": 10190,
+     "path": "2015_United_Nations_Climate_Change_Conference",
+     "title": "2015 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 9539,
+     "path": "Öko-Institut",
+     "title": "Öko-Institut"
+    },
+    {
+     "kind": "html",
+     "size": 3778,
+     "path": "Drought_in_Chile",
+     "title": "Drought in Chile"
+    },
+    {
+     "kind": "html",
+     "size": 7447,
+     "path": "Evelyn_Acham",
+     "title": "Evelyn Acham"
+    },
+    {
+     "kind": "html",
+     "size": 7332,
+     "path": "2013_United_Nations_Climate_Change_Conference",
+     "title": "2013 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 11954,
+     "path": "Nature_Climate_Change",
+     "title": "Nature Climate Change"
+    },
+    {
+     "kind": "html",
+     "size": 6733,
+     "path": "Build_Back_Better_World",
+     "title": "Build Back Better World"
+    },
+    {
+     "kind": "html",
+     "size": 6428,
+     "path": "Renewable_energy_in_Kenya",
+     "title": "Renewable energy in Kenya"
+    },
+    {
+     "kind": "html",
+     "size": 6107,
+     "path": "Nationally_determined_contribution",
+     "title": "Nationally determined contribution"
+    },
+    {
+     "kind": "html",
+     "size": 4858,
+     "path": "Esi_Buobasa",
+     "title": "Esi Buobasa"
+    },
+    {
+     "kind": "html",
+     "size": 8826,
+     "path": "Oceanic_Platform_of_the_Canary_Islands",
+     "title": "Oceanic Platform of the Canary Islands"
+    },
+    {
+     "kind": "html",
+     "size": 4293,
+     "path": "Lower_Manhattan_Coastal_Resiliency",
+     "title": "Lower Manhattan Coastal Resiliency"
+    },
+    {
+     "kind": "html",
+     "size": 5165,
+     "path": "Dorjee_Sun",
+     "title": "Dorjee Sun"
+    },
+    {
+     "kind": "html",
+     "size": 5071,
+     "path": "Landfill_gas",
+     "title": "Landfill gas"
+    },
+    {
+     "kind": "html",
+     "size": 5003,
+     "path": "Internal_wave_breaking",
+     "title": "Internal wave breaking"
+    },
+    {
+     "kind": "html",
+     "size": 4353,
+     "path": "Energy_policy_of_Scotland",
+     "title": "Energy policy of Scotland"
+    },
+    {
+     "kind": "html",
+     "size": 14131,
+     "path": "Gina_McCarthy",
+     "title": "Gina McCarthy"
+    },
+    {
+     "kind": "html",
+     "size": 7187,
+     "path": "Greenhouse_gas_emissions_by_Russia",
+     "title": "Greenhouse gas emissions by Russia"
+    },
+    {
+     "kind": "html",
+     "size": 5801,
+     "path": "Jem_Bendell",
+     "title": "Jem Bendell"
+    },
+    {
+     "kind": "html",
+     "size": 27839,
+     "path": "2022_Brazilian_general_election",
+     "title": "2022 Brazilian general election"
+    },
+    {
+     "kind": "media",
+     "size": 8348,
+     "path": "f8aab0483f099f025d5fe7174146ee315f166b31.svg",
+     "title": "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+    },
+    {
+     "kind": "media",
+     "size": 24566,
+     "path": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp",
+     "title": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18074,
+     "path": "Tipping_points_2022_list.jpeg.webp",
+     "title": "Tipping_points_2022_list.jpeg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 43186,
+     "path": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp",
+     "title": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 20486,
+     "path": "Bloczek_betonowy.jpg.webp",
+     "title": "Bloczek_betonowy.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 37446,
+     "path": "Lamb_meat_(1).jpg.webp",
+     "title": "Lamb_meat_(1).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 21312,
+     "path": "District_heating_plant_spittelau_ssw_crop1.png.webp",
+     "title": "District_heating_plant_spittelau_ssw_crop1.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 10504,
+     "path": "World_map_indicating_tropics_and_subtropics.png.webp",
+     "title": "World_map_indicating_tropics_and_subtropics.png.webp"
+    }
+   ],
+   "phases": {
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       5365,
+       "Leipzig_Declaration"
+      ],
+      [
+       0,
+       4535,
+       "Drawdown_(book)"
+      ],
+      [
+       0,
+       4720,
+       "Land_cover"
+      ],
+      [
+       0,
+       10190,
+       "2015_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       9539,
+       "Öko-Institut"
+      ],
+      [
+       0,
+       3778,
+       "Drought_in_Chile"
+      ],
+      [
+       0,
+       7447,
+       "Evelyn_Acham"
+      ],
+      [
+       0,
+       7332,
+       "2013_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       11954,
+       "Nature_Climate_Change"
+      ],
+      [
+       0,
+       6733,
+       "Build_Back_Better_World"
+      ],
+      [
+       0,
+       6428,
+       "Renewable_energy_in_Kenya"
+      ],
+      [
+       0,
+       6107,
+       "Nationally_determined_contribution"
+      ],
+      [
+       0,
+       4858,
+       "Esi_Buobasa"
+      ],
+      [
+       0,
+       8826,
+       "Oceanic_Platform_of_the_Canary_Islands"
+      ],
+      [
+       0,
+       4293,
+       "Lower_Manhattan_Coastal_Resiliency"
+      ],
+      [
+       0,
+       5165,
+       "Dorjee_Sun"
+      ],
+      [
+       0,
+       5071,
+       "Landfill_gas"
+      ],
+      [
+       0,
+       5003,
+       "Internal_wave_breaking"
+      ],
+      [
+       0,
+       4353,
+       "Energy_policy_of_Scotland"
+      ],
+      [
+       0,
+       14131,
+       "Gina_McCarthy"
+      ],
+      [
+       0,
+       7187,
+       "Greenhouse_gas_emissions_by_Russia"
+      ],
+      [
+       0,
+       5801,
+       "Jem_Bendell"
+      ],
+      [
+       0,
+       27839,
+       "2022_Brazilian_general_election"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2662834,
+        "api_open_plus_work_ns": 19004500,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 16341666,
+        "host_simctl_wall_ns": 716047917,
+        "cpu_ns": 145497000,
+        "peak_rss_bytes": 65093632
+       },
+       {
+        "open_ns": 2520583,
+        "api_open_plus_work_ns": 16855416,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 14334833,
+        "host_simctl_wall_ns": 653252625,
+        "cpu_ns": 134480000,
+        "peak_rss_bytes": 65126400
+       },
+       {
+        "open_ns": 2433166,
+        "api_open_plus_work_ns": 17045585,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 14612419,
+        "host_simctl_wall_ns": 608055083,
+        "cpu_ns": 131407000,
+        "peak_rss_bytes": 65126400
+       },
+       {
+        "open_ns": 2402500,
+        "api_open_plus_work_ns": 17075832,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 14673332,
+        "host_simctl_wall_ns": 645286542,
+        "cpu_ns": 130552000,
+        "peak_rss_bytes": 65126400
+       },
+       {
+        "open_ns": 2400417,
+        "api_open_plus_work_ns": 17130167,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 14729750,
+        "host_simctl_wall_ns": 640458000,
+        "cpu_ns": 134303000,
+        "peak_rss_bytes": 65126400
+       },
+       {
+        "open_ns": 2650541,
+        "api_open_plus_work_ns": 18401667,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 11340007,
+        "api_ns": 15751126,
+        "host_simctl_wall_ns": 683915625,
+        "cpu_ns": 140852000,
+        "peak_rss_bytes": 65110016
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 86875,
+        "api_open_plus_work_ns": 22444586,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 22357711,
+        "host_simctl_wall_ns": 707179042,
+        "cpu_ns": 132134000,
+        "peak_rss_bytes": 47824896
+       },
+       {
+        "open_ns": 71375,
+        "api_open_plus_work_ns": 20987165,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 20915790,
+        "host_simctl_wall_ns": 656431291,
+        "cpu_ns": 130413000,
+        "peak_rss_bytes": 47792128
+       },
+       {
+        "open_ns": 94292,
+        "api_open_plus_work_ns": 21370335,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 21276043,
+        "host_simctl_wall_ns": 672355375,
+        "cpu_ns": 130700000,
+        "peak_rss_bytes": 47775744
+       },
+       {
+        "open_ns": 77625,
+        "api_open_plus_work_ns": 20902749,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 20825124,
+        "host_simctl_wall_ns": 647898000,
+        "cpu_ns": 133570000,
+        "peak_rss_bytes": 47857664
+       },
+       {
+        "open_ns": 71167,
+        "api_open_plus_work_ns": 23032292,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 22961125,
+        "host_simctl_wall_ns": 684185958,
+        "cpu_ns": 144008000,
+        "peak_rss_bytes": 47808512
+       },
+       {
+        "open_ns": 69917,
+        "api_open_plus_work_ns": 21190455,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 22608838,
+        "api_ns": 21120538,
+        "host_simctl_wall_ns": 649950000,
+        "cpu_ns": 133030000,
+        "peak_rss_bytes": 47792128
+       }
+      ]
+     },
+     "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+     "response_bytes": 185469
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4174,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       4252,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       12283,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       20470,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       9037,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       13978,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       21593,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       39090,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       10243,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       16390,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       18723,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       33350,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       10656,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       17216,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       5252,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ],
+      [
+       6408,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2611833,
+        "api_open_plus_work_ns": 5305623,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2693790,
+        "host_simctl_wall_ns": 671914917,
+        "cpu_ns": 128574000,
+        "peak_rss_bytes": 38109184
+       },
+       {
+        "open_ns": 2850833,
+        "api_open_plus_work_ns": 5669041,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2818208,
+        "host_simctl_wall_ns": 687236666,
+        "cpu_ns": 139331000,
+        "peak_rss_bytes": 38092800
+       },
+       {
+        "open_ns": 2876500,
+        "api_open_plus_work_ns": 5823542,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2947042,
+        "host_simctl_wall_ns": 783298625,
+        "cpu_ns": 141526000,
+        "peak_rss_bytes": 38092800
+       },
+       {
+        "open_ns": 2561958,
+        "api_open_plus_work_ns": 5179793,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2617835,
+        "host_simctl_wall_ns": 724257791,
+        "cpu_ns": 126508000,
+        "peak_rss_bytes": 38092800
+       },
+       {
+        "open_ns": 2768084,
+        "api_open_plus_work_ns": 5480332,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2712248,
+        "host_simctl_wall_ns": 682652209,
+        "cpu_ns": 127267000,
+        "peak_rss_bytes": 38109184
+       },
+       {
+        "open_ns": 2915250,
+        "api_open_plus_work_ns": 5855626,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2940376,
+        "host_simctl_wall_ns": 747019500,
+        "cpu_ns": 140112000,
+        "peak_rss_bytes": 38125568
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 79000,
+        "api_open_plus_work_ns": 3157376,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 3078376,
+        "host_simctl_wall_ns": 719813709,
+        "cpu_ns": 131970000,
+        "peak_rss_bytes": 26116096
+       },
+       {
+        "open_ns": 78375,
+        "api_open_plus_work_ns": 2815792,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2737417,
+        "host_simctl_wall_ns": 746176875,
+        "cpu_ns": 130050000,
+        "peak_rss_bytes": 26116096
+       },
+       {
+        "open_ns": 77500,
+        "api_open_plus_work_ns": 2727585,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2650085,
+        "host_simctl_wall_ns": 718482500,
+        "cpu_ns": 119641000,
+        "peak_rss_bytes": 26099712
+       },
+       {
+        "open_ns": 86709,
+        "api_open_plus_work_ns": 3090084,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 3003375,
+        "host_simctl_wall_ns": 731421750,
+        "cpu_ns": 134834000,
+        "peak_rss_bytes": 26116096
+       },
+       {
+        "open_ns": 86458,
+        "api_open_plus_work_ns": 3118873,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 3032415,
+        "host_simctl_wall_ns": 719881375,
+        "cpu_ns": 136654000,
+        "peak_rss_bytes": 26099712
+       },
+       {
+        "open_ns": 90625,
+        "api_open_plus_work_ns": 3001836,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2911211,
+        "host_simctl_wall_ns": 748928583,
+        "cpu_ns": 132352000,
+        "peak_rss_bytes": 26099712
+       }
+      ]
+     },
+     "response_sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+     "response_bytes": 65664
+    }
+   }
+  },
+  {
+   "file": "wikipedia_en_100_maxi_2024-01.zim",
+   "size": 36522122,
+   "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+   "selected": [
+    {
+     "kind": "media",
+     "size": 9196,
+     "path": "I/HK_Chater_Road_LegCo_view.jpg.webp",
+     "title": "HK_Chater_Road_LegCo_view.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 15010,
+     "path": "I/Sheldonbasking.JPG.webp",
+     "title": "Sheldonbasking.JPG.webp"
+    },
+    {
+     "kind": "html",
+     "size": 341585,
+     "path": "A/Amazon_(company)",
+     "title": "Amazon (company)"
+    },
+    {
+     "kind": "html",
+     "size": 273079,
+     "path": "A/Solar_eclipse",
+     "title": "Solar eclipse"
+    },
+    {
+     "kind": "media",
+     "size": 15386,
+     "path": "I/Autosomal_recessive_-_mini.svg.png.webp",
+     "title": "Autosomal_recessive_-_mini.svg.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18586,
+     "path": "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp",
+     "title": "Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9320,
+     "path": "I/Virtual-camera-system.png.webp",
+     "title": "Virtual-camera-system.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 11174,
+     "path": "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp",
+     "title": "Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 571067,
+     "path": "A/William_Shakespeare",
+     "title": "William Shakespeare"
+    },
+    {
+     "kind": "media",
+     "size": 8522,
+     "path": "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp",
+     "title": "Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 580073,
+     "path": "A/Elizabeth_II",
+     "title": "Elizabeth II"
+    },
+    {
+     "kind": "media",
+     "size": 11266,
+     "path": "I/Gills1894.jpg.webp",
+     "title": "Gills1894.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 204716,
+     "path": "A/List_of_presidents_of_the_United_States",
+     "title": "List of presidents of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 423983,
+     "path": "A/Tiger",
+     "title": "Tiger"
+    },
+    {
+     "kind": "html",
+     "size": 662946,
+     "path": "A/Evolution",
+     "title": "Evolution"
+    },
+    {
+     "kind": "html",
+     "size": 527339,
+     "path": "A/Aristotle",
+     "title": "Aristotle"
+    },
+    {
+     "kind": "html",
+     "size": 160033,
+     "path": "A/Anatomical_terms_of_location",
+     "title": "Anatomical terms of location"
+    },
+    {
+     "kind": "html",
+     "size": 152636,
+     "path": "A/Midfielder",
+     "title": "Midfielder"
+    },
+    {
+     "kind": "html",
+     "size": 822971,
+     "path": "A/Native_Americans_in_the_United_States",
+     "title": "Native Americans in the United States"
+    },
+    {
+     "kind": "html",
+     "size": 115653,
+     "path": "A/World_Heritage_Site",
+     "title": "World Heritage Site"
+    },
+    {
+     "kind": "html",
+     "size": 281698,
+     "path": "A/List_of_national_parks_of_the_United_States",
+     "title": "List of national parks of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 245866,
+     "path": "A/Anfield",
+     "title": "Anfield"
+    },
+    {
+     "kind": "html",
+     "size": 661825,
+     "path": "A/African_Americans",
+     "title": "African Americans"
+    },
+    {
+     "kind": "html",
+     "size": 423071,
+     "path": "A/Virus",
+     "title": "Virus"
+    },
+    {
+     "kind": "html",
+     "size": 476260,
+     "path": "A/Bat",
+     "title": "Bat"
+    },
+    {
+     "kind": "html",
+     "size": 357162,
+     "path": "A/Rodent",
+     "title": "Rodent"
+    },
+    {
+     "kind": "html",
+     "size": 856565,
+     "path": "A/YouTube",
+     "title": "YouTube"
+    },
+    {
+     "kind": "html",
+     "size": 805848,
+     "path": "A/Martin_Luther_King_Jr.",
+     "title": "Martin Luther King Jr."
+    },
+    {
+     "kind": "html",
+     "size": 462181,
+     "path": "A/Dublin",
+     "title": "Dublin"
+    },
+    {
+     "kind": "html",
+     "size": 614430,
+     "path": "A/Elvis_Presley",
+     "title": "Elvis Presley"
+    },
+    {
+     "kind": "html",
+     "size": 317012,
+     "path": "A/Plant",
+     "title": "Plant"
+    },
+    {
+     "kind": "html",
+     "size": 326611,
+     "path": "A/Carl_Linnaeus",
+     "title": "Carl Linnaeus"
+    }
+   ],
+   "phases": {
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Solar_eclipse"
+      ],
+      [
+       0,
+       65536,
+       "A/William_Shakespeare"
+      ],
+      [
+       0,
+       65536,
+       "A/Elizabeth_II"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_presidents_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Tiger"
+      ],
+      [
+       0,
+       65536,
+       "A/Evolution"
+      ],
+      [
+       0,
+       65536,
+       "A/Aristotle"
+      ],
+      [
+       0,
+       65536,
+       "A/Anatomical_terms_of_location"
+      ],
+      [
+       0,
+       65536,
+       "A/Midfielder"
+      ],
+      [
+       0,
+       65536,
+       "A/Native_Americans_in_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/World_Heritage_Site"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_national_parks_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Anfield"
+      ],
+      [
+       0,
+       65536,
+       "A/African_Americans"
+      ],
+      [
+       0,
+       65536,
+       "A/Virus"
+      ],
+      [
+       0,
+       65536,
+       "A/Bat"
+      ],
+      [
+       0,
+       65536,
+       "A/Rodent"
+      ],
+      [
+       0,
+       65536,
+       "A/YouTube"
+      ],
+      [
+       0,
+       65536,
+       "A/Martin_Luther_King_Jr."
+      ],
+      [
+       0,
+       65536,
+       "A/Dublin"
+      ],
+      [
+       0,
+       65536,
+       "A/Elvis_Presley"
+      ],
+      [
+       0,
+       65536,
+       "A/Plant"
+      ],
+      [
+       0,
+       65536,
+       "A/Carl_Linnaeus"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3284041,
+        "api_open_plus_work_ns": 42873124,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 39589083,
+        "host_simctl_wall_ns": 801574292,
+        "cpu_ns": 182782000,
+        "peak_rss_bytes": 77414400
+       },
+       {
+        "open_ns": 3156750,
+        "api_open_plus_work_ns": 39602499,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 36445749,
+        "host_simctl_wall_ns": 773415916,
+        "cpu_ns": 177101000,
+        "peak_rss_bytes": 77414400
+       },
+       {
+        "open_ns": 2907750,
+        "api_open_plus_work_ns": 37163620,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 34255870,
+        "host_simctl_wall_ns": 790906083,
+        "cpu_ns": 166227000,
+        "peak_rss_bytes": 77414400
+       },
+       {
+        "open_ns": 2843667,
+        "api_open_plus_work_ns": 36589037,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 33745370,
+        "host_simctl_wall_ns": 729884917,
+        "cpu_ns": 159016000,
+        "peak_rss_bytes": 77398016
+       },
+       {
+        "open_ns": 3091083,
+        "api_open_plus_work_ns": 38661708,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 35570625,
+        "host_simctl_wall_ns": 753836375,
+        "cpu_ns": 176194000,
+        "peak_rss_bytes": 77414400
+       },
+       {
+        "open_ns": 2891959,
+        "api_open_plus_work_ns": 39231126,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 14056826,
+        "api_ns": 36339167,
+        "host_simctl_wall_ns": 750343125,
+        "cpu_ns": 167308000,
+        "peak_rss_bytes": 77365248
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 77667,
+        "api_open_plus_work_ns": 42606625,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 42528958,
+        "host_simctl_wall_ns": 791789125,
+        "cpu_ns": 162757000,
+        "peak_rss_bytes": 55263232
+       },
+       {
+        "open_ns": 81500,
+        "api_open_plus_work_ns": 42888209,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 42806709,
+        "host_simctl_wall_ns": 734925583,
+        "cpu_ns": 165347000,
+        "peak_rss_bytes": 55361536
+       },
+       {
+        "open_ns": 81375,
+        "api_open_plus_work_ns": 43721746,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 43640371,
+        "host_simctl_wall_ns": 724920166,
+        "cpu_ns": 164051000,
+        "peak_rss_bytes": 55246848
+       },
+       {
+        "open_ns": 81959,
+        "api_open_plus_work_ns": 48424209,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 48342250,
+        "host_simctl_wall_ns": 811376167,
+        "cpu_ns": 183961000,
+        "peak_rss_bytes": 55361536
+       },
+       {
+        "open_ns": 91875,
+        "api_open_plus_work_ns": 45785417,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 45693542,
+        "host_simctl_wall_ns": 842708250,
+        "cpu_ns": 165413000,
+        "peak_rss_bytes": 55246848
+       },
+       {
+        "open_ns": 106125,
+        "api_open_plus_work_ns": 43417877,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 28081626,
+        "api_ns": 43311752,
+        "host_simctl_wall_ns": 826010042,
+        "cpu_ns": 166019000,
+        "peak_rss_bytes": 55345152
+       }
+      ]
+     },
+     "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+     "response_bytes": 1573056
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4598,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       5100,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       7505,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       10914,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       7693,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       11290,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       9293,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       14490,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       4660,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5224,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5587,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       7078,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       4261,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       4426,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       5633,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ],
+      [
+       7170,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 3296625,
+        "api_open_plus_work_ns": 3627956,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 331331,
+        "host_simctl_wall_ns": 689445625,
+        "cpu_ns": 125685000,
+        "peak_rss_bytes": 34029568
+       },
+       {
+        "open_ns": 2465708,
+        "api_open_plus_work_ns": 2661292,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 195584,
+        "host_simctl_wall_ns": 623345875,
+        "cpu_ns": 110368000,
+        "peak_rss_bytes": 33964032
+       },
+       {
+        "open_ns": 2459041,
+        "api_open_plus_work_ns": 2663875,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 204834,
+        "host_simctl_wall_ns": 610815834,
+        "cpu_ns": 117408000,
+        "peak_rss_bytes": 33964032
+       },
+       {
+        "open_ns": 2401041,
+        "api_open_plus_work_ns": 2588792,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 187751,
+        "host_simctl_wall_ns": 582261708,
+        "cpu_ns": 108593000,
+        "peak_rss_bytes": 33996800
+       },
+       {
+        "open_ns": 2445666,
+        "api_open_plus_work_ns": 2639124,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 193458,
+        "host_simctl_wall_ns": 585694792,
+        "cpu_ns": 105915000,
+        "peak_rss_bytes": 34045952
+       },
+       {
+        "open_ns": 2310541,
+        "api_open_plus_work_ns": 2511538,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 19888,
+        "api_ns": 200997,
+        "host_simctl_wall_ns": 572393875,
+        "cpu_ns": 102411000,
+        "peak_rss_bytes": 33996800
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 78791,
+        "api_open_plus_work_ns": 319997,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 241206,
+        "host_simctl_wall_ns": 689510375,
+        "cpu_ns": 111825000,
+        "peak_rss_bytes": 22167552
+       },
+       {
+        "open_ns": 83125,
+        "api_open_plus_work_ns": 242623,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 159498,
+        "host_simctl_wall_ns": 632942958,
+        "cpu_ns": 114012000,
+        "peak_rss_bytes": 22167552
+       },
+       {
+        "open_ns": 133791,
+        "api_open_plus_work_ns": 285666,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 151875,
+        "host_simctl_wall_ns": 594892750,
+        "cpu_ns": 110115000,
+        "peak_rss_bytes": 22167552
+       },
+       {
+        "open_ns": 64833,
+        "api_open_plus_work_ns": 189791,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 124958,
+        "host_simctl_wall_ns": 586770875,
+        "cpu_ns": 102733000,
+        "peak_rss_bytes": 22167552
+       },
+       {
+        "open_ns": 79375,
+        "api_open_plus_work_ns": 214124,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 134749,
+        "host_simctl_wall_ns": 565334958,
+        "cpu_ns": 96925000,
+        "peak_rss_bytes": 22167552
+       },
+       {
+        "open_ns": 72916,
+        "api_open_plus_work_ns": 210542,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 137626,
+        "host_simctl_wall_ns": 547520375,
+        "cpu_ns": 99120000,
+        "peak_rss_bytes": 22151168
+       }
+      ]
+     },
+     "response_sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+     "response_bytes": 65664
+    }
+   }
+  }
+ ]
+}

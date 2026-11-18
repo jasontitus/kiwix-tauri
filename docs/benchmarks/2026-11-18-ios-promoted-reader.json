@@ -1,0 +1,1048 @@
+{
+ "cache_bytes": "4194304",
+ "native_xapian_preload": false,
+ "promoted_mit_git": "ff8b0ab5e561b0019151d6d614131f59920ff2ee",
+ "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+ "runtime": "arm64 iOS 26.5 Simulator; neither hardware timing nor device memory",
+ "native_archive_library": "libzim 9.6.0, merged CoreKiwix iOS Simulator static slice",
+ "zimru_git": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+ "method": "One discarded then alternating fresh-process trials. CPU and peak RSS come from wait4 in simulator, API timers from each process. Host command overhead is separate.",
+ "rounds": 6,
+ "driver_sha256": {
+  "libzim": "f5e30bf9025cd1ce15d6d29a70aa9673e6d504455ab3e7f04cd8f709fc7bd498",
+  "zimru": "e4143897c2520620d45d2176f3db51e2717c021ab809c9ab979943665d7e25b9",
+  "candidate": "842304c7883529b25202cf1ea6ed11a9d4b53a79a1ba5eb400e50628dbde5eac"
+ },
+ "archives": [
+  {
+   "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+   "size": 8978471,
+   "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 8622,
+     "path": "The_Green_Grid",
+     "title": "The Green Grid"
+    },
+    {
+     "kind": "html",
+     "size": 5365,
+     "path": "Leipzig_Declaration",
+     "title": "Leipzig Declaration"
+    },
+    {
+     "kind": "html",
+     "size": 4535,
+     "path": "Drawdown_(book)",
+     "title": "Drawdown (book)"
+    },
+    {
+     "kind": "html",
+     "size": 4720,
+     "path": "Land_cover",
+     "title": "Land cover"
+    },
+    {
+     "kind": "html",
+     "size": 10190,
+     "path": "2015_United_Nations_Climate_Change_Conference",
+     "title": "2015 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 9539,
+     "path": "Öko-Institut",
+     "title": "Öko-Institut"
+    },
+    {
+     "kind": "html",
+     "size": 3778,
+     "path": "Drought_in_Chile",
+     "title": "Drought in Chile"
+    },
+    {
+     "kind": "html",
+     "size": 7447,
+     "path": "Evelyn_Acham",
+     "title": "Evelyn Acham"
+    },
+    {
+     "kind": "html",
+     "size": 7332,
+     "path": "2013_United_Nations_Climate_Change_Conference",
+     "title": "2013 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 11954,
+     "path": "Nature_Climate_Change",
+     "title": "Nature Climate Change"
+    },
+    {
+     "kind": "html",
+     "size": 6733,
+     "path": "Build_Back_Better_World",
+     "title": "Build Back Better World"
+    },
+    {
+     "kind": "html",
+     "size": 6428,
+     "path": "Renewable_energy_in_Kenya",
+     "title": "Renewable energy in Kenya"
+    },
+    {
+     "kind": "html",
+     "size": 6107,
+     "path": "Nationally_determined_contribution",
+     "title": "Nationally determined contribution"
+    },
+    {
+     "kind": "html",
+     "size": 4858,
+     "path": "Esi_Buobasa",
+     "title": "Esi Buobasa"
+    },
+    {
+     "kind": "html",
+     "size": 8826,
+     "path": "Oceanic_Platform_of_the_Canary_Islands",
+     "title": "Oceanic Platform of the Canary Islands"
+    },
+    {
+     "kind": "html",
+     "size": 4293,
+     "path": "Lower_Manhattan_Coastal_Resiliency",
+     "title": "Lower Manhattan Coastal Resiliency"
+    },
+    {
+     "kind": "html",
+     "size": 5165,
+     "path": "Dorjee_Sun",
+     "title": "Dorjee Sun"
+    },
+    {
+     "kind": "html",
+     "size": 5071,
+     "path": "Landfill_gas",
+     "title": "Landfill gas"
+    },
+    {
+     "kind": "html",
+     "size": 5003,
+     "path": "Internal_wave_breaking",
+     "title": "Internal wave breaking"
+    },
+    {
+     "kind": "html",
+     "size": 4353,
+     "path": "Energy_policy_of_Scotland",
+     "title": "Energy policy of Scotland"
+    },
+    {
+     "kind": "html",
+     "size": 14131,
+     "path": "Gina_McCarthy",
+     "title": "Gina McCarthy"
+    },
+    {
+     "kind": "html",
+     "size": 7187,
+     "path": "Greenhouse_gas_emissions_by_Russia",
+     "title": "Greenhouse gas emissions by Russia"
+    },
+    {
+     "kind": "html",
+     "size": 5801,
+     "path": "Jem_Bendell",
+     "title": "Jem Bendell"
+    },
+    {
+     "kind": "html",
+     "size": 27839,
+     "path": "2022_Brazilian_general_election",
+     "title": "2022 Brazilian general election"
+    },
+    {
+     "kind": "media",
+     "size": 8348,
+     "path": "f8aab0483f099f025d5fe7174146ee315f166b31.svg",
+     "title": "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+    },
+    {
+     "kind": "media",
+     "size": 24566,
+     "path": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp",
+     "title": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18074,
+     "path": "Tipping_points_2022_list.jpeg.webp",
+     "title": "Tipping_points_2022_list.jpeg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 43186,
+     "path": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp",
+     "title": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 20486,
+     "path": "Bloczek_betonowy.jpg.webp",
+     "title": "Bloczek_betonowy.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 37446,
+     "path": "Lamb_meat_(1).jpg.webp",
+     "title": "Lamb_meat_(1).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 21312,
+     "path": "District_heating_plant_spittelau_ssw_crop1.png.webp",
+     "title": "District_heating_plant_spittelau_ssw_crop1.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 10504,
+     "path": "World_map_indicating_tropics_and_subtropics.png.webp",
+     "title": "World_map_indicating_tropics_and_subtropics.png.webp"
+    }
+   ],
+   "phases": {
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       5365,
+       "Leipzig_Declaration"
+      ],
+      [
+       0,
+       4535,
+       "Drawdown_(book)"
+      ],
+      [
+       0,
+       4720,
+       "Land_cover"
+      ],
+      [
+       0,
+       10190,
+       "2015_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       9539,
+       "Öko-Institut"
+      ],
+      [
+       0,
+       3778,
+       "Drought_in_Chile"
+      ],
+      [
+       0,
+       7447,
+       "Evelyn_Acham"
+      ],
+      [
+       0,
+       7332,
+       "2013_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       11954,
+       "Nature_Climate_Change"
+      ],
+      [
+       0,
+       6733,
+       "Build_Back_Better_World"
+      ],
+      [
+       0,
+       6428,
+       "Renewable_energy_in_Kenya"
+      ],
+      [
+       0,
+       6107,
+       "Nationally_determined_contribution"
+      ],
+      [
+       0,
+       4858,
+       "Esi_Buobasa"
+      ],
+      [
+       0,
+       8826,
+       "Oceanic_Platform_of_the_Canary_Islands"
+      ],
+      [
+       0,
+       4293,
+       "Lower_Manhattan_Coastal_Resiliency"
+      ],
+      [
+       0,
+       5165,
+       "Dorjee_Sun"
+      ],
+      [
+       0,
+       5071,
+       "Landfill_gas"
+      ],
+      [
+       0,
+       5003,
+       "Internal_wave_breaking"
+      ],
+      [
+       0,
+       4353,
+       "Energy_policy_of_Scotland"
+      ],
+      [
+       0,
+       14131,
+       "Gina_McCarthy"
+      ],
+      [
+       0,
+       7187,
+       "Greenhouse_gas_emissions_by_Russia"
+      ],
+      [
+       0,
+       5801,
+       "Jem_Bendell"
+      ],
+      [
+       0,
+       27839,
+       "2022_Brazilian_general_election"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 4230417,
+        "api_open_plus_work_ns": 43666000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 39435583,
+        "host_simctl_wall_ns": 1177215208,
+        "cpu_ns": 219009000,
+        "peak_rss_bytes": 48087040
+       },
+       {
+        "open_ns": 3299709,
+        "api_open_plus_work_ns": 34406625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 31106916,
+        "host_simctl_wall_ns": 1011179292,
+        "cpu_ns": 190762000,
+        "peak_rss_bytes": 48136192
+       },
+       {
+        "open_ns": 2900625,
+        "api_open_plus_work_ns": 29329706,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 26429081,
+        "host_simctl_wall_ns": 796194667,
+        "cpu_ns": 165229000,
+        "peak_rss_bytes": 48119808
+       },
+       {
+        "open_ns": 2089208,
+        "api_open_plus_work_ns": 21483833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 19394625,
+        "host_simctl_wall_ns": 571045875,
+        "cpu_ns": 120014000,
+        "peak_rss_bytes": 48103424
+       },
+       {
+        "open_ns": 2173458,
+        "api_open_plus_work_ns": 23737580,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 21564122,
+        "host_simctl_wall_ns": 570693666,
+        "cpu_ns": 124149000,
+        "peak_rss_bytes": 48103424
+       },
+       {
+        "open_ns": 2034333,
+        "api_open_plus_work_ns": 21143335,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 19109002,
+        "host_simctl_wall_ns": 545571500,
+        "cpu_ns": 119451000,
+        "peak_rss_bytes": 48119808
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 92541,
+        "api_open_plus_work_ns": 74075042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 73982501,
+        "host_simctl_wall_ns": 1172929083,
+        "cpu_ns": 237516000,
+        "peak_rss_bytes": 33423360
+       },
+       {
+        "open_ns": 85833,
+        "api_open_plus_work_ns": 66360541,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 66274708,
+        "host_simctl_wall_ns": 939743333,
+        "cpu_ns": 210137000,
+        "peak_rss_bytes": 33456128
+       },
+       {
+        "open_ns": 84125,
+        "api_open_plus_work_ns": 66823458,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 66739333,
+        "host_simctl_wall_ns": 977706333,
+        "cpu_ns": 218678000,
+        "peak_rss_bytes": 33439744
+       },
+       {
+        "open_ns": 56833,
+        "api_open_plus_work_ns": 40838415,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 40781582,
+        "host_simctl_wall_ns": 595452291,
+        "cpu_ns": 136637000,
+        "peak_rss_bytes": 33423360
+       },
+       {
+        "open_ns": 57625,
+        "api_open_plus_work_ns": 40946954,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 40889329,
+        "host_simctl_wall_ns": 575862917,
+        "cpu_ns": 136101000,
+        "peak_rss_bytes": 33439744
+       },
+       {
+        "open_ns": 59333,
+        "api_open_plus_work_ns": 41758084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 41698751,
+        "host_simctl_wall_ns": 562285833,
+        "cpu_ns": 134799000,
+        "peak_rss_bytes": 33456128
+       }
+      ],
+      "candidate": [
+       {
+        "open_ns": 181209,
+        "api_open_plus_work_ns": 59884126,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 59702917,
+        "host_simctl_wall_ns": 1115609042,
+        "cpu_ns": 221276000,
+        "peak_rss_bytes": 33439744
+       },
+       {
+        "open_ns": 95541,
+        "api_open_plus_work_ns": 53625915,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 53530374,
+        "host_simctl_wall_ns": 972411250,
+        "cpu_ns": 201311000,
+        "peak_rss_bytes": 33472512
+       },
+       {
+        "open_ns": 61833,
+        "api_open_plus_work_ns": 35356625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 35294792,
+        "host_simctl_wall_ns": 642371375,
+        "cpu_ns": 134632000,
+        "peak_rss_bytes": 33488896
+       },
+       {
+        "open_ns": 58458,
+        "api_open_plus_work_ns": 34566250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 34507792,
+        "host_simctl_wall_ns": 600562166,
+        "cpu_ns": 133222000,
+        "peak_rss_bytes": 33439744
+       },
+       {
+        "open_ns": 60208,
+        "api_open_plus_work_ns": 34347915,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 34287707,
+        "host_simctl_wall_ns": 578470417,
+        "cpu_ns": 130661000,
+        "peak_rss_bytes": 33472512
+       },
+       {
+        "open_ns": 59833,
+        "api_open_plus_work_ns": 36505706,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 36445873,
+        "host_simctl_wall_ns": 566236167,
+        "cpu_ns": 132142000,
+        "peak_rss_bytes": 33505280
+       }
+      ]
+     },
+     "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+     "response_bytes": 185469
+    }
+   }
+  },
+  {
+   "file": "wikipedia_en_100_maxi_2024-01.zim",
+   "size": 36522122,
+   "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+   "selected": [
+    {
+     "kind": "media",
+     "size": 9196,
+     "path": "I/HK_Chater_Road_LegCo_view.jpg.webp",
+     "title": "HK_Chater_Road_LegCo_view.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 15010,
+     "path": "I/Sheldonbasking.JPG.webp",
+     "title": "Sheldonbasking.JPG.webp"
+    },
+    {
+     "kind": "html",
+     "size": 341585,
+     "path": "A/Amazon_(company)",
+     "title": "Amazon (company)"
+    },
+    {
+     "kind": "html",
+     "size": 273079,
+     "path": "A/Solar_eclipse",
+     "title": "Solar eclipse"
+    },
+    {
+     "kind": "media",
+     "size": 15386,
+     "path": "I/Autosomal_recessive_-_mini.svg.png.webp",
+     "title": "Autosomal_recessive_-_mini.svg.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18586,
+     "path": "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp",
+     "title": "Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9320,
+     "path": "I/Virtual-camera-system.png.webp",
+     "title": "Virtual-camera-system.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 11174,
+     "path": "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp",
+     "title": "Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 571067,
+     "path": "A/William_Shakespeare",
+     "title": "William Shakespeare"
+    },
+    {
+     "kind": "media",
+     "size": 8522,
+     "path": "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp",
+     "title": "Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 580073,
+     "path": "A/Elizabeth_II",
+     "title": "Elizabeth II"
+    },
+    {
+     "kind": "media",
+     "size": 11266,
+     "path": "I/Gills1894.jpg.webp",
+     "title": "Gills1894.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 204716,
+     "path": "A/List_of_presidents_of_the_United_States",
+     "title": "List of presidents of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 423983,
+     "path": "A/Tiger",
+     "title": "Tiger"
+    },
+    {
+     "kind": "html",
+     "size": 662946,
+     "path": "A/Evolution",
+     "title": "Evolution"
+    },
+    {
+     "kind": "html",
+     "size": 527339,
+     "path": "A/Aristotle",
+     "title": "Aristotle"
+    },
+    {
+     "kind": "html",
+     "size": 160033,
+     "path": "A/Anatomical_terms_of_location",
+     "title": "Anatomical terms of location"
+    },
+    {
+     "kind": "html",
+     "size": 152636,
+     "path": "A/Midfielder",
+     "title": "Midfielder"
+    },
+    {
+     "kind": "html",
+     "size": 822971,
+     "path": "A/Native_Americans_in_the_United_States",
+     "title": "Native Americans in the United States"
+    },
+    {
+     "kind": "html",
+     "size": 115653,
+     "path": "A/World_Heritage_Site",
+     "title": "World Heritage Site"
+    },
+    {
+     "kind": "html",
+     "size": 281698,
+     "path": "A/List_of_national_parks_of_the_United_States",
+     "title": "List of national parks of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 245866,
+     "path": "A/Anfield",
+     "title": "Anfield"
+    },
+    {
+     "kind": "html",
+     "size": 661825,
+     "path": "A/African_Americans",
+     "title": "African Americans"
+    },
+    {
+     "kind": "html",
+     "size": 423071,
+     "path": "A/Virus",
+     "title": "Virus"
+    },
+    {
+     "kind": "html",
+     "size": 476260,
+     "path": "A/Bat",
+     "title": "Bat"
+    },
+    {
+     "kind": "html",
+     "size": 357162,
+     "path": "A/Rodent",
+     "title": "Rodent"
+    },
+    {
+     "kind": "html",
+     "size": 856565,
+     "path": "A/YouTube",
+     "title": "YouTube"
+    },
+    {
+     "kind": "html",
+     "size": 805848,
+     "path": "A/Martin_Luther_King_Jr.",
+     "title": "Martin Luther King Jr."
+    },
+    {
+     "kind": "html",
+     "size": 462181,
+     "path": "A/Dublin",
+     "title": "Dublin"
+    },
+    {
+     "kind": "html",
+     "size": 614430,
+     "path": "A/Elvis_Presley",
+     "title": "Elvis Presley"
+    },
+    {
+     "kind": "html",
+     "size": 317012,
+     "path": "A/Plant",
+     "title": "Plant"
+    },
+    {
+     "kind": "html",
+     "size": 326611,
+     "path": "A/Carl_Linnaeus",
+     "title": "Carl Linnaeus"
+    }
+   ],
+   "phases": {
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Solar_eclipse"
+      ],
+      [
+       0,
+       65536,
+       "A/William_Shakespeare"
+      ],
+      [
+       0,
+       65536,
+       "A/Elizabeth_II"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_presidents_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Tiger"
+      ],
+      [
+       0,
+       65536,
+       "A/Evolution"
+      ],
+      [
+       0,
+       65536,
+       "A/Aristotle"
+      ],
+      [
+       0,
+       65536,
+       "A/Anatomical_terms_of_location"
+      ],
+      [
+       0,
+       65536,
+       "A/Midfielder"
+      ],
+      [
+       0,
+       65536,
+       "A/Native_Americans_in_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/World_Heritage_Site"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_national_parks_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Anfield"
+      ],
+      [
+       0,
+       65536,
+       "A/African_Americans"
+      ],
+      [
+       0,
+       65536,
+       "A/Virus"
+      ],
+      [
+       0,
+       65536,
+       "A/Bat"
+      ],
+      [
+       0,
+       65536,
+       "A/Rodent"
+      ],
+      [
+       0,
+       65536,
+       "A/YouTube"
+      ],
+      [
+       0,
+       65536,
+       "A/Martin_Luther_King_Jr."
+      ],
+      [
+       0,
+       65536,
+       "A/Dublin"
+      ],
+      [
+       0,
+       65536,
+       "A/Elvis_Presley"
+      ],
+      [
+       0,
+       65536,
+       "A/Plant"
+      ],
+      [
+       0,
+       65536,
+       "A/Carl_Linnaeus"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2336041,
+        "api_open_plus_work_ns": 42887457,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 40551416,
+        "host_simctl_wall_ns": 661157792,
+        "cpu_ns": 145049000,
+        "peak_rss_bytes": 48594944
+       },
+       {
+        "open_ns": 2204167,
+        "api_open_plus_work_ns": 40029752,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 37825585,
+        "host_simctl_wall_ns": 635681583,
+        "cpu_ns": 142328000,
+        "peak_rss_bytes": 48627712
+       },
+       {
+        "open_ns": 6179417,
+        "api_open_plus_work_ns": 134625375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 128445958,
+        "host_simctl_wall_ns": 1600358916,
+        "cpu_ns": 385029000,
+        "peak_rss_bytes": 48594944
+       },
+       {
+        "open_ns": 3331916,
+        "api_open_plus_work_ns": 60743580,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 57411664,
+        "host_simctl_wall_ns": 1261444708,
+        "cpu_ns": 211063000,
+        "peak_rss_bytes": 48627712
+       },
+       {
+        "open_ns": 2809042,
+        "api_open_plus_work_ns": 50684419,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 47875377,
+        "host_simctl_wall_ns": 926857125,
+        "cpu_ns": 177971000,
+        "peak_rss_bytes": 48594944
+       },
+       {
+        "open_ns": 2345208,
+        "api_open_plus_work_ns": 43862835,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 41517627,
+        "host_simctl_wall_ns": 744235625,
+        "cpu_ns": 155003000,
+        "peak_rss_bytes": 48611328
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 101959,
+        "api_open_plus_work_ns": 60615457,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 60513498,
+        "host_simctl_wall_ns": 605429334,
+        "cpu_ns": 162871000,
+        "peak_rss_bytes": 33275904
+       },
+       {
+        "open_ns": 101542,
+        "api_open_plus_work_ns": 74176793,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 74075251,
+        "host_simctl_wall_ns": 1177756375,
+        "cpu_ns": 186694000,
+        "peak_rss_bytes": 33275904
+       },
+       {
+        "open_ns": 104958,
+        "api_open_plus_work_ns": 99999043,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 99894085,
+        "host_simctl_wall_ns": 1022471458,
+        "cpu_ns": 266218000,
+        "peak_rss_bytes": 33243136
+       },
+       {
+        "open_ns": 153000,
+        "api_open_plus_work_ns": 147098084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 146945084,
+        "host_simctl_wall_ns": 2550576791,
+        "cpu_ns": 407197000,
+        "peak_rss_bytes": 33243136
+       },
+       {
+        "open_ns": 66875,
+        "api_open_plus_work_ns": 66140376,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 66073501,
+        "host_simctl_wall_ns": 855732584,
+        "cpu_ns": 176170000,
+        "peak_rss_bytes": 33292288
+       },
+       {
+        "open_ns": 66333,
+        "api_open_plus_work_ns": 66487415,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 66421082,
+        "host_simctl_wall_ns": 758006875,
+        "cpu_ns": 175436000,
+        "peak_rss_bytes": 33275904
+       }
+      ],
+      "candidate": [
+       {
+        "open_ns": 66458,
+        "api_open_plus_work_ns": 50487251,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 50420793,
+        "host_simctl_wall_ns": 697500000,
+        "cpu_ns": 147463000,
+        "peak_rss_bytes": 33390592
+       },
+       {
+        "open_ns": 77125,
+        "api_open_plus_work_ns": 57334583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 57257458,
+        "host_simctl_wall_ns": 678948583,
+        "cpu_ns": 163801000,
+        "peak_rss_bytes": 33374208
+       },
+       {
+        "open_ns": 479250,
+        "api_open_plus_work_ns": 142448164,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 141968914,
+        "host_simctl_wall_ns": 2163703042,
+        "cpu_ns": 403130000,
+        "peak_rss_bytes": 33341440
+       },
+       {
+        "open_ns": 132083,
+        "api_open_plus_work_ns": 98130457,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 97998374,
+        "host_simctl_wall_ns": 2290726500,
+        "cpu_ns": 312654000,
+        "peak_rss_bytes": 33374208
+       },
+       {
+        "open_ns": 137458,
+        "api_open_plus_work_ns": 68513082,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 68375624,
+        "host_simctl_wall_ns": 973236000,
+        "cpu_ns": 202348000,
+        "peak_rss_bytes": 33374208
+       },
+       {
+        "open_ns": 63667,
+        "api_open_plus_work_ns": 56074000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 56010333,
+        "host_simctl_wall_ns": 748609417,
+        "cpu_ns": 160508000,
+        "peak_rss_bytes": 33357824
+       }
+      ]
+     },
+     "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+     "response_bytes": 1573056
+    }
+   }
+  }
+ ]
+}
