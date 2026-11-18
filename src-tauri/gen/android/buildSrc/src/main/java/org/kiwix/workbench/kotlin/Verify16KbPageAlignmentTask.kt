@@ -187,8 +187,7 @@ private fun verifyRequiredLibraries(zip: ZipFile, prefix: String, expectedAbis: 
             if (entry == null || entry.size <= 0 || entry.isDirectory) {
                 throw GradleException(
                     "$path is missing or empty in ${File(zip.name).name}. " +
-                        "Build the selected ABI and prepare the pinned speech libraries in the " +
-                        "Android project with Cargo's target directory directly under src-tauri."
+                        "Rebuild the selected Android ABI with the pinned sherpa-onnx-sys dependency."
                 )
             }
         }

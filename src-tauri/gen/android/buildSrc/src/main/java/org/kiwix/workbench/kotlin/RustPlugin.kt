@@ -23,7 +23,9 @@ open class RustPlugin : Plugin<Project> {
         val defaultArchList = listOf("arm64", "arm", "x86", "x86_64");
         val archList = (findProperty("archList") as? String)?.split(',') ?: defaultArchList
 
-        val targetsList = (findProperty("targetList") as? String)?.split(',') ?: listOf("aarch64", "armv7", "i686", "x86_64")
+        val defaultTargets = listOf("aarch64", "armv7", "i686", "x86_64")
+        val targetsList = (findProperty("targetList") as? String)?.split(',') ?: defaultTargets
+        val targetAbis = defaultTargets.zip(defaultAbiList).toMap()
 
         extensions.configure<ApplicationExtension> {
             @Suppress("UnstableApiUsage")
@@ -72,6 +74,7 @@ open class RustPlugin : Plugin<Project> {
                         rootDirRel = config.rootDirRel
                         projectDir = project.projectDir.path
                         target = targetName
+                        abi = targetAbis.getValue(targetName)
                         release = profile == "release"
                     }
 
