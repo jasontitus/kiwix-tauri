@@ -100,9 +100,11 @@ export function AgentConnectorSettings({
             <p role="alert">{errorText(status.error)}</p>
           ) : (
             <p className="muted" aria-live="polite">
-              {status.lastUsed
-                ? t("Used today: {count} requests", { count: status.callsToday })
-                : t("Waiting for an assistant to connect.")}
+              {!status.running
+                ? t("Starting…")
+                : status.lastUsed
+                  ? t("Used today: {count} requests", { count: status.callsToday })
+                  : t("Waiting for an assistant to connect.")}
             </p>
           )}
           {!status.relayInstalled && (

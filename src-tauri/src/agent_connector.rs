@@ -47,6 +47,7 @@ struct Activity {
 
 struct Running {
     generation: u64,
+    ready: bool,
     cancel: CancellationToken,
 }
 
@@ -103,6 +104,14 @@ impl AgentConnector {
     fn set_error(&self, error: Option<String>) {
         if let Ok(mut activity) = self.activity.lock() {
             activity.error = error;
+        }
+    }
+
+    fn listener_ready(&self, generation: u64) {
+        if let Ok(mut running) = self.running.lock() {
+            if let Some(current) = running.as_mut().filter(|current| current.generation == generation) {
+                current.ready = true;
+            }
         }
     }
 
@@ -190,14 +199,14 @@ impl Service {
             (true, false) => {
                 let generation = self.agent.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                 let cancel = CancellationToken::new();
-                *running = Some(Running { generation, cancel: cancel.clone() });
+                *running = Some(Running { generation, ready: false, cancel: cancel.clone() });
                 self.agent.set_error(None);
                 let service = self.clone();
                 tauri::async_runtime::spawn(async move {
                     // Finish retiring the old listener before the replacement claims its endpoint.
                     let _transport = service.agent.transport.lock().await;
                     if cancel.is_cancelled() { return; }
-                    let result = transport::serve(service.clone(), cancel).await;
+                    let result = transport::serve(service.clone(), cancel, generation).await;
                     if let Err(error) = result {
                         eprintln!("Agent connector: {error}");
                         // Forget a failed server so turning the setting off and
@@ -229,7 +238,8 @@ impl Service {
 
     pub(crate) fn agent_connector_status(&self) -> Result<Value, String> {
         let activity = self.agent.activity.lock().map_err(|_| "Agent connector unavailable")?.clone();
-        let running = self.agent.running.lock().map_err(|_| "Agent connector unavailable")?.is_some();
+        let running = self.agent.running.lock().map_err(|_| "Agent connector unavailable")?
+            .as_ref().is_some_and(|current| current.ready);
         let relay = std::env::current_exe()
             .ok()
             .map(|exe| exe.with_file_name(if cfg!(windows) { "kiwix-mcp.exe" } else { "kiwix-mcp" }));
@@ -688,7 +698,7 @@ mod transport {
         }
     }
 
-    pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken) -> Result<(), String> {
+    pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken, generation: u64) -> Result<(), String> {
         let own = Arc::new(User::of(unsafe { GetCurrentProcess() })?);
         let name = pipe_name(&service, &own)?;
         let descriptor = Descriptor::current_user_only(&own)?;
@@ -709,6 +719,7 @@ mod transport {
                 format!("Cannot open the agent connector channel: {error}")
             }
         })?;
+        service.agent.listener_ready(generation);
         let clients = Arc::new(AtomicUsize::new(0));
         loop {
             let connected = tokio::select! {
@@ -802,12 +813,13 @@ mod transport {
         super::serve_client(service, stream, cancel).await
     }
 
-    pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken) -> Result<(), String> {
+    pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken, generation: u64) -> Result<(), String> {
         let path = socket_dir(&service).join(socket_file(&service)?);
         let (listener, _entry) = crate::instance::socket::bind(&path)
             .map_err(|err| format!("Cannot open the agent connector socket: {err}"))?;
         listener.set_nonblocking(true).map_err(|err| err.to_string())?;
         let listener = UnixListener::from_std(listener).map_err(|err| err.to_string())?;
+        service.agent.listener_ready(generation);
         let clients = Arc::new(AtomicUsize::new(0));
         loop {
             let accepted = tokio::select! {
@@ -853,7 +865,7 @@ mod transport {
         true
     }
 
-    pub(super) async fn serve(_service: Arc<Service>, _cancel: CancellationToken) -> Result<(), String> {
+    pub(super) async fn serve(_service: Arc<Service>, _cancel: CancellationToken, _generation: u64) -> Result<(), String> {
         Err("The agent connector is available on desktop in this version.".into())
     }
 }
@@ -869,6 +881,25 @@ mod tests {
         assert_eq!(clean_line(&"x".repeat(50), 10).len(), 10);
         assert_eq!(clean_line("éé z", 2), "éé");
         assert_eq!(clean_line("éé z", 3), "éé");
+    }
+
+    #[test]
+    fn only_the_current_listener_can_report_ready() {
+        let connector = AgentConnector::default();
+        for generation in 1..=2 {
+            *connector.running.lock().unwrap() = Some(Running {
+                generation,
+                ready: false,
+                cancel: CancellationToken::new(),
+            });
+            connector.listener_ready(generation - 1);
+            assert!(!connector.running.lock().unwrap().as_ref().unwrap().ready);
+            connector.listener_ready(generation);
+            assert!(connector.running.lock().unwrap().as_ref().unwrap().ready);
+        }
+        connector.running.lock().unwrap().take();
+        connector.listener_ready(2);
+        assert!(connector.running.lock().unwrap().is_none());
     }
 
     #[test]
