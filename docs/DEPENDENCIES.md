@@ -58,7 +58,7 @@ Fixed when cargo-deny was introduced: `rustls-pemfile` (unmaintained) was replac
 | snow 0.10 | 13 | 79 | Noise protocol for private reading-data sync |
 | tauri-plugin-updater | 10 | 474 | Desktop self-update |
 | rust-embed 8 | 9 | 25 | Embedded frontend for headless mode, plus locale catalogs |
-| rusqlite (bundled SQLite) | 8 | 44 | Catalog cache/index |
+| rusqlite (bundled SQLite) | 8 | 44 | Offline spelling dictionary built from archive titles |
 | notify 8 | 7 | 55 | Watched library folders |
 | mdns-sd (vendored) | 5 | 37 | Nearby discovery on non-Apple platforms |
 
