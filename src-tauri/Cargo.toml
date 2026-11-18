@@ -20,6 +20,8 @@ cc = "1"
 toml = { version = "1", default-features = false, features = ["parse", "std"] }
 
 [dev-dependencies]
+# Reference implementation used by the case-fold data generator and parity test.
+icu_casemap = "=2.4.0"
 # The lib test target compiles native/desktop_sdk.rs to test SDK root resolution.
 cc = "1"
 # The updater tests build a mock Tauri app so the real plugin state and
@@ -73,7 +75,6 @@ icu_locale = "2.4"
 icu_provider = { version = "2.4", features = ["sync"] }
 rusqlite = { version = "0.41", features = ["bundled", "fallible_uint"] }
 unicode-normalization = "0.1"
-icu_casemap = "2.4"
 socket2 = { version = "0.6", features = ["all"] }
 sys-locale = "0.3"
 if-addrs = "0.15"
