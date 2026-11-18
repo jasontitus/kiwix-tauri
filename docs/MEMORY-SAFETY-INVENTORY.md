@@ -4,7 +4,7 @@
 
 The owner trusts the operating system and standard runtime. Application code and dependencies that process untrusted content must be memory safe. The application does **not yet meet this target**. A keyword scan, a safe API or a passing test covers only part of that claim. OS-provided WebViews fall within the platform boundary. App-owned bridges, archive-supplied content handed to non-platform libraries, and vendored browser integration code remain in scope.
 
-The full macOS desktop compiler inventory covers the app, its host build tools and dependencies. It records the 125 observed sites in the application crate and groups them by the behavior a replacement must preserve. [Compiled app worklist and reproducible receipt](audit/2026-11-18-macos-compiled-unsafe.md)
+The Apple silicon desktop release at `7c2dd5d` compiled **114 distinct unsafe Rust sites in the app crate** and 17,383 target-side sites across 421 packages. The earlier build had 125 in the app and 17,850 across its target packages. Nearby transport and discovery account for 59 of the current app sites. The app build dropped bundled SQLite and added one call to check Apple extended file permissions. These counts precede the linker and apply to this Mac configuration. The spelling publication repair at `ffb7dda` came after this measurement. [Current package counts and source locations](audit/2026-11-18-macos-spelling-compiled-unsafe.json) · [Earlier worklist, method and coverage](audit/2026-11-18-macos-compiled-unsafe.md)
 
 | Path | Runtime migration and remaining work |
 |---|---|
