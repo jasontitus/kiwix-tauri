@@ -1,0 +1,8 @@
+[package]
+name = "positioned-reader-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+zimru = { path = "../zimru", default-features = false }
