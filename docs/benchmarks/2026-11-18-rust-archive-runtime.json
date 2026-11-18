@@ -1,0 +1,752 @@
+{
+  "host": "macOS arm64, Apple M1 Ultra",
+  "native_app": "f2875d097225509c75a884739960cdf0951ef9fd",
+  "reader_revision": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "glass_revision": "700791140150142445a5861c5118614a56130dbd",
+  "native_library": "libzim 9.8.2, retained SDK",
+  "method": "Two standalone release-mode Kiwix binaries, loopback HTTP, alternating requests, one warm-up plus eleven measured requests per build. Five fresh-profile import/startup medians follow one warm-up. App flow imported the archive, inspected stored metadata and compared status, content, ranges and lengths with native extraction. HTML comparison accounts for the per-process reader bridge. Warm OS cache, uncontrolled system activity. Distribution packaging was checked separately.",
+  "binary_sha256": {
+    "libzim": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+    "rust": "35b02c57b980e2b32428bdf8a445ee03eb762a68cc276f3717c8003cfcd4dfb2"
+  },
+  "package": {
+    "images": [
+      {
+        "file": "Contents/MacOS/kiwix-mcp",
+        "sha256": "b55697ad7b2b69fe7c74da8ca712161f839190455a680c5a4b7d8e12f8ce9e30",
+        "imports": [
+          "/usr/lib/libiconv.2.dylib",
+          "/usr/lib/libSystem.B.dylib"
+        ]
+      },
+      {
+        "file": "Contents/MacOS/kiwix-workbench",
+        "sha256": "80d35c44852217a610853b118d4412c1632d2ee990111612885ed2e79f0f84a2",
+        "imports": [
+          "/usr/lib/libSystem.B.dylib",
+          "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+          "/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation",
+          "/System/Library/Frameworks/UserNotifications.framework/Versions/A/UserNotifications",
+          "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+          "/System/Library/Frameworks/Network.framework/Versions/A/Network",
+          "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+          "/System/Library/Frameworks/WebKit.framework/Versions/A/WebKit",
+          "/System/Library/Frameworks/PDFKit.framework/Versions/A/PDFKit",
+          "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+          "/usr/lib/libc++.1.dylib",
+          "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+          "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+          "/System/Library/Frameworks/OSAKit.framework/Versions/A/OSAKit",
+          "/System/Library/Frameworks/AudioUnit.framework/Versions/A/AudioUnit",
+          "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+          "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+          "/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon",
+          "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+          "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore",
+          "/usr/lib/libobjc.A.dylib",
+          "/usr/lib/libiconv.2.dylib",
+          "/System/Library/Frameworks/ColorSync.framework/Versions/A/ColorSync"
+        ]
+      }
+    ],
+    "license_sha256": {
+      "licenses/zimru/LICENSE": "653d377231bdc53f35d0e8a5b38047a45e31c7a580f566576483bc3b0cf96070",
+      "licenses/zimru/zstd-rs-MIT": "4b27610bfe4f632e1386e39363e8804bfad720c73ccb45a4d7f22796acc0b8e4",
+      "licenses/zimru/zstd-rs-Apache-2.0": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "licenses/zimru/lzma-rust2-Apache-2.0": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+      "licenses/zimru-xapian/LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "licenses/zimru-xapian/Stopwords-ISO-gu-MIT.txt": "5c112372c3225d89323b7f9846b27feb2d1157c3968885cbc62a64e3738cd116",
+      "licenses/zimru-xapian/Stopwords-ISO-MIT.txt": "27403c9741017239dc227eab9d6118c7c0569b199b42a853bd4ffbca898b1007"
+    },
+    "strict_signature": "ad-hoc, verified on macOS",
+    "installed": false,
+    "full_bundle_headless_temporary_profile": "OS denied creating a profile lock outside the app container. Functional HTTP/browser tests used the standalone release host from this build."
+  },
+  "archives": {
+    "ray": {
+      "file": "wikipedia_en_ray-charles_mini.zim",
+      "archive_bytes": 760553,
+      "article": "Ray_Charles_in_Person",
+      "metadata_fields": [
+        "id",
+        "title",
+        "language",
+        "articleCount",
+        "mediaCount",
+        "size",
+        "available",
+        "hasFulltextIndex",
+        "hasTitleIndex"
+      ],
+      "checks": {
+        "html": {
+          "payload_bytes": 13031,
+          "payload_sha256": "e07c0f229a341a7f6054dd69d7e780bb3afd66d1281021668bbea070f5ed2f8d",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "samples_ms": {
+        "fresh_import_ready": {
+          "native": [
+            62.3334,
+            58.4726,
+            55.881,
+            52.5812,
+            55.7955
+          ],
+          "rust": [
+            52.7781,
+            51.2863,
+            50.1297,
+            55.1517,
+            52.9652
+          ]
+        },
+        "snapshot": {
+          "native": [
+            0.7833,
+            0.5848,
+            0.625,
+            0.605,
+            0.5409,
+            0.4293,
+            0.4339,
+            0.5722,
+            0.5515,
+            0.4702,
+            0.5266
+          ],
+          "rust": [
+            0.7047,
+            0.5516,
+            0.5633,
+            0.5892,
+            0.4638,
+            0.5414,
+            0.4733,
+            0.5948,
+            0.5288,
+            0.6412,
+            0.4677
+          ]
+        },
+        "open_article": {
+          "native": [
+            0.4858,
+            0.539,
+            0.5036,
+            0.5592,
+            0.4771,
+            0.5462,
+            0.4369,
+            0.4988,
+            0.4447,
+            0.4775,
+            0.4735
+          ],
+          "rust": [
+            0.5449,
+            0.4029,
+            0.5123,
+            0.3925,
+            0.5084,
+            0.4538,
+            0.6291,
+            0.4507,
+            0.5043,
+            0.4629,
+            0.5316
+          ]
+        },
+        "html": {
+          "native": [
+            0.4744,
+            0.4085,
+            0.6095,
+            0.48,
+            0.5877,
+            0.4472,
+            0.4301,
+            0.4458,
+            0.5178,
+            0.5149,
+            0.4372
+          ],
+          "rust": [
+            0.4325,
+            0.465,
+            0.5104,
+            0.4932,
+            0.4811,
+            0.6262,
+            0.46,
+            0.6554,
+            0.5635,
+            0.4912,
+            0.5283
+          ]
+        }
+      }
+    },
+    "simple": {
+      "file": "wikipedia_en_simple_all_nopic_2026-05.zim",
+      "archive_bytes": 982788870,
+      "article": "Solar_System",
+      "metadata_fields": [
+        "id",
+        "title",
+        "language",
+        "articleCount",
+        "mediaCount",
+        "size",
+        "available",
+        "hasFulltextIndex",
+        "hasTitleIndex"
+      ],
+      "checks": {
+        "html": {
+          "payload_bytes": 439204,
+          "payload_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "samples_ms": {
+        "fresh_import_ready": {
+          "native": [
+            3556.1055,
+            3535.8056,
+            3345.1169,
+            3343.5066,
+            3358.5991
+          ],
+          "rust": [
+            8097.188,
+            7750.7293,
+            7705.2755,
+            8481.9645,
+            7717.5015
+          ]
+        },
+        "snapshot": {
+          "native": [
+            0.57,
+            0.5006,
+            0.4996,
+            0.6343,
+            0.4566,
+            0.5634,
+            0.5211,
+            0.6929,
+            0.5259,
+            0.531,
+            0.4958
+          ],
+          "rust": [
+            0.5912,
+            0.4884,
+            0.5048,
+            0.5199,
+            0.567,
+            0.4603,
+            0.5223,
+            0.5478,
+            0.5157,
+            0.5337,
+            0.9207
+          ]
+        },
+        "open_article": {
+          "native": [
+            0.5638,
+            0.4027,
+            0.3868,
+            0.4324,
+            0.8455,
+            0.4747,
+            0.624,
+            0.4363,
+            0.4954,
+            0.4409,
+            0.4785
+          ],
+          "rust": [
+            0.5376,
+            0.4736,
+            0.4666,
+            0.8319,
+            0.4785,
+            0.5376,
+            0.4219,
+            0.5148,
+            0.5,
+            0.5134,
+            0.3916
+          ]
+        },
+        "html": {
+          "native": [
+            0.64,
+            0.7781,
+            0.9495,
+            0.7328,
+            0.6396,
+            0.8876,
+            0.7533,
+            0.6165,
+            0.91,
+            1.5051,
+            0.6115
+          ],
+          "rust": [
+            0.5812,
+            0.7548,
+            0.7565,
+            0.5884,
+            0.6502,
+            0.73,
+            0.6017,
+            0.7838,
+            0.5958,
+            1.1117,
+            0.6154
+          ]
+        }
+      }
+    },
+    "media": {
+      "file": "media.zim",
+      "archive_bytes": 36267,
+      "article": "index.html",
+      "metadata_fields": [
+        "id",
+        "title",
+        "language",
+        "articleCount",
+        "mediaCount",
+        "size",
+        "available",
+        "hasFulltextIndex",
+        "hasTitleIndex"
+      ],
+      "checks": {
+        "html": {
+          "payload_bytes": 128,
+          "payload_sha256": "197995b30b0e26c72355cdb6df271d6e3b502492ef01707a0c0a4c0e121d93e5",
+          "http_status": 200,
+          "mime": "text/html"
+        },
+        "resource_all": {
+          "payload_bytes": 3145728,
+          "payload_sha256": "f6dd7fec8584ad00219a447071c1fa368a1caee4d9c146083d233713ddccd2c0",
+          "http_status": 200,
+          "mime": "video/mp4"
+        },
+        "range_4k": {
+          "payload_bytes": 4096,
+          "payload_sha256": "b84f1a029c1a87777a69d7eaddfb7f0f1a55d577dc5fe75b9bd7754fbf74ee44",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=2109497-2113592"
+        },
+        "range_1m": {
+          "payload_bytes": 1048576,
+          "payload_sha256": "4d083586fa4f5f3c8b225c0bf36651f6dea7bae852efffeaa0b1547d5870877f",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=524307-1572882"
+        },
+        "range_end": {
+          "payload_bytes": 4096,
+          "payload_sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=3141632-3145727"
+        }
+      },
+      "samples_ms": {
+        "fresh_import_ready": {
+          "native": [
+            41.9846,
+            44.7214,
+            67.8293,
+            49.7963,
+            61.494
+          ],
+          "rust": [
+            57.7171,
+            54.4768,
+            39.4406,
+            55.8212,
+            41.9245
+          ]
+        },
+        "snapshot": {
+          "native": [
+            0.378,
+            0.4527,
+            0.3974,
+            0.4791,
+            0.3427,
+            0.4643,
+            0.431,
+            0.6135,
+            0.406,
+            0.4198,
+            0.3919
+          ],
+          "rust": [
+            0.4313,
+            0.4105,
+            0.412,
+            0.3892,
+            0.3879,
+            0.4076,
+            0.4972,
+            0.4706,
+            0.4291,
+            0.3529,
+            0.3993
+          ]
+        },
+        "open_article": {
+          "native": [
+            0.2916,
+            0.277,
+            0.367,
+            0.2939,
+            0.2526,
+            0.4072,
+            0.3597,
+            0.4944,
+            0.3519,
+            0.3714,
+            0.3273
+          ],
+          "rust": [
+            0.2913,
+            0.3421,
+            0.313,
+            0.3376,
+            0.2658,
+            0.4262,
+            0.4428,
+            0.3954,
+            0.3431,
+            0.3124,
+            0.4163
+          ]
+        },
+        "html": {
+          "native": [
+            0.3308,
+            0.3097,
+            0.3703,
+            0.3608,
+            0.3237,
+            0.473,
+            0.4602,
+            0.4439,
+            0.3639,
+            0.4554,
+            0.3237
+          ],
+          "rust": [
+            0.3079,
+            0.2832,
+            0.3482,
+            0.3109,
+            0.269,
+            0.4091,
+            0.3216,
+            0.4625,
+            0.3253,
+            0.3483,
+            0.3382
+          ]
+        },
+        "resource_all": {
+          "native": [
+            1.792,
+            1.9562,
+            1.5522,
+            1.8133,
+            1.5413,
+            1.8458,
+            1.6215,
+            2.012,
+            1.5519,
+            1.7362,
+            1.742
+          ],
+          "rust": [
+            2.2535,
+            1.8644,
+            1.75,
+            1.7298,
+            1.6854,
+            1.6905,
+            1.8255,
+            1.7147,
+            1.6468,
+            1.6388,
+            1.6663
+          ]
+        },
+        "range_4k": {
+          "native": [
+            0.4603,
+            0.4785,
+            0.4736,
+            0.4522,
+            0.4392,
+            0.4922,
+            0.4922,
+            0.6278,
+            0.36,
+            0.4529,
+            0.5528
+          ],
+          "rust": [
+            0.657,
+            0.3239,
+            0.6264,
+            0.3028,
+            0.4971,
+            0.3941,
+            0.5025,
+            0.4306,
+            0.5548,
+            0.3865,
+            0.5221
+          ]
+        },
+        "range_1m": {
+          "native": [
+            0.9914,
+            0.8147,
+            1.02,
+            0.8347,
+            0.9394,
+            0.905,
+            1.0018,
+            0.849,
+            0.8756,
+            0.8199,
+            0.8689
+          ],
+          "rust": [
+            1.0126,
+            0.8117,
+            1.0162,
+            0.7843,
+            0.9597,
+            0.879,
+            1.0082,
+            0.9109,
+            0.8702,
+            0.8828,
+            0.9002
+          ]
+        },
+        "range_end": {
+          "native": [
+            0.4418,
+            0.3406,
+            0.3318,
+            0.305,
+            0.3782,
+            0.4462,
+            0.5793,
+            0.3636,
+            0.3472,
+            0.3496,
+            0.3443
+          ],
+          "rust": [
+            0.4044,
+            0.3407,
+            0.3728,
+            0.276,
+            0.388,
+            0.3927,
+            0.5573,
+            0.38,
+            0.3246,
+            0.2912,
+            0.3872
+          ]
+        }
+      }
+    },
+    "large_html": {
+      "file": "large_article.zim",
+      "archive_bytes": 37162,
+      "article": "Large.html",
+      "metadata_fields": [
+        "id",
+        "title",
+        "language",
+        "articleCount",
+        "mediaCount",
+        "size",
+        "available",
+        "hasFulltextIndex",
+        "hasTitleIndex"
+      ],
+      "checks": {
+        "html": {
+          "payload_bytes": 17826555,
+          "payload_sha256": "43dd14e3d8d159f26ef210f02a2d41138277b40f7548d1d43d97de2670fce465",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "samples_ms": {
+        "fresh_import_ready": {
+          "native": [
+            59.5759,
+            59.2705,
+            43.6567,
+            49.2356,
+            50.7056
+          ],
+          "rust": [
+            47.3676,
+            62.6333,
+            42.8472,
+            44.1322,
+            60.9427
+          ]
+        },
+        "snapshot": {
+          "native": [
+            0.519,
+            0.8295,
+            0.543,
+            0.7282,
+            0.3936,
+            0.7805,
+            0.668,
+            0.6648,
+            0.3713,
+            0.6677,
+            0.643
+          ],
+          "rust": [
+            0.6803,
+            0.7025,
+            0.7264,
+            0.4601,
+            0.6735,
+            0.5364,
+            0.8834,
+            0.4472,
+            0.5541,
+            0.4664,
+            0.7462
+          ]
+        },
+        "open_article": {
+          "native": [
+            0.4098,
+            0.5328,
+            0.3344,
+            0.3522,
+            0.2738,
+            0.4425,
+            0.4917,
+            0.2946,
+            0.2432,
+            0.4448,
+            0.5342
+          ],
+          "rust": [
+            0.3239,
+            0.4572,
+            0.3801,
+            0.3571,
+            0.3019,
+            0.4559,
+            0.4107,
+            0.2792,
+            0.2493,
+            0.4273,
+            0.5075
+          ]
+        },
+        "html": {
+          "native": [
+            8.3272,
+            7.0948,
+            7.0233,
+            6.5395,
+            6.9715,
+            7.5287,
+            6.0247,
+            5.2448,
+            5.7831,
+            7.0714,
+            6.5749
+          ],
+          "rust": [
+            5.5002,
+            7.6505,
+            6.8693,
+            7.9556,
+            7.6837,
+            7.2711,
+            7.6297,
+            5.1905,
+            4.7757,
+            6.8602,
+            7.848
+          ]
+        }
+      }
+    }
+  },
+  "webp": {
+    "file": "wikipedia_en_100_maxi_2024-01.zim",
+    "key": "I/225_Peptide_Bond-01.jpg.webp",
+    "bytes": 12414,
+    "mime": "image/webp",
+    "status": 200,
+    "sha256": "c11e2ccd984681167b7ea8e333882ca3c801cdb9fa302d402b9a46c266723811",
+    "samples_ms": {
+      "native": [
+        0.4304,
+        0.3816,
+        0.4388,
+        0.3453,
+        0.3876,
+        0.3367,
+        0.3235,
+        0.3152,
+        0.3707,
+        0.3241,
+        0.3917
+      ],
+      "rust": [
+        0.2851,
+        0.3768,
+        0.6631,
+        0.3657,
+        0.3672,
+        0.3538,
+        0.4456,
+        0.3771,
+        0.3356,
+        0.3468,
+        0.3062
+      ]
+    }
+  },
+  "browser_flow": {
+    "suggestion": "Ray (film)",
+    "chosen": "Ray Charles in Person",
+    "readerFrameTitle": "Article: Ray Charles in Person",
+    "articleText": "Ray Charles in Person\nRay Charles in Person\n\nLive album by Ray Charles\nReleased\tJuly 1960\nRecorded\tM"
+  }
+}

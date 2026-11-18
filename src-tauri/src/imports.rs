@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Read-only acquisition verification. Only the service may register verified books.
 //!
-//! A single std worker owns libzim checks, not Tokio's blocking pool. Admission
+//! A single worker owns archive checks. Admission
 //! retirement invalidates queued/late results immediately; terminal retirement
 //! additionally joins that worker before native provider resources are released.
 //! There are no profile writes, events, receipt commits, or private caches here.
@@ -15,6 +15,7 @@ use std::{
     sync::{Arc, Condvar, Mutex},
 };
 use tokio::sync::Notify;
+use tokio_util::sync::CancellationToken;
 
 const MAX_QUEUED: usize = 64;
 
@@ -43,6 +44,10 @@ impl From<EnqueueError> for String {
 }
 
 pub(crate) fn load_book(path: &str, managed: bool, verify: bool) -> Result<Book, String> {
+    load_book_inner(path, managed, verify, None)
+}
+
+fn load_book_inner(path: &str, managed: bool, verify: bool, cancel: Option<&CancellationToken>) -> Result<Book, String> {
     let canonical = std::fs::canonicalize(path).map_err(|failure| {
         crate::archive::archive_open_error(
             std::path::Path::new(path),
@@ -51,10 +56,10 @@ pub(crate) fn load_book(path: &str, managed: bool, verify: bool) -> Result<Book,
     })?;
     let archive = Archive::open(&canonical)?;
     if verify {
-        let intact = archive.check_integrity().map_err(|error| {
-            eprintln!("Archive integrity check failed: {error}");
-            crate::archive::CORRUPT_ARCHIVE.to_string()
-        })?;
+        let intact = match cancel {
+            Some(token) => archive.check_integrity_cancellable(token, |_, _| {}),
+            None => archive.check_integrity(),
+        }.map_err(crate::archive::integrity_failure)?;
         if !intact {
             // One sentence for both downloaded and manually chosen archives:
             // the failure must say the file was refused, not that it was added.
@@ -62,7 +67,10 @@ pub(crate) fn load_book(path: &str, managed: bool, verify: bool) -> Result<Book,
         }
     }
     Ok(Book {
-        metadata: archive.metadata()?,
+        metadata: match cancel {
+            Some(token) => archive.metadata_cancellable(token)?,
+            None => archive.metadata()?,
+        },
         installation_id: new_installation_id(),
         path: canonical.to_string_lossy().into_owned(),
         added_at: now(),
@@ -103,6 +111,7 @@ fn serialize_arc<T: ?Sized + Serialize, S: serde::Serializer>(
 }
 
 struct Entry {
+    cancel: CancellationToken,
     status: ImportStatus,
     books: Option<Arc<[Book]>>,
     sources: Option<Arc<[crate::archive_source::RetainedSource]>>,
@@ -288,6 +297,7 @@ impl ImportManager {
         state.entries.insert(
             receipt.into(),
             Entry {
+                cancel: CancellationToken::new(),
                 status: status.clone(),
                 books: None,
                 sources: None,
@@ -322,7 +332,7 @@ impl ImportManager {
     /// Revoke one acquisition and all of its publication receipts before any
     /// owned files are deleted. The tombstone also rejects an enqueue from a
     /// completed-job snapshot taken before retirement, even if no entry exists
-    /// yet. A running libzim call may finish reading, but cannot publish.
+    /// yet. In-flight verification observes the per-receipt cancellation token.
     /// Undo `retire_acquisition` when the deletion/forget it guarded was
     /// refused before touching the acquisition (for example, the job had been
     /// resumed from another window and is no longer terminal). Without this the
@@ -349,6 +359,7 @@ impl ImportManager {
         state.queue.retain(|receipt| !belongs_to_acquisition(receipt, acquisition));
         for (receipt, entry) in &mut state.entries {
             if belongs_to_acquisition(receipt, acquisition) {
+                entry.cancel.cancel();
                 entry.status.state = ImportState::Cancelled;
                 entry.status.error = None;
                 entry.books = None;
@@ -514,8 +525,7 @@ impl ImportManager {
         Ok(status)
     }
 
-    /// Idempotent and nonjoining. A current libzim call may finish reading, but
-    /// queued batches never start and neither current nor ready results survive.
+    /// Cancel active verification and invalidate queued and ready batches without joining.
     /// Already retained ReadyImport tickets are invalidated by with_ready.
     pub(crate) fn shutdown(&self) {
         let mut state = self.shared.state.lock().unwrap();
@@ -525,6 +535,7 @@ impl ImportManager {
         state.stopped = true;
         state.queue.clear();
         for entry in state.entries.values_mut() {
+            entry.cancel.cancel();
             if matches!(
                 entry.status.state,
                 ImportState::Queued | ImportState::Verifying | ImportState::Ready
@@ -542,7 +553,7 @@ impl ImportManager {
 
     /// Terminal retirement owns the join even if its awaiting future is dropped.
     /// Later callers await the same task rather than treating a taken handle as
-    /// proof that the native archive consumer has finished.
+    /// proof that the archive verification worker has finished.
     pub(crate) async fn shutdown_and_wait(&self) -> Result<(), String> {
         self.shutdown();
         let mut retirement = self.retirement.lock().await;
@@ -593,7 +604,7 @@ fn owns_ready(state: &State, ready: &ReadyImport) -> bool {
 
 fn verify_pending(shared: &Shared) {
     loop {
-        let (receipt, paths, publication) = {
+        let (receipt, paths, publication, cancel) = {
             let mut state = shared.state.lock().unwrap();
             while !state.stopped && state.queue.is_empty() {
                 state = shared.work.wait(state).unwrap();
@@ -606,62 +617,42 @@ fn verify_pending(shared: &Shared) {
             entry.status.state = ImportState::Verifying;
             let paths = entry.status.paths.clone();
             shared.changed.notify_one();
-            (receipt, paths, entry.publication.clone())
+            (receipt, paths, entry.publication.clone(), entry.cancel.clone())
         };
         #[cfg(test)]
         test_gate(shared, true);
-        // Never hold the state mutex over libzim. Retirement stops between
-        // archives as well as batches and invalidates any in-flight result.
+        // Cancellation belongs to this admission, even if the same receipt is
+        // retired and then re-enqueued. Never hold the state mutex over I/O.
         let mut books = Vec::with_capacity(paths.len());
         let mut sources = Vec::with_capacity(paths.len());
         let mut identities = Vec::with_capacity(paths.len());
         let mut error = publication.as_ref().and_then(|value| value.as_ref().err()).cloned();
         for path in paths.iter() {
             if error.is_some() { break; }
-            let state = shared.state.lock().unwrap();
-            if state.stopped {
-                return;
-            }
-            let active = state.entries.get(&receipt)
-                .is_some_and(|entry| entry.status.state == ImportState::Verifying);
-            drop(state);
-            if !active {
-                break;
-            }
+            if cancel.is_cancelled() { break; }
             #[cfg(test)]
             {
                 shared.hooks.lock().unwrap().reads += 1;
             }
             let verified = (|| {
-                let mut book = load_book(path, true, false)?;
+                let mut book = load_book_inner(path, true, false, Some(&cancel))?;
                 let source = crate::archive_source::retain(&book)?;
                 let identity = VerifiedIdentity::capture(&source)?;
                 if let Some(Ok(publication)) = &publication {
-                    publication.verify(&source, || {
-                        let state = shared.state.lock().unwrap();
-                        state.stopped || state.entries.get(&receipt)
-                            .is_none_or(|entry| entry.status.state != ImportState::Verifying)
-                    })?;
+                    publication.verify(&source, || cancel.is_cancelled())?;
                 }
-                // Retirement during the new cancellable digest pass must not
-                // start a later uninterruptible native integrity operation.
-                {
-                    let state = shared.state.lock().unwrap();
-                    if state.stopped || state.entries.get(&receipt)
-                        .is_none_or(|entry| entry.status.state != ImportState::Verifying)
-                    {
-                        return Err("Archive verification was cancelled".into());
-                    }
-                }
+                if cancel.is_cancelled() { return Err("Archive verification was cancelled".into()); }
                 let archive = source.open()?;
-                let intact = archive.check_integrity().map_err(|error| {
-                    eprintln!("Archive integrity check failed: {error}");
-                    crate::archive::CORRUPT_ARCHIVE.to_string()
+                let intact = archive.check_integrity_cancellable(&cancel, |_checked, _total| {
+                    #[cfg(test)]
+                    checksum_progress(shared, _checked, _total);
+                }).map_err(|error| {
+                    if cancel.is_cancelled() { error } else { crate::archive::integrity_failure(error) }
                 })?;
                 if !intact {
                     return Err(crate::archive::CORRUPT_ARCHIVE.into());
                 }
-                book.metadata = archive.metadata()?;
+                book.metadata = archive.metadata_cancellable(&cancel)?;
                 identity.unchanged(&source)?;
                 Ok((book, source, identity))
             })();
@@ -686,7 +677,7 @@ fn verify_pending(shared: &Shared) {
         let Some(entry) = state.entries.get_mut(&receipt) else {
             continue;
         };
-        if entry.status.state != ImportState::Verifying {
+        if entry.status.state != ImportState::Verifying || cancel.is_cancelled() {
             continue;
         }
         if let Some(error) = error {
@@ -707,6 +698,8 @@ fn verify_pending(shared: &Shared) {
 #[derive(Default)]
 struct TestHooks {
     before_read: Option<TestGate>,
+    during_checksum: Option<TestGate>,
+    finished_checksums: usize,
     after_read: Option<TestGate>,
     exited: Option<std::sync::mpsc::SyncSender<()>>,
     reads: usize,
@@ -716,6 +709,19 @@ struct TestHooks {
 struct TestGate {
     entered: std::sync::mpsc::SyncSender<()>,
     release: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(test)]
+fn checksum_progress(shared: &Shared, checked: u64, total: u64) {
+    let gate = {
+        let mut hooks = shared.hooks.lock().unwrap();
+        if checked == total { hooks.finished_checksums += 1; }
+        hooks.during_checksum.take()
+    };
+    if let Some(gate) = gate {
+        let _ = gate.entered.send(());
+        let _ = gate.release.recv();
+    }
 }
 
 #[cfg(test)]
@@ -1079,6 +1085,36 @@ mod tests {
         manager.shutdown_and_wait().await.unwrap();
     }
 
+    #[tokio::test]
+    async fn stopping_imports_interrupts_the_current_checksum_before_join() {
+        let (during_checksum, entered, release) = gate();
+        let manager = manager(TestHooks { during_checksum: Some(during_checksum), ..TestHooks::default() });
+        manager.enqueue("checking", paths()).unwrap();
+        entered.recv_timeout(DEADLINE).unwrap();
+        manager.shutdown();
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(2), manager.shutdown_and_wait()).await.unwrap().unwrap();
+        assert_eq!(manager.status("checking").unwrap().state, ImportState::Cancelled);
+        assert_eq!(manager.shared.hooks.lock().unwrap().finished_checksums, 0);
+        assert!(manager.ready().is_empty());
+    }
+
+    #[tokio::test]
+    async fn retired_checksum_cannot_finish_or_publish_into_reused_receipt() {
+        let (during_checksum, entered, release) = gate();
+        let manager = manager(TestHooks { during_checksum: Some(during_checksum), ..TestHooks::default() });
+        manager.enqueue("book:edition", paths()).unwrap();
+        entered.recv_timeout(DEADLINE).unwrap();
+        manager.retire_acquisition("book");
+        manager.unretire_acquisition("book");
+        manager.enqueue("book:edition", paths()).unwrap();
+        release.send(()).unwrap();
+        wait_for(&manager, "book:edition", ImportState::Ready).await;
+        assert_eq!(manager.shared.hooks.lock().unwrap().finished_checksums, 1);
+        assert_eq!(manager.ready().len(), 1);
+        manager.shutdown_and_wait().await.unwrap();
+    }
+
     #[test]
     fn shutdown_does_not_wait_for_current_read_or_publish_its_late_result() {
         let (after_read, entered, release) = gate();
@@ -1090,7 +1126,7 @@ mod tests {
         });
         manager.enqueue("active", paths()).unwrap();
         entered.recv_timeout(DEADLINE).unwrap();
-        // This gate is after real libzim verification but before publication.
+        // This gate is after real archive verification but before publication.
         manager.enqueue("pending", paths()).unwrap();
         manager.shutdown();
         assert_eq!(
@@ -1115,7 +1151,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn terminal_retirement_joins_native_work_after_an_await_is_dropped() {
+    async fn terminal_retirement_joins_active_work_after_an_await_is_dropped() {
         let (after_read, entered, release) = gate();
         let manager = manager(TestHooks { after_read: Some(after_read), ..TestHooks::default() });
         manager.enqueue("active", paths()).unwrap();

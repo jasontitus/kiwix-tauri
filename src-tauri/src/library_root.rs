@@ -1812,7 +1812,7 @@ mod tests {
             edition_updates::{EditionIntent, EditionManager, EditionSelection},
             store::{Bookmark, HistoryEntry, Tab, TabLocation, WindowSession},
         };
-        use md5::Digest;
+
 
         // Both mobile storage actions share copy_and_commit; desktop moves use
         // library_files::commit_path, including its journal recovery ordering.
@@ -1827,7 +1827,7 @@ mod tests {
             let mut replacement_bytes = original_bytes.clone();
             replacement_bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
             let checksum = u64::from_le_bytes(replacement_bytes[72..80].try_into().unwrap()) as usize;
-            let digest = md5::Md5::digest(&replacement_bytes[..checksum]);
+            let digest = md5::compute(&replacement_bytes[..checksum]).0;
             replacement_bytes[checksum..checksum + 16].copy_from_slice(&digest);
             fs::write(&replacement_path, replacement_bytes).unwrap();
             let verified = book_at(&replacement_path);

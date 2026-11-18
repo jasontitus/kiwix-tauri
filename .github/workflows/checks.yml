@@ -1,10 +1,7 @@
 name: Checks
 
-# Fast checks that need no native libzim SDK: frontend type/build, JavaScript
-# and Python tests, and dependency policy. The Android and Windows jobs run
-# clippy on the library for those targets in type-check mode (no libzim link,
-# no tests). Host Rust clippy and tests run in the native package workflow,
-# after it builds the matched SDK; its Windows job runs neither.
+# Frontend and policy checks run here alongside cross-target Rust clippy.
+# Host Rust clippy and tests run in the native package workflow.
 on:
   push:
     branches: [main]
@@ -75,8 +72,8 @@ jobs:
       - run: cargo test --locked --manifest-path kiwix-mcp/Cargo.toml
 
   android-typecheck:
+    # Check-only mode skips platform shims and intentionally prevents linking.
     # Type-checks cfg(mobile)/Android code that the desktop jobs never compile.
-    # KIWIX_TYPECHECK_ONLY=1 skips the libzim bridge and makes any real link fail.
     name: Android clippy (${{ matrix.target }}, type-check only)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -125,8 +122,7 @@ jobs:
     # Type-checks cfg(windows) code on pull requests; the Windows package job
     # in build.yml runs only on manual dispatch. Releases target
     # x86_64-pc-windows-msvc, but the MinGW target compiles the same
-    # cfg(windows) code without a Windows runner. KIWIX_TYPECHECK_ONLY=1 skips
-    # the libzim bridge and makes any real link fail.
+    # cfg(windows) code without a Windows runner.
     name: Windows clippy (x86_64-pc-windows-gnu, type-check only)
     runs-on: ubuntu-24.04
     timeout-minutes: 30

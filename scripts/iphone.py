@@ -85,7 +85,7 @@ def receiver_configuration(nearby, device, cache):
             or not IPHONE_UDID.fullmatch(device) or target.casefold() == device.casefold()
             or receiver.get("platform", "device") != "device"):
         raise ValueError("iPhone pair requires two distinct explicit physical iPhone UDIDs")
-    for key in ("sdk", "signing_source", "signing_identity"):
+    for key in ("signing_source", "signing_identity"):
         if not isinstance(receiver.get(key), str) or not receiver[key].strip():
             raise ValueError("Secondary iPhone config requires " + key)
     receiver_cache = local_path(value["cache"])
@@ -102,7 +102,7 @@ def prepare_receiver(config, cache, revision, fixture, mobile):
                "--signing-identity", config["signing_identity"]]
     app = run_json([sys.executable, str(SCRIPTS / "iphone-build.py"), "--platform", "device", "--build",
                     "--repo", str(REPO), "--revision", revision, "--output", str(cache / "build"),
-                    "--sdk", str(local_path(config["sdk"])), "--device-udid", device, *signing], 7200)
+                    "--device-udid", device, *signing], 7200)
     runner = run_json([sys.executable, str(SCRIPTS / "iphone-window.py"), "prepare-only",
                        "--platform", "device", "--output", str(cache / "runner"), "--device", device,
                        "--mode", "nearby", "--map-source", str(fixture), *signing, *mobile], 1800)
@@ -340,9 +340,8 @@ def main_impl():
         if args.nearby_direction is not None and args.nearby_direction != recorded.get("nearby", {}).get("direction", "android-to-iphone"):
             parser.error("--prepared selects its recorded Nearby direction; prepare again to change it")
     else:
-        sdk_key = "simulator_sdk" if platform == "simulator" else "sdk"
         workload = args.mode or config.get("mode", "acceptance")
-        required = (sdk_key,) if platform == "simulator" else (sdk_key, "signing_source", "signing_identity")
+        required = () if platform == "simulator" else ("signing_source", "signing_identity")
         if workload != "launch":
             required += ("map_source",)
         for key in required:
@@ -383,7 +382,7 @@ def main_impl():
         print("Preparing current app off-phone. You can keep using the phone.", flush=True)
         app = run_json([sys.executable, str(SCRIPTS / "iphone-build.py"), "--platform", platform, "--build",
                         "--repo", str(REPO), "--revision", args.revision or "HEAD",
-                        "--output", str(build_cache), "--sdk", str(local_path(config[sdk_key])),
+                        "--output", str(build_cache),
                         *target], 7200)
         products = {"app": app}
         if workload == "comparison":

@@ -1,0 +1,213 @@
+{
+  "platform": "aarch64-apple-darwin",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)",
+  "zimru": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "zimfile-xapian": "700791140150142445a5861c5118614a56130dbd",
+  "method": "Release cargo check of a separate library depending on the app pins, with Zimru defaults off and the engine default features. Seeded from the app lock. RUSTFLAGS=--force-warn=unsafe-code, message format json. Counted compiler diagnostics whose code is unsafe_code. Normal graph membership from cargo tree -e normal,no-proc-macro for each dependency. Includes compiled but unreachable code; does not detect all native, assembly or precompiled code. Other application dependencies and shipping feature unification are outside this probe.",
+  "diagnostics": 1528,
+  "packages_with_diagnostics": [
+    {
+      "crate": "crossbeam-deque",
+      "version": "0.8.8",
+      "compiler_diagnostics": 41,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "crossbeam-epoch",
+      "version": "0.9.21",
+      "compiler_diagnostics": 106,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "crossbeam-utils",
+      "version": "0.8.23",
+      "compiler_diagnostics": 228,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "either",
+      "version": "1.19.0",
+      "compiler_diagnostics": 2,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "errno",
+      "version": "0.3.15",
+      "compiler_diagnostics": 4,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "icu_collections",
+      "version": "2.4.0",
+      "compiler_diagnostics": 10,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "icu_locale_core",
+      "version": "2.4.0",
+      "compiler_diagnostics": 36,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "icu_normalizer",
+      "version": "2.4.0",
+      "compiler_diagnostics": 36,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "icu_provider",
+      "version": "2.4.0",
+      "compiler_diagnostics": 15,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "libc",
+      "version": "0.2.191",
+      "compiler_diagnostics": 23,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "potential_utf",
+      "version": "0.1.6",
+      "compiler_diagnostics": 6,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "proc-macro2",
+      "version": "1.0.107",
+      "compiler_diagnostics": 6,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "rayon",
+      "version": "1.12.0",
+      "compiler_diagnostics": 72,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "rayon-core",
+      "version": "1.13.0",
+      "compiler_diagnostics": 85,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "rustix",
+      "version": "1.1.6",
+      "compiler_diagnostics": 245,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "serde_core",
+      "version": "1.0.229",
+      "compiler_diagnostics": 2,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "sigpipe",
+      "version": "0.1.3",
+      "compiler_diagnostics": 1,
+      "normal_reader_dependency": true,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "smallvec",
+      "version": "1.16.5",
+      "compiler_diagnostics": 59,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "stable_deref_trait",
+      "version": "1.2.1",
+      "compiler_diagnostics": 7,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "syn",
+      "version": "2.0.119",
+      "compiler_diagnostics": 78,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "syn",
+      "version": "3.0.10",
+      "compiler_diagnostics": 79,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "tinystr",
+      "version": "0.8.5",
+      "compiler_diagnostics": 20,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "unicode-ident",
+      "version": "1.0.27",
+      "compiler_diagnostics": 2,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": false
+    },
+    {
+      "crate": "utf8_iter",
+      "version": "1.1.0",
+      "compiler_diagnostics": 16,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "utf_types",
+      "version": "1.0.0",
+      "compiler_diagnostics": 61,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "writeable",
+      "version": "0.6.4",
+      "compiler_diagnostics": 6,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "yoke",
+      "version": "0.8.4",
+      "compiler_diagnostics": 96,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "zerotrie",
+      "version": "0.2.5",
+      "compiler_diagnostics": 5,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    },
+    {
+      "crate": "zerovec",
+      "version": "0.11.9",
+      "compiler_diagnostics": 181,
+      "normal_reader_dependency": false,
+      "normal_search_dependency": true
+    }
+  ]
+}

@@ -13,9 +13,7 @@ import org.gradle.api.tasks.TaskAction
  * then align every PT_LOAD segment to 16 KiB, and the APK must zip-align its
  * uncompressed .so entries to 16 KiB.
  *
- * NDK r28 and the Rust linker already emit that alignment because the mobile
- * SDK manifest's `-Wl,-z,max-page-size=16384` reaches the final link. This task
- * fails the build if a toolchain, SDK or packaging change ever regresses it.
+ * Verify the finished package to catch linker, toolchain and packaging regressions.
  */
 abstract class Verify16KbPageAlignmentTask : DefaultTask() {
     @get:InputFiles

@@ -961,7 +961,7 @@ async fn publish_monitored_http_fixture(service: &Service, damaged: bool) -> cra
 
 #[tokio::test]
 async fn completed_download_import_rejects_replaced_or_rewritten_publications() {
-    use md5::{Digest, Md5};
+
     for rewritten in [false, true] {
         let profile = Profile::new();
         let service = Service::new(profile.0.clone(), false, false).unwrap();
@@ -975,7 +975,7 @@ async fn completed_download_import_rejects_replaced_or_rewritten_publications() 
             let mut changed = original.clone();
             changed[8] ^= 1;
             let checksum = u64::from_le_bytes(changed[72..80].try_into().unwrap()) as usize;
-            let digest = Md5::digest(&changed[..checksum]);
+            let digest = md5::compute(&changed[..checksum]).0;
             changed[checksum..checksum + 16].copy_from_slice(&digest);
             changed
         } else {
@@ -1051,7 +1051,7 @@ async fn nearby_initialization_lock_does_not_hide_unrelated_downloads() {
 #[cfg(unix)]
 #[tokio::test]
 async fn verified_download_import_rejects_a_rewrite_with_restored_mtime() {
-    use md5::{Digest, Md5};
+
     use std::io::Write;
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
@@ -1064,7 +1064,7 @@ async fn verified_download_import_rejects_a_rewrite_with_restored_mtime() {
     let mut changed = original.clone();
     changed[8] ^= 1;
     let checksum = u64::from_le_bytes(changed[72..80].try_into().unwrap()) as usize;
-    let digest = Md5::digest(&changed[..checksum]);
+    let digest = md5::compute(&changed[..checksum]).0;
     changed[checksum..checksum + 16].copy_from_slice(&digest);
     {
         let mut file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
@@ -1260,7 +1260,7 @@ fn incomplete_directory_observations_never_authorize_an_empty_listing() {
 
 #[tokio::test]
 async fn monitor_waits_for_http_verification_without_blocking_external_archives() {
-    use md5::{Digest, Md5};
+
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
     let job = publish_monitored_http_fixture(&service, false).await;
@@ -1269,7 +1269,7 @@ async fn monitor_waits_for_http_verification_without_blocking_external_archives(
     let mut bytes = std::fs::read(fixture()).unwrap();
     bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
     let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-    let digest = Md5::digest(&bytes[..checksum]);
+    let digest = md5::compute(&bytes[..checksum]).0;
     bytes[checksum..checksum + 16].copy_from_slice(&digest);
     std::fs::write(&external, bytes).unwrap();
 
@@ -3102,7 +3102,7 @@ async fn reader_retirement_proof_is_exposed_only_to_authenticated_iframe_navigat
 
 #[tokio::test]
 async fn uuid_collision_imports_and_acquisitions_cannot_replace_an_installation() {
-    use md5::{Digest, Md5};
+
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
     let original = service
@@ -3154,7 +3154,7 @@ async fn uuid_collision_imports_and_acquisitions_cannot_replace_an_installation(
     let mut bytes = std::fs::read(fixture()).unwrap();
     bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
     let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-    let digest = Md5::digest(&bytes[..checksum]);
+    let digest = md5::compute(&bytes[..checksum]).0;
     bytes[checksum..checksum + 16].copy_from_slice(&digest);
     std::fs::write(&distinct, bytes).unwrap();
     assert!(Archive::open(&distinct).unwrap().check_integrity().unwrap());
@@ -3179,7 +3179,7 @@ async fn uuid_collision_imports_and_acquisitions_cannot_replace_an_installation(
 
 #[tokio::test]
 async fn registration_failure_is_retryable_without_blocking_other_acquisitions() {
-    use md5::{Digest, Md5};
+
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
     service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
@@ -3190,7 +3190,7 @@ async fn registration_failure_is_retryable_without_blocking_other_acquisitions()
     let mut bytes = std::fs::read(fixture()).unwrap();
     bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
     let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-    let digest = Md5::digest(&bytes[..checksum]);
+    let digest = md5::compute(&bytes[..checksum]).0;
     bytes[checksum..checksum + 16].copy_from_slice(&digest);
     std::fs::write(&distinct, bytes).unwrap();
     service.enqueue_import("collision", vec![collision.to_string_lossy().into_owned()]).unwrap();
@@ -3748,7 +3748,7 @@ fn prepared_map_fixture(service: &Service, book: &Book, path: &Path) -> crate::m
 
 #[tokio::test]
 async fn explicit_map_replacement_verifies_before_switch_and_retires_old_reader_identity() {
-    use md5::{Digest, Md5};
+
     for new_version in [false, true] {
         let profile = Profile::new();
         let service = Service::new(profile.0.clone(), false, false).unwrap();
@@ -3764,7 +3764,7 @@ async fn explicit_map_replacement_verifies_before_switch_and_retires_old_reader_
         if new_version {
             bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
             let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-            let digest = Md5::digest(&bytes[..checksum]);
+            let digest = md5::compute(&bytes[..checksum]).0;
             bytes[checksum..checksum + 16].copy_from_slice(&digest);
         }
         std::fs::write(&new_path, &bytes).unwrap();
@@ -4019,13 +4019,13 @@ async fn accepted_map_replacement_survives_reader_retirement_but_not_privacy_pol
 }
 
     fn distinct_zim(directory: &Path, name: &str, seed: u8) -> PathBuf {
-        use md5::{Digest, Md5};
+
         let mut bytes = std::fs::read(fixture()).unwrap();
         for (index, byte) in bytes[8..24].iter_mut().enumerate() {
             *byte = seed.wrapping_add(index as u8);
         }
         let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-        let digest = Md5::digest(&bytes[..checksum]);
+        let digest = md5::compute(&bytes[..checksum]).0;
         bytes[checksum..checksum + 16].copy_from_slice(&digest);
         let path = directory.join(name);
         std::fs::write(&path, bytes).unwrap();

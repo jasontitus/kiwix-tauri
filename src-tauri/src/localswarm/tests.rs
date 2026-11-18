@@ -636,7 +636,7 @@ async fn throttled_identity_preflight_inspects_and_admits_into_a_nonempty_librar
     let mut existing_bytes = original.clone();
     existing_bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
     let checksum = u64::from_le_bytes(existing_bytes[72..80].try_into().unwrap()) as usize;
-    let digest = md5::Md5::digest(&existing_bytes[..checksum]);
+    let digest = md5::compute(&existing_bytes[..checksum]).0;
     existing_bytes[checksum..checksum + 16].copy_from_slice(&digest);
     let existing_path = root.0.join("existing.zim");
     fs::write(&existing_path, &existing_bytes).unwrap();

@@ -17,8 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 cc = "1"
-serde_json = "1"
-sha2 = "0.10"
+toml = { version = "1", default-features = false, features = ["parse", "std"] }
 
 [dev-dependencies]
 # The lib test target compiles native/desktop_sdk.rs to test SDK root resolution.
@@ -41,7 +40,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = "2"
 sha1 = "0.11"
 sha2 = "0.10"
-md-5 = "0.10"
+md5 = "0.8.1"
 hex = "0.4"
 base64 = "0.22"
 time = { version = "0.3", features = ["parsing", "macros", "formatting", "local-offset", "large-dates"] }
@@ -62,8 +61,7 @@ html5ever = "0.39.0"
 cssparser = "0.37.0"
 librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
 zimfile-xapian = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "700791140150142445a5861c5118614a56130dbd" }
-zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "30e171038660edcac518e6144be2466dd8084d8f", default-features = false }
-parking_lot = "0.12"
+zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "a6d1b4ccd968c29420135fa3b70ced578509a1e8", default-features = false }
 cap-std = "4"
 same-file = "1"
 cap-fs-ext = "4"

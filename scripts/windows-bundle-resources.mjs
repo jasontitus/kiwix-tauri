@@ -1,9 +1,8 @@
 // Build the two Windows runtime dependencies and emit a Tauri resource overlay.
-// Run after validating the externally provisioned MSVC SDK and its provenance.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -17,11 +16,7 @@ const speech = {
   "sherpa-onnx-cxx-api.dll": "ada772889f966426ad9caba5b5125bffb836163573791fdda99541280d45dafa",
 };
 
-export async function windowsBundleResources(sdk, release) {
-  const manifest = JSON.parse(await readFile(path.join(sdk, "kiwix-sdk.json"), "utf8"));
-  const bin = path.join(sdk, "bin");
-  const libraries = (await readdir(bin)).filter(name => name.toLowerCase().endsWith(".dll"));
-  if (!libraries.length) throw new Error("The verified Windows SDK contains no runtime DLLs");
+export async function windowsBundleResources(release) {
   const resources = {};
   const destinations = new Set();
   async function add(file, digest) {
@@ -36,11 +31,6 @@ export async function windowsBundleResources(sdk, release) {
     destinations.add(name.toLowerCase());
     resources[file] = name;
   }
-  for (const name of libraries) {
-    const digest = manifest.files?.[`bin/${name}`];
-    if (typeof digest !== "string") throw new Error(`Unverified SDK runtime: ${name}`);
-    await add(path.join(bin, name), digest.toLowerCase());
-  }
   for (const [name, digest] of Object.entries(speech)) {
     await add(path.join(release, name), digest);
   }
@@ -49,8 +39,6 @@ export async function windowsBundleResources(sdk, release) {
 }
 
 async function main() {
-  const sdk = process.env.LIBZIM_SDK_ROOT;
-  if (!sdk) throw new Error("Set LIBZIM_SDK_ROOT to the verified Windows SDK");
   const metadata = JSON.parse(execFileSync("cargo", [
     "metadata", "--locked", "--format-version", "1", "--no-deps", "--manifest-path", "src-tauri/Cargo.toml",
   ], { cwd: root, encoding: "utf8" }));
@@ -59,7 +47,7 @@ async function main() {
     execFileSync("cargo", [...args, "--manifest-path", ...crate], { cwd: root, stdio: ["ignore", 2, 2] });
   }
   const release = path.join(metadata.target_directory, target, "release");
-  console.log(JSON.stringify(await windowsBundleResources(path.resolve(sdk), release), null, 2));
+  console.log(JSON.stringify(await windowsBundleResources(release), null, 2));
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

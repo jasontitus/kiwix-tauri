@@ -28,6 +28,8 @@ import UpdatesSettings from "./UpdatesSettings";
 import { SettingsSaveStatus, useSettingsAutosave } from "./SettingsAutosave";
 import PrivateReadingSync from "./PrivateReadingSync";
 import SpeechModels from "./SpeechModels";
+import zimruLicense from "../../src-tauri/licenses/zimru/LICENSE?raw";
+import glassLicense from "../../src-tauri/licenses/glass/LICENSE?raw";
 interface Props {
   settings: AppSettings;
   books: Book[];
@@ -74,8 +76,10 @@ interface LibraryRootResult {
 interface AboutInfo {
   appVersion: string;
   tauriVersion: string;
-  libzimVersion: string | null;
-  xapianVersion: string | null;
+  zimruVersion: string;
+  glassVersion: string;
+  zimruRevision: string | null;
+  glassRevision: string | null;
   sqliteVersion: string;
   platform: string;
   architecture: string;
@@ -987,18 +991,12 @@ export default function Settings({
                 <dd>{about.tauriVersion}</dd>
               </div>
               <div>
-                <dt>{t("libzim")}</dt>
-                <dd>
-                  {about.libzimVersion ??
-                    t("Not reported by this build")}
-                </dd>
+                <dt>Zimru</dt>
+                <dd>{about.zimruVersion}</dd>
               </div>
               <div>
-                <dt>{t("Xapian")}</dt>
-                <dd>
-                  {about.xapianVersion ??
-                    t("Not reported by this build")}
-                </dd>
+                <dt>zimfile-xapian</dt>
+                <dd>{about.glassVersion}</dd>
               </div>
               <div>
                 <dt>{t("SQLite")}</dt>
@@ -1092,15 +1090,22 @@ export default function Settings({
               "No account is required. No usage analytics or telemetry are collected. Network access occurs when you request downloads, catalogs, external links or local sharing.",
             )}
           </p>
+          {[
+            { name: "Zimru · MIT", text: zimruLicense, revision: about?.zimruRevision },
+            { name: "zimfile-xapian · GPL-3.0-or-later", text: glassLicense, revision: about?.glassRevision },
+          ].map(({ name, text, revision }) => (
+            <details key={name}>
+              <summary>{name}</summary>
+              <pre style={{ whiteSpace: "pre-wrap" }}>{text}</pre>
+              {revision && (
+                <button onClick={() => external(`https://github.com/jasontitus/zimru-xapian/tree/${revision}`)}>
+                  <ExternalLink size={16} />
+                  {t("Source code & support")}
+                </button>
+              )}
+            </details>
+          ))}
           <div className="modal-actions">
-            <button onClick={() => external("https://github.com/openzim/libzim")}>
-              <ExternalLink size={16} />
-              {t("libzim licence & source")}
-            </button>
-            <button onClick={() => external("https://xapian.org/")}>
-              <ExternalLink size={16} />
-              {t("Xapian licence & source")}
-            </button>
             <button onClick={() => external("https://www.kiwix.org/")}>
               <ExternalLink size={16} />
               {t("Kiwix project")}

@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Fast local iteration for the Kiwix workbench.
 #
-# The desktop build needs the patched libzim/Xapian SDK, the rustup toolchain
-# (Homebrew's rustc has no Android/iOS targets), and enough cargo jobs to use
-# the host. This wrapper resolves all three once and exposes the common loops.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,33 +14,6 @@ export NDK_HOME="${NDK_HOME:-$ANDROID_HOME/ndk/27.0.12077973}"
 host="$(rustc -vV | sed -n 's/^host: //p')"
 cmd="${1:-check}"
 shift || true
-
-need_sdk=0
-case "$cmd" in
-    check|test|nextest|build|run|bacon|doctor) need_sdk=1 ;;
-esac
-
-if [[ "$need_sdk" == 1 ]]; then
-    if [[ -z "${KIWIX_DESKTOP_SDK_ROOT:-}" ]]; then
-        for candidate in \
-            "$REPO/.native/desktop-retained-v2/$host" \
-            "$REPO/.native/desktop-retained/$host" \
-            "$REPO/../desktop-retained-v2/$host" \
-            "$REPO/../desktop-retained/$host"; do
-            if [[ -f "$candidate/kiwix-sdk.json" ]]; then
-                export KIWIX_DESKTOP_SDK_ROOT="$(cd "$candidate" && pwd)"
-                break
-            fi
-        done
-    fi
-    if [[ -z "${KIWIX_DESKTOP_SDK_ROOT:-}" || ! -f "$KIWIX_DESKTOP_SDK_ROOT/kiwix-sdk.json" ]]; then
-        echo "error: no patched desktop SDK for $host." >&2
-        echo "  build it with: python3 scripts/build-desktop-sdk.py" >&2
-        echo "  or set KIWIX_DESKTOP_SDK_ROOT to a directory containing kiwix-sdk.json" >&2
-        exit 1
-    fi
-    export DYLD_LIBRARY_PATH="$KIWIX_DESKTOP_SDK_ROOT/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
-fi
 
 case "$cmd" in
     check)
@@ -88,7 +58,6 @@ case "$cmd" in
         ;;
     doctor)
         echo "host:        $host"
-        echo "sdk:         $KIWIX_DESKTOP_SDK_ROOT"
         echo "cargo:       $(cargo -V)"
         echo "rustc:       $(rustc -V)"
         echo "jobs:        $CARGO_BUILD_JOBS"

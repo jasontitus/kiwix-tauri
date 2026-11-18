@@ -2,17 +2,20 @@
 //! Search the embedded Glass database over the very files admitted to the archive.
 #![forbid(unsafe_code)]
 
-use crate::archive::{SearchHit, SearchResults};
-use parking_lot::{Mutex, MutexGuard};
+use crate::archive::{
+    archive_error, entry_by_path, public_path, resolve_cancellable as resolve, SearchHit,
+    SearchResults,
+};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io;
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
 use tokio_util::sync::CancellationToken;
 use zimfile_xapian::{Index, ReaderLimits, SnippetQuery, Source};
 use zimru::archive::PositionedInput;
-use zimru::{Archive as Zim, ArchiveLimits, ClusterReadLimits, Entry, Error as ZimError, Item};
+use zimru::{Archive as Zim, Entry, Error as ZimError, Item};
 
 #[derive(Debug)]
 pub(super) struct Parts {
@@ -48,11 +51,11 @@ impl Parts {
 
     // A descriptor remains authoritative after a rename. Reject observable
     // in-place edits before reusing cached directory and index blocks.
-    fn unchanged(&self) -> Result<(), String> {
+    pub(super) fn unchanged(&self) -> Result<(), String> {
         for ((file, len), modified) in self.files.iter().zip(&self.modified) {
             let now = file.metadata().map_err(|e| e.to_string())?;
             if now.len() != *len || now.modified().ok() != *modified {
-                return Err("Archive contents changed while searching. Reopen the archive.".into());
+                return Err("Archive contents changed. Reopen the archive.".into());
             }
         }
         Ok(())
@@ -159,10 +162,10 @@ impl IndexSlot {
     fn item(archive: &Zim, fulltext: bool) -> Result<Option<Item>, String> {
         match Self::entry(archive, fulltext) {
             Err(ZimError::EntryNotFound) => Ok(None),
-            entry => resolve(entry.map_err(|e| e.to_string())?, &|| false)?
+            entry => resolve(entry.map_err(archive_error)?, &|| false)?
                 .get_item(false)
                 .map(Some)
-                .map_err(|e| e.to_string()),
+                .map_err(archive_error),
         }
     }
 
@@ -177,13 +180,9 @@ impl IndexSlot {
         };
         let offset = archive
             .cluster_offset(item.cluster_index())
-            .map_err(|e| e.to_string())?;
+            .map_err(archive_error)?;
         let mut info = [0; 1];
-        if archive
-            .read_at(offset, &mut info)
-            .map_err(|e| e.to_string())?
-            != 1
-        {
+        if archive.read_at(offset, &mut info).map_err(archive_error)? != 1 {
             return Err("Truncated search index cluster".into());
         }
         Ok(matches!(info[0] & 0x0f, 0 | 1))
@@ -198,7 +197,7 @@ impl IndexSlot {
             Some(item) => {
                 let extent = archive
                     .blob_direct_access(item.cluster_index(), item.blob_index())
-                    .map_err(|e| e.to_string())?;
+                    .map_err(archive_error)?;
                 if extent.is_direct {
                     let end = extent
                         .file_offset
@@ -257,11 +256,11 @@ impl IndexSlot {
                 match archive.entry_by_ns_path(b'M', "Language") {
                     Err(ZimError::EntryNotFound) => String::new(),
                     result => {
-                        let item = result
-                            .and_then(|entry| entry.get_item(true))
-                            .map_err(|e| e.to_string())?;
+                        let item = resolve(result.map_err(archive_error)?, &|| false)?
+                            .get_item(false)
+                            .map_err(archive_error)?;
                         let mut prefix = [0; 1025];
-                        let n = item.read_at(0, &mut prefix).map_err(|e| e.to_string())?;
+                        let n = item.read_at(0, &mut prefix).map_err(archive_error)?;
                         let lang = prefix[..n].split(|&b| b == b',').next().unwrap_or_default();
                         if lang.len() > 1024 {
                             return Err("Archive language tag exceeds 1024 bytes".into());
@@ -283,36 +282,13 @@ impl IndexSlot {
 
 #[derive(Default)]
 struct Cache {
-    archive: Option<Zim>,
     prefixes: PrefixCache,
     title: IndexSlot,
     fulltext: IndexSlot,
 }
 
-impl Cache {
-    fn archive(&mut self, parts: &Arc<Parts>) -> Result<Zim, String> {
-        if let Some(archive) = &self.archive {
-            return Ok(archive.clone());
-        }
-        let limits = ArchiveLimits {
-            max_metadata_record_bytes: 2 * 1024 * 1024 + 512,
-            cluster: Some(ClusterReadLimits {
-                max_decoded_bytes: 64 << 20,
-                max_stored_bytes: 65 << 20,
-                xz_memory_bytes: 128 << 20,
-                zstd_window_log: 26,
-            }),
-            ..Default::default()
-        };
-        let archive =
-            Zim::from_positioned(parts.clone(), parts.len(), limits).map_err(|e| e.to_string())?;
-        archive.set_cluster_cache_max_bytes(4 << 20);
-        self.archive = Some(archive.clone());
-        Ok(archive)
-    }
-}
-
 pub(super) struct SearchReader {
+    archive: Zim,
     parts: Arc<Parts>,
     cache: Mutex<Cache>,
 }
@@ -328,43 +304,6 @@ impl std::fmt::Debug for SearchReader {
 const MAX_QUERY: usize = 64 * 1024;
 const MAX_RESULT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SNIPPET_INPUT: usize = 64 * 1024;
-
-fn original_entry(archive: &Zim, data: &str) -> Result<Entry, String> {
-    if data.len() > 1 << 20 || data.as_bytes().contains(&0) {
-        return Err("Invalid indexed path".into());
-    }
-    let path = data.strip_prefix('/').unwrap_or(data);
-    let qualified = match path.as_bytes() {
-        [ns, b'/', ..] if ns.is_ascii() && *ns != b'/' => Some((*ns, &path[2..])),
-        [ns] if ns.is_ascii() && *ns != b'/' => Some((*ns, "")),
-        _ => None,
-    };
-    if archive.header().uses_new_namespaces() {
-        match archive.entry_by_ns_path(b'C', data) {
-            Err(ZimError::EntryNotFound) => {
-                let (_, tail) =
-                    qualified.ok_or("Search index points to an absent archive entry")?;
-                return archive
-                    .entry_by_ns_path(b'C', tail)
-                    .map_err(|e| e.to_string());
-            }
-            other => return other.map_err(|e| e.to_string()),
-        }
-    }
-    if let Some((ns, tail)) = qualified {
-        match archive.entry_by_ns_path(ns, tail) {
-            Err(ZimError::EntryNotFound) => {}
-            other => return other.map_err(|e| e.to_string()),
-        }
-    }
-    for ns in *b"AIJ-" {
-        match archive.entry_by_ns_path(ns, data) {
-            Err(ZimError::EntryNotFound) => {}
-            other => return other.map_err(|e| e.to_string()),
-        }
-    }
-    Err("Search index points to an absent archive entry".into())
-}
 
 // Interactive pages frequently return the same articles for adjacent queries.
 // Keep one 50-hit UI page (at most 3.125 MiB of prefixes) per archive.
@@ -389,22 +328,6 @@ impl PrefixCache {
     }
 }
 
-fn resolve(mut entry: Entry, cancelled: &dyn Fn() -> bool) -> Result<Entry, String> {
-    for _ in 0..256 {
-        if !entry.is_redirect() {
-            return Ok(entry);
-        }
-        if cancelled() {
-            return Err("Search cancelled".into());
-        }
-        entry = entry.get_redirect_entry().map_err(|e| e.to_string())?;
-    }
-    if entry.is_redirect() {
-        return Err("Cyclic or excessive archive redirect chain".into());
-    }
-    Ok(entry)
-}
-
 struct ResultPage<'a> {
     rows: SearchResults,
     bytes: usize,
@@ -426,12 +349,8 @@ impl ResultPage<'_> {
     ) -> Result<(), String> {
         let title = entry.title().to_owned();
         let entry = resolve(entry, cancelled)?;
-        let path = if modern {
-            entry.path().to_owned()
-        } else {
-            format!("{}/{}", char::from(entry.namespace()), entry.path())
-        };
-        if path.len() > 1 << 20 || title.len() > 1 << 20 {
+        let path = public_path(&entry, modern)?;
+        if title.len() > 1 << 20 {
             return Err("Search result field exceeds 1 MiB".into());
         }
         let snippet = if !self.snippets {
@@ -471,28 +390,16 @@ impl ResultPage<'_> {
 }
 
 impl SearchReader {
-    pub(super) fn new(parts: Arc<Parts>) -> Self {
+    pub(super) fn new(parts: Arc<Parts>, archive: Zim) -> Self {
         Self {
             parts,
+            archive,
             cache: Mutex::new(Cache::default()),
         }
     }
 
     fn lock(&self, cancel: Option<&CancellationToken>) -> Result<MutexGuard<'_, Cache>, String> {
-        let Some(token) = cancel else {
-            return Ok(self.cache.lock());
-        };
-        loop {
-            if token.is_cancelled() {
-                return Err("Search cancelled".into());
-            }
-            if let Some(guard) = self
-                .cache
-                .try_lock_for(std::time::Duration::from_millis(10))
-            {
-                return Ok(guard);
-            }
-        }
+        crate::archive::archive_lock(&self.cache, cancel.map(|token| (token, "Search cancelled")))
     }
 
     pub(super) fn capabilities(
@@ -500,11 +407,11 @@ impl SearchReader {
         cancel: Option<&CancellationToken>,
     ) -> Result<(bool, bool), String> {
         self.parts.unchanged()?;
-        let mut cache = self.lock(cancel)?;
-        let archive = cache.archive(&self.parts)?;
+        let cache = self.lock(cancel)?;
+        let archive = &self.archive;
         let indexes = (
-            cache.fulltext.available(&archive, true)?,
-            cache.title.available(&archive, false)?,
+            cache.fulltext.available(archive, true)?,
+            cache.title.available(archive, false)?,
         );
         self.parts.unchanged()?;
         Ok(indexes)
@@ -534,16 +441,8 @@ impl SearchReader {
         let mut cache = self.lock(cancel)?;
         check()?;
         self.parts.unchanged()?;
-        let archive = cache.archive(&self.parts)?;
+        let archive = &self.archive;
         let modern = archive.header().uses_new_namespaces();
-        // The MIT reader sorts one u64 offset per cluster on the first extent
-        // lookup. Bound this search-only allocation while preserving import and
-        // article access for archives above the limit.
-        if archive.cluster_count() > 8 * 1024 * 1024 {
-            return Err(
-                "This archive exceeds the search memory limit of 8,388,608 clusters.".into(),
-            );
-        }
         let Cache {
             title,
             fulltext: text,
@@ -563,7 +462,7 @@ impl SearchReader {
             prepared: None,
             prefixes,
         };
-        match slot.open(&archive, &self.parts, fulltext)? {
+        match slot.open(archive, &self.parts, fulltext)? {
             Some(open) if fulltext => {
                 let page = open
                     .index
@@ -580,7 +479,7 @@ impl SearchReader {
                 for row in page.hits {
                     check()?;
                     result.add(
-                        original_entry(&archive, &row.hit.path)?,
+                        entry_by_path(archive, &row.hit.path)?,
                         modern,
                         f64::from(row.hit.percent),
                         row.snippet,
@@ -603,7 +502,7 @@ impl SearchReader {
                 for path in page.hits {
                     check()?;
                     result.add(
-                        original_entry(&archive, &path)?,
+                        entry_by_path(archive, &path)?,
                         modern,
                         0.0,
                         None,
@@ -615,7 +514,7 @@ impl SearchReader {
             None if !q.is_empty() => {
                 let range = archive
                     .title_prefix_range(if modern { b'C' } else { b'A' }, q)
-                    .map_err(|e| e.to_string())?;
+                    .map_err(archive_error)?;
                 result.rows.total = u64::from(range.end - range.start);
                 for i in range.start.saturating_add(offset)
                     ..range
@@ -626,7 +525,7 @@ impl SearchReader {
                 {
                     check()?;
                     result.add(
-                        archive.entry_by_title_index(i).map_err(|e| e.to_string())?,
+                        archive.entry_by_title_index(i).map_err(archive_error)?,
                         modern,
                         0.0,
                         Some(String::new()),
@@ -680,7 +579,7 @@ mod tests {
         bytes.copy_within(original + 16..original + 16 + key_len, original + 12);
         bytes[original + 12 + key_len] = 0;
         let end = bytes.len() - 16;
-        let checksum = <md5::Md5 as md5::Digest>::digest(&bytes[..end]);
+        let checksum = md5::compute(&bytes[..end]).0;
         bytes[end..].copy_from_slice(&checksum);
         let path = std::env::temp_dir().join(format!("kiwix-index-{}.zim", uuid::Uuid::new_v4()));
         std::fs::write(&path, &bytes).unwrap();
@@ -701,11 +600,11 @@ mod tests {
     fn queued_query_observes_cancellation_before_the_cache_is_released() {
         let file = File::open(fixture()).unwrap();
         let size = file.metadata().unwrap().len();
-        let reader = Arc::new(SearchReader::new(Arc::new(
-            Parts::new(vec![(file, size)]).unwrap(),
-        )));
+        let parts = Arc::new(Parts::new(vec![(file, size)]).unwrap());
+        let archive = crate::archive::open_positioned(&parts).unwrap();
+        let reader = Arc::new(SearchReader::new(parts, archive));
         let token = CancellationToken::new();
-        let held = reader.cache.lock();
+        let held = reader.cache.lock().unwrap();
         let (started, waiting) = std::sync::mpsc::channel();
         let (done, result) = std::sync::mpsc::channel();
         let task = {

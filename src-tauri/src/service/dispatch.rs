@@ -1872,10 +1872,10 @@ impl Service {
             "about_info" => Ok(json!({
                 "appVersion": env!("CARGO_PKG_VERSION"),
                 "tauriVersion": tauri::VERSION,
-                // Emitted by build.rs from the validated native SDK manifest;
-                // absent means this build cannot truthfully report the version.
-                "libzimVersion": option_env!("KIWIX_LIBZIM_VERSION"),
-                "xapianVersion": option_env!("KIWIX_XAPIAN_VERSION"),
+                "zimruVersion": env!("KIWIX_ZIMRU"),
+                "glassVersion": env!("KIWIX_GLASS"),
+                "zimruRevision": option_env!("KIWIX_ZIMRU_REVISION"),
+                "glassRevision": option_env!("KIWIX_GLASS_REVISION"),
                 "sqliteVersion": rusqlite::version(),
                 "platform": std::env::consts::OS,
                 "architecture": std::env::consts::ARCH,

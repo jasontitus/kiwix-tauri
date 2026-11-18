@@ -230,7 +230,7 @@ fn verify(store: &Store, book: &Book, persistent: bool, cancel: &CancellationTok
     let identity = pinned.identity()?;
     if cancel.is_cancelled() { return Err("Integrity check cancelled".into()); }
     let archive = pinned.open()?;
-    if archive.metadata()?.id != book.metadata.id { return Err("Archive installation changed".into()); }
+    if archive.metadata_cancellable(cancel)?.id != book.metadata.id { return Err("Archive installation changed".into()); }
     let valid = archive.check_integrity_cancellable(cancel, |checked, total| {
         if let Ok(mut job) = job.lock() {
             job.phase = if checked < total { "checksum" } else { "structure" }.into();
@@ -285,7 +285,7 @@ pub fn summary(store: &Store) -> Result<serde_json::Value, String> {
     }).collect();
     Ok(serde_json::json!({"valid":valid,"invalid":invalid,"unknown":state.books.len()-valid-invalid,
         "archiveNumbering":"library-order","archives":archives,
-        "methods":["retained-byte-md5","libzim-structure"],"publisherAuthenticity":false}))
+        "methods":["retained-byte-md5","archive-structure"],"publisherAuthenticity":false}))
 }
 pub fn book_statuses(store: &Store) -> Result<Vec<BookResult>, String> {
     Ok(store.read()?.books.iter().map(|book| {
@@ -443,8 +443,8 @@ mod tests {
         let mut bytes = fs::read(&book.path).unwrap();
         bytes[8..24].copy_from_slice(uuid::Uuid::new_v4().as_bytes());
         let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
-        use md5::{Digest, Md5};
-        let digest = Md5::digest(&bytes[..checksum]);
+
+        let digest = md5::compute(&bytes[..checksum]).0;
         bytes[checksum..checksum + 16].copy_from_slice(&digest);
         fs::write(&second, &bytes).unwrap();
         let second_book = crate::imports::load_book(second.to_str().unwrap(), false, false).unwrap();

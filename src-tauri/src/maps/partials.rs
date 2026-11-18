@@ -176,10 +176,10 @@ fn next_count(remaining: u64, buffer: usize) -> usize {
 pub(super) fn verify_map_prefix(
     mut file: fs::File, checkpoint: &MapResume, record: &OwnedPartial,
     store: &crate::store::Store, control: &Control,
-) -> Result<(fs::File, Md5, Sha256), ResumeVerificationFailure> {
+) -> Result<(fs::File, md5::Context, Sha256), ResumeVerificationFailure> {
     use std::io::{Read, Seek};
     file.seek(io::SeekFrom::Start(0)).map_err(|error| error.to_string())?;
-    let mut md5 = Md5::new();
+    let mut md5 = md5::Context::new();
     let mut sha256 = Sha256::new();
     let mut remaining = checkpoint.written;
     let mut buffer = [0u8; 64 * 1024];
@@ -187,7 +187,7 @@ pub(super) fn verify_map_prefix(
         control.check()?;
         let count = next_count(remaining, buffer.len());
         file.read_exact(&mut buffer[..count]).map_err(|error| error.to_string())?;
-        md5.update(&buffer[..count]);
+        md5.consume(&buffer[..count]);
         sha256.update(&buffer[..count]);
         remaining -= count as u64;
     }

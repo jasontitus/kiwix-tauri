@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use std::env;
-#[path = "native/mobile_sdk.rs"]
-mod mobile_sdk;
-#[path = "native/desktop_sdk.rs"]
-mod desktop_sdk;
-
 fn main() {
+    emit_archive_versions();
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+        println!("cargo:rustc-link-arg=-Wl,-z,max-page-size=16384");
+    }
     // Platforms with an app-owned location provider (see permissions.rs). An
     // archive asks Kiwix, never the webview's own geolocation.
     println!("cargo::rustc-check-cfg=cfg(native_location)");
@@ -20,52 +19,14 @@ fn main() {
     // The authenticated headless preview embeds this directory independently of
     // Tauri's platform-specific frontendDist. Rebuild it when those assets change.
     println!("cargo:rerun-if-changed=../dist");
-    println!("cargo:rerun-if-changed=native/archive.cpp");
-    println!("cargo:rerun-if-changed=native/archive.h");
-    println!("cargo:rerun-if-env-changed=LIBZIM_INCLUDE_DIR");
-    println!("cargo:rerun-if-env-changed=LIBZIM_LIB_DIR");
-    println!("cargo:rerun-if-changed=native/mobile_sdk.rs");
-    println!("cargo:rerun-if-changed=native/desktop_sdk.rs");
     println!("cargo:rerun-if-env-changed=KIWIX_TYPECHECK_ONLY");
 
-    // CI type-checks targets whose matched SDK is not provisioned (Android)
-    // with `cargo clippy`. This mode skips the libzim bridge, SDK verification
-    // and Objective-C sources. It never substitutes an unverified library, and
-    // it requests a library that does not exist, so `cargo check`/`clippy`
-    // work but every real link (binary, cdylib, tests) fails at build time
-    // instead of producing an app with unresolved bridge symbols.
+    // Cross-target checks skip platform shims. Force an error if a check-only
+    // build is ever linked as an executable or shared library.
     if env::var("KIWIX_TYPECHECK_ONLY").as_deref() == Ok("1") {
         println!("cargo:rustc-link-lib=dylib=kiwix_typecheck_only_cannot_link");
         tauri_build_with_windows_manifest();
         return;
-    }
-
-    let mut native = cc::Build::new();
-    native.cpp(true).std("c++17").file("native/archive.cpp");
-    if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-        native.flag("/EHsc");
-    }
-    let mobile_sdk = mobile_sdk::MobileSdk::load();
-
-    let desktop_sdk = if let Some(sdk) = &mobile_sdk {
-        assert!(env::var_os("LIBZIM_INCLUDE_DIR").is_none() && env::var_os("LIBZIM_LIB_DIR").is_none(),
-            "Mobile targets use TAURI_KIWIX_MOBILE_SDK_ROOT, not desktop LIBZIM overrides");
-        sdk.configure(&mut native);
-        None
-    } else {
-        let sdk = desktop_sdk::DesktopSdk::load();
-        sdk.configure(&mut native);
-        Some(sdk)
-    };
-
-    native.compile("kiwix_archive");
-
-    // The bridge precedes its dependency closure. Mobile SDKs supply only
-    // target-built static archives; desktop deployment bundles dynamic runtimes.
-    if let Some(sdk) = mobile_sdk {
-        sdk.emit_links();
-    } else {
-        desktop_sdk.expect("Desktop SDK is required for non-mobile targets").emit_links();
     }
 
     if matches!(env::var("CARGO_CFG_TARGET_OS").as_deref(), Ok("macos" | "ios")) {
@@ -163,6 +124,28 @@ fn main() {
     }
 
     tauri_build_with_windows_manifest();
+}
+
+/// Report the two reader dependencies selected by the application's lockfile.
+fn emit_archive_versions() {
+    println!("cargo:rerun-if-changed=Cargo.lock");
+    let lock: toml::Table = include_str!("Cargo.lock").parse().expect("invalid Cargo.lock");
+    let packages = lock["package"].as_array().expect("missing Cargo packages");
+    for (name, variable) in [("zimru", "KIWIX_ZIMRU"), ("zimfile-xapian", "KIWIX_GLASS")] {
+        let package = packages.iter().find(|pkg| pkg["name"].as_str() == Some(name))
+            .expect("missing locked archive dependency");
+        let version = package["version"].as_str().expect("missing archive dependency version");
+        let revision = package.get("source").and_then(|v| v.as_str())
+            .and_then(|source| source.rsplit_once('#')).map(|(_, rev)| rev)
+            .filter(|rev| rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()));
+        match revision {
+            Some(rev) => {
+                println!("cargo:rustc-env={variable}={version} ({})", &rev[..12]);
+                println!("cargo:rustc-env={variable}_REVISION={rev}");
+            }
+            None => println!("cargo:rustc-env={variable}={version}"),
+        }
+    }
 }
 
 /// tauri-build embeds its Common-Controls v6 manifest only into the app

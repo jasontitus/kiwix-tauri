@@ -3,7 +3,6 @@
 param([string]$Source = 'E:\kiwix-win\lf-check')
 $ErrorActionPreference = 'Continue'
 $target = 'aarch64-pc-windows-msvc'
-$sdk = 'E:\kiwix-win\sdk-next\aarch64-pc-windows-msvc'
 $log = 'E:\kiwix-win\arm64\nsis-arm64.log'
 Remove-Item "$log.exit" -ErrorAction SilentlyContinue
 "starting $(Get-Date -Format o)" | Out-File -Encoding utf8 $log
@@ -14,9 +13,6 @@ foreach ($l in $lines) { if ($l -match '^([^=]+)=(.*)$') { Set-Item "env:$($Matc
 $env:RUSTUP_HOME = 'E:\dev\rustup'; $env:CARGO_HOME = 'E:\dev\cargo'
 $env:TEMP = 'E:\kiwix-win\tmp-private'; $env:TMP = 'E:\kiwix-win\tmp-private'
 $env:npm_config_cache = 'E:\dev\npm-cache'
-$env:KIWIX_SDK_OVERRIDE = $sdk; $env:KIWIX_DESKTOP_SDK_ROOT = $sdk
-$env:LIBZIM_INCLUDE_DIR = Join-Path $sdk 'include'; $env:LIBZIM_LIB_DIR = Join-Path $sdk 'lib'
-$env:INCLUDE = "$sdk\include;$env:INCLUDE"; $env:LIB = "$sdk\lib;$env:LIB"
 $node = (Get-ChildItem E:\dev\node* -Filter node.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
 if (-not $node) { $node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source }
 # ring and aws-lc-sys compile their ARM64 Windows sources with clang (VS "C++ Clang tools").
@@ -37,13 +33,12 @@ function Fail([int]$Code, [string]$Message) {
     $Message | Out-File -Append -Encoding utf8 $log; Set-Content "$log.exit" $Code; exit $Code
 }
 
-"rustc target $target; sdk $sdk" | Out-File -Append -Encoding utf8 $log
+"rustc target $target" | Out-File -Append -Encoding utf8 $log
 & cargo build --release --locked --target $target --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys 2>&1 |
     ForEach-Object { "$_" } | Out-File -Append -Encoding utf8 $log
 if ($LASTEXITCODE -ne 0) { Fail $LASTEXITCODE 'sherpa-onnx-sys build failed' }
 $profile = Join-Path $env:CARGO_TARGET_DIR "$target\release"
 $resources = @{}
-Get-ChildItem (Join-Path $sdk 'bin') -Filter '*.dll' -File | ForEach-Object { $resources[$_.FullName] = $_.Name }
 # sherpa-onnx 2.0.1 win-arm64-shared-MT-Release, pinned like the x64 build: the
 # crate downloads its prebuilt archive without a checksum.
 $sherpa = @{

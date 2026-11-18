@@ -144,7 +144,7 @@ mod native {
             let app = self.app.clone();
             let token = self.token.clone();
             // Never synchronously wait for UI dispatch in a destructor. Native
-            // closes its originals/scope only after libzim and Rust FDs drop;
+            // closes its originals/scope only after the retained reader files drop;
             // the owned asynchronous release extends, never shortens, authority.
             tauri::async_runtime::spawn(async move {
                 let _ = app.kiwix_mobile().call("releaseExternalArchive", json!({"lease":token})).await;
@@ -233,9 +233,9 @@ mod tests {
         assert_eq!(contextual["sourceReference"], source.reference);
         assert_eq!(book, original_book);
         // Unix (and the mobile providers this models) open the retained
-        // descriptor alone and ignore the directory. The Windows bridge
+        // descriptor alone and ignore the directory. The Windows reader
         // re-binds every retained handle to a nonreplaceable lease on its
-        // absolute native path (native/archive.cpp), so it needs the file's
+        // absolute native path, so it needs the file's
         // real location; descriptor-only opens do not exist there.
         #[cfg(windows)]
         let (directory, name) = (
