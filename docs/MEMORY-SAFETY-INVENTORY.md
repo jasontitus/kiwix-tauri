@@ -4,6 +4,8 @@
 
 The owner trusts the operating system and standard runtime. Application code and dependencies that process untrusted content must be memory safe. The application does **not yet meet this target**. A keyword scan, a safe API or a passing test covers only part of that claim. OS-provided WebViews fall within the platform boundary. App-owned bridges, archive-supplied content handed to non-platform libraries, and vendored browser integration code remain in scope.
 
+The full macOS desktop compiler inventory covers the app, its host build tools and dependencies. It records the 125 observed sites in the application crate and groups them by the behavior a replacement must preserve. [Compiled app worklist and reproducible receipt](audit/2026-11-18-macos-compiled-unsafe.md)
+
 | Path | Runtime migration and remaining work |
 |---|---|
 | Open, verify and read ZIM content | The app uses the MIT positioned reader for archives, illustrations, metadata and media. Files remain open across rename and multipart reads. The app checks a full checksum, directory and title order, cluster structure and referenced item indices. Its two archive adapters and structural checker forbid unsafe Rust. Default writer, C ABI and legacy memory-map features are disabled. Verify the built package on each shipping target. |
