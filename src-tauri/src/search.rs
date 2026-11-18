@@ -77,7 +77,41 @@ pub(crate) fn check_cancel(cancel: &CancellationToken) -> Result<(), String> {
     }
 }
 
+/// Locally generated excerpts and titles are escaped text. Index-supplied snippets
+/// can also contain HTML. Decode only the producer's three exact escapes, once.
+fn short_text_snippet(html: &str) -> Option<String> {
+    // A normal generated excerpt fits in 2 KiB even with escaped punctuation.
+    // Longer fields retain the fragment parser's bounds and cancellation polling.
+    if html.len() > 2048 || html.contains(['<', '\0', '\r']) {
+        return None;
+    }
+    // parse_chunked_as removes one leading byte-order mark before tokenization.
+    let html = html.strip_prefix('\u{feff}').unwrap_or(html);
+    let mut parts = html.split('&');
+    let mut text = String::with_capacity(html.len());
+    text.push_str(parts.next().unwrap_or_default());
+    for part in parts {
+        let (decoded, rest) = if let Some(rest) = part.strip_prefix("amp;") {
+            ('&', rest)
+        } else if let Some(rest) = part.strip_prefix("lt;") {
+            ('<', rest)
+        } else if let Some(rest) = part.strip_prefix("gt;") {
+            ('>', rest)
+        } else {
+            return None;
+        };
+        text.push(decoded);
+        text.push_str(rest);
+    }
+    Some(text)
+}
+
 pub(crate) fn snippet_text(html: &str, cancel: &CancellationToken) -> Result<String, String> {
+    check_cancel(cancel)?;
+    if let Some(text) = short_text_snippet(html) {
+        check_cancel(cancel)?;
+        return Ok(text);
+    }
     // Archive-supplied snippets are parsed under a snippet-sized work
     // budget and the request's cancellation token, so a hostile result
     // cannot hold the search request after it was retired.
@@ -523,6 +557,67 @@ pub fn suggest(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escaped_and_plain_snippets_match_the_bounded_html_fragment_parser() {
+        let cancel = CancellationToken::new();
+        let controls = (1..=127).filter_map(char::from_u32).filter(|c| !matches!(c, '&' | '<' | '\r')).collect::<String>();
+        for source in ["", "   ", "a\n\t b", "\u{feff}", "\u{feff}text", "\u{feff}\u{feff}text", "¿日🌐\u{feff}", "&lt;img src=x&gt;", "&amp;lt;script&amp;gt;",
+            "&lt;&amp;&gt; &amp;amp; &gt;", &controls, &"é".repeat(1024)] {
+            let fragment = crate::exports::html::Html::parse_fragment_bounded(source, &crate::exports::html::SNIPPET_BOUNDS, Some(&cancel)).unwrap();
+            let expected = crate::exports::html::text(&fragment.root_element());
+            assert_eq!(short_text_snippet(source).as_deref(), Some(expected.as_str()));
+            assert_eq!(snippet_text(source, &cancel).unwrap(), expected);
+        }
+        for source in ["<b>x</b>", "&nbsp;", "&#38;", "&notin", "AT&T", "a\rb", "a\0b", &"a".repeat(2049)] {
+            assert!(short_text_snippet(source).is_none());
+            let fragment = crate::exports::html::Html::parse_fragment_bounded(source, &crate::exports::html::SNIPPET_BOUNDS, Some(&cancel)).unwrap();
+            assert_eq!(snippet_text(source, &cancel).unwrap(), crate::exports::html::text(&fragment.root_element()));
+        }
+        cancel.cancel();
+        assert!(snippet_text("short &amp; plain", &cancel).is_err());
+    }
+
+    #[test]
+    #[ignore = "Manual release comparison of fifty search-result snippets"]
+    fn measure_search_snippet_pages() {
+        use crate::exports::html::{self, Html, SNIPPET_BOUNDS};
+        use std::{hint::black_box, time::Instant};
+        let cancel = CancellationToken::new();
+        let reference = |s: &str| {
+            let tree = Html::parse_fragment_bounded(s, &SNIPPET_BOUNDS, Some(&cancel)).unwrap();
+            html::text(&tree.root_element())
+        };
+        for (name, source) in [
+            ("plain", "Climate science examines the atmosphere, oceans and ice. ".repeat(4)),
+            ("escaped", "Rock &amp; roll — 東京 &lt;music&gt; in the 1950s. ".repeat(4)),
+            ("markup", "<b>Climate</b> change and &nbsp;global warming. ".repeat(4)),
+        ] {
+            assert_eq!(reference(&source), snippet_text(&source, &cancel).unwrap());
+            let mut samples = [Vec::new(), Vec::new()];
+            for round in 0..22 {
+                for step in 0..2 {
+                    let variant = (round + step) % 2;
+                    let started = Instant::now();
+                    for _ in 0..50 {
+                        if variant == 0 {
+                            black_box(reference(black_box(&source)));
+                        } else {
+                            black_box(snippet_text(black_box(&source), &cancel).unwrap());
+                        }
+                    }
+                    if round >= 2 {
+                        samples[variant].push(started.elapsed().as_nanos());
+                    }
+                }
+            }
+            let micros = samples.map(|mut times| {
+                times.sort_unstable();
+                (times[9] + times[10]) as f64 / 2000.0
+            });
+            eprintln!("{name}: DOM {:.2} µs, selected path {:.2} µs per page", micros[0], micros[1]);
+        }
+    }
 
     fn hit(title: &str) -> SearchHit {
         SearchHit {
