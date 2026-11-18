@@ -1,0 +1,241 @@
+{
+  "app_commit": "eaffd58cca7ba67430c4bbce222c43d20a8fe847",
+  "native_app_commit": "f2875d097225509c75a884739960cdf0951ef9fd",
+  "host": "Apple M1 Ultra, macOS 27.2.1, ARM64",
+  "zimru": "a6d1b4ccd968c29420135fa3b70ced578509a1e8",
+  "zimfile-xapian": "380d84d7bb4ba9f30144462fd6bb18e932493fc0",
+  "executables_sha256": {
+    "libzim": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+    "integrated": "499adf71a379a54dcf58d156e6a43e2d4a8572dae66fe649d2bc2be2ec2fed66"
+  },
+  "scope": "Standalone release app processes, alternating on the same host using isolated profiles and warm OS file caches. Other build and test jobs were active on this host. The separately ad-hoc-signed package was verified on disk.",
+  "article_method": "The native reference was zimdump. For the HTML comparisons the local reader bridge was removed before comparing all article bytes. Both executables returned matching selected book metadata, image and media contents and HTTP range boundaries. Fresh import medians use five timed starts of each executable following one warmup each.",
+  "articles": {
+    "ray": {
+      "file": "wikipedia_en_ray-charles_mini.zim",
+      "archive_bytes": 760553,
+      "reference_bytes": {
+        "html": {
+          "payload_bytes": 13031,
+          "payload_sha256": "e07c0f229a341a7f6054dd69d7e780bb3afd66d1281021668bbea070f5ed2f8d",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "article": "Ray_Charles_in_Person",
+      "median_ms_native_rust": {
+        "fresh_import_ready": [
+          83.5203,
+          74.7705
+        ],
+        "snapshot": [
+          0.4838,
+          0.4942
+        ],
+        "open_article": [
+          0.517,
+          0.4604
+        ],
+        "html": [
+          0.4629,
+          0.4323
+        ]
+      }
+    },
+    "simple": {
+      "file": "wikipedia_en_simple_all_nopic_2026-05.zim",
+      "archive_bytes": 982788870,
+      "reference_bytes": {
+        "html": {
+          "payload_bytes": 439204,
+          "payload_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "article": "Solar_System",
+      "median_ms_native_rust": {
+        "fresh_import_ready": [
+          3587.2741,
+          3638.4247
+        ],
+        "snapshot": [
+          0.947,
+          1.0883
+        ],
+        "open_article": [
+          0.6927,
+          0.7419
+        ],
+        "html": [
+          1.8068,
+          1.4038
+        ]
+      }
+    },
+    "media": {
+      "file": "media.zim",
+      "archive_bytes": 36267,
+      "reference_bytes": {
+        "html": {
+          "payload_bytes": 128,
+          "payload_sha256": "197995b30b0e26c72355cdb6df271d6e3b502492ef01707a0c0a4c0e121d93e5",
+          "http_status": 200,
+          "mime": "text/html"
+        },
+        "resource_all": {
+          "payload_bytes": 3145728,
+          "payload_sha256": "f6dd7fec8584ad00219a447071c1fa368a1caee4d9c146083d233713ddccd2c0",
+          "http_status": 200,
+          "mime": "video/mp4"
+        },
+        "range_4k": {
+          "payload_bytes": 4096,
+          "payload_sha256": "b84f1a029c1a87777a69d7eaddfb7f0f1a55d577dc5fe75b9bd7754fbf74ee44",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=2109497-2113592"
+        },
+        "range_1m": {
+          "payload_bytes": 1048576,
+          "payload_sha256": "4d083586fa4f5f3c8b225c0bf36651f6dea7bae852efffeaa0b1547d5870877f",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=524307-1572882"
+        },
+        "range_end": {
+          "payload_bytes": 4096,
+          "payload_sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193",
+          "http_status": 206,
+          "mime": "video/mp4",
+          "range": "bytes=3141632-3145727"
+        }
+      },
+      "article": "index.html",
+      "median_ms_native_rust": {
+        "fresh_import_ready": [
+          46.3669,
+          40.9308
+        ],
+        "snapshot": [
+          0.4255,
+          0.4659
+        ],
+        "open_article": [
+          0.3695,
+          0.3727
+        ],
+        "html": [
+          0.3521,
+          0.335
+        ],
+        "resource_all": [
+          1.6687,
+          1.6864
+        ],
+        "range_4k": [
+          0.3957,
+          0.3979
+        ],
+        "range_1m": [
+          0.8242,
+          0.8437
+        ],
+        "range_end": [
+          0.3433,
+          0.3573
+        ]
+      }
+    },
+    "large_html": {
+      "file": "large_article.zim",
+      "archive_bytes": 37162,
+      "reference_bytes": {
+        "html": {
+          "payload_bytes": 17826555,
+          "payload_sha256": "43dd14e3d8d159f26ef210f02a2d41138277b40f7548d1d43d97de2670fce465",
+          "http_status": 200,
+          "mime": "text/html"
+        }
+      },
+      "article": "Large.html",
+      "median_ms_native_rust": {
+        "fresh_import_ready": [
+          42.8325,
+          43.2207
+        ],
+        "snapshot": [
+          0.5484,
+          0.6592
+        ],
+        "open_article": [
+          0.356,
+          0.34
+        ],
+        "html": [
+          6.3777,
+          6.3481
+        ]
+      }
+    }
+  },
+  "image": {
+    "file": "wikipedia_en_100_maxi_2024-01.zim",
+    "key": "I/225_Peptide_Bond-01.jpg.webp",
+    "bytes": 12414,
+    "mime": "image/webp",
+    "status": 200,
+    "sha256": "c11e2ccd984681167b7ea8e333882ca3c801cdb9fa302d402b9a46c266723811"
+  },
+  "search": {
+    "archive": "wikipedia_en_ray-charles_nopic.zim",
+    "archive_sha256": "59eb2b233b1fcdd7dfd44679a519501dbd7b77fbee80ac46ad90a57899459e62",
+    "pairs": 4,
+    "query_checks": [
+      {
+        "mode": "fulltext",
+        "snippets": true,
+        "query": "Ray Charles",
+        "hits": 50,
+        "ordered_digest": "779d8dd8641ff52cb01226a55b4e3b54b61ad2d846db6a384ed1aefe363d5f50"
+      },
+      {
+        "mode": "fulltext",
+        "snippets": false,
+        "query": "Ray Charles",
+        "hits": 50,
+        "ordered_digest": "779d8dd8641ff52cb01226a55b4e3b54b61ad2d846db6a384ed1aefe363d5f50"
+      },
+      {
+        "mode": "suggest",
+        "snippets": false,
+        "query": "Ray",
+        "hits": 50,
+        "ordered_digest": "f227578e3c5ffb0f68acf02f9721c81e94102633873b52c4f0f465c27aa1bf33"
+      }
+    ],
+    "method": "scripts/compare-archive-search.py with four pairs and five warm requests per case. The ordered digest covers each title and path and whether more results were available."
+  },
+  "browser": {
+    "flow": "Select archive, observe title suggestion, submit full-text search, open first result and verify visible reader-frame text in Chrome against standalone host.",
+    "selected_article": "Ray Charles in Person"
+  },
+  "package": {
+    "mach_o_sha256": {
+      "Contents/MacOS/kiwix-mcp": "b55697ad7b2b69fe7c74da8ca712161f839190455a680c5a4b7d8e12f8ce9e30",
+      "Contents/MacOS/kiwix-workbench": "ec1578091e303f245aceee8e96d6e2b7c9fb6aacf566441bdb014fc2a40ba6e8"
+    },
+    "byte_verified_notices": {
+      "licenses/zimru/LICENSE": "653d377231bdc53f35d0e8a5b38047a45e31c7a580f566576483bc3b0cf96070",
+      "licenses/zimru/zstd-rs-MIT": "4b27610bfe4f632e1386e39363e8804bfad720c73ccb45a4d7f22796acc0b8e4",
+      "licenses/zimru/zstd-rs-Apache-2.0": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "licenses/zimru/lzma-rust2-Apache-2.0": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+      "licenses/zimru-xapian/Unicode-3.0.txt": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+      "licenses/zimru-xapian/LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "licenses/zimru-xapian/Stopwords-ISO-gu-MIT.txt": "5c112372c3225d89323b7f9846b27feb2d1157c3968885cbc62a64e3738cd116",
+      "licenses/zimru-xapian/Stopwords-ISO-MIT.txt": "27403c9741017239dc227eab9d6118c7c0569b199b42a853bd4ffbca898b1007"
+    },
+    "signature": "Ad-hoc, verified with codesign --deep --strict.",
+    "dynamic_imports": "Neither Mach-O image imports libzim or Xapian dynamically."
+  }
+}
