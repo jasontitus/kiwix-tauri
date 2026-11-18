@@ -2677,9 +2677,6 @@ dependencies = [
  "icu_properties",
  "icu_provider",
  "smallvec",
- "utf16_iter",
- "utf8_iter",
- "write16",
  "zerovec",
 ]
 
@@ -7082,15 +7079,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "utf16_iter"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c7de35d9d8757dbc1f5125dc8b51438c68b4430546a735c3a9b91aaaaf9a18a"
-dependencies = [
- "utf_types",
-]
-
-[[package]]
 name = "utf8_iter"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7884,12 +7872,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
-name = "write16"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1890f4022759daae28ed4fe62859b1236caebfc61ede2f63ed4e695f3f6d936"
-
-[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8169,10 +8151,8 @@ dependencies = [
 [[package]]
 name = "zimfile-xapian"
 version = "0.1.0"
-source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=700791140150142445a5861c5118614a56130dbd#700791140150142445a5861c5118614a56130dbd"
+source = "git+https://github.com/jasontitus/zimru-xapian.git?rev=380d84d7bb4ba9f30144462fd6bb18e932493fc0#380d84d7bb4ba9f30144462fd6bb18e932493fc0"
 dependencies = [
- "icu_normalizer",
- "icu_properties",
  "miniz_oxide 0.9.1",
  "rust-stemmers",
 ]
