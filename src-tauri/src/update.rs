@@ -990,11 +990,20 @@ mod tests {
     const TEST_PUBLIC_KEY: &str = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
     const TEST_SIGNATURE: &str = "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==";
 
-    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+    fn mock_loopback_app(endpoints: &[&str]) -> tauri::App<tauri::test::MockRuntime> {
+        for endpoint in endpoints {
+            let url = Url::parse(endpoint).unwrap();
+            assert_eq!(url.scheme(), "http");
+            assert_eq!(url.host_str(), Some("127.0.0.1"));
+        }
         let mut context = tauri::test::mock_context(tauri::test::noop_assets());
         context.config_mut().plugins.0.insert(
             "updater".into(),
-            json!({"pubkey": "test", "endpoints": ["https://example.invalid/update.json"]}),
+            json!({
+                "pubkey": "test",
+                "endpoints": endpoints,
+                "dangerousInsecureTransportProtocol": true,
+            }),
         );
         tauri::test::mock_builder()
             .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1003,12 +1012,10 @@ mod tests {
     }
 
     fn mock_updater(endpoint: &str) -> (tauri::App<tauri::test::MockRuntime>, tauri_plugin_updater::Updater) {
-        let app = mock_app();
+        let app = mock_loopback_app(&[endpoint]);
         let updater = app
             .handle()
             .updater_builder()
-            .endpoints(vec![Url::parse(endpoint).unwrap()])
-            .unwrap()
             .pubkey(base64::engine::general_purpose::STANDARD.encode(TEST_PUBLIC_KEY))
             .build()
             .unwrap();
@@ -1088,7 +1095,7 @@ mod tests {
         let target = std::env::var("KIWIX_UPDATE_E2E_TARGET")
             .unwrap_or_else(|_| "darwin-aarch64-app".into());
 
-        let app = mock_app();
+        let app = mock_loopback_app(&[&manifest, &tampered_manifest]);
         let handle = app.handle().clone();
 
         let fake_app = workdir.join("installed").join("Kiwix.app");

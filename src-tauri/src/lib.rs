@@ -1970,13 +1970,18 @@ mod navigation_policy_tests {
             "blob:http://tauri.localhost/export",
             "blob:http://abc-123.localhost:49860/export",
             "http://abc-123.localhost:49860/index",
-            "http://127.0.0.1:1420/",
         ] {
             assert!(
                 navigation_allowed(&Url::parse(allowed).unwrap(), &readers),
                 "{allowed}"
             );
         }
+        let development_server = Url::parse("http://127.0.0.1:1420/").unwrap();
+        assert_eq!(
+            navigation_allowed(&development_server, &readers),
+            cfg!(debug_assertions),
+            "the development server is available only in debug builds"
+        );
         for denied in [
             "https://example.com/",
             "http://tracker.example/?q=1",
