@@ -20,6 +20,10 @@ A standalone macOS ARM64 release compilation of the two pinned libraries emitted
 
 At `eccfcbe`, Kiwix opened the embedded Glass index on retained archive files through the Rust APIs of the MIT Zimru reader and the separate GPL-3.0-or-later search engine. Full-text search, indexed suggestions and title-prefix fallback use this path. Kiwix resolves redirects, reads article prefixes for excerpts and validates the checksum against the retained parts. The native bridge still opens the archive and handles article and media reads, metadata, title iteration and structural integrity checks. The historical A1–A5 rows below describe the starting point. See the [private dependency pins and verification instructions](DEPENDENCIES.md#rust-archive-search).
 
+## Filesystem boundary update
+
+`fs_ext.rs` now forbids unsafe Rust on Unix. Advisory locks use typed `rustix::fs::flock` operations with a borrowed file, and volume space comes from `rustix::fs::statvfs`. Windows uses standard-library nonblocking file locks, preserving error 33 for contention. The Windows volume lookup still calls the OS through an app-owned unsafe wrapper. Both paths reject embedded NUL characters. macOS exercised lock contention and release, volume queries, and path errors. Windows, Linux, iOS and Android ARM64 were type-checked. Windows and mobile behavior still need execution on those targets.
+
 ## Inventory baseline, 2026-11-17
 
 **Start with the bytes an archive supplies.** Opening a ZIM, decoding a cluster, querying an embedded index, and rendering the resulting article are four separate operations. Switching to the Rust ZIM and Xapian readers would retire the current C++ reader and search code once every consumer switches. The baseline Zimru file mapping and codecs, and the platform rendering engines, need their own decisions.
