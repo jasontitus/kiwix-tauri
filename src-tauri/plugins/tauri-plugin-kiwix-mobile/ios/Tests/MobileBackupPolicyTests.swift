@@ -21,6 +21,28 @@ final class MobileBackupPolicyTests: XCTestCase {
     path.path.withCString { kiwixMobileArchiveAdmitted(file, $0) }
   }
 
+  func testRepeatedBackupReconciliationPreservesArchiveChangeTime() throws {
+    let root = try ownedDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let path = root.appendingPathComponent("book.zim")
+    let file = try create(path)
+    defer { close(file) }
+    func changeTime() throws -> [Int] {
+      var info = stat()
+      guard fstat(file, &info) == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+      return [info.st_ctimespec.tv_sec, info.st_ctimespec.tv_nsec]
+    }
+    for include in [false, true, false] {
+      try applyOwnedBackupPolicy(file: file, path: path.path, include: include, admit: true)
+      let established = try changeTime()
+      try applyOwnedBackupPolicy(file: file, path: path.path, include: include, admit: true)
+      XCTAssertEqual(try changeTime(), established)
+      XCTAssertEqual(admitted(file, path), 1)
+      let current = try URL(fileURLWithPath: path.path).resourceValues(forKeys: [.isExcludedFromBackupKey])
+      XCTAssertEqual(current.isExcludedFromBackup, !include)
+    }
+  }
+
   func testExclusionUsesSupportedFoundationKeyAndPublicationSurvivesHiddenMove() throws {
     let root = try ownedDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

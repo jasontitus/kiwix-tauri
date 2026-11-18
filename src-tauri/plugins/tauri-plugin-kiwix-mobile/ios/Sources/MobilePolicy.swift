@@ -91,11 +91,16 @@ private func descriptorAttribute(_ file: Int32, _ name: String) throws -> Data? 
 }
 
 private func setDescriptorAttribute(_ file: Int32, _ name: String, _ value: Data?) throws {
-  if let value = value {
-    let result = value.withUnsafeBytes { fsetxattr(file, name, $0.baseAddress, value.count, 0, 0) }
-    guard result == 0 else { throw posixFailure("write_backup_attribute") }
-  } else if fremovexattr(file, name, 0) != 0 && errno != ENOATTR {
-    throw posixFailure("remove_backup_attribute")
+  // Rewriting identical bytes advances inode ctime and invalidates archive-derived indexes.
+  // An unreadable or oversized old value still goes through the normal repair and verification.
+  let alreadyApplied = (try? (descriptorAttribute(file, name) == value)) ?? false
+  if !alreadyApplied {
+    if let value = value {
+      let result = value.withUnsafeBytes { fsetxattr(file, name, $0.baseAddress, value.count, 0, 0) }
+      guard result == 0 else { throw posixFailure("write_backup_attribute") }
+    } else if fremovexattr(file, name, 0) != 0 && errno != ENOATTR {
+      throw posixFailure("remove_backup_attribute")
+    }
   }
   guard try descriptorAttribute(file, name) == value else { throw MobileFailure("backup_policy_not_applied") }
 }
