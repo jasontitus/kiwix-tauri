@@ -1,0 +1,8 @@
+[package]
+name = "android-reader-sample"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+nix = { version = "=0.32.0", default-features = false, features = ["resource"] }
