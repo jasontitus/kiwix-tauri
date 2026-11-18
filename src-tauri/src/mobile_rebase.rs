@@ -861,7 +861,7 @@ mod tests {
 
     fn profile_dir(tag: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!("mobile-rebase-{tag}-{}", Uuid::new_v4()));
-        std::fs::create_dir_all(&root).unwrap();
+        crate::fs_ext::create_private_dir_all(&root).unwrap();
         std::fs::canonicalize(root).unwrap()
     }
 
@@ -888,6 +888,7 @@ mod tests {
             }]);
         }
         std::fs::write(root.join("state.json"), serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+        private(&root.join("state.json"), 0o600);
     }
 
     fn write_marker(root: &Path, marker: &serde_json::Value) {
@@ -918,7 +919,7 @@ mod tests {
         let root = profile_dir("unbound-reanchor");
         let old = old_container("unbound");
         let archive = root.join("archives").join("book.zim");
-        std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+        crate::fs_ext::create_private_dir_all(archive.parent().unwrap()).unwrap();
         std::fs::write(&archive, b"archive").unwrap();
         write_state(&root, &root.join("archives"), Some(&old.join("archives").join("book.zim")));
         let stale = serde_json::json!({
@@ -989,7 +990,7 @@ mod tests {
             ("localswarm", "jobs.json"),
             ("maps", "map-job.json"),
         ] {
-            std::fs::create_dir_all(root.join(directory)).unwrap();
+            crate::fs_ext::create_private_dir_all(root.join(directory)).unwrap();
             std::fs::write(root.join(directory).join(name), b"{not json").unwrap();
         }
         let initialized = initialize(&root, false).unwrap();
@@ -1006,7 +1007,7 @@ mod tests {
         let root = profile_dir("bound");
         let old = old_container("bound");
         write_state(&root, &root.join("archives"), Some(&old.join("archives").join("book.zim")));
-        std::fs::create_dir_all(root.join("archives")).unwrap();
+        crate::fs_ext::create_private_dir_all(root.join("archives")).unwrap();
         std::fs::write(root.join("archives").join("book.zim"), b"archive").unwrap();
         std::fs::create_dir_all(root.join(CAPABILITY)).unwrap();
         private(&root.join(CAPABILITY), 0o700);
@@ -1039,10 +1040,10 @@ mod tests {
     #[test]
     fn retained_map_relocation_preserves_directory_authority_and_rejects_substitution() {
         let root = std::env::temp_dir().join(format!("map-retained-rebase-{}", Uuid::new_v4()));
-        std::fs::create_dir(&root).unwrap();
+        crate::fs_ext::create_private_dir_all(&root).unwrap();
         let root = std::fs::canonicalize(root).unwrap();
         let destination = root.join("archives");
-        std::fs::create_dir(&destination).unwrap();
+        crate::fs_ext::create_private_dir_all(&destination).unwrap();
         let identity = Directory::open(&destination).unwrap().identity;
         let relocation = Relocation {
             old_root: root.join("old-container"), new_root: root.clone(),
@@ -1140,7 +1141,7 @@ mod tests {
         let root = profile_dir("unreadable-pending");
         let old = old_container("unreadable-pending");
         write_state(&root, &root.join("archives"), Some(&old.join("archives").join("book.zim")));
-        std::fs::create_dir_all(root.join("archives")).unwrap();
+        crate::fs_ext::create_private_dir_all(root.join("archives")).unwrap();
         std::fs::write(root.join("archives").join("book.zim"), b"archive").unwrap();
         write_bound_marker(&root, &old);
         let pending = root.join(CAPABILITY).join("pending.json");
@@ -1166,9 +1167,9 @@ mod tests {
         let root = profile_dir("incomplete");
         let old = old_container("incomplete");
         write_state(&root, &root.join("archives"), Some(&old.join("archives").join("book.zim")));
-        std::fs::create_dir_all(root.join("archives")).unwrap();
+        crate::fs_ext::create_private_dir_all(root.join("archives")).unwrap();
         std::fs::write(root.join("archives").join("book.zim"), b"archive").unwrap();
-        std::fs::create_dir_all(root.join("downloads")).unwrap();
+        crate::fs_ext::create_private_dir_all(root.join("downloads")).unwrap();
         std::fs::write(root.join("downloads/downloads.json"), b"{not json").unwrap();
         write_bound_marker(&root, &old);
 

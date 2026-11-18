@@ -302,7 +302,7 @@ pub(super) fn validate_publication_directory(directory: &Dir) -> Result<(), Stri
         // Capture needs exclusive mutation, not confidentiality. FAT/exFAT can
         // report mount-derived 0755 even when creation requested 0700.
         if !publication_directory_mutation_is_owned(metadata.uid(), metadata.mode()) {
-            return Err("Torrent publication requires directories owned by the effective user without group/other write access; this destination permits unsupported mutation risk".into());
+            return Err("Kiwix needs a folder owned by your account that other users cannot write to. Choose a private download folder. If it is already private, check the permissions on the torrents folder inside your Kiwix data folder.".into());
         }
     }
     #[cfg(not(unix))]

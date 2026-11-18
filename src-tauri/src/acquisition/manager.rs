@@ -52,7 +52,7 @@ impl DownloadManager {
         store: Arc<Store>,
         admission: crate::update_admission::AdmissionGate,
     ) -> Result<Self, String> {
-        fs::create_dir_all(&data_dir).map_err(|e| format!("Creating downloads directory: {e}"))?;
+        crate::fs_ext::create_private_dir_all(&data_dir).map_err(|e| format!("Creating downloads directory: {e}"))?;
         let data_dir = fs::canonicalize(data_dir)
             .map_err(|e| format!("Resolving downloads directory: {e}"))?;
         let lock_path = data_dir.join("downloads.lock");
@@ -791,7 +791,7 @@ impl DownloadManager {
                 crate::storage::check_file_size(&destination_dir, size)?;
             }
         }
-        fs::create_dir_all(&destination_dir)
+        crate::fs_ext::create_private_dir_all(&destination_dir)
             .map_err(|e| format!("Creating destination directory: {e}"))?;
         let directory = fs::canonicalize(destination_dir)
             .map_err(|e| format!("Resolving download directory: {e}"))?;

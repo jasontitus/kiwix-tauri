@@ -910,7 +910,7 @@ impl LocalSwarmManager {
         let initial_route = session.route().map(str::to_owned);
         let manifest = session.into_manifest().await; check_cancel(&cancel)?;
         let directory = blocking(move || {
-            std::fs::create_dir_all(&directory).map_err(err)?;
+            crate::fs_ext::create_private_dir_all(&directory).map_err(err)?;
             let directory = std::fs::canonicalize(&directory).map_err(err)?;
             Directory::open(&directory)
         }).await?;

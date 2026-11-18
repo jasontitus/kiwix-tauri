@@ -1694,7 +1694,7 @@ pub(crate) fn claim_profile_lock(
     read_only: bool,
 ) -> Result<File, ProfileLockError> {
     if !read_only {
-        fs::create_dir_all(data_dir).map_err(|source| ProfileLockError::Directory {
+        crate::fs_ext::create_private_dir_all(data_dir).map_err(|source| ProfileLockError::Directory {
             path: data_dir.to_path_buf(),
             source,
         })?;
@@ -2059,7 +2059,7 @@ impl Store {
     pub fn new_mobile(data_dir: PathBuf, runtime_read_only: bool) -> Result<Self, String> {
         let read_only = runtime_read_only || saved_read_only(&data_dir)?;
         if !read_only {
-            fs::create_dir_all(&data_dir).map_err(|e| {
+            crate::fs_ext::create_private_dir_all(&data_dir).map_err(|e| {
                 format!("Cannot create state directory {}: {e}", data_dir.display())
             })?;
         }
