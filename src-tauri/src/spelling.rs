@@ -1026,25 +1026,26 @@ where
     // Explicit recovery retains the previous generation. A concurrent publisher,
     // symlink or hardlink is never overwritten.
     let backup = PathBuf::from(format!(".{key}.{}.previous", uuid::Uuid::new_v4()));
-    if let Some(old) = &existing {
-        publish_verified_noreplace_in(&dir, &final_name, &backup, old).map_err(err)?;
+    let result = publish_index(
+        &dir,
+        &staged.name,
+        &final_name,
+        &backup,
+        &verified,
+        existing.as_ref(),
+        || {
+            confirm_directory()?;
+            #[cfg(unix)]
+            crate::storage::sync_cap_directory(&dir).map_err(err)?;
+            Ok(())
+        },
+    );
+    if let Err(error) = result {
+        // A failed rollback can leave a visible file. Require explicit recovery
+        // in this process before accepting it as a successfully built cache.
+        inner.insert_failure(key, error.clone());
+        return Err(error);
     }
-    if let Err(error) = publish_verified_noreplace_in(&dir, &staged.name, &final_name, &verified) {
-        if let Some(old) = &existing {
-            if let Err(restore) = publish_verified_noreplace_in(&dir, &backup, &final_name, old) {
-                return Err(format!(
-                    "Spelling publication failed: {error}; previous file retained at {}: {restore}",
-                    backup.display()
-                ));
-            }
-        }
-        return Err(err(error));
-    }
-    confirm_directory()?;
-    #[cfg(unix)]
-    dir.try_clone()
-        .and_then(|d| d.into_std_file().sync_all())
-        .map_err(err)?;
     let mut status = identity.status("ready");
     status.processed = dictionary.total;
     status.total = dictionary.total;
@@ -1053,6 +1054,52 @@ where
     inner.failures.remove(&key);
     inner.insert_status(key, status);
     Ok(())
+}
+
+fn publish_index(
+    dir: &Dir,
+    staging: &Path,
+    destination: &Path,
+    backup: &Path,
+    new: &VerifiedFile,
+    previous: Option<&VerifiedFile>,
+    confirm_and_flush: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    // Either verified rename may have moved the file before an I/O error
+    // prevented its post-rename identity check. Recover from observed names.
+    let backed_up = previous.map_or(Ok(()), |old| {
+        publish_verified_noreplace_in(dir, destination, backup, old)
+    });
+    let published =
+        backed_up.and_then(|()| publish_verified_noreplace_in(dir, staging, destination, new));
+    let was_published = published.is_ok();
+    let error = match published {
+        Ok(()) => match confirm_and_flush() {
+            Ok(()) => return Ok(()),
+            Err(error) => error,
+        },
+        Err(error) => err(error),
+    };
+    let recover = || -> Result<(), String> {
+        check_cache_directory(dir).map_err(err)?;
+        if new.matches_in(dir, destination).map_err(err)? {
+            publish_verified_noreplace_in(dir, destination, staging, new).map_err(err)?;
+        } else if was_published {
+            return Err("The published spelling file changed before recovery".into());
+        }
+        if let Some(old) = previous {
+            if !old.matches_in(dir, destination).map_err(err)? {
+                publish_verified_noreplace_in(dir, backup, destination, old).map_err(err)?;
+            }
+        }
+        #[cfg(unix)]
+        crate::storage::sync_cap_directory(dir).map_err(err)?;
+        Ok(())
+    };
+    match recover() {
+        Ok(()) => Err(format!("The spelling index could not be saved. Check available space and permissions, then retry. {error}")),
+        Err(recovery) => Err(format!("The spelling index could not be saved and recovery could not be confirmed. Check the spelling folder, available space and permissions before retrying. Previous backup name, if present: {}. {error}. Recovery: {recovery}", backup.display())),
+    }
 }
 
 /// Optimal-string-alignment distance <= 1: insert/delete/substitute or transpose
@@ -1583,6 +1630,149 @@ mod tests {
         );
         assert_eq!(fs::read(path).unwrap(), marker);
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spelling_failed_directory_flush_preserves_old_cache_and_can_retry_and_reopen() {
+        let templates = TestDirectory::new();
+        drop(fixture(&templates.0));
+        let id = identity();
+        let name = PathBuf::from(format!("{}.words", id.key()));
+        let checked = |path: &Path| {
+            let file = fs::File::open(path).unwrap();
+            let size = file.metadata().unwrap().len();
+            VerifiedFile::new(file, size).unwrap()
+        };
+        for with_old in [false, true] {
+            let profile = TestDirectory::new();
+            let dir = open_directory(&profile.0, true).unwrap();
+            let path = profile.0.join(&name);
+            let staging = Path::new("temporary");
+            let backup = Path::new("prior");
+            let stage = profile.0.join(staging);
+            fs::copy(templates.0.join(&name), &stage).unwrap();
+            if with_old {
+                fs::copy(templates.0.join(&name), &path).unwrap();
+            }
+            fs::write(profile.0.join("unrelated"), b"preserved").unwrap();
+            let old = with_old.then(|| checked(&path));
+            let new = checked(&stage);
+            let failed = publish_index(&dir, staging, &name, backup, &new, old.as_ref(), || {
+                assert!(new.matches_in(&dir, &name).unwrap());
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    // This is the real kernel error from syncing a cap-std O_PATH
+                    // descriptor that triggered the packaged Linux regression.
+                    let error = dir
+                        .try_clone()
+                        .unwrap()
+                        .into_std_file()
+                        .sync_all()
+                        .unwrap_err();
+                    assert_eq!(error.raw_os_error(), Some(libc::EBADF));
+                    Err(err(error))
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                Err(err(io::Error::from_raw_os_error(libc::EIO)))
+            });
+            assert!(failed.unwrap_err().contains("could not be saved"));
+            assert!(new.matches_in(&dir, staging).unwrap());
+            assert_eq!(path.exists(), with_old);
+            if let Some(old) = &old {
+                assert!(old.matches_in(&dir, &name).unwrap());
+                open_verified(&path, &id).unwrap();
+            }
+            assert!(!profile.0.join(backup).exists());
+            assert_eq!(fs::read(profile.0.join("unrelated")).unwrap(), b"preserved");
+            publish_index(&dir, staging, &name, backup, &new, old.as_ref(), || {
+                crate::storage::sync_cap_directory(&dir).map_err(err)
+            })
+            .unwrap();
+            assert!(new.matches_in(&dir, &name).unwrap());
+            assert!(open_verified(&path, &id).unwrap().words > 0);
+            if let Some(old) = old {
+                assert!(old.matches_in(&dir, backup).unwrap());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spelling_uncertain_backup_move_restores_only_the_retained_prior_file() {
+        for replaced_destination in [false, true] {
+            let profile = TestDirectory::new();
+            let dir = open_directory(&profile.0, true).unwrap();
+            let stage = Path::new("new");
+            let destination = Path::new("final");
+            let backup = Path::new("owned-backup");
+            let new = VerifiedFile::new(dir.create(stage).unwrap().into_std(), 0).unwrap();
+            let previous =
+                VerifiedFile::new(dir.create(destination).unwrap().into_std(), 0).unwrap();
+            // The original is already under its backup name, as it could be
+            // when the post-rename check fails. No other name is ours to move.
+            dir.rename(destination, &dir, backup).unwrap();
+            if replaced_destination {
+                dir.write(destination, b"unrelated").unwrap();
+            }
+            let error = publish_index(
+                &dir,
+                stage,
+                destination,
+                backup,
+                &new,
+                Some(&previous),
+                || panic!("failed initial move must never reach the final flush"),
+            )
+            .unwrap_err();
+            assert!(new.matches_in(&dir, stage).unwrap());
+            if replaced_destination {
+                assert!(
+                    error.contains("owned-backup")
+                        && error.contains("recovery could not be confirmed")
+                );
+                assert!(previous.matches_in(&dir, backup).unwrap());
+                assert_eq!(dir.read(destination).unwrap(), b"unrelated");
+            } else {
+                assert!(error.contains("could not be saved"));
+                assert!(previous.matches_in(&dir, destination).unwrap());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spelling_rollback_keeps_replacements_at_all_owned_names() {
+        for changed in ["final", "staging", "backup"] {
+            let profile = TestDirectory::new();
+            let dir = open_directory(&profile.0, true).unwrap();
+            let stage = Path::new("staging");
+            let destination = Path::new("final");
+            let backup = Path::new("backup");
+            let make = |name: &Path, bytes: &[u8]| {
+                let path = profile.0.join(name);
+                fs::write(&path, bytes).unwrap();
+                VerifiedFile::new(fs::File::open(&path).unwrap(), bytes.len() as u64).unwrap()
+            };
+            let old = make(destination, b"old");
+            let new = make(stage, b"new");
+            let result = publish_index(&dir, stage, destination, backup, &new, Some(&old), || {
+                let path = profile.0.join(changed);
+                if path.exists() {
+                    fs::rename(&path, profile.0.join("displaced")).unwrap();
+                }
+                fs::write(&path, b"another file").unwrap();
+                Err("simulated flush error".into())
+            });
+            assert!(result
+                .unwrap_err()
+                .contains("recovery could not be confirmed"));
+            assert_eq!(fs::read(profile.0.join(changed)).unwrap(), b"another file");
+            assert!(
+                old.matches_in(&dir, backup).unwrap()
+                    || old.matches_in(&dir, Path::new("displaced")).unwrap()
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]

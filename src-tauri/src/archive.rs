@@ -998,8 +998,7 @@ impl Archive {
             .page(query, fulltext, offset, limit, snippets, Some(cancel))
     }
 
-    /// Explicit background dictionary builders only, not interactive searches.
-    /// Maximum 256 titles, each at most 16 KiB; offsets seek directly.
+    #[cfg(test)]
     pub fn title_batch(&self, offset: u32, limit: u32) -> Result<TitleBatch, String> {
         self.with_unchanged(None, |z| {
             crate::archive_metadata::title_batch(z, offset, limit)
