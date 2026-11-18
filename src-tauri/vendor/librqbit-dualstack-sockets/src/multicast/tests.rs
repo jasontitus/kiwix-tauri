@@ -27,13 +27,7 @@ async fn bind_mcast_sock(port: u16, bd_name: Option<&str>) -> MulticastUdpSocket
     .unwrap()
 }
 
-pub fn setup_test_logging() {
-    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
-    if std::env::var("RUST_LOG").is_err() {
-        unsafe { std::env::set_var("RUST_LOG", "trace") };
-    }
-    let _ = tracing_subscriber::fmt::try_init();
-}
+use crate::tests::setup_test_logging;
 
 #[tokio::test]
 async fn multicast_example() {
