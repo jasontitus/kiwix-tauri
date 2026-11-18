@@ -8,7 +8,7 @@ impl Profile {
     fn new() -> Self {
         let path =
             std::env::temp_dir().join(format!("kiwix-torrent-policy-{}", Uuid::new_v4()));
-        fs::create_dir_all(path.join("torrents")).unwrap();
+        crate::fs_ext::create_private_dir_all(path.join("torrents")).unwrap();
         let path = fs::canonicalize(path).unwrap();
         let store = Arc::new(Store::new(path.clone()).unwrap());
         Self(path, store)
@@ -88,7 +88,7 @@ fn aliased_profile_allows_owned_metadata_but_not_descendant_symlinks() {
     std::os::unix::fs::symlink(&real, &alias).unwrap();
     let store = Store::new(alias).unwrap();
     let metadata = store.data_dir().join("torrents");
-    fs::create_dir(&metadata).unwrap();
+    crate::fs_ext::create_private_dir_all(&metadata).unwrap();
     let published = metadata.join("archive.torrent");
     publish_metadata(&published, TEST_METADATA, |_, _| Ok(())).unwrap();
     assert_eq!(fs::read(published).unwrap(), TEST_METADATA);
@@ -463,7 +463,7 @@ async fn terminal_history_removal_joins_retirement_and_preserves_payload() {
     let mut record = profile.record();
     record.job.status = "error".into();
     let id = record.job.id.clone();
-    fs::create_dir(&record.staging).unwrap();
+    crate::fs_ext::create_private_dir_all(&record.staging).unwrap();
     let partial = record.staging.join("archive.zim");
     let archive = profile.0.join("archive.zim");
     fs::write(&partial, b"retained staging").unwrap();
@@ -569,7 +569,7 @@ async fn failed_history_checkpoint_retains_torrent_record_and_files() {
     let mut record = profile.record();
     record.job.status = "cancelled".into();
     let id = record.job.id.clone();
-    fs::create_dir(&record.staging).unwrap();
+    crate::fs_ext::create_private_dir_all(&record.staging).unwrap();
     let payload = record.staging.join("archive.zim");
     fs::write(&payload, b"retained staging").unwrap();
     profile.save(vec![record]);
@@ -587,7 +587,7 @@ fn owned_terminal_fixture() -> (Profile, Arc<TorrentManager>, String) {
     let mut record = profile.record();
     record.job.status = "error".into();
     record.files = vec![PathBuf::from("archive.zim")];
-    fs::create_dir(&record.staging).unwrap();
+    crate::fs_ext::create_private_dir_all(&record.staging).unwrap();
     let root = open_staging(&record.staging).unwrap();
     record.staging_directories.push((PathBuf::new(), PublicationIdentity::of(&root.dir_metadata().unwrap())));
     let partial = record.staging.join("archive.zim");
@@ -772,6 +772,11 @@ async fn torrent_factory_journals_new_nested_payload_before_cleanup() {
         owner: Some(((*manager).clone(), id.clone())),
     };
     let file = factory.open_file(&relative, 5).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(fs::metadata(record.staging.join("nested")).unwrap().permissions().mode() & 0o777, 0o700);
+    }
     let mut writer = file.as_ref();
     writer.write_all(b"bytes").unwrap();
     file.sync_all().unwrap();
@@ -1524,7 +1529,7 @@ fn publication_fixture() -> (Profile, Arc<TorrentManager>, String) {
     let profile = Profile::new();
     let mut record = profile.record();
     record.files.push(PathBuf::from("archive.zim"));
-    fs::create_dir(&record.staging).unwrap();
+    crate::fs_ext::create_private_dir_all(&record.staging).unwrap();
     fs::write(
         record.staging.join("archive.zim"),
         b"ZIM\x04test archive bytes",
@@ -1768,7 +1773,9 @@ fn publication_rejects_mutable_parent_before_creating_temporaries() {
     let (profile, manager, id) = publication_fixture();
     for mode in [0o775, 0o757, 0o777] {
         fs::set_permissions(&profile.0, fs::Permissions::from_mode(mode)).unwrap();
-        assert!(publish_fixture(&manager, &id, false, false).is_err());
+        let error = publish_fixture(&manager, &id, false, false).unwrap_err();
+        assert!(error.contains("Choose a private download folder"), "{error}");
+        assert_eq!(fs::metadata(&profile.0).unwrap().permissions().mode() & 0o777, mode);
         let record = manager.record(&id).unwrap();
         assert!(record.publication_temporaries.is_empty());
         assert!(record.publication_intents.is_empty());
@@ -2480,7 +2487,7 @@ fn temporary_cleanup_captures_before_identity_check_and_preserves_replacement() 
 fn temporary_cleanup_preserves_a_replaced_destination_directory() {
     let profile = Profile::new();
     let path = profile.0.join("destination");
-    fs::create_dir(&path).unwrap();
+    crate::fs_ext::create_private_dir_all(&path).unwrap();
     let destination = open_publication_directory(&path).unwrap();
     let (temporary, mut output) = create_publication_temporary(
         &path,
@@ -2682,7 +2689,7 @@ async fn shared_library_archive_downloads_from_magnet_in_second_profile() {
 
     let downloader_profile = Profile::new();
     let destination = downloader_profile.0.join("downloads");
-    fs::create_dir_all(&destination).unwrap();
+    crate::fs_ext::create_private_dir_all(&destination).unwrap();
     let downloader = TorrentManager::new(
         downloader_profile.0.clone(),
         false,

@@ -16,6 +16,20 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
+/// Create missing profile or transfer directories with owner-only Unix access.
+/// Existing directories keep their permissions, including user-selected destinations.
+/// Callers retain responsibility for validating ownership and mutation authority.
+pub(crate) fn create_private_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
+}
+
 /// This process's effective user ID: the principal every ownership check in
 /// this crate compares a file's owner against.
 ///
@@ -153,6 +167,25 @@ pub(crate) fn win32_error(error: windows::core::Error) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn private_creation_preserves_existing_folder_modes() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("kiwix-private-dir-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::set_permissions(root.as_path(), std::fs::Permissions::from_mode(0o775)).unwrap();
+        let nested = root.as_path().join("download").join("state");
+        create_private_dir_all(&nested).unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&nested), 0o700);
+        assert_eq!(mode(nested.parent().unwrap()), 0o700);
+        assert_eq!(mode(root.as_path()), 0o775);
+        std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(0o755)).unwrap();
+        create_private_dir_all(&nested).unwrap();
+        assert_eq!(mode(&nested), 0o755);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn exclusive_lock_excludes_other_open_files_until_dropped() {

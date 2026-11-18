@@ -55,6 +55,13 @@ impl ConfinedFactory {
             bail!("Torrent file path or advertised length changed");
         }
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            #[cfg_attr(not(unix), allow(unused_mut, reason = "the builder is only configured with a Unix mode"))]
+            let mut builder = cap_std::fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use cap_std::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
             let mut prefix = PathBuf::new();
             for component in parent.components() {
                 prefix.push(component.as_os_str());
@@ -68,7 +75,7 @@ impl ConfinedFactory {
                     .lock()
                     .map_err(|_| anyhow::anyhow!("Torrent storage lock poisoned"))?
                     .contains(&prefix);
-                let created = match self.root.create_dir(&prefix) {
+                let created = match self.root.create_dir_with(&prefix, &builder) {
                     Ok(()) => true,
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
                     Err(error) => return Err(error.into()),

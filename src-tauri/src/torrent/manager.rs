@@ -192,7 +192,7 @@ impl TorrentManager {
         store: Arc<Store>,
     ) -> Result<Arc<Self>, String> {
         let folder = data_dir.join("torrents");
-        fs::create_dir_all(&folder).map_err(display)?;
+        crate::fs_ext::create_private_dir_all(&folder).map_err(display)?;
         let lock = OpenOptions::new()
             .create(true)
             .truncate(false)

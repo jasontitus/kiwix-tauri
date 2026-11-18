@@ -2218,7 +2218,7 @@ impl Service {
                         .unwrap_or(self.store.settings()?.download_directory),
                 );
                 self.store.validate_portable_directory(&directory)?;
-                std::fs::create_dir_all(&directory)
+                crate::fs_ext::create_private_dir_all(&directory)
                     .map_err(|e| format!("Creating download directory: {e}"))?;
                 if url.starts_with("magnet:")
                     || url::Url::parse(&url)

@@ -600,7 +600,7 @@ fn metalink_rejects_plaintext_and_external_filename_traversal() {
 
 fn test_directory() -> PathBuf {
     let path = std::env::temp_dir().join(format!("kiwix-acquisition-test-{}", Uuid::new_v4()));
-    fs::create_dir_all(&path).unwrap();
+    crate::fs_ext::create_private_dir_all(&path).unwrap();
     fs::canonicalize(path).unwrap()
 }
 
