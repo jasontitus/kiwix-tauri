@@ -1,0 +1,162 @@
+{
+  "protocol": "One warm-up per executable, four measured rounds, alternating launch order. APFS clone of the same archive; new app profile for every process. Ready wall time in milliseconds. Child user + system CPU seconds and Darwin peak process RSS bytes include serving the checked Solar System article. Background builds were active, especially in the second run.",
+  "native_source": "f2875d0",
+  "measurements": [
+    {
+      "archive": "wikipedia_en_simple_all_nopic_2026-05.zim",
+      "archive_sha256": "503b74027d101ec13b272f1ebbd23473e1d260be71a35a71141dfc985fd20d0a",
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7",
+      "macos": "27.2.1",
+      "darwin_kernel": "27.2.0",
+      "binaries": {
+        "native": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+        "optimized": "e0c699cddcae8d63060b0d18d12945b25d533283827cd6839a3a502678045520"
+      },
+      "runs": [
+        {
+          "build": "native",
+          "round": 1,
+          "ready_ms": 6706.450290977955,
+          "cpu_s": 6.706983,
+          "peak_bytes": 33046528,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 1,
+          "ready_ms": 7662.7382499864325,
+          "cpu_s": 15.526595,
+          "peak_bytes": 80953344,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 2,
+          "ready_ms": 5563.137667020783,
+          "cpu_s": 11.646486999999999,
+          "peak_bytes": 77791232,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 2,
+          "ready_ms": 4826.5979590360075,
+          "cpu_s": 4.812862,
+          "peak_bytes": 32669696,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 3,
+          "ready_ms": 4282.31874993071,
+          "cpu_s": 4.2490939999999995,
+          "peak_bytes": 32718848,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 3,
+          "ready_ms": 4860.821250011213,
+          "cpu_s": 11.229692,
+          "peak_bytes": 83853312,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 4,
+          "ready_ms": 5154.82575003989,
+          "cpu_s": 11.210716,
+          "peak_bytes": 76234752,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 4,
+          "ready_ms": 4779.480625060387,
+          "cpu_s": 4.764823,
+          "peak_bytes": 32505856,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        }
+      ],
+      "rust_source": "ffb7ddab1084324df99b234f644a789eb4181ed4"
+    },
+    {
+      "archive": "wikipedia_en_simple_all_nopic_2026-05.zim",
+      "archive_sha256": "503b74027d101ec13b272f1ebbd23473e1d260be71a35a71141dfc985fd20d0a",
+      "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7",
+      "macos": "27.2.1",
+      "darwin_kernel": "27.2.0",
+      "binaries": {
+        "native": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+        "optimized": "9d90f865f8950a759263190e479549f54d3ba699579b620d94f92662b0638f62"
+      },
+      "runs": [
+        {
+          "build": "native",
+          "round": 1,
+          "ready_ms": 8537.717333994806,
+          "cpu_s": 7.905289,
+          "peak_bytes": 32899072,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 1,
+          "ready_ms": 10392.320665996522,
+          "cpu_s": 12.928279999999999,
+          "peak_bytes": 95436800,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 2,
+          "ready_ms": 9029.983417014591,
+          "cpu_s": 13.225766,
+          "peak_bytes": 94191616,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 2,
+          "ready_ms": 9857.61750000529,
+          "cpu_s": 8.106173,
+          "peak_bytes": 32882688,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 3,
+          "ready_ms": 14481.908084009774,
+          "cpu_s": 7.497266999999999,
+          "peak_bytes": 30277632,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 3,
+          "ready_ms": 11461.885207914747,
+          "cpu_s": 14.792947,
+          "peak_bytes": 87408640,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "optimized",
+          "round": 4,
+          "ready_ms": 10906.444958993234,
+          "cpu_s": 18.89018,
+          "peak_bytes": 90423296,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        },
+        {
+          "build": "native",
+          "round": 4,
+          "ready_ms": 13859.498250065371,
+          "cpu_s": 7.433286,
+          "peak_bytes": 33079296,
+          "article_sha256": "28b9283360d072ab0d7e5a6d5a888267b35b9527686ca656a622391ddbd73ee7"
+        }
+      ],
+      "rust_source": "a4d9f0656d9ef3b26e8c484d83f298b38d5c8bc0"
+    }
+  ]
+}
