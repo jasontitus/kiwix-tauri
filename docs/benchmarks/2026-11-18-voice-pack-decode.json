@@ -1,0 +1,92 @@
+[
+  {
+    "trial": 0,
+    "kind": "previous",
+    "seconds": 14.731491959071718,
+    "cpu_seconds": 14.576939,
+    "rss_bytes": 5996544,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 0,
+    "kind": "turbo",
+    "seconds": 10.091887624934316,
+    "cpu_seconds": 9.980913000000001,
+    "rss_bytes": 10600448,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 1,
+    "kind": "turbo",
+    "seconds": 10.712074583978392,
+    "cpu_seconds": 10.592974,
+    "rss_bytes": 10616832,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 1,
+    "kind": "previous",
+    "seconds": 13.882685916032642,
+    "cpu_seconds": 13.857455999999999,
+    "rss_bytes": 5996544,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 2,
+    "kind": "previous",
+    "seconds": 17.91874662495684,
+    "cpu_seconds": 15.298411,
+    "rss_bytes": 5996544,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 2,
+    "kind": "turbo",
+    "seconds": 13.878378583001904,
+    "cpu_seconds": 13.531701,
+    "rss_bytes": 10616832,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 3,
+    "kind": "turbo",
+    "seconds": 9.643181542051025,
+    "cpu_seconds": 9.542553999999999,
+    "rss_bytes": 10600448,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 3,
+    "kind": "previous",
+    "seconds": 14.234228707966395,
+    "cpu_seconds": 13.182818,
+    "rss_bytes": 5996544,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 4,
+    "kind": "previous",
+    "seconds": 19.885890041012317,
+    "cpu_seconds": 19.746056,
+    "rss_bytes": 5996544,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  },
+  {
+    "trial": 4,
+    "kind": "turbo",
+    "seconds": 10.821841208031401,
+    "cpu_seconds": 10.698449,
+    "rss_bytes": 10616832,
+    "size": 221801472,
+    "sha256": "ce23b8a10c500f7897abdcfbe1e35d711235fc6e8abb1228914dc71bb5fd192e"
+  }
+]
