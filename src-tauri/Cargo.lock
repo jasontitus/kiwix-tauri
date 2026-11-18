@@ -3128,6 +3128,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "block2",
  "bytes",
  "bzip2 0.6.1",
  "cap-fs-ext",

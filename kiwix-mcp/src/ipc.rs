@@ -15,7 +15,6 @@
 //!   the relay's user.
 
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -60,8 +59,8 @@ pub fn read_frame(reader: &mut impl Read) -> std::io::Result<Value> {
 pub fn profile_suffix(profile: &Path) -> Result<String, String> {
     let canonical = std::fs::canonicalize(profile)
         .map_err(|_| "Cannot identify the Kiwix profile folder. Check --data-dir and try again.".to_string())?;
-    let digest = Sha256::digest(canonical.to_string_lossy().to_lowercase().as_bytes());
-    Ok(digest[..8].iter().map(|byte| format!("{byte:02x}")).collect())
+    let digest = chksum_hash_sha2_256::hash(canonical.to_string_lossy().to_lowercase().as_bytes());
+    Ok(digest.to_hex_lowercase()[..16].to_owned())
 }
 
 /// Which profile's app this relay talks to: `--data-dir`, else the portable
@@ -488,28 +487,24 @@ mod unix {
 
     #[cfg(target_os = "linux")]
     fn peer_is_same_user(stream: &UnixStream) -> bool {
-        use std::os::fd::AsRawFd;
-        let mut credentials: libc::ucred = unsafe { std::mem::zeroed() };
-        let mut length = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
-        let ok = unsafe {
-            libc::getsockopt(
-                stream.as_raw_fd(),
-                libc::SOL_SOCKET,
-                libc::SO_PEERCRED,
-                (&mut credentials as *mut libc::ucred).cast(),
-                &mut length,
-            )
-        } == 0;
-        ok && credentials.uid == unsafe { libc::geteuid() }
+        rustix::net::sockopt::socket_peercred(stream)
+            .is_ok_and(|credentials| credentials.uid == rustix::process::geteuid())
     }
 
     #[cfg(target_os = "macos")]
     fn peer_is_same_user(stream: &UnixStream) -> bool {
-        use std::os::fd::AsRawFd;
-        let mut uid: libc::uid_t = 0;
-        let mut gid: libc::gid_t = 0;
-        let ok = unsafe { libc::getpeereid(stream.as_raw_fd(), &mut uid, &mut gid) } == 0;
-        ok && uid == unsafe { libc::geteuid() }
+        nix::unistd::getpeereid(stream)
+            .is_ok_and(|(uid, _)| uid == nix::unistd::geteuid())
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn peer_lookup_accepts_connected_sockets_and_denies_a_failed_lookup() {
+        let (left, right) = UnixStream::pair().unwrap();
+        assert!(peer_is_same_user(&left));
+        assert!(peer_is_same_user(&right));
+        let directory: std::os::fd::OwnedFd = std::fs::File::open(".").unwrap().into();
+        assert!(!peer_is_same_user(&UnixStream::from(directory)));
     }
 
     pub(super) fn connect(profile: Option<&Path>) -> Result<UnixStream, String> {

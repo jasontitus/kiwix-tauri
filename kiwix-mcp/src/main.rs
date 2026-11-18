@@ -8,6 +8,8 @@
 //!
 //! Client configuration: `{"command": "<Kiwix install folder>/kiwix-mcp", "args": []}`.
 
+#![cfg_attr(unix, forbid(unsafe_code))]
+
 mod ipc;
 mod protocol;
 

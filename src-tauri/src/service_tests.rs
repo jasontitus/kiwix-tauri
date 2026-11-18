@@ -5833,7 +5833,11 @@ async fn agent_connector_tools_are_off_by_default_and_return_bounded_clean_resul
     assert!(!running(&service));
     assert!(service.agent_call("list_archives", json!({})).await.is_err(), "turned off");
     service.clone().dispatch("save_settings", json!({"settings": {"agentConnector": true}})).await.unwrap();
-    assert!(running(&service));
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !running(&service) {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }).await.expect("connector should claim the named pipe");
     service.clone().dispatch("save_settings", json!({"settings": {"zoom": 1.25}})).await.unwrap();
     assert!(running(&service));
     service.agent_call("list_archives", json!({})).await.unwrap();

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Keep platform power management away from live transfers.
 //!
 //! A transfer that is not user-visible can be slowed by the system even while
@@ -105,10 +106,10 @@ impl Drop for Guard {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use objc2::rc::Retained;
-    use objc2::runtime::ProtocolObject;
-    use objc2_foundation::{NSActivityOptions, NSObjectProtocol, NSProcessInfo, NSString};
-    use std::sync::Mutex;
+    use block2::RcBlock;
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+    use std::sync::{mpsc, Mutex};
+    use std::thread;
 
     // `NSActivityUserInitiated` already contains `IdleSystemSleepDisabled`; the
     // explicit bit documents the intent and keeps the set stable if Foundation
@@ -119,30 +120,69 @@ mod platform {
             | NSActivityOptions::IdleSystemSleepDisabled.0,
     );
 
-    struct Token(Retained<ProtocolObject<dyn NSObjectProtocol>>);
+    struct Request {
+        reason: &'static str,
+        ready: mpsc::SyncSender<()>,
+        release: mpsc::Receiver<()>,
+        ended: mpsc::SyncSender<()>,
+    }
 
-    // SAFETY: an activity token is an opaque Objective-C handle with no thread
-    // affinity: the only operation Rust performs on it is `endActivity:`, and
-    // the token is neither read nor sent to any other API. The `TOKEN` mutex
-    // serialises begin/end and holds the only owned reference, so a guard may be
-    // released by a different task than the one that acquired it. Enforced by
-    // `Token`'s field and `TOKEN` both being private to this module.
-    unsafe impl Send for Token {}
+    fn run(queue: mpsc::Receiver<Request>) {
+        for request in queue {
+            let Request { reason, ready, release, ended } = request;
+            objc2::rc::autoreleasepool(|_| {
+                let block = RcBlock::new(move || {
+                    if ready.send(()).is_ok() {
+                        let _ = release.recv();
+                    }
+                });
+                NSProcessInfo::processInfo().performActivityWithOptions_reason_usingBlock(
+                    OPTIONS, &NSString::from_str(reason), &block,
+                );
+            });
+            let _ = ended.send(());
+        }
+    }
 
-    static TOKEN: Mutex<Option<Token>> = Mutex::new(None);
+    // Foundation owns the assertion for the duration of its synchronous block.
+    // Only the worker enters that block. Transfer guards exchange Rust channels.
+    struct Worker {
+        queue: Option<mpsc::Sender<Request>>,
+        active: Option<(mpsc::Sender<()>, mpsc::Receiver<()>)>,
+    }
+
+    static WORKER: Mutex<Worker> = Mutex::new(Worker { queue: None, active: None });
 
     pub(super) fn begin(reason: &'static str) {
-        let info = NSProcessInfo::processInfo();
-        let token = info.beginActivityWithOptions_reason(OPTIONS, &NSString::from_str(reason));
-        *TOKEN.lock().unwrap_or_else(|error| error.into_inner()) = Some(Token(token));
+        let mut worker = WORKER.lock().unwrap_or_else(|error| error.into_inner());
+        if worker.queue.is_none() {
+            let (sender, receiver) = mpsc::channel();
+            match thread::Builder::new().name("kiwix-power".into()).spawn(move || run(receiver)) {
+                Ok(_) => worker.queue = Some(sender),
+                Err(error) => {
+                    eprintln!("Could not start the macOS transfer activity: {error}");
+                    return;
+                }
+            }
+        }
+        let (ready, started) = mpsc::sync_channel(0);
+        let (finish, release) = mpsc::channel();
+        let (ended, done) = mpsc::sync_channel(0);
+        let request = Request { reason, ready, release, ended };
+        if worker.queue.as_ref().is_some_and(|queue| queue.send(request).is_ok())
+            && started.recv().is_ok() {
+            worker.active = Some((finish, done));
+        } else {
+            worker.queue = None;
+            eprintln!("Could not start the macOS transfer activity");
+        }
     }
 
     pub(super) fn end() {
-        let token = TOKEN.lock().unwrap_or_else(|error| error.into_inner()).take();
-        if let Some(Token(token)) = token {
-            // SAFETY: the token came from `beginActivityWithOptions:reason:`
-            // and is ended exactly once, after which it is dropped.
-            unsafe { NSProcessInfo::processInfo().endActivity(&token) };
+        let mut worker = WORKER.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some((finish, done)) = worker.active.take() {
+            drop(finish);
+            let _ = done.recv();
         }
     }
 }
