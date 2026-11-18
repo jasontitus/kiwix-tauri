@@ -4,6 +4,10 @@ fn main() {
     emit_archive_versions();
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
         println!("cargo:rustc-link-arg=-Wl,-z,max-page-size=16384");
+        // Oboe selects the static C++ runtime. The NDK's API-level libc++.a
+        // linker script supplies both libc++_static and its exception/RTTI ABI.
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-l:libc++.a");
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-z,defs");
     }
     // Platforms with an app-owned location provider (see permissions.rs). An
     // archive asks Kiwix, never the webview's own geolocation.

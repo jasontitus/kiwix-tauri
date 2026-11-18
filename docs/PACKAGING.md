@@ -281,6 +281,10 @@ The first iOS application build stopped before native compilation because cargo-
 
 Android application builds additionally require a compatible JDK, Android SDK platform 37 (Android 17; package `platforms;android-37.0`) for the application module plus platform 36 (`platforms;android-36`) for the vendored `:tauri-android`, `:rustls-platform-verifier`, `:tauri-plugin-dialog` and `:tauri-plugin-kiwix-mobile` modules, which still declare `compileSdk = 36`. No module pins `buildToolsVersion`, so AGP 9.3.1's default Build-Tools 36.0.0 is used; NDK `28.2.13676358` and the matching Rust target are also required. The committed Gradle wrapper and mobile source projects are build inputs; nested `.tauri/` API copies, Gradle/build caches and local SDK paths regenerate or remain local and are not repository inputs.
 
+The Android app links Oboe’s selected static C++ runtime through the NDK’s API-level `libc++.a` linker script on ARM64 and ARMv7. The script includes both the standard library and its exception and runtime type information support. The Android shared-library link fails on unresolved symbols. This catches missing C++ definitions before an APK reaches `System.loadLibrary` on startup.
+
+For Android builds, keeping Cargo’s target directory directly under `src-tauri` lets the sherpa-onnx build script find the generated Android project and stage its shared libraries. When using a separate compilation cache, prepare the same locked speech dependency with a project-local target directory before Gradle packages the APK. Verify the APK includes `libkiwix_app.so`, `libsherpa-onnx-c-api.so` and `libonnxruntime.so` for each selected ABI.
+
 Mobile frontend behavior is selected by `TAURI_ENV_PLATFORM`, including the iOS-only archive-backup controls. Normal Tauri builds inject that environment into `beforeBuildCommand`. Do not skip that command and reuse a generic desktop `dist/` for mobile acceptance. For independent parallel platform builds, generate separate output directories and point each Tauri invocation at its own bundle:
 
 ```sh
