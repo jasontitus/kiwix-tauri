@@ -1,6 +1,6 @@
 # Forks and patches
 
-This app carries local changes to five third-party Rust/Kotlin packages and to the libzim and Xapian C++ libraries. It also builds one more package, rustls-platform-verifier's Android component, from vendored source. Each one has to be re-applied, by hand, on every upstream upgrade. This page lists what each change does and why. It also records whether the change fixes a real upstream bug or is a Kiwix-specific policy, and what it would take to drop it.
+This page tracks local changes to third-party Rust and Kotlin packages and the patches used for native libzim and Xapian comparison builds. The app also builds rustls-platform-verifier's Android component from vendored source. Each one has to be re-applied, by hand, on every upstream upgrade. This page lists what each change does and why. It also records whether the change fixes a real upstream bug or is a Kiwix-specific policy, and what it would take to drop it.
 
 Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), tauri/tauri-runtime-wry 3.0.0-alpha.5, wry 0.57.1, mdns-sd 0.21.7 and librqbit-dualstack-sockets 0.7.0. An independent fact-check against those sources corrected the first draft; the corrections are included here.
 
@@ -17,6 +17,7 @@ Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), 
 | tauri-runtime-wry | 4 lines | Yes: Linux incognito IPC | Yes, in 3.0.0-alpha.5 | Upstream PR to tauri-apps/tauri |
 | wry | ~100 lines | Apple media policy; Windows: permission persistence and accelerator forwarding (a real bug) | n/a | Keep the policy; report accelerator forwarding upstream |
 | tauri-android | ~200 lines | Yes: Activity references kept after recreation | Not re-checked against `dev` | Upstream PR to tauri-apps/tauri |
+| cssparser | Five changed Rust source files | Memory-safety hardening | Audited at 0.37.0 | Keep the source and fixtures with the app and compare CSS behavior on upgrades |
 | mdns-sd | ~1,900 lines | Hardening against hostile LAN packets | Partly fixed in 0.21 | Rebase onto 0.21.7, then offer the cache bounds upstream |
 | librqbit-dualstack-sockets | 2 lines | Yes: does not build for iOS | Yes, in 0.7.0 | Upstream PR; trivial |
 | rustls-platform-verifier (Android Kotlin) | Unchanged source; build files only | No: vendored instead of upstream's GitHub-hosted Maven archive | n/a | Keep pinned to Cargo.lock; re-vendor on every crate update |
@@ -137,6 +138,14 @@ Tauri's Android plugins (`Plugin`, `AppPlugin`, `PathPlugin`) hold a strong refe
 In those cases the plugins keep the dead Activity alive. The new Activity also gets no back-press handler, so Back does the system default instead of web history or the app's back-button event.
 
 The fork holds the Activity and WebView weakly and rebinds on resume and on WebView creation (a new `onAppWebViewCreated` hook that `MainActivity` calls). It keeps one-shot activity-result and permission callbacks per Activity and clears them on destroy, uses the application context for path lookups, and makes `exit` reject when no Activity is available. These are real upstream issues; re-check against tauri `dev` before sending a PR.
+
+### cssparser
+
+The app vendors cssparser 0.37.0 under MPL-2.0 in `src-tauri/vendor/cssparser-0.37.0`. The registry archive SHA-256 is `8c9cdaae01d5ed7882b04d795e7f752f46ff52d2fa3b50a20d28c464510bba98`. Its recorded upstream commit is `4c49486494fb24dc01390e3baca9698ef1744c71`. The additional test inputs under `src/css-parsing-tests` and `src/big-data-url.css` come from that same revision. The CSS parsing test data includes its original CC0 notice. [Upstream source](https://github.com/servo/rust-cssparser/tree/4c49486494fb24dc01390e3baca9698ef1744c71)
+
+Application resources include the complete matching source, manifests, upstream fixtures and license under `licenses/cssparser/source`, with a notice alongside the directory.
+
+The local edits in `lib.rs`, `cow_rc_str.rs`, `tokenizer.rs`, `serializer.rs` and `macros.rs` remove raw reference-count manipulation and unchecked byte/string access. The previously hidden macro helpers have changed with the exported macro expansion. On upgrades, run the upstream test suite and the app's export and PDF tests, then compare token streams, source spans and output on real stylesheets. [App call sites and measurements](HTML-PARSER-SAFETY.md#css-export-and-pdf-token-handling)
 
 ### mdns-sd: bounds against hostile LAN traffic
 

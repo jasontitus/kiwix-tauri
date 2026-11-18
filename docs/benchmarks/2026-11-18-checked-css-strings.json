@@ -1,0 +1,561 @@
+{
+  "host": "arm64 macOS 27.2.1, rustc 1.99.1, release profile",
+  "application_base": "96e7afc",
+  "registry_crate_sha256": "8c9cdaae01d5ed7882b04d795e7f752f46ff52d2fa3b50a20d28c464510bba98",
+  "fixtures": [
+    {
+      "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "stylesheets": 24,
+      "css_bytes": 360854
+    },
+    {
+      "name": "wikipedia_en_nollywood_maxi_2026-10.zim",
+      "sha256": "faa53e0c8ef641206867ce21f0e107d4e2aa9012e3b2263f05fe9bddf4f72aa3",
+      "stylesheets": 25,
+      "css_bytes": 361471
+    }
+  ],
+  "assets_manifest_sha256": "06dbb473e2c3479d8a9bc109e85adf8f2dd3919f1988f72335e5a66d74c06d49",
+  "variants": {
+    "upstream": "crates.io cssparser 0.37.0",
+    "cow": "Only checked CowRcStr storage",
+    "checked": "Checked CowRcStr, tokenizer, ASCII serializer and case folding"
+  },
+  "sampling": "Twelve single-process trials per variant and operation. Trial order rotated and alternated direction. Each trial validated the whole corpus then timed twelve corpus passes. Wall time is per pass. Process maximum RSS includes validation and fixture input.",
+  "raw_columns": [
+    "wall_ms_per_corpus_pass",
+    "process_max_rss_bytes"
+  ],
+  "size_columns_bytes": [
+    "CowRcStr",
+    "Option<CowRcStr>",
+    "Token",
+    "ParserInput",
+    "BasicParseError"
+  ],
+  "validation": [
+    "DefaultHasher digest over reference discovery results and all token debug values, offsets and original token spans; pdf_css also includes serialized CSS bytes",
+    "total tokens per corpus pass"
+  ],
+  "operations": {
+    "export": {
+      "digest_and_tokens": [
+        "1814558990925514368",
+        "126530"
+      ],
+      "sizes": {
+        "upstream": [
+          16,
+          16,
+          32,
+          160,
+          40
+        ],
+        "cow": [
+          16,
+          24,
+          32,
+          160,
+          40
+        ],
+        "checked": [
+          16,
+          24,
+          32,
+          160,
+          40
+        ]
+      },
+      "raw": {
+        "upstream": [
+          [
+            5.991253,
+            3866624
+          ],
+          [
+            5.618809,
+            3866624
+          ],
+          [
+            5.837597,
+            3866624
+          ],
+          [
+            5.352416,
+            3850240
+          ],
+          [
+            5.360354,
+            3948544
+          ],
+          [
+            5.347631,
+            3833856
+          ],
+          [
+            5.320975,
+            3850240
+          ],
+          [
+            4.720524,
+            3833856
+          ],
+          [
+            4.709961,
+            3817472
+          ],
+          [
+            4.713309,
+            3850240
+          ],
+          [
+            4.734798,
+            3883008
+          ],
+          [
+            4.712545,
+            3833856
+          ]
+        ],
+        "cow": [
+          [
+            5.608388,
+            4145152
+          ],
+          [
+            5.359069,
+            4177920
+          ],
+          [
+            5.649656,
+            4194304
+          ],
+          [
+            5.796659,
+            4194304
+          ],
+          [
+            5.343718,
+            4161536
+          ],
+          [
+            5.36252,
+            4194304
+          ],
+          [
+            4.93517,
+            4128768
+          ],
+          [
+            4.755757,
+            4194304
+          ],
+          [
+            4.763125,
+            4210688
+          ],
+          [
+            4.759819,
+            4161536
+          ],
+          [
+            4.729791,
+            4128768
+          ],
+          [
+            4.715184,
+            4194304
+          ]
+        ],
+        "checked": [
+          [
+            5.481718,
+            4177920
+          ],
+          [
+            5.631378,
+            4210688
+          ],
+          [
+            5.562875,
+            4079616
+          ],
+          [
+            6.206888,
+            4194304
+          ],
+          [
+            5.487375,
+            4210688
+          ],
+          [
+            5.50609,
+            4177920
+          ],
+          [
+            4.871524,
+            4161536
+          ],
+          [
+            4.843583,
+            4063232
+          ],
+          [
+            4.858072,
+            4145152
+          ],
+          [
+            4.881253,
+            4210688
+          ],
+          [
+            4.875732,
+            4259840
+          ],
+          [
+            4.853739,
+            4161536
+          ]
+        ]
+      },
+      "medians": {
+        "upstream": [
+          5.334303,
+          3850240.0
+        ],
+        "cow": [
+          5.139444,
+          4186112.0
+        ],
+        "checked": [
+          5.1814855,
+          4177920.0
+        ]
+      }
+    },
+    "pdf_css": {
+      "digest_and_tokens": [
+        "4853920051819471746",
+        "126530"
+      ],
+      "sizes": {
+        "upstream": [
+          16,
+          16,
+          32,
+          160,
+          40
+        ],
+        "cow": [
+          16,
+          24,
+          32,
+          160,
+          40
+        ],
+        "checked": [
+          16,
+          24,
+          32,
+          160,
+          40
+        ]
+      },
+      "raw": {
+        "upstream": [
+          [
+            9.823684,
+            4718592
+          ],
+          [
+            9.794041,
+            4718592
+          ],
+          [
+            9.798388,
+            4816896
+          ],
+          [
+            8.840631,
+            4718592
+          ],
+          [
+            8.868461,
+            4718592
+          ],
+          [
+            8.866802,
+            4866048
+          ],
+          [
+            8.784847,
+            4767744
+          ],
+          [
+            9.822038,
+            4915200
+          ],
+          [
+            9.799357,
+            4685824
+          ],
+          [
+            9.80276,
+            5128192
+          ],
+          [
+            9.814062,
+            4734976
+          ],
+          [
+            9.816375,
+            4915200
+          ]
+        ],
+        "cow": [
+          [
+            9.820906,
+            4915200
+          ],
+          [
+            9.828621,
+            5062656
+          ],
+          [
+            9.799954,
+            5029888
+          ],
+          [
+            8.821878,
+            4898816
+          ],
+          [
+            8.842875,
+            4882432
+          ],
+          [
+            8.799434,
+            4685824
+          ],
+          [
+            8.855034,
+            5210112
+          ],
+          [
+            8.749034,
+            5046272
+          ],
+          [
+            9.854305,
+            5259264
+          ],
+          [
+            9.81918,
+            4980736
+          ],
+          [
+            9.83442,
+            4833280
+          ],
+          [
+            9.853493,
+            5062656
+          ]
+        ],
+        "checked": [
+          [
+            10.015375,
+            5095424
+          ],
+          [
+            9.96585,
+            5079040
+          ],
+          [
+            10.03777,
+            5275648
+          ],
+          [
+            9.634958,
+            5062656
+          ],
+          [
+            9.049673,
+            4800512
+          ],
+          [
+            9.021316,
+            5095424
+          ],
+          [
+            9.000451,
+            5292032
+          ],
+          [
+            9.832725,
+            5095424
+          ],
+          [
+            10.010201,
+            5226496
+          ],
+          [
+            10.045048,
+            4997120
+          ],
+          [
+            10.015027,
+            4816896
+          ],
+          [
+            10.025947,
+            5029888
+          ]
+        ]
+      },
+      "medians": {
+        "upstream": [
+          9.7988725,
+          4751360.0
+        ],
+        "cow": [
+          9.809567,
+          5005312.0
+        ],
+        "checked": [
+          9.9880255,
+          5087232.0
+        ]
+      }
+    }
+  },
+  "full_live_pdf_sanitizer": {
+    "inputs": "Two production-bridge audio test snapshots and two modeled article snapshots using Climate and Nollywood HTML, each with visual resources inlined as a small test data URL and the same 5,375-byte Climate content.parsoid.css. The sanitized document never entered a print renderer.",
+    "input_sha256": {
+      "bridge-0.html": "9b32c31e8b65cf69aeac2d48db69b657dad0b08593f0abf09cedec7a96d1326d",
+      "bridge-1.html": "7d88c0710cb0ec79637638aa8b3b291e520ffad2d4d0ff519cca1b90a6575b97",
+      "climate.html": "48955ea19beff1f107817698a411a31a7d1059b5e03305b03b480fbe6d22ca59",
+      "nollywood.html": "dfd6d02f29119b096f42a94ea8f832176ceb49fed2f7f3e4a2e527d710ee8bc8"
+    },
+    "validation": "All calls succeeded. DefaultHasher digest over complete serialized HTML strings in sorted filename order, plus output byte lengths.",
+    "digest_and_output_bytes": "2075771987185250609 [533, 772, 16430, 52086]",
+    "method": "Twelve serial release processes per variant, alternated in order, twelve complete four-document passes per process after a full validation pass.",
+    "raw_columns": [
+      "wall_ms_per_corpus_pass",
+      "process_max_rss_bytes"
+    ],
+    "raw": {
+      "upstream": [
+        [
+          2.404805,
+          4718592
+        ],
+        [
+          2.384468,
+          4440064
+        ],
+        [
+          2.459579,
+          5013504
+        ],
+        [
+          2.440013,
+          4554752
+        ],
+        [
+          2.430986,
+          4734976
+        ],
+        [
+          2.445666,
+          4767744
+        ],
+        [
+          2.45443,
+          5095424
+        ],
+        [
+          2.480572,
+          4833280
+        ],
+        [
+          2.433458,
+          4440064
+        ],
+        [
+          2.461934,
+          4980736
+        ],
+        [
+          2.408072,
+          4866048
+        ],
+        [
+          2.469357,
+          5341184
+        ]
+      ],
+      "checked": [
+        [
+          2.444586,
+          4997120
+        ],
+        [
+          2.542083,
+          4980736
+        ],
+        [
+          2.444479,
+          5013504
+        ],
+        [
+          2.455475,
+          5341184
+        ],
+        [
+          2.460621,
+          4866048
+        ],
+        [
+          2.412486,
+          4751360
+        ],
+        [
+          2.465343,
+          5242880
+        ],
+        [
+          2.473722,
+          4915200
+        ],
+        [
+          2.481062,
+          5013504
+        ],
+        [
+          2.456343,
+          5455872
+        ],
+        [
+          2.466649,
+          5095424
+        ],
+        [
+          2.444541,
+          4947968
+        ]
+      ]
+    },
+    "medians": {
+      "upstream": [
+        2.4428395,
+        4800512.0
+      ],
+      "checked": [
+        2.458482,
+        5005312.0
+      ]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+This application includes a modified cssparser 0.37.0 under the Mozilla
+Public License 2.0. The complete matching crate, including its license,
+Cargo manifests, lockfile, source and test inputs, is in the source directory
+next to this notice. The upstream revision is
+4c49486494fb24dc01390e3baca9698ef1744c71 in
+https://github.com/servo/rust-cssparser.
