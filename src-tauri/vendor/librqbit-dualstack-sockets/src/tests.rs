@@ -78,16 +78,14 @@ struct SendAssertion {
     should_work: bool,
 }
 
-fn setup_test_logging() {
+pub(crate) fn setup_test_logging() {
     let _ = tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::TRACE.into())
-                .from_env()
-                .unwrap(),
+                .from_env_lossy(),
         )
         .try_init();
-    unsafe { std::env::set_var("RUST_BACKTRACE", "1") }
 }
 
 async fn test_tcp(server: BindSpec, tests: &[SendAssertion]) {

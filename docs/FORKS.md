@@ -18,7 +18,7 @@ Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), 
 | wry | ~100 lines | Apple media policy; Windows: permission persistence and accelerator forwarding (a real bug) | n/a | Keep the policy; report accelerator forwarding upstream |
 | tauri-android | ~200 lines | Yes: Activity references kept after recreation | Not re-checked against `dev` | Upstream PR to tauri-apps/tauri |
 | mdns-sd | ~1,900 lines | Hardening against hostile LAN packets | Partly fixed in 0.21 | Rebase onto 0.21.7, then offer the cache bounds upstream |
-| librqbit-dualstack-sockets | 2 lines | Yes: does not build for iOS | Yes, in 0.7.0 | Upstream PR; trivial |
+| librqbit-dualstack-sockets | iOS binding and checked interface handling | Yes: does not build for iOS | Yes, in 0.7.0 | Upstream PR; trivial |
 | rustls-platform-verifier (Android Kotlin) | Unchanged source; build files only | No: vendored instead of upstream's GitHub-hosted Maven archive | n/a | Keep pinned to Cargo.lock; re-vendor on every crate update |
 
 ## libzim (C++)
@@ -146,7 +146,9 @@ Upstream 0.21.7 now caps expanded names at 255 bytes (which stops compression lo
 
 ### librqbit-dualstack-sockets: iOS interface binding
 
-On iOS the crate compiles the Linux `bind_device` path, which socket2 provides only on Android, Fuchsia and Linux, so the crate does not build for iOS. The patch extends the macOS index-based (`IP_BOUND_IF`) branch to iOS. This is a two-line upstream PR.
+On iOS the crate compiles the Linux `bind_device` path, which socket2 provides only on Android, Fuchsia and Linux, so the crate does not build for iOS. The patch extends the macOS index-based (`IP_BOUND_IF`) branch to iOS. The original iOS fix changes two platform conditions.
+
+The app fork now also forbids unsafe Rust across the socket crate. Named interface selection uses the same typed Unix name-to-index lookup as the nearby route code. It checks the retained UTF-8 name and preserves socket2's platform-specific interface binding. Tests configure tracing directly without changing the process environment. The upstream Apache-2.0 notice applies to this fork. Both the app and the fork select nix 0.32.0 for the interface APIs. Version 0.31.3's network feature references macOS-only constants on iOS. Version 0.32.0 guards those APIs and the fork compiles for both ARM64 iOS devices and simulators.
 
 ### rustls-platform-verifier: Android JVM component
 
@@ -157,7 +159,7 @@ Upstream's library manifest also sets an application-wide `networkSecurityConfig
 ## Upstreaming order
 
 1. libzim: the one-line lazy `loadXapianDb()` result fix.
-2. librqbit-dualstack-sockets: iOS binding (two lines).
+2. librqbit-dualstack-sockets: iOS binding and the subsequent checked interface handling.
 3. tauri-runtime-wry: incognito scheme registration (four lines).
 4. libzim: LP32 raw-blob fix, with its test.
 5. libzim: `getMemorySize` lock, then the zstd `state_size` swap. Never the swap alone.

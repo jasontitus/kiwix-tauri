@@ -17,14 +17,14 @@ impl BindDevice {
     pub fn new_from_name(name: &str) -> crate::Result<Self> {
         let name = CString::new(name).map_err(|_| Error::BindDeviceInvalid)?;
 
-        let index = unsafe { libc::if_nametoindex(name.as_ptr()) };
-        let index = NonZeroU32::new(index)
-            .ok_or_else(|| Error::BindDeviceInvalidError(std::io::Error::last_os_error()))?;
+        let index = nix::net::if_::if_nametoindex(name.as_c_str())
+            .map_err(|error| Error::BindDeviceInvalidError(error.into()))?;
+        let index = NonZeroU32::new(index).ok_or(Error::BindDeviceInvalid)?;
         Ok(Self { index, name })
     }
 
     #[cfg(windows)]
-    pub fn new_from_name(name: &str) -> crate::Result<Self> {
+    pub fn new_from_name(_name: &str) -> crate::Result<Self> {
         Err(Error::BindDeviceNotSupported)
     }
 
@@ -33,8 +33,9 @@ impl BindDevice {
     }
 
     pub fn name(&self) -> &str {
-        // We constructed from a string so this can't fail
-        unsafe { std::str::from_utf8_unchecked(self.name.to_bytes()) }
+        self.name
+            .to_str()
+            .expect("interface name was created from &str")
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]

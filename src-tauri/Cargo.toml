@@ -122,7 +122,7 @@ sherpa-onnx = "2.0.1"
 # features so only these modules compile.
 [target.'cfg(unix)'.dependencies]
 # Preserve kernel interface flags, addresses, netmasks and exact name/index receipts.
-nix = { version = "0.31.3", default-features = false, features = ["net"] }
+nix = { version = "0.32.0", default-features = false, features = ["net"] }
 rustix = { version = "1", default-features = false, features = ["fs", "process", "time", "net"] }
 
 # Iteration builds keep line tables so backtraces stay actionable, but skip the

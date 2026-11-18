@@ -13,6 +13,50 @@ pub fn find_localhost_name() -> String {
         .expect("expected to find loopback interface")
 }
 
+#[cfg(unix)]
+#[test]
+fn checked_interface_name_preserves_identity_and_error_types() {
+    let name = find_localhost_name();
+    let selected = BindDevice::new_from_name(&name).unwrap();
+    assert_eq!(selected.clone().name(), name);
+    assert!(matches!(
+        BindDevice::new_from_name(&(name + "\0alias")),
+        Err(crate::Error::BindDeviceInvalid)
+    ));
+    assert!(matches!(
+        BindDevice::new_from_name(""),
+        Err(crate::Error::BindDeviceInvalidError(_))
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "Requires IPv4 and IPv6 loopback and permission to bind sockets to the interface"]
+fn checked_name_binds_the_loopback_interface() {
+    let selected = BindDevice::new_from_name(&find_localhost_name()).unwrap();
+    for (domain, ipv6) in [
+        (socket2::Domain::IPV4, false),
+        (socket2::Domain::IPV6, true),
+    ] {
+        let socket = socket2::Socket::new(domain, socket2::Type::DGRAM, None).unwrap();
+        selected.bind_sref(&socket, ipv6).unwrap();
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            let bound = if ipv6 {
+                socket.device_index_v6()
+            } else {
+                socket.device_index_v4()
+            };
+            assert_eq!(bound.unwrap(), Some(selected.index()));
+        }
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        assert_eq!(
+            socket.device().unwrap().as_deref(),
+            Some(selected.name().as_bytes())
+        );
+    }
+}
+
 const TIMEOUT: Duration = Duration::from_secs(1);
 
 #[cfg(not(windows))]
