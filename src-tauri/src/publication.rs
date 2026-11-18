@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Publish a complete sibling temporary file without ever replacing a user file.
 //! Native exclusive renames work on FAT/exFAT, unlike hard-link-only publication.
+#![cfg_attr(unix, forbid(unsafe_code))]
 use cap_fs_ext::{FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, Metadata, OpenOptions};
 use std::{fs::File, io, path::Path};
@@ -361,35 +362,34 @@ pub(crate) fn rename_entry_noreplace(directory: &Dir, source: &Path, destination
     platform_publish_in(directory, source, destination)
 }
 
+/// The kernel enforces exclusivity in one operation relative to the supplied
+/// directories. Return the original OS error if the filesystem lacks support.
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
+pub(crate) fn rename_noreplace_at(
+    source_dir: impl std::os::fd::AsFd,
+    source: &std::ffi::CStr,
+    destination_dir: impl std::os::fd::AsFd,
+    destination: &std::ffi::CStr,
+) -> io::Result<()> {
+    rustix::fs::renameat_with(
+        source_dir,
+        source,
+        destination_dir,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn platform_publish_in(
     directory: &cap_std::fs::Dir,
     source: &Path,
     destination: &Path,
 ) -> io::Result<()> {
-    use std::os::fd::AsRawFd;
     let from = c_path(source)?;
     let to = c_path(destination)?;
-    let fd = directory.as_raw_fd();
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result =
-        unsafe { libc::renameatx_np(fd, from.as_ptr(), fd, to.as_ptr(), libc::RENAME_EXCL) };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            fd,
-            from.as_ptr(),
-            fd,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        return Ok(());
-    }
-    let error = io::Error::last_os_error();
-    Err(error)
+    rename_noreplace_at(directory, &from, directory, &to)
 }
 
 #[cfg(windows)]
@@ -468,44 +468,16 @@ fn c_path(path: &Path) -> io::Result<std::ffi::CString> {
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
     let source = c_path(source)?;
     let destination = c_path(destination)?;
-    // renameatx_np(2): RENAME_EXCL is enforced by the filesystem, not a racy
-    // existence check. Do not substitute plain rename if a volume rejects it.
-    let result = unsafe {
-        libc::renameatx_np(
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            destination.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    rename_noreplace_at(rustix::fs::CWD, &source, rustix::fs::CWD, &destination)
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
     let from = c_path(source)?;
     let to = c_path(destination)?;
-    // Calling the syscall directly also supports libc versions predating the
-    // renameat2 wrapper. Modern Linux exFAT implements RENAME_NOREPLACE.
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            from.as_ptr(),
-            libc::AT_FDCWD,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
+    let Err(error) = rename_noreplace_at(rustix::fs::CWD, &from, rustix::fs::CWD, &to) else {
         return Ok(());
-    }
-    let error = io::Error::last_os_error();
+    };
     if !matches!(
         error.raw_os_error(),
         Some(libc::ENOSYS | libc::EINVAL | libc::EOPNOTSUPP)
@@ -949,6 +921,39 @@ mod tests {
         drop(directory);
         std::fs::remove_dir_all(root).unwrap();
     }
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
+    #[test]
+    fn cross_directory_rename_stays_with_both_handles_after_parent_replacement() {
+        let root = std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let parent = Dir::open_ambient_dir(&root, cap_std::ambient_authority()).unwrap();
+        parent.create_dir("from").unwrap();
+        parent.create_dir("to").unwrap();
+        let from = parent.open_dir("from").unwrap();
+        let to = parent.open_dir("to").unwrap();
+        from.write("partial", b"verified").unwrap();
+        to.write("complete", b"existing").unwrap();
+
+        parent.rename("from", &parent, "held-from").unwrap();
+        parent.rename("to", &parent, "held-to").unwrap();
+        parent.create_dir("from").unwrap();
+        parent.create_dir("to").unwrap();
+        parent.write("from/partial", b"unrelated source").unwrap();
+        parent.write("to/complete", b"unrelated destination").unwrap();
+
+        let error = rename_noreplace_at(&from, c"partial", &to, c"complete").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(from.read("partial").unwrap(), b"verified");
+        assert_eq!(to.read("complete").unwrap(), b"existing");
+        to.remove_file("complete").unwrap();
+        rename_noreplace_at(&from, c"partial", &to, c"complete").unwrap();
+        assert_eq!(from.open("partial").unwrap_err().kind(), io::ErrorKind::NotFound);
+        assert_eq!(to.read("complete").unwrap(), b"verified");
+        assert_eq!(parent.read("from/partial").unwrap(), b"unrelated source");
+        assert_eq!(parent.read("to/complete").unwrap(), b"unrelated destination");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn dangling_symlink_is_an_existing_destination() {
