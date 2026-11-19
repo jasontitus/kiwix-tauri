@@ -6,7 +6,7 @@ removed or updated. Coordination happens through commits and this file; there is
 ## Owner
 
 Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.md`) rows **B3
-(exclusive-rename subset)** and **B10 (diagnostic clocks)**.
+(exclusive-rename subset)**, **B4 (provider descriptor duplication only)** and **B10 (diagnostic clocks)**.
 
 ## Reserved paths and symbols
 
@@ -63,4 +63,5 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - `src-tauri/src/instance.rs` `getpeereid`
 - Windows rename arms (`storage::rename_into_directory_noreplace`, `MoveFileExW`)
 - A SAFETY-comment sweep across the remaining blocks
-- Inventory rows A1–A5, B1/B2/B4–B9, C1–C5, and the `unsafe impl Send/Sync` sign-offs
+- Inventory rows A1–A5, B1/B2, the B4 remainder (lease lifetimes, revoke/regrant, backup flags, bookmark
+  scope, Swift delegate chaining), B5–B9, C1–C5, and the `unsafe impl Send/Sync` sign-offs
