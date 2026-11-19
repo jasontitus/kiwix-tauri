@@ -16,6 +16,18 @@ The optimized Rust app library tests passed 1,259 cases on macOS with 25 ignored
 
 The ad-hoc signed Mac app accepted both real archives and rejected the incorrect advertised checksums without publishing those files. It reopened the earlier build's download records. The Ubuntu AppImage and bare executable matched the recorded archive service outputs for single and split archives, subsequent opens, and a ranged image. The Mac package and Ubuntu AppImage contained the three block-buffer notice files byte for byte.
 
+## Android package and runtime
+
+The independently reviewed APK `bdb85f1e080afc7e1b9673f52f1eb663ba4d0e040641d851f01805b0696ae1d6` was signed with a temporary test key. Its frozen source manifest hashes to `597443423553ea7e5c7acb82fdb9870dbdc394deb9b16628784d216f9d83ec0d`. That snapshot matches the production code in `f4006d29c48475abafc9863d7dc3531b8ca6b4a9`. The final commit adds or changes tests in two of those frozen files.
+
+The dedicated API 35 ARM64 emulator ran the installed APK. It opened a real Climate Wikipedia ZIM via the Android file picker, built and used the spelling index, opened title and full-text results, and restored the open article and spelling index after a cold relaunch. Cleanup checked the exact install and fixture hashes, removed the test app and fixture, and confirmed the emulator had stopped. The package review checked all 64 notice files and all five ARM64 libraries. This run covers Android API 35 on the emulator. Physical-device performance and ARMv7 runtime remain unmeasured.
+
+## iOS simulator package and runtime
+
+The ad-hoc signed ARM64 simulator app was built from `f4006d29c48475abafc9863d7dc3531b8ca6b4a9`. Its executable hashes to `5e08e219b1a394306dacf1bac662b9732165449656b26d2d02ab683aca7afb0a` and the retained ZIP hashes to `689783d4ae0864f955192a9e1c112131282a293a5da8cc45c2e03774e177dfa8`. The independent package review matched all 64 notices, verified the app signature and checked the complete app and test-runner inputs before installation.
+
+The dedicated iPhone 17 simulator running iOS 26.5 passed the offline reader UI test. It imported a managed copy of the real Climate Wikipedia archive, opened the Greenhouse effect article, built and used the spelling index to correct a mistyped query, and restored the open Climate 200 article after a cold relaunch. The spelling correction still worked after relaunch without rebuilding the index. The run matched the installed executables, notice files and archive copies to their expected hashes. The runner shut down and deleted its simulator. Physical iPhone runtime, performance and memory use remain unmeasured for this checkpoint.
+
 ## Performance
 
 The checked and published buffers used the same local SHA-256 implementation in the in-memory Mac run. The 111-byte digest took a median 244.98 ns with the published buffer and 244.72 ns with the checked buffer. The two preloaded archives took 7.54 and 31.04 ms with the published buffer and 7.52 and 30.59 ms with the checked buffer.
