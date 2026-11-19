@@ -1,0 +1,9 @@
+# iOS storage root
+
+At app revision `51cd273ab9286e885d02a68a579a2dd53f76eac1`, Foundation supplies the installed application's container path to Rust. Rust resolves the physical path, opens the directory with no-follow flags, checks the effective owner and retains the handle. Later directory requests compare the path identity with that handle and open each child relative to its parent. This replaces the manually sized Swift output buffer, pointer conversion and integer file descriptor transfer. [Implementation](../../src-tauri/src/storage.rs)
+
+The independent review compared this revision with `88deeb29e444f38558771fc27e843115de1a37c3`. The change covered the iOS dependencies in `src-tauri/Cargo.toml`, the Rust storage module and `DocumentStorage.swift` in the mobile plugin. The old and new producers, exercised in a sandboxed test app on an iOS 26.5 ARM64 simulator, returned the same physical path, device number, inode and owner. The new retained descriptor had close-on-exec set. Descendant traversal rejected relative and outside paths, parent components, symlinks, absent entries and regular files. A separate root-control probe rejected replacement directories, symlinks and a different owner.
+
+The signed simulator release imported the Climate archive and returned article text and search results. After a cold launch, the app restored the same article before navigation and used the existing spelling index. Both archive copies matched the original 8,978,471 bytes by SHA-256. The index kept the same inode and digest, with 3,821 articles and 4,204 terms. All 44 hosted native tests and the full reader UI test passed. The root functions also compiled for physical ARM64 iOS. Physical-device behavior was unmeasured.
+
+This change covers the application container. External document leases, Apple Nearby callbacks and unsafe code inside the Objective-C framework bindings remain in the [whole-app inventory](../MEMORY-SAFETY-INVENTORY.md).
