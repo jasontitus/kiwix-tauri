@@ -426,15 +426,8 @@ pub(super) fn chunk_position(manifest: &Manifest, index: u32) -> Result<(usize, 
 
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn rename_directory_noreplace(directory: &Dir, source: &str, target: &str, _expected: &Identity) -> Result<(), String> {
-    use std::os::fd::AsRawFd;
-    let source = std::ffi::CString::new(source).map_err(err)?;
-    let target = std::ffi::CString::new(target).map_err(err)?;
-    let fd = directory.as_raw_fd();
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result = unsafe { libc::renameatx_np(fd, source.as_ptr(), fd, target.as_ptr(), libc::RENAME_EXCL) };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe { libc::syscall(libc::SYS_renameat2, fd, source.as_ptr(), fd, target.as_ptr(), libc::RENAME_NOREPLACE) };
-    if result == 0 { Ok(()) } else { Err(err(std::io::Error::last_os_error())) }
+    rustix::fs::renameat_with(directory, source, directory, target, rustix::fs::RenameFlags::NOREPLACE)
+        .map_err(err)
 }
 
 #[cfg(windows)]

@@ -3282,16 +3282,13 @@ async fn a_cancel_persisted_at_the_end_of_transfer_is_never_overwritten_by_verif
 
 // Reproducible throughput harness: `cargo test --release --lib \
 // --features localswarm-profiling bench_loopback_throughput -- --ignored --nocapture`.
-#[cfg(unix)] // getrusage(2) is Unix-only; the profiling harness is too.
+#[cfg(unix)] // The profiling harness is Unix-only; so is the process CPU clock.
 fn cpu_seconds() -> f64 {
-    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
-    assert_eq!(unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) }, 0);
-    let usage = unsafe { usage.assume_init() };
-    usage.ru_utime.tv_sec as f64 + usage.ru_utime.tv_usec as f64 / 1e6
-        + usage.ru_stime.tv_sec as f64 + usage.ru_stime.tv_usec as f64 / 1e6
+    crate::cpu_time::process_cpu_time_micros()
+        .expect("the process CPU clock is readable") as f64 / 1e6
 }
 
-#[cfg(unix)] // Uses cpu_seconds (getrusage).
+#[cfg(unix)] // Uses cpu_seconds (process CPU time).
 #[tokio::test]
 #[ignore]
 async fn bench_loopback_throughput() {

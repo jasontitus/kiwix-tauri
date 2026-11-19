@@ -639,35 +639,10 @@ pub(super) fn sync_map_directory(directory: &Dir) -> Result<(), String> {
 // renames between capabilities, never a link/unlink or ambient-path fallback.
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 pub(super) fn capture_partial(source: &Dir, from: &str, destination: &Dir, to: &str) -> Result<(), String> {
-    use std::os::fd::AsRawFd;
-    let from = std::ffi::CString::new(from).map_err(|e| e.to_string())?;
-    let to = std::ffi::CString::new(to).map_err(|e| e.to_string())?;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result = unsafe {
-        libc::renameatx_np(
-            source.as_raw_fd(),
-            from.as_ptr(),
-            destination.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            source.as_raw_fd(),
-            from.as_ptr(),
-            destination.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error().to_string())
-    }
+    // The same exclusive-rename call as library publication: RENAME_NOREPLACE
+    // on Linux/Android and RENAME_EXCL on Apple, enforced by the filesystem.
+    rustix::fs::renameat_with(source, from, destination, to, rustix::fs::RenameFlags::NOREPLACE)
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(windows)]

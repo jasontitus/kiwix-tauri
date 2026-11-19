@@ -529,13 +529,13 @@ impl Control {
     }
     fn chunk_sha256(&self, bytes: &[u8]) -> String {
         #[cfg(all(feature = "android-evaluation", target_os = "android", debug_assertions))]
-        let (start, cpu) = (std::time::Instant::now(), evaluation::thread_cpu_us());
+        let (start, cpu) = (std::time::Instant::now(), crate::cpu_time::thread_cpu_time_micros());
         let digest = Sha256::digest(bytes);
         #[cfg(all(feature = "android-evaluation", target_os = "android", debug_assertions))]
         if let Ok(mut metrics) = self.evaluation_hash.lock() {
             metrics.0 += bytes.len() as u64;
             metrics.1 += start.elapsed().as_micros();
-            let elapsed = evaluation::thread_cpu_us().zip(cpu).map(|(end, start)| end.saturating_sub(start));
+            let elapsed = crate::cpu_time::thread_cpu_time_micros().zip(cpu).map(|(end, start)| end.saturating_sub(start));
             metrics.2 = metrics.2.zip(elapsed).map(|(total, elapsed)| total + elapsed);
             metrics.3 += 1;
         }
@@ -829,13 +829,6 @@ pub(crate) mod evaluation {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
     const MAX_EVALUATION_SIZE: u64 = 8 * 1024 * 1024 * 1024;
-    pub(super) fn thread_cpu_us() -> Option<u128> {
-        let mut time = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        // SAFETY: valid writable timespec for the current thread's CPU clock.
-        if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) } == 0 {
-            Some(time.tv_sec as u128 * 1_000_000 + time.tv_nsec as u128 / 1000)
-        } else { None }
-    }
 
     pub(crate) struct Prepared {
         manager: MapManager,

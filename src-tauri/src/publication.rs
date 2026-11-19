@@ -367,29 +367,10 @@ fn platform_publish_in(
     source: &Path,
     destination: &Path,
 ) -> io::Result<()> {
-    use std::os::fd::AsRawFd;
-    let from = c_path(source)?;
-    let to = c_path(destination)?;
-    let fd = directory.as_raw_fd();
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result =
-        unsafe { libc::renameatx_np(fd, from.as_ptr(), fd, to.as_ptr(), libc::RENAME_EXCL) };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            fd,
-            from.as_ptr(),
-            fd,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        return Ok(());
-    }
-    let error = io::Error::last_os_error();
-    Err(error)
+    // RENAME_NOREPLACE (Linux/Android) and RENAME_EXCL (Apple) are enforced by
+    // the filesystem, not a racy existence check.
+    rustix::fs::renameat_with(directory, source, directory, destination, rustix::fs::RenameFlags::NOREPLACE)
+        .map_err(io::Error::from)
 }
 
 #[cfg(windows)]
@@ -457,55 +438,34 @@ fn platform_publish_entry_in(
     )
 }
 
-#[cfg(unix)]
-fn c_path(path: &Path) -> io::Result<std::ffi::CString> {
-    use std::os::unix::ffi::OsStrExt;
-    std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Publication path contains NUL"))
-}
-
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
-    let source = c_path(source)?;
-    let destination = c_path(destination)?;
     // renameatx_np(2): RENAME_EXCL is enforced by the filesystem, not a racy
     // existence check. Do not substitute plain rename if a volume rejects it.
-    let result = unsafe {
-        libc::renameatx_np(
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            destination.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        source,
+        rustix::fs::CWD,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
-    let from = c_path(source)?;
-    let to = c_path(destination)?;
-    // Calling the syscall directly also supports libc versions predating the
-    // renameat2 wrapper. Modern Linux exFAT implements RENAME_NOREPLACE.
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            from.as_ptr(),
-            libc::AT_FDCWD,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
+    // rustix issues the renameat2 syscall itself where libc predates a wrapper.
+    // Modern Linux exFAT implements RENAME_NOREPLACE.
+    let error = match rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        source,
+        rustix::fs::CWD,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    ) {
+        Ok(()) => return Ok(()),
+        Err(error) => io::Error::from(error),
     };
-    if result == 0 {
-        return Ok(());
-    }
-    let error = io::Error::last_os_error();
     if !matches!(
         error.raw_os_error(),
         Some(libc::ENOSYS | libc::EINVAL | libc::EOPNOTSUPP)
