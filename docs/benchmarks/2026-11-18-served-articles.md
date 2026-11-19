@@ -22,6 +22,8 @@ The signed app at `09e57a9` and the same libzim app repeated the ten alternating
 
 The signed handle-ID build at `26ced32` repeated the same test with ten new process pairs per archive. All 960 responses passed the archived-byte check. Climate took 69.53 ms with the Rust app and 71.38 ms with libzim (2.6% faster). Wikipedia 100 took 123.66 and 121.10 ms respectively (2.1% slower). The reader pins were unchanged. [Handle-ID build measurements](2026-11-18-served-articles-handle-ids.json.gz)
 
+The signed Bonjour build at `541725a` repeated the comparison. Climate took 46.49 ms with each app when rounded to two decimal places. Wikipedia 100 took 77.66 ms with the Rust app and 74.69 ms with libzim (4.0% slower). All 960 responses passed the archived-byte check. These are complete local article requests on a shared Mac. [Bonjour build measurements](2026-11-18-served-articles-bonjour.json.gz)
+
 ## Linux x86-64
 
 The release Linux app at `7c5abf7` used the same two reader revisions as the signed Mac app. We built historical app `f2875d0` with the retained Linux libzim 9.8.2 SDK. Both ran as the same unprivileged test account. Ten alternating trials per archive used the same 48 paths and profile policy as macOS. The native reference driver read each original item in contiguous ranges of up to 64 KiB. All 201 length-framed ranges reconstructed the same 48 complete article hashes that native zimdump produced on the Mac. All 960 Linux app responses preserved those archived bytes.
