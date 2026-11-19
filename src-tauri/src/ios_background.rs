@@ -64,9 +64,13 @@ fn entry_bytes(entry: &CatalogEntry) -> usize {
 #[cfg(any(target_os = "ios", all(test, unix)))]
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "ios")]
+use crate::apple_replies::Replies;
+#[cfg(target_os = "ios")]
+use objc2_foundation::NSData;
+#[cfg(target_os = "ios")]
 use serde_json::{json, Value};
 #[cfg(target_os = "ios")]
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::sync::LazyLock;
 
 #[cfg(any(target_os = "ios", all(test, unix)))]
 #[derive(Clone, Debug, Serialize)]
@@ -102,11 +106,19 @@ pub(crate) struct NativeSnapshot {
 }
 
 #[cfg(target_os = "ios")]
-type Callback = unsafe extern "C" fn(*const c_char, *mut c_void);
+static REPLIES: LazyLock<Replies<Result<Value, String>>> = LazyLock::new(Replies::default);
+
 #[cfg(target_os = "ios")]
-extern "C" {
-    fn kiwix_ios_background_call(input: *const c_char, callback: Callback, context: *mut c_void);
-    fn kiwix_ios_background_install_delegate_handoff() -> i32;
+#[deny(improper_ctypes)]
+unsafe extern "C" {
+    // Swift snapshots the bytes before returning and borrows immutable reply
+    // data only for the callback. The request ID carries no Rust ownership.
+    safe fn kiwix_ios_background_call(
+        id: u64,
+        input: &NSData,
+        callback: extern "C" fn(u64, Option<&NSData>),
+    );
+    safe fn kiwix_ios_background_install_delegate_handoff() -> i32;
 }
 
 /// Call on main after Tao constructs its runtime, before App::run invokes
@@ -114,37 +126,32 @@ extern "C" {
 /// UIKit optional-selector caches and disturbing its non-retaining delegate.
 #[cfg(target_os = "ios")]
 pub(crate) fn install_delegate_handoff() -> Result<(), String> {
-    if unsafe { kiwix_ios_background_install_delegate_handoff() } == 1 { Ok(()) }
+    if kiwix_ios_background_install_delegate_handoff() == 1 { Ok(()) }
     else { Err("Native application delegate class is unavailable before application run".into()) }
 }
 
 #[cfg(target_os = "ios")]
-unsafe extern "C" fn receive(response: *const c_char, context: *mut c_void) {
-    // The native bridge invokes this exactly once, synchronously borrowing its
-    // UTF-8 buffer. The sender remains owned here even if the waiter is dropped.
-    let sender = unsafe { Box::from_raw(context.cast::<tokio::sync::oneshot::Sender<Result<Value, String>>>()) };
-    let result = if response.is_null() {
-        Err("Native background transport returned no response".into())
-    } else {
-        let bytes = unsafe { CStr::from_ptr(response) }.to_bytes();
-        serde_json::from_slice::<Value>(bytes).map_err(|error| format!("Reading native background response: {error}"))
+extern "C" fn receive(id: u64, response: Option<&NSData>) {
+    REPLIES.finish(id, || {
+        let response = response.ok_or("Native background transport returned no response")?;
+        serde_json::from_slice::<Value>(&response.to_vec())
+            .map_err(|error| format!("Reading native background response: {error}"))
             .and_then(|value| match value.get("failure").and_then(Value::as_str) {
                 Some(error) => Err(error.to_owned()),
                 None => Ok(value),
             })
-    };
-    let _ = sender.send(result);
+    });
 }
 
 #[cfg(target_os = "ios")]
 async fn call(command: &'static str, args: Value) -> Result<Value, String> {
-    let request = CString::new(serde_json::to_vec(&json!({"command": command, "args": args}))
-        .map_err(|error| error.to_string())?).map_err(|error| error.to_string())?;
-    let (send, receive_response) = tokio::sync::oneshot::channel();
-    unsafe {
-        kiwix_ios_background_call(request.as_ptr(), receive, Box::into_raw(Box::new(send)).cast::<c_void>());
-    }
-    receive_response.await.map_err(|_| "Native background transport did not acknowledge operation".to_string())?
+    let bytes = serde_json::to_vec(&json!({"command": command, "args": args}))
+        .map_err(|error| error.to_string())?;
+    let reply = REPLIES.register().ok_or("Native background request IDs exhausted")?;
+    // Swift still owns the submitted command if the Rust future is cancelled.
+    // In particular, dropping a waiter cannot retract a native privacy barrier.
+    kiwix_ios_background_call(reply.id(), &NSData::with_bytes(&bytes), receive);
+    reply.wait().await.map_err(|_| "Native background transport did not acknowledge operation".to_string())?
 }
 
 #[cfg(target_os = "ios")]

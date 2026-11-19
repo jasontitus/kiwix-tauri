@@ -790,26 +790,26 @@ final class BackgroundAcquisition: NSObject, URLSessionDownloadDelegate {
 /// Tao runtime has registered AppDelegate, before it enters App::run.
 @_cdecl("kiwix_ios_background_install_delegate_handoff")
 public func kiwixIOSBackgroundInstallDelegateHandoff() -> Int32 {
-  BackgroundAcquisition.install() && IncomingOriginalAuthority.install() ? 1 : 0
+  guard Thread.isMainThread else { return 0 }
+  return BackgroundAcquisition.install() && IncomingOriginalAuthority.install() ? 1 : 0
 }
 
 /// Internal Rust ABI only; no webview command can grant official provenance.
-/// The callback is invoked exactly once and borrows UTF-8 for its duration.
+/// The queued operation owns a snapshot and returns only its ID and borrowed
+/// immutable data. No Rust allocation or reference survives the ABI call.
 @_cdecl("kiwix_ios_background_call")
-public func kiwixIOSBackgroundCall(_ input: UnsafePointer<CChar>?,
-  _ callback: @escaping @convention(c) (UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> Void,
-  _ context: UnsafeMutableRawPointer?) {
-  guard let input = input else {
-    "{\"failure\":\"Missing background request\"}".withCString { callback($0, context) }; return
+public func kiwixIOSBackgroundCall(_ id: UInt64, _ input: NSData?,
+  _ callback: @escaping @convention(c) (UInt64, NSData?) -> Void) {
+  guard let snapshot = input?.copy() as? NSData else {
+    callback(id, Data("{\"failure\":\"Missing background request\"}".utf8) as NSData)
+    return
   }
-  let data = Data(String(cString: input).utf8)
-  BackgroundAcquisition.shared.call(data) { result in
+  BackgroundAcquisition.shared.call(Data(referencing: snapshot)) { result in
     do {
       let response = try JSONSerialization.data(withJSONObject: result)
-      let string = String(decoding: response, as: UTF8.self)
-      string.withCString { callback($0, context) }
+      callback(id, response as NSData)
     } catch {
-      "{\"failure\":\"Cannot encode background response\"}".withCString { callback($0, context) }
+      callback(id, Data("{\"failure\":\"Cannot encode background response\"}".utf8) as NSData)
     }
   }
 }

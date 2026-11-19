@@ -3,7 +3,7 @@
 //! admission. Transport completion and persisted history are not notice authority.
 //! The native delegate is installed before the platform application main loop;
 //! configuration/permission are deliberately separate, explicit operations.
-use crate::store::{Book, Store};
+use crate::{apple_replies::{Replies, Reply}, store::{Book, Store}};
 use cap_fs_ext::MetadataExt;
 use objc2::rc::Retained;
 use objc2_foundation::NSData;
@@ -11,11 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
     os::fd::AsRawFd,
     sync::{Arc, LazyLock, Mutex, Weak},
 };
-use tokio::sync::oneshot;
 
 #[deny(improper_ctypes)]
 unsafe extern "C" {
@@ -161,9 +159,9 @@ impl NotificationManager {
         if policy.protected || self.store.private_mode()? || self.store.read_only()? {
             return Err("Leave private or read-only mode before enabling notifications".into());
         }
-        let (ticket, receiver) = register_permission()?;
-        kiwix_notifications_request_permission(ticket.0, permission_is_live, permission_result);
-        Ok(PermissionRequest { _ticket: ticket, receiver, revision: policy.revision })
+        let reply = PERMISSION_REQUESTS.register().ok_or("Native notification request IDs exhausted")?;
+        kiwix_notifications_request_permission(reply.id(), permission_is_live, permission_result);
+        Ok(PermissionRequest { reply, revision: policy.revision })
     }
 
     /// Revalidate only after Service has regained the same root's foreground
@@ -269,72 +267,31 @@ fn notice_id(profile_id: &str, receipt: &str, installation_id: &str) -> String {
 
 type PermissionResult = Result<bool, String>;
 
-#[derive(Default)]
-struct PermissionRequests {
-    last_id: u64,
-    pending: HashMap<u64, oneshot::Sender<PermissionResult>>,
-}
-
-static PERMISSION_REQUESTS: LazyLock<Mutex<PermissionRequests>> = LazyLock::new(Mutex::default);
-
-struct PermissionTicket(u64);
-
-impl Drop for PermissionTicket {
-    fn drop(&mut self) {
-        PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
-            .pending.remove(&self.0);
-    }
-}
-
-impl PermissionRequests {
-    fn register(&mut self) -> Result<(u64, oneshot::Receiver<PermissionResult>), String> {
-        let id = self.last_id.checked_add(1).ok_or("Native notification request IDs exhausted")?;
-        let (sender, receiver) = oneshot::channel();
-        self.last_id = id;
-        self.pending.insert(id, sender);
-        Ok((id, receiver))
-    }
-}
-
-fn register_permission() -> Result<(PermissionTicket, oneshot::Receiver<PermissionResult>), String> {
-    let (id, receiver) = PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
-        .register()?;
-    Ok((PermissionTicket(id), receiver))
-}
+static PERMISSION_REQUESTS: LazyLock<Replies<PermissionResult>> = LazyLock::new(Replies::default);
 
 pub(crate) struct PermissionRequest {
-    _ticket: PermissionTicket,
-    receiver: oneshot::Receiver<PermissionResult>,
+    reply: Reply<'static, PermissionResult>,
     revision: u64,
 }
 
 impl PermissionRequest {
     pub(crate) async fn wait(self) -> Result<(bool, u64), String> {
-        let Self { _ticket, receiver, revision } = self;
-        let granted = receiver.await.map_err(|_| "Native notification permission response was lost")??;
-        Ok((granted, revision))
+        let granted = self.reply.wait().await.map_err(|_| "Native notification permission response was lost")??;
+        Ok((granted, self.revision))
     }
 }
 
 extern "C" fn permission_is_live(id: u64) -> bool {
-    PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
-        .pending.get(&id).is_some_and(|sender| !sender.is_closed())
+    PERMISSION_REQUESTS.is_live(id)
 }
 
 extern "C" fn permission_result(id: u64, result: i32, error: Option<&NSData>) {
-    let sender = PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
-        .pending.remove(&id);
-    let Some(sender) = sender else { return; };
-    if sender.is_closed() {
-        return;
-    }
-    let value = match result {
+    PERMISSION_REQUESTS.finish(id, || match result {
         0 => Ok(false),
         1 => Ok(true),
         _ => Err(error.map(|bytes| String::from_utf8_lossy(&bytes.to_vec()).into_owned())
             .unwrap_or_else(|| "Native notification authorization failed".into())),
-    };
-    let _ = sender.send(value);
+    });
 }
 
 #[cfg(test)]
@@ -362,8 +319,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn permission_results_preserve_grants_denials_and_diagnostics() {
+    #[tokio::test]
+    async fn permission_results_preserve_grants_denials_and_diagnostics() {
         let reason = NSData::with_bytes("Authorization failed: オフライン".as_bytes());
         for (status, error, expected) in [
             (1, None, Ok(true)),
@@ -371,38 +328,12 @@ mod tests {
             (-1, Some(&*reason), Err("Authorization failed: オフライン")),
             (-1, None, Err("Native notification authorization failed")),
         ] {
-            let (ticket, receiver) = register_permission().unwrap();
-            permission_result(ticket.0, status, error);
-            assert_eq!(receiver.blocking_recv().unwrap().as_ref().copied().map_err(String::as_str), expected);
+            let reply = PERMISSION_REQUESTS.register().unwrap();
+            assert!(permission_is_live(reply.id()));
+            permission_result(reply.id(), status, error);
+            assert!(!permission_is_live(reply.id()));
+            assert_eq!(reply.wait().await.unwrap().as_ref().copied().map_err(String::as_str), expected);
         }
-    }
-
-    #[test]
-    fn cancelled_and_duplicate_permission_replies_cannot_complete_another_waiter() {
-        let (ticket, cancelled) = register_permission().unwrap();
-        let cancelled_id = ticket.0;
-        assert!(permission_is_live(cancelled_id));
-        drop(ticket);
-        assert!(!permission_is_live(cancelled_id));
-        assert!(cancelled.blocking_recv().is_err());
-
-        let (ticket, mut current) = register_permission().unwrap();
-        assert!(ticket.0 > cancelled_id);
-        permission_result(cancelled_id, 1, None);
-        assert!(matches!(current.try_recv(), Err(oneshot::error::TryRecvError::Empty)));
-        permission_result(ticket.0, 0, None);
-        assert!(!permission_is_live(ticket.0));
-        permission_result(ticket.0, 1, None);
-        assert!(!current.blocking_recv().unwrap().unwrap());
-    }
-
-    #[test]
-    fn exhausted_permission_ids_are_never_reused() {
-        let mut requests = PermissionRequests { last_id: u64::MAX - 1, ..PermissionRequests::default() };
-        let (last, _receiver) = requests.register().unwrap();
-        assert_eq!(last, u64::MAX);
-        assert!(requests.register().is_err());
-        assert_eq!(requests.pending.len(), 1);
     }
 
     struct Profile(std::path::PathBuf);

@@ -106,6 +106,8 @@ mod mobile;
 mod android_tls;
 #[cfg(any(mobile, test))]
 mod mobile_rebase;
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+mod apple_replies;
 #[cfg(any(target_os = "ios", test))]
 mod ios_background;
 #[cfg(all(feature = "android-evaluation", not(all(target_os = "android", debug_assertions))))]
