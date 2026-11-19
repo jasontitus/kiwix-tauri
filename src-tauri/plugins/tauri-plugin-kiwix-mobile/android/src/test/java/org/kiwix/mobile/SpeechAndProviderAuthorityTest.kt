@@ -8,6 +8,16 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class SpeechAndProviderAuthorityTest {
+    @Test fun unreadableVoiceAssetListRemainsRetryable() {
+        try {
+            BundledKokoro.containsPack(null)
+            fail("An unavailable asset list must not select the download-only edition")
+        } catch (_: IllegalStateException) { }
+        assertFalse(BundledKokoro.containsPack(emptyArray()))
+        assertFalse(BundledKokoro.containsPack(arrayOf("model.voicepack")))
+        assertTrue(BundledKokoro.containsPack(arrayOf("other", "kiwix-kokoro-v1.voicepack")))
+    }
+
     @Test fun splitCohortsPreserveProviderNamesRegardlessOfExtensionCase() {
         assertTrue(providerSplitPartsComplete(listOf("COHORT.ZIMAA", "COHORT.ZIMAB")))
         assertTrue(providerSplitPartsComplete(listOf("cohort.ZIMaa", "COHORT.zimAB")))
