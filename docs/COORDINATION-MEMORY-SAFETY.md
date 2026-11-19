@@ -53,8 +53,10 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - First batch: 239 → 226 matches, 42 → 37 files. Second batch (`84fd93e7de`, `cdfdf64478`): 226 → 223.
   Third batch (`7b50d62763`): 223 → 219 matches, 37 → 36 files. The four initial findings and two follow-up
   findings from the first batch are fixed and independently verified.
-- The second batch is independently reviewed. Two P3 documentation findings (batch count, reservation
-  synchronization) are fixed in the follow-up commit. The third batch awaits independent review.
+- The second batch is independently reviewed; two P3 documentation findings (batch count, reservation
+  synchronization) are fixed in its follow-up commit.
+- The third batch is independently reviewed; two P3 documentation findings (cumulative file count, Android
+  seek-probe wording) are fixed in its follow-up commit.
 
 ## Not reserved (safe for the other session)
 

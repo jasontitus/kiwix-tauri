@@ -35,7 +35,7 @@ Each row covers both sides of an interface. Moving raw operations behind a safe 
 
 ### Progress since the 2026-11-17 snapshot
 
-`942c36306b`, `84fd93e7de`, `cdfdf64478` and `7b50d62763` (2026-11-19) removed 20 `unsafe` matches from eight
+`942c36306b`, `84fd93e7de`, `cdfdf64478` and `7b50d62763` (2026-11-19) removed 20 `unsafe` matches from nine
 files, six of which became unsafe-free (`239` → `219` matches; `42` → `36` files):
 
 - **B3, exclusive-rename, volume-space and lock subset.** `publication::platform_publish{,_in}`,

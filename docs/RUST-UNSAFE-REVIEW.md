@@ -285,7 +285,8 @@ sanitizer/Miri.
 - **Provider descriptor duplication (3 → 1 block).** `provider_reference`'s native `retain` duplicates the
   lease-owned descriptor with `rustix::io::fcntl_dupfd_cloexec` (the same `F_DUPFD_CLOEXEC` request), turns
   the resulting `OwnedFd` into a `File` without `from_raw_fd`, and probes seekability with `rustix::fs::tell`
-  (the same `lseek(fd, 0, SEEK_CUR)`). One documented `BorrowedFd::borrow_raw` claim remains: the native
+  (the same `SEEK_CUR` check; rustix uses `lseek64` on Android, so large offsets are reported where the
+  32-bit `libc::lseek` could not). One documented `BorrowedFd::borrow_raw` claim remains: the native
   lease owns the raw descriptor for the call and the duplicate is owned only by the new `File`.
 
 | Metric | Before | After |
