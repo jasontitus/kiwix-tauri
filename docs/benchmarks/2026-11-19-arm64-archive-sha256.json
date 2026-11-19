@@ -1,0 +1,183 @@
+{
+  "experiment": "Apple Silicon, RustCrypto 0.10.9 ARM SHA2 with the app feature, RustCrypto 0.10.9 force-soft, and chksum-hash-sha2-256 0.0.1 already used by the app. Read each real ZIM into memory before timing. Hash every byte in 256 KiB update calls. Each process verifies one digest before timing and all five timed digests against the fixture hash. Each input runs all six orders. This measures digest work on this Mac. Complete import, file I/O and physical mobile impact remain open.",
+  "raw": {
+    "wikipedia_en_climate_change_mini_2024-06.zim": {
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "rows": [
+        {
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26796417
+          },
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 165991583
+          },
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 183935792
+          }
+        },
+        {
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26881875
+          },
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 183748583
+          },
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 165794250
+          }
+        },
+        {
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 165925250
+          },
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26964125
+          },
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 183449125
+          }
+        },
+        {
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 166000417
+          },
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 184124375
+          },
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26751875
+          }
+        },
+        {
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 183493084
+          },
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26847333
+          },
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 165559750
+          }
+        },
+        {
+          "existing_checked": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 184049833
+          },
+          "rustcrypto_software": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 166120375
+          },
+          "arm_sha2": {
+            "input_bytes": 8978471,
+            "five_hashes_ns": 26797166
+          }
+        }
+      ]
+    },
+    "wikipedia_en_100_maxi_2024-01.zim": {
+      "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "rows": [
+        {
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 109225541
+          },
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 674691709
+          },
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 747553292
+          }
+        },
+        {
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 109229583
+          },
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 732514458
+          },
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 675551625
+          }
+        },
+        {
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 673168833
+          },
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 108734125
+          },
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 713861042
+          }
+        },
+        {
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 640247333
+          },
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 722045916
+          },
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 102340500
+          }
+        },
+        {
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 745294541
+          },
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 109323250
+          },
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 674384209
+          }
+        },
+        {
+          "existing_checked": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 745822334
+          },
+          "rustcrypto_software": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 674029833
+          },
+          "arm_sha2": {
+            "input_bytes": 36522122,
+            "five_hashes_ns": 107838292
+          }
+        }
+      ]
+    }
+  }
+}

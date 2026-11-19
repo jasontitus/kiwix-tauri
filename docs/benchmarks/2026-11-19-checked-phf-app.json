@@ -1,0 +1,1578 @@
+{
+  "source": "52d9f07fc754d976ae3aa7c9728a4fccd2a67414",
+  "method": "The headless app handles full commands. Per host and archive, six fresh profile triplets use all orders once. Startup and importing precede the timer. Each preview measures one full local response. MHTML also includes writing the file. Every complete preview JSON response, root/resource part and normalized export wire must agree. Each executable is rehashed after the run. The older native app is a historical libzim workload reference. The comparison with the previous checked-atom Rust app isolates the SipHash input-load change in the application source.",
+  "macos_arm64": {
+    "clock": "elapsed nanoseconds per local command, including JSON, IPC and filesystem output for MHTML",
+    "binaries": {
+      "native": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+      "published": "7d69252429d1d6b92a86d61ec6b8ed50975f6b4934c76b7be84bb1007432c10f",
+      "checked": "c3dc75e54bba2ff146da19d994d8c57ba9e3b08be51b7442f28463228e7bc829"
+    },
+    "inputs": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "preview.zim": "64c381c2d63bff5f30ac3223292b613e6f6bbec9ef2b9e2d6818c7d9a4a578d8"
+    },
+    "samples": [
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          12930125,
+          4305542,
+          3322458
+        ],
+        "mhtml_ns": 44191584
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          12551125,
+          4575958,
+          4497792
+        ],
+        "mhtml_ns": 39303375
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          10685166,
+          3946833,
+          3929000
+        ],
+        "mhtml_ns": 33617250
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          8737250,
+          3024625,
+          2376250
+        ],
+        "mhtml_ns": 31396583
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          8638208,
+          3639167,
+          3701959
+        ],
+        "mhtml_ns": 32487417
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          8252125,
+          4020625,
+          3317084
+        ],
+        "mhtml_ns": 36059792
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          7939791,
+          3588542,
+          3778917
+        ],
+        "mhtml_ns": 33656000
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          9026459,
+          3169167,
+          2432041
+        ],
+        "mhtml_ns": 42581958
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          7913083,
+          3336292,
+          3252084
+        ],
+        "mhtml_ns": 22736667
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          8839208,
+          3780625,
+          3809625
+        ],
+        "mhtml_ns": 38366750
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          8772083,
+          3481083,
+          4374708
+        ],
+        "mhtml_ns": 25650375
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          7673000,
+          2910500,
+          1978916
+        ],
+        "mhtml_ns": 32207167
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          7960875,
+          3354250,
+          3366667
+        ],
+        "mhtml_ns": 42017250
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          7816208,
+          3151584,
+          2249333
+        ],
+        "mhtml_ns": 48229500
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          14756458,
+          4543708,
+          3505583
+        ],
+        "mhtml_ns": 41494125
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          6992958,
+          3310791,
+          3278083
+        ],
+        "mhtml_ns": 31198708
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          7302250,
+          2915541,
+          3088791
+        ],
+        "mhtml_ns": 30558500
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          8239125,
+          3304834,
+          2472208
+        ],
+        "mhtml_ns": 31685750
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          18251208,
+          12310625,
+          10358792
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          19736541,
+          13521292,
+          11229458
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          18935334,
+          13358125,
+          11421625
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          15852792,
+          10787583,
+          9556000
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          17709000,
+          12101584,
+          10309167
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          17612250,
+          11961042,
+          9843625
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          17217000,
+          11862417,
+          10026541
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          15740958,
+          10877041,
+          9346583
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          17645875,
+          12300333,
+          10224250
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          17478917,
+          12218458,
+          10269416
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          20454250,
+          12986375,
+          10671917
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          18005750,
+          12358625,
+          10791250
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          19494042,
+          13581208,
+          11151291
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          16327291,
+          11442917,
+          9824917
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          17651375,
+          12614667,
+          10561042
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          16389083,
+          10794458,
+          9212042
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          15677334,
+          10948667,
+          9369916
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          14880125,
+          9777709,
+          8837041
+        ]
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          2327500
+        ],
+        "mhtml_ns": 25561250
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          1892250
+        ],
+        "mhtml_ns": 19350833
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          1977625
+        ],
+        "mhtml_ns": 24543875
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          2199125
+        ],
+        "mhtml_ns": 25569667
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          2079833
+        ],
+        "mhtml_ns": 26468458
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          1714500
+        ],
+        "mhtml_ns": 18231167
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          1459084
+        ],
+        "mhtml_ns": 19698000
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          2342542
+        ],
+        "mhtml_ns": 25715708
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          2125292
+        ],
+        "mhtml_ns": 26160791
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          1802250
+        ],
+        "mhtml_ns": 19803542
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          1901625
+        ],
+        "mhtml_ns": 32025583
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          2324834
+        ],
+        "mhtml_ns": 21270208
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          1821208
+        ],
+        "mhtml_ns": 24580667
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          2142792
+        ],
+        "mhtml_ns": 23603750
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          1476458
+        ],
+        "mhtml_ns": 22884458
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          2058375
+        ],
+        "mhtml_ns": 22189167
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          1635584
+        ],
+        "mhtml_ns": 22956250
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          2329833
+        ],
+        "mhtml_ns": 23752209
+      }
+    ],
+    "outputs": {
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "2d9dc4c1b47e896098503d5c9c70f50be4388ef666511008d301081b142aee90",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Nationally_determined_contribution": "aef45fe2c638c151fdea713635e63b03b9a45a34c4759733504ea0de9d96a608",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Greenhouse_gas_emissions_by_Russia": "67790c1864ce4be33c4a254ed43044e826e8a08ea3f5237c0e07720478d91adb",
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": [
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/Land%5Fcover",
+          "text/html",
+          4720,
+          "087b8e53dce024959e7ec995658c3f5bc33e30f1c7af97f3da9d6c1adfc70748"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.css",
+          "text/css",
+          878,
+          "732cab0693bce7583f0413e9eea5f3562ec2c48a2cc87809ffb8c2eaf590167e"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.css",
+          "text/css",
+          0,
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.styles.css",
+          "text/css",
+          3147,
+          "e77e47ceba89ba5599b3056cf105c7ee42492f2127539d5c7af8408bfc35899f"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/skins.minerva.base.reset|skins.minerva.content.styles|ext.cite.style|site.styles|mobile.app.pagestyles.android|mediawiki.page.gallery.styles|mediawiki.skinning.content.parsoid.css",
+          "text/css",
+          33750,
+          "602b591b6d2acd76fb67cfeec50816a1a247accaf90744f3f75922ca40a79d2a"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/style.css",
+          "text/css",
+          2050,
+          "564289803262093733e99d72f6dee8eafff6e9ab92461b5e4c9191afe812a819"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/content.parsoid.css",
+          "text/css",
+          5375,
+          "f7dc0ccb4820fed986c31d6180d7c8bc66cb360e4607c1b17e1f399802355169"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/inserted_style.css",
+          "text/css",
+          111686,
+          "695296296b92ec5d8157ea781e67ff29b84f160778e11f01279104a913730c0d"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/script.js",
+          "application/javascript",
+          1900,
+          "3500dda3d51b31bf3f4999148c8fab1759b89b595c4e7ca9eb0bd31c1ee69462"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/masonry.min.js",
+          "application/javascript",
+          24103,
+          "367d6afdfc741fb48d2d9310e47c3924b693459a74c882c0fc545ec5ed7d55d2"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/article_list_home.js",
+          "application/javascript",
+          714,
+          "ce1953c7f98ca0bce16d0efb9acfb379b884df46aa673d48f7617599dfd6c9e5"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/images_loaded.min.js",
+          "application/javascript",
+          6398,
+          "3998be5e1fd8869eefddbc2a16cfcc9bc75165f208f6f5100dd8394879c027a9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/node_module/details-element-polyfill/dist/details-element-polyfill.js",
+          "application/javascript",
+          6953,
+          "caeb7871c711b90e300cca886bc958a1fd0551e15223db9dd03fee447a539e5b"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jsConfigVars.js",
+          "application/javascript",
+          2654,
+          "3d20f0a12949ccca3037a2232afed85f176960c7a6068c1c705944e03f4748be"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/startup.js",
+          "application/javascript",
+          175478,
+          "e4e7782237cb0073d2e02f398d12c23fb6e96a4e929afe32273fe99504a1b330"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery,mediawiki.js",
+          "application/javascript",
+          285385,
+          "0815440e4f8e22410773d2d45f34bc04b817de6bcbe5422e46aa8da39ca19a79"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.base.js",
+          "application/javascript",
+          55803,
+          "cf7a785e48226eb022a288069652a909d963b4becf7eb2ead8cb9a32281cd641"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.util.js",
+          "application/javascript",
+          47702,
+          "614918e8b17abca4ebce4305267106bf8840c6afb238ed16408db2eb5e658344"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/site.js",
+          "application/javascript",
+          5360,
+          "9e05911b80af8b0e0570b4234c3586caf7c79111ec5afe5fc5ee52c04b8a7454"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.ready.js",
+          "application/javascript",
+          32751,
+          "2dd214d41335ee359b4ae19ab38dd87e5b40eb69faaa9eb91946824918312326"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery.cookie.js",
+          "application/javascript",
+          52,
+          "a6fa1c0cc9f49e2b932862146ebcc56589037d43a14ab0d460a20a54c656faa8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.cookie.js",
+          "application/javascript",
+          9831,
+          "c8304bf3ca86759ed53809723324ebe5630804bd3c39bdd1c413ca9e89a641fb"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.storage.js",
+          "application/javascript",
+          9808,
+          "5b80b01f79e3d44ec7c621fa55261a905f1bbd1e001cddf1cff0d8b68c3877b9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.VisibilityToggles.js",
+          "application/javascript",
+          67,
+          "7505550ab77a789bd7770f1e01b29efbdcd1c9c57ff0e9d43eaba62264ea2380"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.defaultVisibilityToggles.js",
+          "application/javascript",
+          74,
+          "963ccfb8487751b89befc12f23e25e6e1c4c2a88d0d64cdc43a1f6f3a23134f8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.js",
+          "application/javascript",
+          6609,
+          "4360a123a2c69d89c459de2408488c83f1b2e82aa55a6e5f3bf1cf046cd7b404"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.js",
+          "application/javascript",
+          1440,
+          "6f797307b40ede46fd4b52a812a2a134c48eec6cac345ade735b7d8c6dd8d7e2"
+        ]
+      ],
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elizabeth_II": "f5e985642d15562094b17bd741e08e6b4be0f4f256ed4f31c1cce4cb5a7805a1",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/List_of_national_parks_of_the_United_States": "051b9b0e39f05f6c43ccd78dc04efa5abf73f977168c84a55fcec7f1a25a90c7",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elvis_Presley": "c6e0175baf216d48f6c581ce5d51ffe75b2f6adbdbe4f5feaabfcd04ad2082ea",
+      "preview preview.zim/fallback.html": "42bbb3aa5fd22fd98312a5149d1aa76b81fbb1e61620cf81edfb4d76e268fc93",
+      "MHTML preview.zim/fallback.html": [
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/fallback%2Ehtml",
+          "text/html",
+          167,
+          "c693c18cf97b13a410c342a1082a6772e7a8db36822aa7f973a48bddf6716dc6"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/vector.svg",
+          "image/svg+xml",
+          41,
+          "900fbe934249ad120004bd24adf66aad8817d89586273c0cc50e187bddebb601"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/large.png",
+          "image/png",
+          262244,
+          "3e7427142df429e8eb8cd1ff9a1f4ef3917fb276bf33a9340c76be793fc0aabf"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/photo%20%2523.png",
+          "image/png",
+          100,
+          "ff748409b6a0ecf8c2ecd97f8b3f0e29243c7048584939c0d4b9e4f9512a4b78"
+        ]
+      ]
+    },
+    "mhtml_with_fixed_boundary_sha256": {
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "a809bf65e73d87a05ec52bd172afaf6181a179848a26246f4925c58cf0b0a1fa",
+      "MHTML preview.zim/fallback.html": "103df8bb0fd9b72bbcebdc40fc11bcb8faa081448b38b8e1280b62d4077b9348"
+    }
+  },
+  "ubuntu24_x86_64": {
+    "clock": "elapsed nanoseconds per local command, including JSON, IPC and filesystem output for MHTML",
+    "binaries": {
+      "native": "f094517da1d4facf3d32bbe724d60c2058ad706517ee970723f89a41d0a89a53",
+      "published": "6b2e6ed97a492c27449941c683072f2a4a3f0025c995ee4fe0150de10fe85558",
+      "checked": "21029a3a163905241d6e206e68aa837a7528adefe8c72a74fe4d399bda2f2499"
+    },
+    "inputs": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "preview.zim": "64c381c2d63bff5f30ac3223292b613e6f6bbec9ef2b9e2d6818c7d9a4a578d8"
+    },
+    "samples": [
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          8659209,
+          2905397,
+          2516205
+        ],
+        "mhtml_ns": 25124647
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          9977725,
+          2941272,
+          3925272
+        ],
+        "mhtml_ns": 20044489
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          10109736,
+          2942823,
+          4009632
+        ],
+        "mhtml_ns": 20017633
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          8891757,
+          3068301,
+          2598072
+        ],
+        "mhtml_ns": 22890499
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          10083018,
+          3003765,
+          4037889
+        ],
+        "mhtml_ns": 19060579
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          9924658,
+          4257368,
+          3562558
+        ],
+        "mhtml_ns": 21030193
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          10070442,
+          3316991,
+          4122571
+        ],
+        "mhtml_ns": 18909152
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          8508937,
+          2781217,
+          2493920
+        ],
+        "mhtml_ns": 22095313
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          10369944,
+          3019903,
+          4622783
+        ],
+        "mhtml_ns": 19748086
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          10164875,
+          3106548,
+          3960262
+        ],
+        "mhtml_ns": 19216836
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          9877551,
+          3316501,
+          4023221
+        ],
+        "mhtml_ns": 20085281
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          10470847,
+          4022353,
+          2436736
+        ],
+        "mhtml_ns": 25641826
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          12006566,
+          5392310,
+          4783157
+        ],
+        "mhtml_ns": 24617038
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          8712647,
+          2967810,
+          2513378
+        ],
+        "mhtml_ns": 22594847
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          10165056,
+          3406748,
+          4300981
+        ],
+        "mhtml_ns": 20054470
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          10227474,
+          3019793,
+          4016180
+        ],
+        "mhtml_ns": 19658014
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          12432455,
+          3539873,
+          4801757
+        ],
+        "mhtml_ns": 22746243
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          10451667,
+          3530714,
+          3070275
+        ],
+        "mhtml_ns": 24912820
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          17836365,
+          14388415,
+          10692733
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          21343874,
+          13055722,
+          12358471
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          27282340,
+          16469314,
+          14827480
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          22841000,
+          14459627,
+          12858348
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          23061331,
+          13288645,
+          12104096
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          22508313,
+          13262388,
+          12075203
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          22016418,
+          13502500,
+          12335580
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          17321352,
+          11678205,
+          11063955
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          22902094,
+          13359545,
+          11979149
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          22914395,
+          13520659,
+          12620754
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          21384472,
+          13536238,
+          12665808
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          18400974,
+          12448159,
+          10896984
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          21830567,
+          17040142,
+          14544997
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          17837132,
+          11544802,
+          10359823
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          23390352,
+          13184901,
+          12538684
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          23594943,
+          13558527,
+          12499992
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          23027827,
+          13648288,
+          12422738
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          18280669,
+          13990565,
+          11601160
+        ]
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          1842686
+        ],
+        "mhtml_ns": 13008215
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          1881958
+        ],
+        "mhtml_ns": 14289475
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          2343587
+        ],
+        "mhtml_ns": 12460394
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          2079410
+        ],
+        "mhtml_ns": 13531131
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          2058622
+        ],
+        "mhtml_ns": 12456826
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          2385218
+        ],
+        "mhtml_ns": 12192654
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          1919513
+        ],
+        "mhtml_ns": 13265181
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          2894390
+        ],
+        "mhtml_ns": 21542124
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          2569787
+        ],
+        "mhtml_ns": 12219181
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          1996368
+        ],
+        "mhtml_ns": 11965769
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          2461279
+        ],
+        "mhtml_ns": 12256752
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          1911876
+        ],
+        "mhtml_ns": 15745843
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          1977654
+        ],
+        "mhtml_ns": 14121187
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          2353348
+        ],
+        "mhtml_ns": 12790101
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          1927645
+        ],
+        "mhtml_ns": 12884788
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          1926364
+        ],
+        "mhtml_ns": 14074617
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          2346948
+        ],
+        "mhtml_ns": 12089457
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          1923946
+        ],
+        "mhtml_ns": 12889170
+      }
+    ],
+    "outputs": {
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "2d9dc4c1b47e896098503d5c9c70f50be4388ef666511008d301081b142aee90",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Nationally_determined_contribution": "aef45fe2c638c151fdea713635e63b03b9a45a34c4759733504ea0de9d96a608",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Greenhouse_gas_emissions_by_Russia": "67790c1864ce4be33c4a254ed43044e826e8a08ea3f5237c0e07720478d91adb",
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": [
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/Land%5Fcover",
+          "text/html",
+          4720,
+          "087b8e53dce024959e7ec995658c3f5bc33e30f1c7af97f3da9d6c1adfc70748"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.css",
+          "text/css",
+          878,
+          "732cab0693bce7583f0413e9eea5f3562ec2c48a2cc87809ffb8c2eaf590167e"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.css",
+          "text/css",
+          0,
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.styles.css",
+          "text/css",
+          3147,
+          "e77e47ceba89ba5599b3056cf105c7ee42492f2127539d5c7af8408bfc35899f"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/skins.minerva.base.reset|skins.minerva.content.styles|ext.cite.style|site.styles|mobile.app.pagestyles.android|mediawiki.page.gallery.styles|mediawiki.skinning.content.parsoid.css",
+          "text/css",
+          33750,
+          "602b591b6d2acd76fb67cfeec50816a1a247accaf90744f3f75922ca40a79d2a"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/style.css",
+          "text/css",
+          2050,
+          "564289803262093733e99d72f6dee8eafff6e9ab92461b5e4c9191afe812a819"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/content.parsoid.css",
+          "text/css",
+          5375,
+          "f7dc0ccb4820fed986c31d6180d7c8bc66cb360e4607c1b17e1f399802355169"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/inserted_style.css",
+          "text/css",
+          111686,
+          "695296296b92ec5d8157ea781e67ff29b84f160778e11f01279104a913730c0d"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/script.js",
+          "application/javascript",
+          1900,
+          "3500dda3d51b31bf3f4999148c8fab1759b89b595c4e7ca9eb0bd31c1ee69462"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/masonry.min.js",
+          "application/javascript",
+          24103,
+          "367d6afdfc741fb48d2d9310e47c3924b693459a74c882c0fc545ec5ed7d55d2"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/article_list_home.js",
+          "application/javascript",
+          714,
+          "ce1953c7f98ca0bce16d0efb9acfb379b884df46aa673d48f7617599dfd6c9e5"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/images_loaded.min.js",
+          "application/javascript",
+          6398,
+          "3998be5e1fd8869eefddbc2a16cfcc9bc75165f208f6f5100dd8394879c027a9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/node_module/details-element-polyfill/dist/details-element-polyfill.js",
+          "application/javascript",
+          6953,
+          "caeb7871c711b90e300cca886bc958a1fd0551e15223db9dd03fee447a539e5b"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jsConfigVars.js",
+          "application/javascript",
+          2654,
+          "3d20f0a12949ccca3037a2232afed85f176960c7a6068c1c705944e03f4748be"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/startup.js",
+          "application/javascript",
+          175478,
+          "e4e7782237cb0073d2e02f398d12c23fb6e96a4e929afe32273fe99504a1b330"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery,mediawiki.js",
+          "application/javascript",
+          285385,
+          "0815440e4f8e22410773d2d45f34bc04b817de6bcbe5422e46aa8da39ca19a79"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.base.js",
+          "application/javascript",
+          55803,
+          "cf7a785e48226eb022a288069652a909d963b4becf7eb2ead8cb9a32281cd641"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.util.js",
+          "application/javascript",
+          47702,
+          "614918e8b17abca4ebce4305267106bf8840c6afb238ed16408db2eb5e658344"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/site.js",
+          "application/javascript",
+          5360,
+          "9e05911b80af8b0e0570b4234c3586caf7c79111ec5afe5fc5ee52c04b8a7454"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.ready.js",
+          "application/javascript",
+          32751,
+          "2dd214d41335ee359b4ae19ab38dd87e5b40eb69faaa9eb91946824918312326"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery.cookie.js",
+          "application/javascript",
+          52,
+          "a6fa1c0cc9f49e2b932862146ebcc56589037d43a14ab0d460a20a54c656faa8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.cookie.js",
+          "application/javascript",
+          9831,
+          "c8304bf3ca86759ed53809723324ebe5630804bd3c39bdd1c413ca9e89a641fb"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.storage.js",
+          "application/javascript",
+          9808,
+          "5b80b01f79e3d44ec7c621fa55261a905f1bbd1e001cddf1cff0d8b68c3877b9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.VisibilityToggles.js",
+          "application/javascript",
+          67,
+          "7505550ab77a789bd7770f1e01b29efbdcd1c9c57ff0e9d43eaba62264ea2380"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.defaultVisibilityToggles.js",
+          "application/javascript",
+          74,
+          "963ccfb8487751b89befc12f23e25e6e1c4c2a88d0d64cdc43a1f6f3a23134f8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.js",
+          "application/javascript",
+          6609,
+          "4360a123a2c69d89c459de2408488c83f1b2e82aa55a6e5f3bf1cf046cd7b404"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.js",
+          "application/javascript",
+          1440,
+          "6f797307b40ede46fd4b52a812a2a134c48eec6cac345ade735b7d8c6dd8d7e2"
+        ]
+      ],
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elizabeth_II": "f5e985642d15562094b17bd741e08e6b4be0f4f256ed4f31c1cce4cb5a7805a1",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/List_of_national_parks_of_the_United_States": "051b9b0e39f05f6c43ccd78dc04efa5abf73f977168c84a55fcec7f1a25a90c7",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elvis_Presley": "c6e0175baf216d48f6c581ce5d51ffe75b2f6adbdbe4f5feaabfcd04ad2082ea",
+      "preview preview.zim/fallback.html": "42bbb3aa5fd22fd98312a5149d1aa76b81fbb1e61620cf81edfb4d76e268fc93",
+      "MHTML preview.zim/fallback.html": [
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/fallback%2Ehtml",
+          "text/html",
+          167,
+          "c693c18cf97b13a410c342a1082a6772e7a8db36822aa7f973a48bddf6716dc6"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/vector.svg",
+          "image/svg+xml",
+          41,
+          "900fbe934249ad120004bd24adf66aad8817d89586273c0cc50e187bddebb601"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/large.png",
+          "image/png",
+          262244,
+          "3e7427142df429e8eb8cd1ff9a1f4ef3917fb276bf33a9340c76be793fc0aabf"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/photo%20%2523.png",
+          "image/png",
+          100,
+          "ff748409b6a0ecf8c2ecd97f8b3f0e29243c7048584939c0d4b9e4f9512a4b78"
+        ]
+      ]
+    },
+    "mhtml_with_fixed_boundary_sha256": {
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "a809bf65e73d87a05ec52bd172afaf6181a179848a26246f4925c58cf0b0a1fa",
+      "MHTML preview.zim/fallback.html": "103df8bb0fd9b72bbcebdc40fc11bcb8faa081448b38b8e1280b62d4077b9348"
+    }
+  },
+  "verified_signed_mac": {
+    "exe_sha256": "d75f41f769afaf978cd6dcc67247c16305404bca8be4778cf07fc17fef1511c8",
+    "matching_text_section_bytes": 35817212,
+    "matching_text_section_sha256": "09b6da741a7afd1e66eaca2070b8b9445eed4347f9df69fedd53e80fc28983f5",
+    "verified_resource_files": 58,
+    "siphasher_resource_hashes": {
+      "licenses/siphasher/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "licenses/siphasher/SOURCE.txt": "81b9712ab366e9a613f5126073c0042dd26133095bc080c57c54a4556a705244",
+      "licenses/siphasher/LICENSE-MIT": "f9c4c77baa3828004ee54b8a4f2db2e88ed44a6237a493965bf551fac0fcb62d"
+    },
+    "replayed_previews": 7,
+    "replayed_mhtml_exports": 2,
+    "signing": "Local ad-hoc signature, verified strictly and deeply"
+  },
+  "isolated_css_color_table": {
+    "method": "Eight alternating process pairs on Mac ARM64. Both compiled the same cssparser with fast_match_color. Each result table stores RGB for all 148 names in lowercase and uppercase and misses for derived names and 5 edge strings. The timed loop performs 50,000 passes over the same 449 names. The isolated loop measures direct lookups without archive I/O or DOM work.",
+    "comparison_rows": 449,
+    "lookups_per_process": 22450000,
+    "output_sha256": "e4770be7e3e46a7fc801a04be59b403f801d97583a51f5a62902c50ec0674145",
+    "processes": [
+      {
+        "published": 1104888666,
+        "checked": 1134909125
+      },
+      {
+        "checked": 1115040750,
+        "published": 1033182042
+      },
+      {
+        "published": 1004816792,
+        "checked": 1160788917
+      },
+      {
+        "checked": 1100313500,
+        "published": 1017671875
+      },
+      {
+        "published": 1005116333,
+        "checked": 1083059541
+      },
+      {
+        "checked": 1144459625,
+        "published": 1008564500
+      },
+      {
+        "published": 1009816417,
+        "checked": 1116698000
+      },
+      {
+        "checked": 1087873875,
+        "published": 1003817416
+      }
+    ],
+    "binaries": {
+      "checked": "64f5bb3a515b53e9a0012e5bf3b8f8f15c979138d86897a8448abb1a609c3237",
+      "published": "d957492c7ff3ab9afef79522a7a05343f300da4758e79163c882ab23300988f9"
+    }
+  }
+}

@@ -12,4 +12,4 @@ cargo test --locked --release --manifest-path src-tauri/vendor/siphasher-1.0.4/C
 cargo test --locked --no-default-features --manifest-path src-tauri/vendor/siphasher-1.0.4/Cargo.toml
 ```
 
-The initial evidence covers hash equivalence and the isolated DOM. The private application branch selects the local crate for the next verification pass. Complete app runtime acceptance and cross-platform performance measurements are open.
+The private application branch selected the local crate at `52d9f07`. The app comparison exercised complete previews and exports beside the previous Rust and historical libzim builds on macOS and Ubuntu. [Full app outputs and timing samples](../benchmarks/2026-11-19-checked-phf-app.json)
