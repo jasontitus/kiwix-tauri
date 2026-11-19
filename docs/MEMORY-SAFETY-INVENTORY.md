@@ -8,6 +8,8 @@ The Apple silicon desktop release at `f7fc9b8` compiled **86 distinct unsafe Rus
 
 The earlier Bonjour change reduced the Rust discovery worker from 29 sites to 24. It followed an integer-handle change that removed eleven sites from Nearby transport, which still accounts for eleven. The voice decoder change removed another 100 target-side sites from the old bzip2 libraries. [Handle and voice checkpoint](audit/2026-11-18-macos-handle-ids-compiled-unsafe.json)
 
+The Apple PDF renderer now returns numeric request IDs and result codes across its native callback boundary. The source census counts **171 explicit production Rust `unsafe` blocks** across the application and MCP relay, down from 174. It includes source for all supported platforms and excludes dependencies and test-only code. macOS printing still crosses a separate native callback boundary. [Renderer changes and printing follow-up](audit/2026-11-19-apple-pdf-renderer-ids.md)
+
 | Path | Runtime migration and remaining work |
 |---|---|
 | Open, verify and read ZIM content | The app uses the MIT positioned reader for archives, illustrations, metadata and media. Files remain open across rename and multipart reads. The app checks a full checksum, directory and title order, cluster structure and referenced item indices. Its two archive adapters and structural checker forbid unsafe Rust. Default writer, C ABI and legacy memory-map features are disabled. The packaged reader has run on macOS ARM64, iOS ARM64 Simulator, Android ARM64 Emulator and Linux x86-64. The Android ARMv7 package was also built and inspected. Windows package testing remains open in this round. [Exact revisions and platform checks](audit/2026-11-18-reader-platforms.md) |

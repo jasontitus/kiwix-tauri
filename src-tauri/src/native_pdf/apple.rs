@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use super::{Authority, Commit, Destination, Files, Phase, Presentation};
-use std::{ffi::{c_char, c_void, CStr, CString}, path::PathBuf, sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}}};
+use std::{ffi::{c_char, CString}, path::PathBuf, sync::{Arc, atomic::AtomicBool}};
 #[cfg(target_os = "macos")]
-use std::{path::Path, time::Duration};
+use std::{ffi::{c_void, CStr}, path::Path, sync::atomic::{AtomicU64, Ordering}, time::Duration};
+#[cfg(target_os = "macos")]
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+#[path = "apple_callbacks.rs"]
+mod callbacks;
+use callbacks::CALLBACKS;
+type Admit = extern "C" fn(u64) -> bool;
+type Complete = extern "C" fn(u64, u8);
 unsafe extern "C" {
-    fn kiwix_pdf_start(id: u64, bootstrap: *const c_char, article: *const c_char, output: *const c_char, width: u32, height: u32, context: *mut c_void, authority: extern "C" fn(*mut c_void) -> bool, complete: extern "C" fn(*mut c_void, *const c_char));
+    fn kiwix_pdf_start(id: u64, bootstrap: *const c_char, article: *const c_char, output: *const c_char, width: u32, height: u32, authority: Admit, complete: Complete);
     fn kiwix_pdf_cancel(id: u64);
 }
 #[cfg(target_os = "macos")]
@@ -14,32 +20,56 @@ unsafe extern "C" {
     fn kiwix_pdf_print_start(id: u64, path: *const c_char, title: *const c_char, context: *mut c_void, authority: extern "C" fn(*mut c_void) -> bool, complete: extern "C" fn(*mut c_void, *const c_char)) -> bool;
     fn kiwix_pdf_print_cancel(id: u64);
 }
-struct Callback { authority: Authority, sender: oneshot::Sender<Result<(), String>>, _files: Files }
-extern "C" fn admitted(context: *mut c_void) -> bool {
-    // Native owns the callback context until its exactly-once completion.
-    let callback = unsafe { &*(context as *const Callback) };
-    (callback.authority)(Phase::BeforeHandoff).is_ok()
+extern "C" fn admitted(id: u64) -> bool { CALLBACKS.admitted(id) }
+extern "C" fn complete(id: u64, status: u8) {
+    let Some(callback) = CALLBACKS.take(id) else { return; };
+    let _ = callback.sender.send(render_result(status));
 }
-extern "C" fn complete(context: *mut c_void, error: *const c_char) {
-    let callback = unsafe { Box::from_raw(context as *mut Callback) };
-    let result = if error.is_null() { Ok(()) } else { Err(unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned()) };
-    let _ = callback.sender.send(result);
+
+// These ABI values match PdfRenderStatus in native/pdf.mm. Unknown values
+// are errors so a mismatched provider cannot accidentally authorize output.
+fn render_result(status: u8) -> Result<(), String> {
+    let error = match status {
+        0 => return Ok(()),
+        1 => "The live article PDF document could not load",
+        2 => "The live article PDF renderer terminated",
+        3 => "Article PDF authority expired",
+        4 => "Article PDF exceeds the 512-page limit",
+        5 => "Cannot create the live article PDF output",
+        6 => "Live article PDF capture requires iOS 14 or macOS 11 or later",
+        7 => "WebKit could not capture a bounded live article PDF page",
+        8 => "WebKit returned an invalid live article PDF page",
+        9 => "WebKit returned invalid live article PDF dimensions",
+        10 => "Native PDF output exceeds the 64 MiB limit",
+        11 => "Invalid live article capture dimensions",
+        12 => "Article PDF export timed out",
+        13 => "Article PDF export was cancelled",
+        _ => "Unknown native Apple PDF export error",
+    };
+    Err(error.into())
 }
+
 struct NativeRequest(u64);
-impl Drop for NativeRequest { fn drop(&mut self) { unsafe { kiwix_pdf_cancel(self.0); } } }
+impl Drop for NativeRequest {
+    fn drop(&mut self) {
+        if CALLBACKS.revoke(self.0) {
+            // SAFETY: this ID identifies the native renderer started below.
+            unsafe { kiwix_pdf_cancel(self.0); }
+        }
+    }
+}
 // Shared platform-provider boundary: keep native rendering, handoff authority,
 // temporary-file ownership and cancellation explicit across Apple/desktop/Android.
 #[allow(clippy::too_many_arguments)]
 pub async fn render(_app: tauri::AppHandle, bootstrap: String, article: String, _secret: String, output: PathBuf, _presentation: Presentation, _destination: Destination, width: u32, height: u32, authority: Authority, _commit: Commit, _handed_off: Arc<AtomicBool>, files: Files, cancel: CancellationToken) -> Result<(), String> {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
-    let id = NEXT.fetch_add(1, Ordering::Relaxed);
     let bootstrap = CString::new(bootstrap).map_err(|_| "Invalid PDF bootstrap URL")?;
     let article = CString::new(article).map_err(|_| "Invalid PDF article URL")?;
     let output = CString::new(output.to_str().ok_or("PDF output path is not UTF-8")?).map_err(|_| "Invalid PDF output path")?;
-    let (sender, receiver) = oneshot::channel();
-    let context = Box::into_raw(Box::new(Callback { authority, sender, _files: files }));
-    unsafe { kiwix_pdf_start(id, bootstrap.as_ptr(), article.as_ptr(), output.as_ptr(), width, height, context.cast(), admitted, complete); }
+    let (id, receiver) = CALLBACKS.register(authority, files)?;
     let _request = NativeRequest(id);
+    // SAFETY: the bridge copies these C strings before returning. The request
+    // owns its registered ID and the callbacks have the declared C ABI.
+    unsafe { kiwix_pdf_start(id, bootstrap.as_ptr(), article.as_ptr(), output.as_ptr(), width, height, admitted, complete); }
     tokio::select! {
         result = receiver => result.map_err(|_| "Native Apple PDF provider stopped")?,
         _ = cancel.cancelled() => Err("Article PDF export was cancelled".into()),
