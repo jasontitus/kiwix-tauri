@@ -1,0 +1,16 @@
+encoding_rs 0.8.44
+Upstream: https://github.com/hsivonen/encoding_rs
+Upstream revision: 8e8556af3cf976392b993a9dbe07456a5ef58469
+Published crate SHA-256: 89253175e704ab869b04f9db224d38630e0211a53841a79181deae0889e169f5
+License: (Apache-2.0 OR MIT) AND BSD-3-Clause
+(COPYRIGHT, LICENSE-APACHE, LICENSE-MIT, LICENSE-WHATWG)
+
+Kiwix retains the encoding tables, codec state machines and streaming
+slice APIs. The fork validates UTF-8 through Rust's core library, reads
+unaligned UTF-16 through borrowed byte pairs, and uses checked offsets and
+initialized output buffers. The crate forbids unsafe Rust.
+
+The six upstream entry points that write directly into a fixed-length
+mutable str are omitted. Callers can decode into a byte slice or append
+validated output to a String. The simd-accel feature is accepted as a no-op.
+Cargo.toml.orig and the upstream README record upstream configuration.

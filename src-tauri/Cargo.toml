@@ -216,6 +216,9 @@ android-evaluation = ["dep:jni"]
 localswarm-profiling = []
 
 [patch.crates-io]
+# Count and decode torrent filename bytes through checked Rust APIs.
+chardetng = { path = "vendor/chardetng-1.0.0" }
+encoding_rs = { path = "vendor/encoding_rs-0.8.44" }
 # Format JSON and HTTP integers in initialized stack storage.
 itoa = { path = "vendor/itoa-1.0.19" }
 memchr = { path = "vendor/memchr-2.8.3" }
