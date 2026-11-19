@@ -7,7 +7,13 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use tokio::sync::oneshot;
 
-type ReadResult = Result<Vec<u8>, String>;
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Received {
+    Bytes(Vec<u8>),
+    NextContext,
+}
+
+type ReadResult = Result<Received, String>;
 
 struct Pending {
     maximum: usize,
@@ -65,14 +71,15 @@ pub(super) extern "C" fn complete(id: u64, status: i32, data: Option<&DispatchDa
         return;
     }
     let result = match data {
+        None if status == 1 => Ok(Received::NextContext),
         _ if status != 0 => {
             Err("LocalSwarm Apple QUIC connection failed or left the local link".into())
         }
         Some(data) if data.size() > maximum => {
             Err("Apple QUIC receive exceeded its request".into())
         }
-        Some(data) => Ok(data.to_vec()),
-        None => Ok(Vec::new()),
+        Some(data) => Ok(Received::Bytes(data.to_vec())),
+        None => Ok(Received::Bytes(Vec::new())),
     };
     let _ = reply.send(result);
 }
@@ -91,7 +98,10 @@ mod tests {
         complete(full.id(), 0, Some(&data));
         complete(small.id(), 0, Some(&data));
         assert!(short_result.blocking_recv().unwrap().is_err());
-        assert_eq!(full_result.blocking_recv().unwrap().unwrap(), b"abcdef");
+        assert_eq!(
+            full_result.blocking_recv().unwrap().unwrap(),
+            Received::Bytes(b"abcdef".to_vec())
+        );
     }
 
     #[test]
@@ -109,7 +119,23 @@ mod tests {
         ));
         complete(new.id(), 0, Some(&bytes));
         complete(new.id(), -1, None);
-        assert_eq!(current.blocking_recv().unwrap().unwrap(), b"now");
+        assert_eq!(
+            current.blocking_recv().unwrap().unwrap(),
+            Received::Bytes(b"now".to_vec())
+        );
+    }
+
+    #[test]
+    fn nonfinal_empty_context_requests_another_read_only_while_awaited() {
+        let (ticket, received) = register(16).unwrap();
+        complete(ticket.id(), 1, None);
+        assert_eq!(
+            received.blocking_recv().unwrap().unwrap(),
+            Received::NextContext
+        );
+        let (ticket, received) = register(16).unwrap();
+        complete(ticket.id(), 1, Some(DispatchData::empty()));
+        assert!(received.blocking_recv().unwrap().is_err());
     }
 
     #[test]
@@ -119,7 +145,7 @@ mod tests {
             complete(ticket.id(), status, data);
             let result = received.blocking_recv().unwrap();
             if status == 0 {
-                assert!(result.unwrap().is_empty());
+                assert_eq!(result.unwrap(), Received::Bytes(Vec::new()));
             } else {
                 assert!(result.is_err());
             }

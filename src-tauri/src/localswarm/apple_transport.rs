@@ -214,10 +214,15 @@ impl Connection {
     pub async fn read(&self, output: &mut [u8]) -> Result<Option<usize>, String> {
         if output.is_empty() { return Ok(Some(0)); }
         let maximum = output.len().min(MAX_READ);
-        let (ticket, received) = read_request::register(maximum)?;
-        // The native operation retains the connection and only echoes the ID.
-        unsafe { kiwix_swarm_read(self.0.0.as_ptr(), maximum, ticket.id(), read_request::complete); }
-        let bytes = received.await.map_err(|_| "Apple QUIC receive callback lost")??;
+        let bytes = loop {
+            let (ticket, received) = read_request::register(maximum)?;
+            // The native operation retains the connection and only echoes the ID.
+            unsafe { kiwix_swarm_read(self.0.0.as_ptr(), maximum, ticket.id(), read_request::complete); }
+            match received.await.map_err(|_| "Apple QUIC receive callback lost")?? {
+                read_request::Received::Bytes(bytes) => break bytes,
+                read_request::Received::NextContext => continue,
+            }
+        };
         if bytes.is_empty() { return Ok(None); }
         output.get_mut(..bytes.len()).ok_or("Apple QUIC receive exceeded its request")?.copy_from_slice(&bytes);
         Ok(Some(bytes.len()))
