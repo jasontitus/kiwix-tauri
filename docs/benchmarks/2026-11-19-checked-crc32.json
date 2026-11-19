@@ -1,0 +1,698 @@
+{
+ "published_source": "8a93d2a70c00ab3e72beda42014b18fad8e496ea",
+ "source_package_sha256": "2b929dd2a135771f40afabd1073f85eed59c800b7c61901e5c254270497dad64",
+ "macos": {
+  "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "raw_sha256": "4ca2c58bc7bc7a66bdabdbd57950c52e2da34c643efd7dcf9d2ba0bdbd608920",
+  "gzip_sha256": "6f01290d25ee4e881ed08fb290c3b961f093cb5793b387bdc049795beb221540",
+  "executables": {
+   "before": "9baa4ac9db28d0538803459d4a7a001df9ae395fc83fba4354a1da2dbbb9257a",
+   "after": "0fd765b7fcfd379874bcf4186dff3d010e51fd3b56c6583bb14baeec5c85e654"
+  },
+  "cases": [
+   {
+    "mode": "crc",
+    "bytes": 64,
+    "iterations": 3000000,
+    "crc32": 2699194659,
+    "pairs_ns": [
+     {
+      "after": 9806959,
+      "before": 8458084
+     },
+     {
+      "before": 8331000,
+      "after": 9914333
+     },
+     {
+      "after": 9785833,
+      "before": 8436167
+     },
+     {
+      "before": 8403250,
+      "after": 9759458
+     },
+     {
+      "after": 9826125,
+      "before": 8361500
+     },
+     {
+      "before": 8338875,
+      "after": 9752916
+     },
+     {
+      "after": 9834875,
+      "before": 8307792
+     },
+     {
+      "before": 8391042,
+      "after": 9818958
+     },
+     {
+      "after": 9960167,
+      "before": 8470125
+     },
+     {
+      "before": 8359750,
+      "after": 9818209
+     },
+     {
+      "after": 9834833,
+      "before": 8383458
+     },
+     {
+      "before": 8343125,
+      "after": 9807125
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 4096,
+    "iterations": 250000,
+    "crc32": 881247467,
+    "pairs_ns": [
+     {
+      "after": 22517959,
+      "before": 15158125
+     },
+     {
+      "before": 15214625,
+      "after": 22552167
+     },
+     {
+      "after": 22480125,
+      "before": 15223416
+     },
+     {
+      "before": 15196209,
+      "after": 22486708
+     },
+     {
+      "after": 22463667,
+      "before": 15460375
+     },
+     {
+      "before": 15164166,
+      "after": 22494084
+     },
+     {
+      "after": 22540667,
+      "before": 15150875
+     },
+     {
+      "before": 15189625,
+      "after": 22532750
+     },
+     {
+      "after": 22528167,
+      "before": 15185625
+     },
+     {
+      "before": 15404875,
+      "after": 22504583
+     },
+     {
+      "after": 22532500,
+      "before": 15303042
+     },
+     {
+      "before": 15160958,
+      "after": 22376917
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 65536,
+    "iterations": 12000,
+    "crc32": 713422812,
+    "pairs_ns": [
+     {
+      "after": 17176958,
+      "before": 10819791
+     },
+     {
+      "before": 10795417,
+      "after": 17074125
+     },
+     {
+      "after": 17046250,
+      "before": 10853708
+     },
+     {
+      "before": 10792333,
+      "after": 17023334
+     },
+     {
+      "after": 17048416,
+      "before": 10826041
+     },
+     {
+      "before": 10888208,
+      "after": 16995084
+     },
+     {
+      "after": 16999125,
+      "before": 10806292
+     },
+     {
+      "before": 10767875,
+      "after": 17038709
+     },
+     {
+      "after": 17250333,
+      "before": 10824291
+     },
+     {
+      "before": 10830708,
+      "after": 17162750
+     },
+     {
+      "after": 17047333,
+      "before": 10818208
+     },
+     {
+      "before": 10969125,
+      "after": 17074167
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 1048576,
+    "iterations": 850,
+    "crc32": 782993002,
+    "pairs_ns": [
+     {
+      "after": 19493500,
+      "before": 12388833
+     },
+     {
+      "before": 12629750,
+      "after": 19420500
+     },
+     {
+      "after": 19643708,
+      "before": 12553459
+     },
+     {
+      "before": 12336166,
+      "after": 19501333
+     },
+     {
+      "after": 19696167,
+      "before": 12340125
+     },
+     {
+      "before": 12422917,
+      "after": 19595834
+     },
+     {
+      "after": 19541791,
+      "before": 12287791
+     },
+     {
+      "before": 12384541,
+      "after": 19388541
+     },
+     {
+      "after": 19477375,
+      "before": 12385542
+     },
+     {
+      "before": 12460083,
+      "after": 19474833
+     },
+     {
+      "after": 19572834,
+      "before": 12515291
+     },
+     {
+      "before": 12394000,
+      "after": 19584250
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 8388608,
+    "iterations": 85,
+    "crc32": 778572939,
+    "pairs_ns": [
+     {
+      "after": 16647541,
+      "before": 10655375
+     },
+     {
+      "before": 10617208,
+      "after": 16860250
+     },
+     {
+      "after": 16721000,
+      "before": 11125625
+     },
+     {
+      "before": 11377000,
+      "after": 16841250
+     },
+     {
+      "after": 16537459,
+      "before": 10810667
+     },
+     {
+      "before": 11497250,
+      "after": 16655042
+     },
+     {
+      "after": 16223625,
+      "before": 11162125
+     },
+     {
+      "before": 10987375,
+      "after": 16528208
+     },
+     {
+      "after": 17149375,
+      "before": 10803250
+     },
+     {
+      "before": 10667584,
+      "after": 16525333
+     },
+     {
+      "after": 16520333,
+      "before": 10724834
+     },
+     {
+      "before": 11041250,
+      "after": 16266416
+     }
+    ]
+   },
+   {
+    "mode": "gzip",
+    "bytes": 8388608,
+    "iterations": 9,
+    "crc32": 778572939,
+    "pairs_ns": [
+     {
+      "after": 167128292,
+      "before": 167737083
+     },
+     {
+      "before": 168186583,
+      "after": 168199000
+     },
+     {
+      "after": 169007625,
+      "before": 168084458
+     },
+     {
+      "before": 167205917,
+      "after": 169968917
+     },
+     {
+      "after": 167860167,
+      "before": 168714917
+     },
+     {
+      "before": 168153917,
+      "after": 170573042
+     },
+     {
+      "after": 168372834,
+      "before": 168787958
+     },
+     {
+      "before": 168358459,
+      "after": 166529875
+     },
+     {
+      "after": 168530333,
+      "before": 167726000
+     },
+     {
+      "before": 167567917,
+      "after": 167295458
+     },
+     {
+      "after": 169222333,
+      "before": 166720708
+     },
+     {
+      "before": 168107792,
+      "after": 167520667
+     }
+    ]
+   }
+  ]
+ },
+ "linux": {
+  "host": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "raw_sha256": "4ca2c58bc7bc7a66bdabdbd57950c52e2da34c643efd7dcf9d2ba0bdbd608920",
+  "gzip_sha256": "6f01290d25ee4e881ed08fb290c3b961f093cb5793b387bdc049795beb221540",
+  "executables": {
+   "before": "f0c23495558e255a769b27e6cc0053aa639c1ebb4ae1c07cb0d53bc6b77230cb",
+   "after": "303c0fb13afd0590a9db42299f0520d9829d8e487adba4f12f1a95bc3a7290e9"
+  },
+  "cases": [
+   {
+    "mode": "crc",
+    "bytes": 64,
+    "iterations": 3000000,
+    "crc32": 2699194659,
+    "pairs_ns": [
+     {
+      "after": 34613520,
+      "before": 32593211
+     },
+     {
+      "before": 32422544,
+      "after": 35451680
+     },
+     {
+      "after": 35203542,
+      "before": 37508416
+     },
+     {
+      "before": 35217623,
+      "after": 36187379
+     },
+     {
+      "after": 35586409,
+      "before": 33066599
+     },
+     {
+      "before": 35950269,
+      "after": 36744268
+     },
+     {
+      "after": 35992353,
+      "before": 33495145
+     },
+     {
+      "before": 32249920,
+      "after": 34873234
+     },
+     {
+      "after": 34765076,
+      "before": 32945270
+     },
+     {
+      "before": 33427467,
+      "after": 45523046
+     },
+     {
+      "after": 42143556,
+      "before": 33489102
+     },
+     {
+      "before": 32222479,
+      "after": 35456525
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 4096,
+    "iterations": 250000,
+    "crc32": 881247467,
+    "pairs_ns": [
+     {
+      "after": 39060065,
+      "before": 40195197
+     },
+     {
+      "before": 40016327,
+      "after": 39152989
+     },
+     {
+      "after": 38983113,
+      "before": 40042619
+     },
+     {
+      "before": 40295708,
+      "after": 40342662
+     },
+     {
+      "after": 40741737,
+      "before": 39674308
+     },
+     {
+      "before": 39998400,
+      "after": 39907615
+     },
+     {
+      "after": 39170267,
+      "before": 39993627
+     },
+     {
+      "before": 39390256,
+      "after": 39446686
+     },
+     {
+      "after": 39975632,
+      "before": 40295117
+     },
+     {
+      "before": 39361820,
+      "after": 38916564
+     },
+     {
+      "after": 38784427,
+      "before": 39221173
+     },
+     {
+      "before": 39689029,
+      "after": 39280389
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 65536,
+    "iterations": 12000,
+    "crc32": 713422812,
+    "pairs_ns": [
+     {
+      "after": 28984995,
+      "before": 29530636
+     },
+     {
+      "before": 29538735,
+      "after": 29151619
+     },
+     {
+      "after": 29400341,
+      "before": 29911092
+     },
+     {
+      "before": 29981935,
+      "after": 29725420
+     },
+     {
+      "after": 28699501,
+      "before": 29384242
+     },
+     {
+      "before": 29961589,
+      "after": 28750550
+     },
+     {
+      "after": 28762239,
+      "before": 29469598
+     },
+     {
+      "before": 29962026,
+      "after": 28794087
+     },
+     {
+      "after": 28854281,
+      "before": 29873598
+     },
+     {
+      "before": 29586195,
+      "after": 28711316
+     },
+     {
+      "after": 28811255,
+      "before": 29152091
+     },
+     {
+      "before": 29803028,
+      "after": 28626481
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 1048576,
+    "iterations": 850,
+    "crc32": 782993002,
+    "pairs_ns": [
+     {
+      "after": 34470639,
+      "before": 34788909
+     },
+     {
+      "before": 34972334,
+      "after": 33802159
+     },
+     {
+      "after": 34989565,
+      "before": 34222148
+     },
+     {
+      "before": 35066743,
+      "after": 34502963
+     },
+     {
+      "after": 35383731,
+      "before": 34975543
+     },
+     {
+      "before": 34458409,
+      "after": 34842702
+     },
+     {
+      "after": 34561677,
+      "before": 34097213
+     },
+     {
+      "before": 35194694,
+      "after": 34549219
+     },
+     {
+      "after": 34360455,
+      "before": 34906398
+     },
+     {
+      "before": 34452824,
+      "after": 35263204
+     },
+     {
+      "after": 34602712,
+      "before": 34563212
+     },
+     {
+      "before": 34694394,
+      "after": 34150940
+     }
+    ]
+   },
+   {
+    "mode": "crc",
+    "bytes": 8388608,
+    "iterations": 85,
+    "crc32": 778572939,
+    "pairs_ns": [
+     {
+      "after": 41327947,
+      "before": 38305082
+     },
+     {
+      "before": 39182688,
+      "after": 37295910
+     },
+     {
+      "after": 39621338,
+      "before": 38413223
+     },
+     {
+      "before": 37238170,
+      "after": 39906311
+     },
+     {
+      "after": 39230539,
+      "before": 38234885
+     },
+     {
+      "before": 39466584,
+      "after": 37866329
+     },
+     {
+      "after": 39151427,
+      "before": 37217171
+     },
+     {
+      "before": 38957632,
+      "after": 38604477
+     },
+     {
+      "after": 37983755,
+      "before": 39408601
+     },
+     {
+      "before": 37266764,
+      "after": 39071637
+     },
+     {
+      "after": 37829065,
+      "before": 39120719
+     },
+     {
+      "before": 37626142,
+      "after": 38409286
+     }
+    ]
+   },
+   {
+    "mode": "gzip",
+    "bytes": 8388608,
+    "iterations": 9,
+    "crc32": 778572939,
+    "pairs_ns": [
+     {
+      "after": 166580794,
+      "before": 159887592
+     },
+     {
+      "before": 160225091,
+      "after": 165663802
+     },
+     {
+      "after": 169714194,
+      "before": 159580619
+     },
+     {
+      "before": 161953002,
+      "after": 165815771
+     },
+     {
+      "after": 167205697,
+      "before": 160552032
+     },
+     {
+      "before": 163650615,
+      "after": 165743685
+     },
+     {
+      "after": 167256145,
+      "before": 162372264
+     },
+     {
+      "before": 164202633,
+      "after": 165788322
+     },
+     {
+      "after": 169662476,
+      "before": 161416202
+     },
+     {
+      "before": 162215902,
+      "after": 165093476
+     },
+     {
+      "after": 165367399,
+      "before": 161417511
+     },
+     {
+      "before": 159738039,
+      "after": 164526010
+     }
+    ]
+   }
+  ]
+ }
+}

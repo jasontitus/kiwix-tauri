@@ -216,6 +216,8 @@ android-evaluation = ["dep:jni"]
 localswarm-profiling = []
 
 [patch.crates-io]
+# Keep accelerated gzip and PNG CRCs on checked byte loads.
+crc32fast = { path = "vendor/crc32fast-1.5.5" }
 # Use checked UTF-8 slices throughout the app's HTML tokenizer and its input queue.
 html5ever = { path = "vendor/html5ever-0.39.0" }
 markup5ever = { path = "vendor/markup5ever-0.39.0" }

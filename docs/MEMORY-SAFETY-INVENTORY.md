@@ -51,6 +51,8 @@ The same probe with GPL `380d84d` emitted 974 diagnostics across 15 package vers
 
 The app now opts out of Zimru's `cli` and `parallel` features. The application's normal dependency graphs drop Rayon, Rayon Core, Crossbeam Deque and Crossbeam Epoch on all nine checked targets, and drop the SIGPIPE helper on the eight Unix targets. Other app paths still use Crossbeam Utils. The standalone Mac reader produced matching bytes against libzim and took 27.03 ms and 41.18 ms for the two 24-article workloads. [Dependency changes, workload scope and review](audit/2026-11-19-zimru-reader-graph.md)
 
+The app's `crc32fast` dependency uses checked byte loads for its ARM64 and x86 hardware paths. The two release compiler checks each report a single unsafe block for entering a CPU-checked kernel. The DEFLATE buffers, Adler-32 code and the zlib-rs backend used by host-side icon code still require their own coverage. [CRC consumers, verification and measurements](audit/2026-11-19-checked-crc32.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.
