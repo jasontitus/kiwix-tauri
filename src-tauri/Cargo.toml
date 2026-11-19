@@ -206,8 +206,9 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"
-# Use AppKit's typed window borrow and workspace opening APIs.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSWindow", "NSWorkspace"] }
+# Typed AppKit window, menu, colour, and workspace APIs.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAppearance", "NSApplication", "NSColor", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebView", "objc2-app-kit"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

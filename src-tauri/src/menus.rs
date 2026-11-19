@@ -6,6 +6,10 @@ use tauri::{
     Emitter, Manager,
 };
 
+#[cfg(target_os = "macos")]
+#[path = "macos_menu_keys.rs"]
+mod macos_menu_keys;
+
 const ACTIONS: [(&str, &str, &str); 38] = [
     ("new-tab", "New tab", "CmdOrCtrl+T"),
     ("new-window", "New window", "CmdOrCtrl+Shift+N"),
@@ -114,6 +118,9 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let quit = PredefinedMenuItem::quit(app, Some("Quit"))?;
     #[cfg(not(target_os = "macos"))]
     let quit = MenuItem::with_id(app, "kiwix-quit", "Quit", true, Some("Ctrl+Q"))?;
+    #[cfg(target_os = "macos")]
+    let main_thread = objc2::MainThreadMarker::new()
+        .ok_or_else(|| std::io::Error::other("Install the application menu on the main thread"))?;
     let application = Submenu::with_id(app, "kiwix-application", "Kiwix", true)?;
     application.append(&quit)?;
     let menu = Menu::with_items(app, &[&application, &file, &edit, &tabs])?;
@@ -121,17 +128,13 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     // muda writes "Shift + lowercase letter" key equivalents, which Cocoa also
     // matches without Shift, so Cmd+Shift+R swallowed Cmd+R (and Cmd+Shift+T
     // would swallow Cmd+T). Normalise to Cocoa's uppercase-without-Shift form.
-    #[cfg(target_os = "macos")]
-    unsafe {
-        extern "C" {
-            fn kiwix_menu_normalize_shift_keys();
-        }
-        kiwix_menu_normalize_shift_keys();
-    }
     // AppKit's Window menu carries the native tab-group commands
     // (Show Previous/Next Tab, Merge All Windows, Show Tab Bar).
     #[cfg(target_os = "macos")]
     {
+        if let Some(menu) = objc2_app_kit::NSApplication::sharedApplication(main_thread).mainMenu() {
+            macos_menu_keys::normalize(&menu);
+        }
         crate::windows::install_tabbing_menu();
         let locale = app.try_state::<std::sync::Arc<crate::service::Service>>()
             .map(|service| service.store.locale())

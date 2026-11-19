@@ -74,16 +74,6 @@ fn main() {
             .flag("-fblocks")
             .compile("kiwix_pdf");
         println!("cargo:rustc-link-lib=framework=WebKit");
-        // WebKit's under-page background is the one reader colour the page
-        // cannot set: it must be right before a document exists.
-        println!("cargo:rerun-if-changed=native/webview_backdrop.mm");
-        cc::Build::new()
-            .cpp(true)
-            .std("c++17")
-            .file("native/webview_backdrop.mm")
-            .flag("-fobjc-arc")
-            .flag("-fblocks")
-            .compile("kiwix_webview_backdrop");
         if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
             // The real OS print panel is macOS-only. iOS shares the renderer
             // but has no print button upstream (the share sheet is the only
@@ -108,14 +98,6 @@ fn main() {
                 .flag("-fobjc-arc")
                 .flag("-fblocks")
                 .compile("kiwix_share");
-            println!("cargo:rerun-if-changed=native/menu_keys.mm");
-            cc::Build::new()
-                .cpp(true)
-                .std("c++17")
-                .file("native/menu_keys.mm")
-                .flag("-fobjc-arc")
-                .flag("-fblocks")
-                .compile("kiwix_menu_keys");
             println!("cargo:rerun-if-changed=native/tabbing.mm");
             cc::Build::new()
                 .cpp(true)

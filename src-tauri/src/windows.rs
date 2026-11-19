@@ -14,6 +14,10 @@ use tauri::{
 #[path = "native_tabs.rs"]
 mod native_tabs;
 
+#[cfg(target_os = "macos")]
+#[path = "webkit_backdrop.rs"]
+mod webkit_backdrop;
+
 /// How long a new shell may take to commit its first usable snapshot before
 /// the native side paints diagnostics over the pre-bundle placeholder.
 const FRONTEND_READY_DEADLINE: Duration = Duration::from_secs(10);
@@ -127,23 +131,10 @@ fn capture_native_tabs() -> Result<Vec<native_tabs::Member>, String> {
         .map_err(|e| format!("Kiwix could not read the current window groups: {e}"))
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-mod under_page {
-    extern "C" {
-        pub fn kiwix_webview_set_under_page_background(
-            webview: *mut std::ffi::c_void,
-            red: f64,
-            green: f64,
-            blue: f64,
-        );
-        pub fn kiwix_webview_appearance_is_dark(webview: *mut std::ffi::c_void) -> std::os::raw::c_int;
-    }
-}
-
 /// The shell's own paper, the colour every shell surface paints (`--paper` in
 /// src/styles.css). `system` is resolved by the webview's appearance, which is
 /// also what its `prefers-color-scheme` media query uses.
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn shell_paper(theme: &str, dark: bool) -> (u8, u8, u8) {
     match theme {
         "dark" => (0x00, 0x00, 0x00),
@@ -156,7 +147,7 @@ fn shell_paper(theme: &str, dark: bool) -> (u8, u8, u8) {
 /// The page colour `reader-bridge.js` paints for each reader theme. `original`
 /// is absent on purpose: it keeps the archive's own colours, so there is no
 /// paper to match and the shell paper stands in.
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn reader_paper(theme: &str) -> Option<(u8, u8, u8)> {
     match theme {
         "light" => Some((0xff, 0xff, 0xff)),
@@ -205,29 +196,25 @@ pub(crate) fn has_reader_surface(label: &str) -> bool {
 /// reader paper only while a reader surface is on screen, so a light shell
 /// never paints a dark first frame at launch or after leaving the reader.
 pub fn apply_under_page(window: &WebviewWindow, settings: &crate::store::Settings) {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "macos")]
     {
         let reader = has_reader_surface(window.label());
         let reader_theme = settings.reader_theme.clone();
         let shell_theme = settings.theme.clone();
         let _ = window.with_webview(move |webview| {
-            let webview = webview.inner();
-            let dark = unsafe { under_page::kiwix_webview_appearance_is_dark(webview) != 0 };
-            let (red, green, blue) = reader
+            // SAFETY: the pinned Wry dispatcher holds a retained WKWebView
+            // throughout this main-thread callback. The borrow stays here.
+            let Some(view) = (unsafe { webview.inner().cast::<objc2_web_kit::WKWebView>().as_ref() }) else {
+                return;
+            };
+            let colour = reader
                 .then(|| reader_paper(&reader_theme))
                 .flatten()
-                .unwrap_or_else(|| shell_paper(&shell_theme, dark));
-            unsafe {
-                under_page::kiwix_webview_set_under_page_background(
-                    webview,
-                    f64::from(red) / 255.0,
-                    f64::from(green) / 255.0,
-                    f64::from(blue) / 255.0,
-                );
-            }
+                .unwrap_or_else(|| shell_paper(&shell_theme, webkit_backdrop::is_dark(view)));
+            webkit_backdrop::set_colour(view, colour);
         });
     }
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(target_os = "macos"))]
     {
         // Only WebKit owns an under-page layer; the other engines paint their
         // own platform background and have no equivalent to keep in sync.
@@ -237,11 +224,11 @@ pub fn apply_under_page(window: &WebviewWindow, settings: &crate::store::Setting
 
 /// Re-apply to every window after a theme change or at startup.
 pub fn apply_under_page_all(app: &AppHandle, settings: &crate::store::Settings) {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "macos")]
     for window in app.webview_windows().values() {
         apply_under_page(window, settings);
     }
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(target_os = "macos"))]
     let _ = (app, settings);
 }
 
