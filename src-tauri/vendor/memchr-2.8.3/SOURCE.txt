@@ -1,0 +1,13 @@
+memchr 2.8.3
+Upstream: https://github.com/BurntSushi/memchr
+Upstream revision: 5fdb40c054e1fff359a2f7bdf7f87a13b34b465d
+Published crate SHA-256: cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98
+License: Unlicense OR MIT (COPYING, UNLICENSE, and LICENSE-MIT from upstream)
+
+Kiwix replaces architecture-specific dispatch, unchecked byte loads, and raw
+pointer APIs with checked portable searches. The fork retains the public
+slice-based byte and substring APIs used by the Kiwix dependency graph,
+including reusable finders, custom byte ranking, and owned variants.
+
+The logging feature remains accepted as a no-op. The portable implementation
+has a single dispatch path and does not emit the upstream strategy logs.
