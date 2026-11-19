@@ -17,6 +17,7 @@
 #include <limits>
 #include <condition_variable>
 #include <cerrno>
+#include <cstddef>
 
 using Completion = void (^)(int, size_t);
 using Accepted = void (^)(uint64_t);
@@ -381,25 +382,42 @@ static void schedule_next(SwarmConnectionHandle handle, int64_t delay) {
         if (!handle->stopping && !handle->value && handle->resolutionEpoch == epoch) resolve_next(handle);
     });
 }
+// DNS-SD owns the input until this callback returns. Copy a complete address
+// before inspecting its IP fields and pass the canonical size on to Network.
+static bool copy_resolved_address(const sockaddr *address, uint16_t port, uint32_t index,
+                                  sockaddr_storage &target) {
+    if (!address || address->sa_len < offsetof(sockaddr, sa_data)) return false;
+    if (address->sa_family == AF_INET && address->sa_len >= sizeof(sockaddr_in)) {
+        sockaddr_in value;
+        memcpy(&value, address, sizeof(value));
+        value.sin_len = sizeof(value);
+        value.sin_port = port; // DNS-SD supplies network byte order.
+        memcpy(&target, &value, sizeof(value));
+        return true;
+    }
+    if (address->sa_family == AF_INET6 && address->sa_len >= sizeof(sockaddr_in6)) {
+        sockaddr_in6 value;
+        memcpy(&value, address, sizeof(value));
+        value.sin6_len = sizeof(value);
+        value.sin6_port = port;
+        if (IN6_IS_ADDR_LINKLOCAL(&value.sin6_addr)) value.sin6_scope_id = index;
+        memcpy(&target, &value, sizeof(value));
+        return true;
+    }
+    return false;
+}
 static void resolved_address(DNSServiceRef, DNSServiceFlags flags, uint32_t index, DNSServiceErrorType error,
                              const char *, const sockaddr *address, uint32_t ttl, void *context) {
     auto handle = static_cast<Connection *>(context)->shared_from_this();
     if (handle->stopping || handle->value) return;
     if (error) { schedule_next(handle, 300 * NSEC_PER_MSEC); return; }
+    sockaddr_storage target {};
     if (!(flags & kDNSServiceFlagsAdd) || !ttl || index != nw_interface_get_index(handle->interface) ||
-        !local_address(address, handle->interface)) {
+        !copy_resolved_address(address, handle->port, index, target) ||
+        !local_address((const sockaddr *)&target, handle->interface)) {
         schedule_next(handle, 300 * NSEC_PER_MSEC);
         return;
     }
-    sockaddr_storage target {};
-    if (address->sa_family == AF_INET && address->sa_len >= sizeof(sockaddr_in)) {
-        auto value = (sockaddr_in *)&target;
-        *value = *(const sockaddr_in *)address; value->sin_port = handle->port;
-    } else if (address->sa_family == AF_INET6 && address->sa_len >= sizeof(sockaddr_in6)) {
-        auto value = (sockaddr_in6 *)&target;
-        *value = *(const sockaddr_in6 *)address; value->sin6_port = handle->port;
-        if (IN6_IS_ADDR_LINKLOCAL(&value->sin6_addr)) value->sin6_scope_id = index;
-    } else { return; }
     auto params = parameters(handle->peerToPeer);
     if (!params) { cancel_connection(handle); return; }
     nw_parameters_require_interface(params, handle->interface);

@@ -188,6 +188,48 @@ static bool concurrent_leases_and_exhaustion() {
     return ok;
 }
 
+static bool resolved_addresses_preserve_endpoint() {
+    const auto port = htons(54321);
+    const uint32_t index = 7;
+    sockaddr_storage target {};
+    sockaddr header {};
+    if (copy_resolved_address(nullptr, port, index, target)) return false;
+    for (auto family : {AF_INET, AF_INET6}) {
+        header.sa_family = family;
+        for (auto length : {0, 1, 2, int(family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)) - 1}) {
+            header.sa_len = length;
+            if (copy_resolved_address(&header, port, index, target)) return false;
+        }
+    }
+    sockaddr_in source4 {};
+    source4.sin_len = sizeof(source4);
+    source4.sin_family = AF_INET;
+    source4.sin_addr.s_addr = htonl(0xc0000201);
+    if (!copy_resolved_address((const sockaddr *)&source4, port, index, target)) return false;
+    sockaddr_in result4;
+    memcpy(&result4, &target, sizeof(result4));
+    if (result4.sin_len != sizeof(result4) || result4.sin_family != AF_INET ||
+        result4.sin_port != port || result4.sin_addr.s_addr != source4.sin_addr.s_addr) return false;
+
+    sockaddr_in6 source6 {};
+    source6.sin6_len = sizeof(source6);
+    source6.sin6_family = AF_INET6;
+    source6.sin6_scope_id = 19;
+    for (const char *host : {"fe80::23", "2001:db8::42"}) {
+        if (inet_pton(AF_INET6, host, &source6.sin6_addr) != 1) return false;
+        sockaddr_storage extended {};
+        memcpy(&extended, &source6, sizeof(source6));
+        extended.ss_len = sizeof(extended);
+        if (!copy_resolved_address((const sockaddr *)&extended, port, index, target)) return false;
+        sockaddr_in6 result6;
+        memcpy(&result6, &target, sizeof(result6));
+        if (result6.sin6_len != sizeof(result6) || result6.sin6_family != AF_INET6 ||
+            result6.sin6_port != port || memcmp(&result6.sin6_addr, &source6.sin6_addr, sizeof(in6_addr)) ||
+            result6.sin6_scope_id != (IN6_IS_ADDR_LINKLOCAL(&source6.sin6_addr) ? index : 19)) return false;
+    }
+    return true;
+}
+
 int main() {
     @autoreleasepool {
         bool passed = true;
@@ -203,6 +245,8 @@ int main() {
         std::printf("{\"finalPayloadAndRevocation\":%s}\n", read_ok ? "true" : "false");
         const bool ids_ok = retired_ids_do_not_alias() && concurrent_leases_and_exhaustion();
         std::printf("{\"typedHandleLifetimes\":%s}\n", ids_ok ? "true" : "false");
-        return passed && read_ok && ids_ok ? 0 : 1;
+        const bool addresses_ok = resolved_addresses_preserve_endpoint();
+        std::printf("{\"resolvedAddressBounds\":%s}\n", addresses_ok ? "true" : "false");
+        return passed && read_ok && ids_ok && addresses_ok ? 0 : 1;
     }
 }
