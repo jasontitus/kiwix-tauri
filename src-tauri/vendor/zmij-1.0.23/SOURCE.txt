@@ -1,0 +1,11 @@
+zmij 1.0.23
+Upstream: https://github.com/dtolnay/zmij
+Revision: 7b7cc48b58028e8af7be87e94c0c1c8936f1a57c
+Crate SHA-256: 29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b
+License: MIT. See LICENSE-MIT.
+
+Kiwix changes: keep the upstream binary-to-decimal conversion and rounding
+rules. Use checked power-table indexing, scalar digit assembly and initialized
+stack storage. Keep the compressed table selection for size-optimized builds.
+The library forbids unsafe Rust. The private fork omits the optional no-panic
+instrumentation, which is unused in the app and relay.

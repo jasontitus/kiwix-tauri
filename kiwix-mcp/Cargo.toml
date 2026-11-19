@@ -37,6 +37,7 @@ windows-sys = { version = "0.61", features = [
 [patch.crates-io]
 itoa = { path = "../src-tauri/vendor/itoa-1.0.19" }
 serde_json = { path = "../src-tauri/vendor/serde_json-1.0.154" }
+zmij = { path = "../src-tauri/vendor/zmij-1.0.23" }
 
 [profile.release]
 opt-level = "s"

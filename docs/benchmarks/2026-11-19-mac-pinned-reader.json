@@ -1,0 +1,4938 @@
+{
+ "cache_bytes": "4194304",
+ "native_xapian_preload": false,
+ "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+ "rounds": 8,
+ "driver_sha256": {
+  "libzim": "f1b33cc928034911ebbabe79953a187b729b636419338240eb4c2b75d7f11725",
+  "zimru": "eb9267484575202460899352cc5bc3e828a02e99a497a1bc7969cd0fc53885ab"
+ },
+ "archives": [
+  {
+   "file": "wikipedia_en_climate_change_mini_2024-06.zim",
+   "size": 8978471,
+   "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 8622,
+     "path": "The_Green_Grid",
+     "title": "The Green Grid"
+    },
+    {
+     "kind": "html",
+     "size": 5365,
+     "path": "Leipzig_Declaration",
+     "title": "Leipzig Declaration"
+    },
+    {
+     "kind": "html",
+     "size": 4535,
+     "path": "Drawdown_(book)",
+     "title": "Drawdown (book)"
+    },
+    {
+     "kind": "html",
+     "size": 4720,
+     "path": "Land_cover",
+     "title": "Land cover"
+    },
+    {
+     "kind": "html",
+     "size": 10190,
+     "path": "2015_United_Nations_Climate_Change_Conference",
+     "title": "2015 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 9539,
+     "path": "Öko-Institut",
+     "title": "Öko-Institut"
+    },
+    {
+     "kind": "html",
+     "size": 3778,
+     "path": "Drought_in_Chile",
+     "title": "Drought in Chile"
+    },
+    {
+     "kind": "html",
+     "size": 7447,
+     "path": "Evelyn_Acham",
+     "title": "Evelyn Acham"
+    },
+    {
+     "kind": "html",
+     "size": 7332,
+     "path": "2013_United_Nations_Climate_Change_Conference",
+     "title": "2013 United Nations Climate Change Conference"
+    },
+    {
+     "kind": "html",
+     "size": 11954,
+     "path": "Nature_Climate_Change",
+     "title": "Nature Climate Change"
+    },
+    {
+     "kind": "html",
+     "size": 6733,
+     "path": "Build_Back_Better_World",
+     "title": "Build Back Better World"
+    },
+    {
+     "kind": "html",
+     "size": 6428,
+     "path": "Renewable_energy_in_Kenya",
+     "title": "Renewable energy in Kenya"
+    },
+    {
+     "kind": "html",
+     "size": 6107,
+     "path": "Nationally_determined_contribution",
+     "title": "Nationally determined contribution"
+    },
+    {
+     "kind": "html",
+     "size": 4858,
+     "path": "Esi_Buobasa",
+     "title": "Esi Buobasa"
+    },
+    {
+     "kind": "html",
+     "size": 8826,
+     "path": "Oceanic_Platform_of_the_Canary_Islands",
+     "title": "Oceanic Platform of the Canary Islands"
+    },
+    {
+     "kind": "html",
+     "size": 4293,
+     "path": "Lower_Manhattan_Coastal_Resiliency",
+     "title": "Lower Manhattan Coastal Resiliency"
+    },
+    {
+     "kind": "html",
+     "size": 5165,
+     "path": "Dorjee_Sun",
+     "title": "Dorjee Sun"
+    },
+    {
+     "kind": "html",
+     "size": 5071,
+     "path": "Landfill_gas",
+     "title": "Landfill gas"
+    },
+    {
+     "kind": "html",
+     "size": 5003,
+     "path": "Internal_wave_breaking",
+     "title": "Internal wave breaking"
+    },
+    {
+     "kind": "html",
+     "size": 4353,
+     "path": "Energy_policy_of_Scotland",
+     "title": "Energy policy of Scotland"
+    },
+    {
+     "kind": "html",
+     "size": 14131,
+     "path": "Gina_McCarthy",
+     "title": "Gina McCarthy"
+    },
+    {
+     "kind": "html",
+     "size": 7187,
+     "path": "Greenhouse_gas_emissions_by_Russia",
+     "title": "Greenhouse gas emissions by Russia"
+    },
+    {
+     "kind": "html",
+     "size": 5801,
+     "path": "Jem_Bendell",
+     "title": "Jem Bendell"
+    },
+    {
+     "kind": "html",
+     "size": 27839,
+     "path": "2022_Brazilian_general_election",
+     "title": "2022 Brazilian general election"
+    },
+    {
+     "kind": "media",
+     "size": 8348,
+     "path": "f8aab0483f099f025d5fe7174146ee315f166b31.svg",
+     "title": "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+    },
+    {
+     "kind": "media",
+     "size": 24566,
+     "path": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp",
+     "title": "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18074,
+     "path": "Tipping_points_2022_list.jpeg.webp",
+     "title": "Tipping_points_2022_list.jpeg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 43186,
+     "path": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp",
+     "title": "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 20486,
+     "path": "Bloczek_betonowy.jpg.webp",
+     "title": "Bloczek_betonowy.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 37446,
+     "path": "Lamb_meat_(1).jpg.webp",
+     "title": "Lamb_meat_(1).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 21312,
+     "path": "District_heating_plant_spittelau_ssw_crop1.png.webp",
+     "title": "District_heating_plant_spittelau_ssw_crop1.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 10504,
+     "path": "World_map_indicating_tropics_and_subtropics.png.webp",
+     "title": "World_map_indicating_tropics_and_subtropics.png.webp"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2128375,
+        "api_open_plus_work_ns": 2128375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2128375,
+        "process_ns": 12477958,
+        "cpu_ns": 9993000,
+        "peak_rss_bytes": 3981312
+       },
+       {
+        "open_ns": 2024125,
+        "api_open_plus_work_ns": 2024125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2024125,
+        "process_ns": 11532250,
+        "cpu_ns": 9388000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 2032083,
+        "api_open_plus_work_ns": 2032083,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2032083,
+        "process_ns": 12222417,
+        "cpu_ns": 9514000,
+        "peak_rss_bytes": 3981312
+       },
+       {
+        "open_ns": 2055167,
+        "api_open_plus_work_ns": 2055167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2055167,
+        "process_ns": 11360833,
+        "cpu_ns": 9348000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 1986250,
+        "api_open_plus_work_ns": 1986250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 1986250,
+        "process_ns": 11386125,
+        "cpu_ns": 9100000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 2065875,
+        "api_open_plus_work_ns": 2065875,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2065875,
+        "process_ns": 11051583,
+        "cpu_ns": 9075000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 2007208,
+        "api_open_plus_work_ns": 2007208,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 2007208,
+        "process_ns": 11396000,
+        "cpu_ns": 9177000,
+        "peak_rss_bytes": 3981312
+       },
+       {
+        "open_ns": 1987708,
+        "api_open_plus_work_ns": 1987708,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 1987708,
+        "process_ns": 11654209,
+        "cpu_ns": 9118000,
+        "peak_rss_bytes": 3981312
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 59833,
+        "api_open_plus_work_ns": 59833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 59833,
+        "process_ns": 5234417,
+        "cpu_ns": 3247000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 55500,
+        "api_open_plus_work_ns": 55500,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 55500,
+        "process_ns": 5303500,
+        "cpu_ns": 3016000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 49333,
+        "api_open_plus_work_ns": 49333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 49333,
+        "process_ns": 5105750,
+        "cpu_ns": 2899000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 57250,
+        "api_open_plus_work_ns": 57250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 57250,
+        "process_ns": 4988958,
+        "cpu_ns": 2859000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 54166,
+        "api_open_plus_work_ns": 54166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 54166,
+        "process_ns": 5149000,
+        "cpu_ns": 3099000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 57875,
+        "api_open_plus_work_ns": 57875,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 57875,
+        "process_ns": 4916875,
+        "cpu_ns": 2915000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 51625,
+        "api_open_plus_work_ns": 51625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 51625,
+        "process_ns": 5116834,
+        "cpu_ns": 2861000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 53583,
+        "api_open_plus_work_ns": 53583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 53583,
+        "process_ns": 4972416,
+        "cpu_ns": 2912000,
+        "peak_rss_bytes": 2342912
+       }
+      ]
+     },
+     "response_sha256": "36949a688cc7ba42f310039dac3bf1f0a6b76284e40b03a68ad6999a9b207723",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1974375,
+        "api_open_plus_work_ns": 3395166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1420791,
+        "process_ns": 13685667,
+        "cpu_ns": 11077000,
+        "peak_rss_bytes": 7684096
+       },
+       {
+        "open_ns": 2249667,
+        "api_open_plus_work_ns": 3703167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1453500,
+        "process_ns": 14191584,
+        "cpu_ns": 11714000,
+        "peak_rss_bytes": 7651328
+       },
+       {
+        "open_ns": 2067166,
+        "api_open_plus_work_ns": 3506916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1439750,
+        "process_ns": 13332250,
+        "cpu_ns": 11196000,
+        "peak_rss_bytes": 7700480
+       },
+       {
+        "open_ns": 2005375,
+        "api_open_plus_work_ns": 3375833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1370458,
+        "process_ns": 13008708,
+        "cpu_ns": 10656000,
+        "peak_rss_bytes": 7651328
+       },
+       {
+        "open_ns": 2076958,
+        "api_open_plus_work_ns": 3414291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1337333,
+        "process_ns": 13308708,
+        "cpu_ns": 10832000,
+        "peak_rss_bytes": 7700480
+       },
+       {
+        "open_ns": 1969292,
+        "api_open_plus_work_ns": 3356542,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1387250,
+        "process_ns": 13193208,
+        "cpu_ns": 10663000,
+        "peak_rss_bytes": 7651328
+       },
+       {
+        "open_ns": 2139834,
+        "api_open_plus_work_ns": 3591000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1451166,
+        "process_ns": 13417125,
+        "cpu_ns": 11010000,
+        "peak_rss_bytes": 7667712
+       },
+       {
+        "open_ns": 2058333,
+        "api_open_plus_work_ns": 3488833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 1430500,
+        "process_ns": 13567541,
+        "cpu_ns": 11099000,
+        "peak_rss_bytes": 7684096
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 54083,
+        "api_open_plus_work_ns": 1528375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1474292,
+        "process_ns": 6253333,
+        "cpu_ns": 4405000,
+        "peak_rss_bytes": 6881280
+       },
+       {
+        "open_ns": 59625,
+        "api_open_plus_work_ns": 1515042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1455417,
+        "process_ns": 6512375,
+        "cpu_ns": 4520000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 58458,
+        "api_open_plus_work_ns": 1562375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1503917,
+        "process_ns": 6716292,
+        "cpu_ns": 4531000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 55667,
+        "api_open_plus_work_ns": 1581251,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1525584,
+        "process_ns": 6654000,
+        "cpu_ns": 4508000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 55125,
+        "api_open_plus_work_ns": 1546167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1491042,
+        "process_ns": 6840375,
+        "cpu_ns": 4348000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 62791,
+        "api_open_plus_work_ns": 1576416,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1513625,
+        "process_ns": 7271167,
+        "cpu_ns": 4797000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 54084,
+        "api_open_plus_work_ns": 1587126,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1533042,
+        "process_ns": 6681583,
+        "cpu_ns": 4521000,
+        "peak_rss_bytes": 6864896
+       },
+       {
+        "open_ns": 53917,
+        "api_open_plus_work_ns": 1586667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 1532750,
+        "process_ns": 6628667,
+        "cpu_ns": 4454000,
+        "peak_rss_bytes": 6848512
+       }
+      ]
+     },
+     "response_sha256": "c4d559ddc7b643fa6410154efb9cecc59135413f0ea7d7d3256a0338da5e14d1",
+     "response_bytes": 8630
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2009708,
+        "api_open_plus_work_ns": 2065083,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 55375,
+        "process_ns": 23140167,
+        "cpu_ns": 12516000,
+        "peak_rss_bytes": 7684096
+       },
+       {
+        "open_ns": 2072084,
+        "api_open_plus_work_ns": 2129250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 57166,
+        "process_ns": 33566792,
+        "cpu_ns": 12107000,
+        "peak_rss_bytes": 7700480
+       },
+       {
+        "open_ns": 2055042,
+        "api_open_plus_work_ns": 2113540,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 58498,
+        "process_ns": 17610833,
+        "cpu_ns": 12501000,
+        "peak_rss_bytes": 7667712
+       },
+       {
+        "open_ns": 2106083,
+        "api_open_plus_work_ns": 2156295,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 50212,
+        "process_ns": 18961542,
+        "cpu_ns": 12661000,
+        "peak_rss_bytes": 7700480
+       },
+       {
+        "open_ns": 2066958,
+        "api_open_plus_work_ns": 2116128,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 49170,
+        "process_ns": 18138917,
+        "cpu_ns": 12470000,
+        "peak_rss_bytes": 7700480
+       },
+       {
+        "open_ns": 1990625,
+        "api_open_plus_work_ns": 2037917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 47292,
+        "process_ns": 15605958,
+        "cpu_ns": 12069000,
+        "peak_rss_bytes": 7684096
+       },
+       {
+        "open_ns": 2033125,
+        "api_open_plus_work_ns": 2089627,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 56502,
+        "process_ns": 21952959,
+        "cpu_ns": 12201000,
+        "peak_rss_bytes": 7716864
+       },
+       {
+        "open_ns": 1998334,
+        "api_open_plus_work_ns": 2059415,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1049345,
+        "api_ns": 61081,
+        "process_ns": 29962833,
+        "cpu_ns": 12576000,
+        "peak_rss_bytes": 7700480
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 60625,
+        "api_open_plus_work_ns": 121666,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 61041,
+        "process_ns": 12506584,
+        "cpu_ns": 6581000,
+        "peak_rss_bytes": 6864896
+       },
+       {
+        "open_ns": 61333,
+        "api_open_plus_work_ns": 127163,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 65830,
+        "process_ns": 16857125,
+        "cpu_ns": 6087000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 58167,
+        "api_open_plus_work_ns": 118418,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 60251,
+        "process_ns": 11073166,
+        "cpu_ns": 6487000,
+        "peak_rss_bytes": 6864896
+       },
+       {
+        "open_ns": 58125,
+        "api_open_plus_work_ns": 161000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 102875,
+        "process_ns": 14114250,
+        "cpu_ns": 6902000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 56875,
+        "api_open_plus_work_ns": 124834,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 67959,
+        "process_ns": 10156750,
+        "cpu_ns": 6559000,
+        "peak_rss_bytes": 6881280
+       },
+       {
+        "open_ns": 57125,
+        "api_open_plus_work_ns": 122585,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 65460,
+        "process_ns": 11175833,
+        "cpu_ns": 6603000,
+        "peak_rss_bytes": 6864896
+       },
+       {
+        "open_ns": 62000,
+        "api_open_plus_work_ns": 125248,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 63248,
+        "process_ns": 17037459,
+        "cpu_ns": 6389000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 57375,
+        "api_open_plus_work_ns": 148252,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2091939,
+        "api_ns": 90877,
+        "process_ns": 24706583,
+        "cpu_ns": 6909000,
+        "peak_rss_bytes": 8273920
+       }
+      ]
+     },
+     "response_sha256": "7b339a20ff64327c0240984cf274a031a8265fd909d9313fc4091e35dbc5ea9d",
+     "response_bytes": 276160
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       8622,
+       "The_Green_Grid"
+      ],
+      [
+       0,
+       5365,
+       "Leipzig_Declaration"
+      ],
+      [
+       0,
+       4535,
+       "Drawdown_(book)"
+      ],
+      [
+       0,
+       4720,
+       "Land_cover"
+      ],
+      [
+       0,
+       10190,
+       "2015_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       9539,
+       "Öko-Institut"
+      ],
+      [
+       0,
+       3778,
+       "Drought_in_Chile"
+      ],
+      [
+       0,
+       7447,
+       "Evelyn_Acham"
+      ],
+      [
+       0,
+       7332,
+       "2013_United_Nations_Climate_Change_Conference"
+      ],
+      [
+       0,
+       11954,
+       "Nature_Climate_Change"
+      ],
+      [
+       0,
+       6733,
+       "Build_Back_Better_World"
+      ],
+      [
+       0,
+       6428,
+       "Renewable_energy_in_Kenya"
+      ],
+      [
+       0,
+       6107,
+       "Nationally_determined_contribution"
+      ],
+      [
+       0,
+       4858,
+       "Esi_Buobasa"
+      ],
+      [
+       0,
+       8826,
+       "Oceanic_Platform_of_the_Canary_Islands"
+      ],
+      [
+       0,
+       4293,
+       "Lower_Manhattan_Coastal_Resiliency"
+      ],
+      [
+       0,
+       5165,
+       "Dorjee_Sun"
+      ],
+      [
+       0,
+       5071,
+       "Landfill_gas"
+      ],
+      [
+       0,
+       5003,
+       "Internal_wave_breaking"
+      ],
+      [
+       0,
+       4353,
+       "Energy_policy_of_Scotland"
+      ],
+      [
+       0,
+       14131,
+       "Gina_McCarthy"
+      ],
+      [
+       0,
+       7187,
+       "Greenhouse_gas_emissions_by_Russia"
+      ],
+      [
+       0,
+       5801,
+       "Jem_Bendell"
+      ],
+      [
+       0,
+       27839,
+       "2022_Brazilian_general_election"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2378375,
+        "api_open_plus_work_ns": 23050541,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 20672166,
+        "process_ns": 55115417,
+        "cpu_ns": 33679000,
+        "peak_rss_bytes": 21823488
+       },
+       {
+        "open_ns": 2389958,
+        "api_open_plus_work_ns": 23330207,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 20940249,
+        "process_ns": 60596542,
+        "cpu_ns": 33652000,
+        "peak_rss_bytes": 21987328
+       },
+       {
+        "open_ns": 2019583,
+        "api_open_plus_work_ns": 19434124,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 17414541,
+        "process_ns": 31833583,
+        "cpu_ns": 28195000,
+        "peak_rss_bytes": 21725184
+       },
+       {
+        "open_ns": 2108125,
+        "api_open_plus_work_ns": 19668081,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 17559956,
+        "process_ns": 35253958,
+        "cpu_ns": 28484000,
+        "peak_rss_bytes": 21561344
+       },
+       {
+        "open_ns": 2251292,
+        "api_open_plus_work_ns": 20996875,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 18745583,
+        "process_ns": 39647250,
+        "cpu_ns": 30212000,
+        "peak_rss_bytes": 21774336
+       },
+       {
+        "open_ns": 2139167,
+        "api_open_plus_work_ns": 20215500,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 18076333,
+        "process_ns": 40216583,
+        "cpu_ns": 29325000,
+        "peak_rss_bytes": 21708800
+       },
+       {
+        "open_ns": 2029459,
+        "api_open_plus_work_ns": 20438041,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 18408582,
+        "process_ns": 35743833,
+        "cpu_ns": 30041000,
+        "peak_rss_bytes": 21839872
+       },
+       {
+        "open_ns": 1988792,
+        "api_open_plus_work_ns": 20744417,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4079192,
+        "api_ns": 18755625,
+        "process_ns": 36093500,
+        "cpu_ns": 29829000,
+        "peak_rss_bytes": 21856256
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 55208,
+        "api_open_plus_work_ns": 28303999,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28248791,
+        "process_ns": 37738291,
+        "cpu_ns": 33705000,
+        "peak_rss_bytes": 22495232
+       },
+       {
+        "open_ns": 63709,
+        "api_open_plus_work_ns": 29272332,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 29208623,
+        "process_ns": 41230625,
+        "cpu_ns": 33936000,
+        "peak_rss_bytes": 32817152
+       },
+       {
+        "open_ns": 55875,
+        "api_open_plus_work_ns": 28088291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28032416,
+        "process_ns": 43069000,
+        "cpu_ns": 32795000,
+        "peak_rss_bytes": 30965760
+       },
+       {
+        "open_ns": 61125,
+        "api_open_plus_work_ns": 29604670,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 29543545,
+        "process_ns": 47366292,
+        "cpu_ns": 34856000,
+        "peak_rss_bytes": 30818304
+       },
+       {
+        "open_ns": 55208,
+        "api_open_plus_work_ns": 28378747,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28323539,
+        "process_ns": 39077333,
+        "cpu_ns": 33285000,
+        "peak_rss_bytes": 28770304
+       },
+       {
+        "open_ns": 64916,
+        "api_open_plus_work_ns": 28560041,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28495125,
+        "process_ns": 45346083,
+        "cpu_ns": 33545000,
+        "peak_rss_bytes": 30621696
+       },
+       {
+        "open_ns": 57917,
+        "api_open_plus_work_ns": 28538916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28480999,
+        "process_ns": 41273334,
+        "cpu_ns": 34193000,
+        "peak_rss_bytes": 28917760
+       },
+       {
+        "open_ns": 56292,
+        "api_open_plus_work_ns": 28598877,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3945778,
+        "api_ns": 28542585,
+        "process_ns": 47436750,
+        "cpu_ns": 34139000,
+        "peak_rss_bytes": 30965760
+       }
+      ]
+     },
+     "response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+     "response_bytes": 185469
+    },
+    "title_prefixes": {
+     "requested": [
+      [
+       0,
+       0,
+       "The"
+      ],
+      [
+       0,
+       0,
+       "Lei"
+      ],
+      [
+       0,
+       0,
+       "Dra"
+      ],
+      [
+       0,
+       0,
+       "Lan"
+      ],
+      [
+       0,
+       0,
+       "201"
+      ],
+      [
+       0,
+       0,
+       "Öko"
+      ],
+      [
+       0,
+       0,
+       "Dro"
+      ],
+      [
+       0,
+       0,
+       "Eve"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2238334,
+        "api_open_plus_work_ns": 2363543,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 125209,
+        "process_ns": 18728958,
+        "cpu_ns": 10528000,
+        "peak_rss_bytes": 4112384
+       },
+       {
+        "open_ns": 2006292,
+        "api_open_plus_work_ns": 2120791,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 114499,
+        "process_ns": 16538167,
+        "cpu_ns": 10141000,
+        "peak_rss_bytes": 4112384
+       },
+       {
+        "open_ns": 1976541,
+        "api_open_plus_work_ns": 2090664,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 114123,
+        "process_ns": 20097041,
+        "cpu_ns": 9867000,
+        "peak_rss_bytes": 4079616
+       },
+       {
+        "open_ns": 2231250,
+        "api_open_plus_work_ns": 2355166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 123916,
+        "process_ns": 11933125,
+        "cpu_ns": 9729000,
+        "peak_rss_bytes": 4112384
+       },
+       {
+        "open_ns": 2162084,
+        "api_open_plus_work_ns": 2275958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 113874,
+        "process_ns": 11799292,
+        "cpu_ns": 9410000,
+        "peak_rss_bytes": 4177920
+       },
+       {
+        "open_ns": 2020250,
+        "api_open_plus_work_ns": 2134249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 113999,
+        "process_ns": 11667084,
+        "cpu_ns": 9371000,
+        "peak_rss_bytes": 4096000
+       },
+       {
+        "open_ns": 2134333,
+        "api_open_plus_work_ns": 2254919,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 120586,
+        "process_ns": 11922167,
+        "cpu_ns": 9427000,
+        "peak_rss_bytes": 4145152
+       },
+       {
+        "open_ns": 2006625,
+        "api_open_plus_work_ns": 2119999,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 32,
+        "api_ns": 113374,
+        "process_ns": 11904958,
+        "cpu_ns": 9634000,
+        "peak_rss_bytes": 4128768
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 61000,
+        "api_open_plus_work_ns": 237167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 176167,
+        "process_ns": 5568833,
+        "cpu_ns": 3436000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 54000,
+        "api_open_plus_work_ns": 241794,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 187794,
+        "process_ns": 20150417,
+        "cpu_ns": 3654000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 59875,
+        "api_open_plus_work_ns": 248751,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 188876,
+        "process_ns": 13149875,
+        "cpu_ns": 3993000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 57084,
+        "api_open_plus_work_ns": 239665,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 182581,
+        "process_ns": 5844209,
+        "cpu_ns": 3417000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 54292,
+        "api_open_plus_work_ns": 228793,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 174501,
+        "process_ns": 5410791,
+        "cpu_ns": 3117000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 58334,
+        "api_open_plus_work_ns": 237667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 179333,
+        "process_ns": 5290625,
+        "cpu_ns": 3049000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 58125,
+        "api_open_plus_work_ns": 243084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 184959,
+        "process_ns": 5165417,
+        "cpu_ns": 3149000,
+        "peak_rss_bytes": 2768896
+       },
+       {
+        "open_ns": 58250,
+        "api_open_plus_work_ns": 233458,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 175208,
+        "process_ns": 5204250,
+        "cpu_ns": 3109000,
+        "peak_rss_bytes": 2785280
+       }
+      ]
+     },
+     "response_sha256": "7b7f6560143fd11b0cbfa415e7d297a7b41a1514372a6d0d8dcf5c7741eca0fa",
+     "response_bytes": 1344
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4174,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       4252,
+       4096,
+       "f8aab0483f099f025d5fe7174146ee315f166b31.svg"
+      ],
+      [
+       12283,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       20470,
+       4096,
+       "Greta_Thunberg_in_Stckholm_(cropped_2).jpg.webp"
+      ],
+      [
+       9037,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       13978,
+       4096,
+       "Tipping_points_2022_list.jpeg.webp"
+      ],
+      [
+       21593,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       39090,
+       4096,
+       "Cow_(Fleckvieh_breed)_Oeschinensee_Slaunger_2009-07-07.jpg.webp"
+      ],
+      [
+       10243,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       16390,
+       4096,
+       "Bloczek_betonowy.jpg.webp"
+      ],
+      [
+       18723,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       33350,
+       4096,
+       "Lamb_meat_(1).jpg.webp"
+      ],
+      [
+       10656,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       17216,
+       4096,
+       "District_heating_plant_spittelau_ssw_crop1.png.webp"
+      ],
+      [
+       5252,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ],
+      [
+       6408,
+       4096,
+       "World_map_indicating_tropics_and_subtropics.png.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2092708,
+        "api_open_plus_work_ns": 4393417,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2300709,
+        "process_ns": 15434042,
+        "cpu_ns": 12473000,
+        "peak_rss_bytes": 8355840
+       },
+       {
+        "open_ns": 2080750,
+        "api_open_plus_work_ns": 4375460,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2294710,
+        "process_ns": 14441334,
+        "cpu_ns": 12180000,
+        "peak_rss_bytes": 8323072
+       },
+       {
+        "open_ns": 2053375,
+        "api_open_plus_work_ns": 4274250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2220875,
+        "process_ns": 14690000,
+        "cpu_ns": 12040000,
+        "peak_rss_bytes": 8355840
+       },
+       {
+        "open_ns": 2075000,
+        "api_open_plus_work_ns": 4337375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2262375,
+        "process_ns": 14560542,
+        "cpu_ns": 12127000,
+        "peak_rss_bytes": 8339456
+       },
+       {
+        "open_ns": 2033916,
+        "api_open_plus_work_ns": 4248330,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2214414,
+        "process_ns": 14212333,
+        "cpu_ns": 11882000,
+        "peak_rss_bytes": 8355840
+       },
+       {
+        "open_ns": 2019292,
+        "api_open_plus_work_ns": 4227167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2207875,
+        "process_ns": 14454292,
+        "cpu_ns": 11797000,
+        "peak_rss_bytes": 8339456
+       },
+       {
+        "open_ns": 2007083,
+        "api_open_plus_work_ns": 4147833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2140750,
+        "process_ns": 14529917,
+        "cpu_ns": 11846000,
+        "peak_rss_bytes": 8339456
+       },
+       {
+        "open_ns": 2010375,
+        "api_open_plus_work_ns": 4168208,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 962823,
+        "api_ns": 2157833,
+        "process_ns": 14350834,
+        "cpu_ns": 11752000,
+        "peak_rss_bytes": 8323072
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 64042,
+        "api_open_plus_work_ns": 2192791,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2128749,
+        "process_ns": 7846167,
+        "cpu_ns": 5460000,
+        "peak_rss_bytes": 6782976
+       },
+       {
+        "open_ns": 63375,
+        "api_open_plus_work_ns": 2172586,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2109211,
+        "process_ns": 8006042,
+        "cpu_ns": 5527000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 53750,
+        "api_open_plus_work_ns": 2132627,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2078877,
+        "process_ns": 7919209,
+        "cpu_ns": 5395000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 75584,
+        "api_open_plus_work_ns": 2181002,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2105418,
+        "process_ns": 8204834,
+        "cpu_ns": 5713000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 64459,
+        "api_open_plus_work_ns": 2187796,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2123337,
+        "process_ns": 8139875,
+        "cpu_ns": 5441000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 63584,
+        "api_open_plus_work_ns": 2125415,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2061831,
+        "process_ns": 8320500,
+        "cpu_ns": 5538000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 66125,
+        "api_open_plus_work_ns": 2155877,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2089752,
+        "process_ns": 7849917,
+        "cpu_ns": 5399000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 52833,
+        "api_open_plus_work_ns": 2151748,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1918127,
+        "api_ns": 2098915,
+        "process_ns": 7857834,
+        "cpu_ns": 5334000,
+        "peak_rss_bytes": 6782976
+       }
+      ]
+     },
+     "response_sha256": "ffcc7dbd4d6f576de78159d7ee68d3ee731559e9127d32c449b5504763a07e23",
+     "response_bytes": 65664
+    }
+   }
+  },
+  {
+   "file": "wikipedia_en_100_maxi_2024-01.zim",
+   "size": 36522122,
+   "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+   "selected": [
+    {
+     "kind": "media",
+     "size": 9196,
+     "path": "I/HK_Chater_Road_LegCo_view.jpg.webp",
+     "title": "HK_Chater_Road_LegCo_view.jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 15010,
+     "path": "I/Sheldonbasking.JPG.webp",
+     "title": "Sheldonbasking.JPG.webp"
+    },
+    {
+     "kind": "html",
+     "size": 341585,
+     "path": "A/Amazon_(company)",
+     "title": "Amazon (company)"
+    },
+    {
+     "kind": "html",
+     "size": 273079,
+     "path": "A/Solar_eclipse",
+     "title": "Solar eclipse"
+    },
+    {
+     "kind": "media",
+     "size": 15386,
+     "path": "I/Autosomal_recessive_-_mini.svg.png.webp",
+     "title": "Autosomal_recessive_-_mini.svg.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 18586,
+     "path": "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp",
+     "title": "Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9320,
+     "path": "I/Virtual-camera-system.png.webp",
+     "title": "Virtual-camera-system.png.webp"
+    },
+    {
+     "kind": "media",
+     "size": 11174,
+     "path": "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp",
+     "title": "Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 571067,
+     "path": "A/William_Shakespeare",
+     "title": "William Shakespeare"
+    },
+    {
+     "kind": "media",
+     "size": 8522,
+     "path": "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp",
+     "title": "Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 580073,
+     "path": "A/Elizabeth_II",
+     "title": "Elizabeth II"
+    },
+    {
+     "kind": "media",
+     "size": 11266,
+     "path": "I/Gills1894.jpg.webp",
+     "title": "Gills1894.jpg.webp"
+    },
+    {
+     "kind": "html",
+     "size": 204716,
+     "path": "A/List_of_presidents_of_the_United_States",
+     "title": "List of presidents of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 423983,
+     "path": "A/Tiger",
+     "title": "Tiger"
+    },
+    {
+     "kind": "html",
+     "size": 662946,
+     "path": "A/Evolution",
+     "title": "Evolution"
+    },
+    {
+     "kind": "html",
+     "size": 527339,
+     "path": "A/Aristotle",
+     "title": "Aristotle"
+    },
+    {
+     "kind": "html",
+     "size": 160033,
+     "path": "A/Anatomical_terms_of_location",
+     "title": "Anatomical terms of location"
+    },
+    {
+     "kind": "html",
+     "size": 152636,
+     "path": "A/Midfielder",
+     "title": "Midfielder"
+    },
+    {
+     "kind": "html",
+     "size": 822971,
+     "path": "A/Native_Americans_in_the_United_States",
+     "title": "Native Americans in the United States"
+    },
+    {
+     "kind": "html",
+     "size": 115653,
+     "path": "A/World_Heritage_Site",
+     "title": "World Heritage Site"
+    },
+    {
+     "kind": "html",
+     "size": 281698,
+     "path": "A/List_of_national_parks_of_the_United_States",
+     "title": "List of national parks of the United States"
+    },
+    {
+     "kind": "html",
+     "size": 245866,
+     "path": "A/Anfield",
+     "title": "Anfield"
+    },
+    {
+     "kind": "html",
+     "size": 661825,
+     "path": "A/African_Americans",
+     "title": "African Americans"
+    },
+    {
+     "kind": "html",
+     "size": 423071,
+     "path": "A/Virus",
+     "title": "Virus"
+    },
+    {
+     "kind": "html",
+     "size": 476260,
+     "path": "A/Bat",
+     "title": "Bat"
+    },
+    {
+     "kind": "html",
+     "size": 357162,
+     "path": "A/Rodent",
+     "title": "Rodent"
+    },
+    {
+     "kind": "html",
+     "size": 856565,
+     "path": "A/YouTube",
+     "title": "YouTube"
+    },
+    {
+     "kind": "html",
+     "size": 805848,
+     "path": "A/Martin_Luther_King_Jr.",
+     "title": "Martin Luther King Jr."
+    },
+    {
+     "kind": "html",
+     "size": 462181,
+     "path": "A/Dublin",
+     "title": "Dublin"
+    },
+    {
+     "kind": "html",
+     "size": 614430,
+     "path": "A/Elvis_Presley",
+     "title": "Elvis Presley"
+    },
+    {
+     "kind": "html",
+     "size": 317012,
+     "path": "A/Plant",
+     "title": "Plant"
+    },
+    {
+     "kind": "html",
+     "size": 326611,
+     "path": "A/Carl_Linnaeus",
+     "title": "Carl Linnaeus"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2239416,
+        "api_open_plus_work_ns": 2239416,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2239416,
+        "process_ns": 11639917,
+        "cpu_ns": 9615000,
+        "peak_rss_bytes": 4046848
+       },
+       {
+        "open_ns": 2304625,
+        "api_open_plus_work_ns": 2304625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2304625,
+        "process_ns": 11983916,
+        "cpu_ns": 9785000,
+        "peak_rss_bytes": 4014080
+       },
+       {
+        "open_ns": 2243166,
+        "api_open_plus_work_ns": 2243166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2243166,
+        "process_ns": 12189917,
+        "cpu_ns": 9841000,
+        "peak_rss_bytes": 4063232
+       },
+       {
+        "open_ns": 2248625,
+        "api_open_plus_work_ns": 2248625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2248625,
+        "process_ns": 11854750,
+        "cpu_ns": 9891000,
+        "peak_rss_bytes": 4063232
+       },
+       {
+        "open_ns": 2279958,
+        "api_open_plus_work_ns": 2279958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2279958,
+        "process_ns": 12017375,
+        "cpu_ns": 9857000,
+        "peak_rss_bytes": 4046848
+       },
+       {
+        "open_ns": 2294667,
+        "api_open_plus_work_ns": 2294667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2294667,
+        "process_ns": 12142833,
+        "cpu_ns": 9917000,
+        "peak_rss_bytes": 4046848
+       },
+       {
+        "open_ns": 2270083,
+        "api_open_plus_work_ns": 2270083,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2270083,
+        "process_ns": 12128416,
+        "cpu_ns": 9921000,
+        "peak_rss_bytes": 4046848
+       },
+       {
+        "open_ns": 2241166,
+        "api_open_plus_work_ns": 2241166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 2241166,
+        "process_ns": 12236208,
+        "cpu_ns": 9775000,
+        "peak_rss_bytes": 4046848
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 51042,
+        "api_open_plus_work_ns": 51042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 51042,
+        "process_ns": 5054167,
+        "cpu_ns": 2929000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 62958,
+        "api_open_plus_work_ns": 62958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 62958,
+        "process_ns": 5360125,
+        "cpu_ns": 3205000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 65667,
+        "api_open_plus_work_ns": 65667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 65667,
+        "process_ns": 5349958,
+        "cpu_ns": 3053000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 58209,
+        "api_open_plus_work_ns": 58209,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 58209,
+        "process_ns": 5451000,
+        "cpu_ns": 3067000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 53917,
+        "api_open_plus_work_ns": 53917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 53917,
+        "process_ns": 5131333,
+        "cpu_ns": 3010000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 64125,
+        "api_open_plus_work_ns": 64125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 64125,
+        "process_ns": 5487625,
+        "cpu_ns": 3173000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 54083,
+        "api_open_plus_work_ns": 54083,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 54083,
+        "process_ns": 5153000,
+        "cpu_ns": 3117000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 59708,
+        "api_open_plus_work_ns": 59708,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 59708,
+        "process_ns": 5214250,
+        "cpu_ns": 3030000,
+        "peak_rss_bytes": 2342912
+       }
+      ]
+     },
+     "response_sha256": "1cedf2a54ce349c8cde927ffe5a9311e9060556bc4afde27cc9366f71c1aecd6",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2269583,
+        "api_open_plus_work_ns": 3446916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1177333,
+        "process_ns": 13545834,
+        "cpu_ns": 11113000,
+        "peak_rss_bytes": 5914624
+       },
+       {
+        "open_ns": 2225708,
+        "api_open_plus_work_ns": 3326542,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1100834,
+        "process_ns": 13071208,
+        "cpu_ns": 10868000,
+        "peak_rss_bytes": 5898240
+       },
+       {
+        "open_ns": 2256833,
+        "api_open_plus_work_ns": 3404000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1147167,
+        "process_ns": 13512250,
+        "cpu_ns": 11078000,
+        "peak_rss_bytes": 5881856
+       },
+       {
+        "open_ns": 2220333,
+        "api_open_plus_work_ns": 3332708,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1112375,
+        "process_ns": 13161750,
+        "cpu_ns": 10883000,
+        "peak_rss_bytes": 5881856
+       },
+       {
+        "open_ns": 2268041,
+        "api_open_plus_work_ns": 3375666,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1107625,
+        "process_ns": 13605750,
+        "cpu_ns": 11119000,
+        "peak_rss_bytes": 5931008
+       },
+       {
+        "open_ns": 2265250,
+        "api_open_plus_work_ns": 3402250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1137000,
+        "process_ns": 13662584,
+        "cpu_ns": 11040000,
+        "peak_rss_bytes": 5865472
+       },
+       {
+        "open_ns": 2380167,
+        "api_open_plus_work_ns": 3547417,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1167250,
+        "process_ns": 13466708,
+        "cpu_ns": 11138000,
+        "peak_rss_bytes": 5914624
+       },
+       {
+        "open_ns": 2265750,
+        "api_open_plus_work_ns": 3505417,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 1239667,
+        "process_ns": 13447625,
+        "cpu_ns": 11250000,
+        "peak_rss_bytes": 5931008
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 51292,
+        "api_open_plus_work_ns": 2444542,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2393250,
+        "process_ns": 7810167,
+        "cpu_ns": 5534000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 53500,
+        "api_open_plus_work_ns": 2467041,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2413541,
+        "process_ns": 7748833,
+        "cpu_ns": 5588000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 54708,
+        "api_open_plus_work_ns": 2425208,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2370500,
+        "process_ns": 7470083,
+        "cpu_ns": 5473000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 57625,
+        "api_open_plus_work_ns": 2413333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2355708,
+        "process_ns": 7556292,
+        "cpu_ns": 5527000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 51458,
+        "api_open_plus_work_ns": 2471125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2419667,
+        "process_ns": 7867791,
+        "cpu_ns": 5468000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 61208,
+        "api_open_plus_work_ns": 2511167,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2449959,
+        "process_ns": 8134084,
+        "cpu_ns": 5692000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 57250,
+        "api_open_plus_work_ns": 2456916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2399666,
+        "process_ns": 7643750,
+        "cpu_ns": 5553000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 62917,
+        "api_open_plus_work_ns": 2395125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 2332208,
+        "process_ns": 7687000,
+        "cpu_ns": 5473000,
+        "peak_rss_bytes": 6832128
+       }
+      ]
+     },
+     "response_sha256": "1e7b748c5c9bbf68f732946b053ed4bd28d3bbfdb151b0b7a3781f9f29da1a33",
+     "response_bytes": 65544
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2337292,
+        "api_open_plus_work_ns": 2428874,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 91582,
+        "process_ns": 16340917,
+        "cpu_ns": 13115000,
+        "peak_rss_bytes": 5881856
+       },
+       {
+        "open_ns": 2259125,
+        "api_open_plus_work_ns": 2355250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 96125,
+        "process_ns": 15901041,
+        "cpu_ns": 12904000,
+        "peak_rss_bytes": 5898240
+       },
+       {
+        "open_ns": 2266875,
+        "api_open_plus_work_ns": 2358584,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 91709,
+        "process_ns": 17506917,
+        "cpu_ns": 13309000,
+        "peak_rss_bytes": 5898240
+       },
+       {
+        "open_ns": 2308333,
+        "api_open_plus_work_ns": 2400664,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 92331,
+        "process_ns": 16467917,
+        "cpu_ns": 13293000,
+        "peak_rss_bytes": 5914624
+       },
+       {
+        "open_ns": 2427375,
+        "api_open_plus_work_ns": 2525955,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 98580,
+        "process_ns": 16677166,
+        "cpu_ns": 13453000,
+        "peak_rss_bytes": 5980160
+       },
+       {
+        "open_ns": 2225875,
+        "api_open_plus_work_ns": 2345541,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 119666,
+        "process_ns": 16087458,
+        "cpu_ns": 13027000,
+        "peak_rss_bytes": 5931008
+       },
+       {
+        "open_ns": 2239541,
+        "api_open_plus_work_ns": 2359248,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 119707,
+        "process_ns": 20891000,
+        "cpu_ns": 13833000,
+        "peak_rss_bytes": 5914624
+       },
+       {
+        "open_ns": 2282542,
+        "api_open_plus_work_ns": 2372460,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 987036,
+        "api_ns": 89918,
+        "process_ns": 18986000,
+        "cpu_ns": 13237000,
+        "peak_rss_bytes": 5865472
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 64750,
+        "api_open_plus_work_ns": 158251,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 93501,
+        "process_ns": 10054125,
+        "cpu_ns": 7048000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 53875,
+        "api_open_plus_work_ns": 174048,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 120173,
+        "process_ns": 25169167,
+        "cpu_ns": 7776000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 63167,
+        "api_open_plus_work_ns": 159958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 96791,
+        "process_ns": 11304625,
+        "cpu_ns": 7393000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 62291,
+        "api_open_plus_work_ns": 167085,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 104794,
+        "process_ns": 9925875,
+        "cpu_ns": 7316000,
+        "peak_rss_bytes": 6832128
+       },
+       {
+        "open_ns": 68208,
+        "api_open_plus_work_ns": 288707,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 220499,
+        "process_ns": 11546250,
+        "cpu_ns": 8344000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 64875,
+        "api_open_plus_work_ns": 165833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 100958,
+        "process_ns": 10828833,
+        "cpu_ns": 7346000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 64500,
+        "api_open_plus_work_ns": 190248,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 125748,
+        "process_ns": 10500334,
+        "cpu_ns": 7534000,
+        "peak_rss_bytes": 8830976
+       },
+       {
+        "open_ns": 56709,
+        "api_open_plus_work_ns": 163959,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1971912,
+        "api_ns": 107250,
+        "process_ns": 9498042,
+        "cpu_ns": 7138000,
+        "peak_rss_bytes": 6832128
+       }
+      ]
+     },
+     "response_sha256": "93862d1a24696b4b15f39cde3dd42f5da09f27fcf4f77079ec064c8a3cafb4f8",
+     "response_bytes": 2097408
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       65536,
+       "A/Amazon_(company)"
+      ],
+      [
+       0,
+       65536,
+       "A/Solar_eclipse"
+      ],
+      [
+       0,
+       65536,
+       "A/William_Shakespeare"
+      ],
+      [
+       0,
+       65536,
+       "A/Elizabeth_II"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_presidents_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Tiger"
+      ],
+      [
+       0,
+       65536,
+       "A/Evolution"
+      ],
+      [
+       0,
+       65536,
+       "A/Aristotle"
+      ],
+      [
+       0,
+       65536,
+       "A/Anatomical_terms_of_location"
+      ],
+      [
+       0,
+       65536,
+       "A/Midfielder"
+      ],
+      [
+       0,
+       65536,
+       "A/Native_Americans_in_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/World_Heritage_Site"
+      ],
+      [
+       0,
+       65536,
+       "A/List_of_national_parks_of_the_United_States"
+      ],
+      [
+       0,
+       65536,
+       "A/Anfield"
+      ],
+      [
+       0,
+       65536,
+       "A/African_Americans"
+      ],
+      [
+       0,
+       65536,
+       "A/Virus"
+      ],
+      [
+       0,
+       65536,
+       "A/Bat"
+      ],
+      [
+       0,
+       65536,
+       "A/Rodent"
+      ],
+      [
+       0,
+       65536,
+       "A/YouTube"
+      ],
+      [
+       0,
+       65536,
+       "A/Martin_Luther_King_Jr."
+      ],
+      [
+       0,
+       65536,
+       "A/Dublin"
+      ],
+      [
+       0,
+       65536,
+       "A/Elvis_Presley"
+      ],
+      [
+       0,
+       65536,
+       "A/Plant"
+      ],
+      [
+       0,
+       65536,
+       "A/Carl_Linnaeus"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2291334,
+        "api_open_plus_work_ns": 35793709,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33502375,
+        "process_ns": 47579458,
+        "cpu_ns": 44754000,
+        "peak_rss_bytes": 21921792
+       },
+       {
+        "open_ns": 2265291,
+        "api_open_plus_work_ns": 35894249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33628958,
+        "process_ns": 48085250,
+        "cpu_ns": 45095000,
+        "peak_rss_bytes": 25444352
+       },
+       {
+        "open_ns": 2245917,
+        "api_open_plus_work_ns": 34926916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 32680999,
+        "process_ns": 46439458,
+        "cpu_ns": 43821000,
+        "peak_rss_bytes": 21938176
+       },
+       {
+        "open_ns": 2284500,
+        "api_open_plus_work_ns": 36120958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33836458,
+        "process_ns": 51183584,
+        "cpu_ns": 45317000,
+        "peak_rss_bytes": 21938176
+       },
+       {
+        "open_ns": 2265458,
+        "api_open_plus_work_ns": 36650752,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 34385294,
+        "process_ns": 77380250,
+        "cpu_ns": 46361000,
+        "peak_rss_bytes": 21938176
+       },
+       {
+        "open_ns": 2315625,
+        "api_open_plus_work_ns": 35967456,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33651831,
+        "process_ns": 50976250,
+        "cpu_ns": 45379000,
+        "peak_rss_bytes": 23330816
+       },
+       {
+        "open_ns": 2315917,
+        "api_open_plus_work_ns": 35967247,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33651330,
+        "process_ns": 48313916,
+        "cpu_ns": 45424000,
+        "peak_rss_bytes": 26951680
+       },
+       {
+        "open_ns": 2282167,
+        "api_open_plus_work_ns": 35693249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3503066,
+        "api_ns": 33411082,
+        "process_ns": 47781417,
+        "cpu_ns": 44895000,
+        "peak_rss_bytes": 21938176
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 58166,
+        "api_open_plus_work_ns": 43701041,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43642875,
+        "process_ns": 50809959,
+        "cpu_ns": 48472000,
+        "peak_rss_bytes": 13828096
+       },
+       {
+        "open_ns": 61958,
+        "api_open_plus_work_ns": 43908581,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43846623,
+        "process_ns": 51397625,
+        "cpu_ns": 48711000,
+        "peak_rss_bytes": 13893632
+       },
+       {
+        "open_ns": 73625,
+        "api_open_plus_work_ns": 43932000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43858375,
+        "process_ns": 51015500,
+        "cpu_ns": 48580000,
+        "peak_rss_bytes": 13778944
+       },
+       {
+        "open_ns": 55500,
+        "api_open_plus_work_ns": 43397754,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43342254,
+        "process_ns": 50787416,
+        "cpu_ns": 47983000,
+        "peak_rss_bytes": 13828096
+       },
+       {
+        "open_ns": 63625,
+        "api_open_plus_work_ns": 43719036,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43655411,
+        "process_ns": 52084916,
+        "cpu_ns": 48959000,
+        "peak_rss_bytes": 13811712
+       },
+       {
+        "open_ns": 59041,
+        "api_open_plus_work_ns": 43596499,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43537458,
+        "process_ns": 51458000,
+        "cpu_ns": 49024000,
+        "peak_rss_bytes": 13828096
+       },
+       {
+        "open_ns": 54917,
+        "api_open_plus_work_ns": 43854626,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43799709,
+        "process_ns": 50894250,
+        "cpu_ns": 48471000,
+        "peak_rss_bytes": 13844480
+       },
+       {
+        "open_ns": 66625,
+        "api_open_plus_work_ns": 43244084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 3647554,
+        "api_ns": 43177459,
+        "process_ns": 50531708,
+        "cpu_ns": 48058000,
+        "peak_rss_bytes": 13893632
+       }
+      ]
+     },
+     "response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+     "response_bytes": 1573056
+    },
+    "title_prefixes": {
+     "requested": [
+      [
+       0,
+       0,
+       "Ama"
+      ],
+      [
+       0,
+       0,
+       "Sol"
+      ],
+      [
+       0,
+       0,
+       "Wil"
+      ],
+      [
+       0,
+       0,
+       "Eli"
+      ],
+      [
+       0,
+       0,
+       "Lis"
+      ],
+      [
+       0,
+       0,
+       "Tig"
+      ],
+      [
+       0,
+       0,
+       "Evo"
+      ],
+      [
+       0,
+       0,
+       "Ari"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2249458,
+        "api_open_plus_work_ns": 2414749,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 165291,
+        "process_ns": 12534708,
+        "cpu_ns": 10010000,
+        "peak_rss_bytes": 4194304
+       },
+       {
+        "open_ns": 2264833,
+        "api_open_plus_work_ns": 2427458,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 162625,
+        "process_ns": 12656708,
+        "cpu_ns": 10070000,
+        "peak_rss_bytes": 4210688
+       },
+       {
+        "open_ns": 2277167,
+        "api_open_plus_work_ns": 2440625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 163458,
+        "process_ns": 12381250,
+        "cpu_ns": 9918000,
+        "peak_rss_bytes": 4161536
+       },
+       {
+        "open_ns": 2277958,
+        "api_open_plus_work_ns": 2442500,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 164542,
+        "process_ns": 12524333,
+        "cpu_ns": 10127000,
+        "peak_rss_bytes": 4177920
+       },
+       {
+        "open_ns": 2246375,
+        "api_open_plus_work_ns": 2410625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 164250,
+        "process_ns": 12039958,
+        "cpu_ns": 9800000,
+        "peak_rss_bytes": 4227072
+       },
+       {
+        "open_ns": 2244333,
+        "api_open_plus_work_ns": 2407958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 163625,
+        "process_ns": 12308417,
+        "cpu_ns": 9939000,
+        "peak_rss_bytes": 4210688
+       },
+       {
+        "open_ns": 2272541,
+        "api_open_plus_work_ns": 2436122,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 163581,
+        "process_ns": 12046042,
+        "cpu_ns": 9933000,
+        "peak_rss_bytes": 4210688
+       },
+       {
+        "open_ns": 2298959,
+        "api_open_plus_work_ns": 2463500,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 164541,
+        "process_ns": 12487208,
+        "cpu_ns": 10140000,
+        "peak_rss_bytes": 4210688
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 55209,
+        "api_open_plus_work_ns": 194919,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 139710,
+        "process_ns": 5430708,
+        "cpu_ns": 3136000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 52958,
+        "api_open_plus_work_ns": 199247,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 146289,
+        "process_ns": 5134750,
+        "cpu_ns": 3127000,
+        "peak_rss_bytes": 2670592
+       },
+       {
+        "open_ns": 58625,
+        "api_open_plus_work_ns": 198623,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 139998,
+        "process_ns": 5805125,
+        "cpu_ns": 3265000,
+        "peak_rss_bytes": 2686976
+       },
+       {
+        "open_ns": 56666,
+        "api_open_plus_work_ns": 207166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 150500,
+        "process_ns": 5668792,
+        "cpu_ns": 3200000,
+        "peak_rss_bytes": 2686976
+       },
+       {
+        "open_ns": 56708,
+        "api_open_plus_work_ns": 201333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 144625,
+        "process_ns": 5218667,
+        "cpu_ns": 3134000,
+        "peak_rss_bytes": 2670592
+       },
+       {
+        "open_ns": 54041,
+        "api_open_plus_work_ns": 201876,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 147835,
+        "process_ns": 5764542,
+        "cpu_ns": 3253000,
+        "peak_rss_bytes": 2686976
+       },
+       {
+        "open_ns": 65208,
+        "api_open_plus_work_ns": 207666,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 142458,
+        "process_ns": 5698792,
+        "cpu_ns": 3248000,
+        "peak_rss_bytes": 2686976
+       },
+       {
+        "open_ns": 58417,
+        "api_open_plus_work_ns": 206460,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 148043,
+        "process_ns": 5533583,
+        "cpu_ns": 3181000,
+        "peak_rss_bytes": 2686976
+       }
+      ]
+     },
+     "response_sha256": "fc206633143ad6a13a64398ef40f9048ea96e3cf0eadb87df2e68c7327bcc116",
+     "response_bytes": 1668
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4598,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       5100,
+       4096,
+       "I/HK_Chater_Road_LegCo_view.jpg.webp"
+      ],
+      [
+       7505,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       10914,
+       4096,
+       "I/Sheldonbasking.JPG.webp"
+      ],
+      [
+       7693,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       11290,
+       4096,
+       "I/Autosomal_recessive_-_mini.svg.png.webp"
+      ],
+      [
+       9293,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       14490,
+       4096,
+       "I/Queen_Elizabeth_II_-_1974_Royal_Tour_of_NZ_-_Oamaru_with_Mayor_Bill_Laney_(4).jpg.webp"
+      ],
+      [
+       4660,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5224,
+       4096,
+       "I/Virtual-camera-system.png.webp"
+      ],
+      [
+       5587,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       7078,
+       4096,
+       "I/Image_Floor_Mosaic_of_City_Hall_of_Dublin.jpg.webp"
+      ],
+      [
+       4261,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       4426,
+       4096,
+       "I/Fossil_Wasp_(_Iberomaimetsha_).jpg.webp"
+      ],
+      [
+       5633,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ],
+      [
+       7170,
+       4096,
+       "I/Gills1894.jpg.webp"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 2243833,
+        "api_open_plus_work_ns": 2451668,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 207835,
+        "process_ns": 12694250,
+        "cpu_ns": 10736000,
+        "peak_rss_bytes": 4358144
+       },
+       {
+        "open_ns": 2281292,
+        "api_open_plus_work_ns": 2497375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 216083,
+        "process_ns": 12744292,
+        "cpu_ns": 10709000,
+        "peak_rss_bytes": 4358144
+       },
+       {
+        "open_ns": 2249125,
+        "api_open_plus_work_ns": 2452458,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 203333,
+        "process_ns": 12629833,
+        "cpu_ns": 10756000,
+        "peak_rss_bytes": 4276224
+       },
+       {
+        "open_ns": 2264667,
+        "api_open_plus_work_ns": 2465668,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 201001,
+        "process_ns": 12608042,
+        "cpu_ns": 10195000,
+        "peak_rss_bytes": 4259840
+       },
+       {
+        "open_ns": 2270167,
+        "api_open_plus_work_ns": 2480418,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 210251,
+        "process_ns": 13003542,
+        "cpu_ns": 10851000,
+        "peak_rss_bytes": 4390912
+       },
+       {
+        "open_ns": 2279250,
+        "api_open_plus_work_ns": 2484209,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 204959,
+        "process_ns": 12617708,
+        "cpu_ns": 10704000,
+        "peak_rss_bytes": 4358144
+       },
+       {
+        "open_ns": 2254459,
+        "api_open_plus_work_ns": 2474294,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 219835,
+        "process_ns": 12977917,
+        "cpu_ns": 10756000,
+        "peak_rss_bytes": 4325376
+       },
+       {
+        "open_ns": 2283875,
+        "api_open_plus_work_ns": 2494041,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 19888,
+        "api_ns": 210166,
+        "process_ns": 12862542,
+        "cpu_ns": 10758000,
+        "peak_rss_bytes": 4390912
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 68041,
+        "api_open_plus_work_ns": 187459,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 119418,
+        "process_ns": 5632208,
+        "cpu_ns": 3426000,
+        "peak_rss_bytes": 2588672
+       },
+       {
+        "open_ns": 61208,
+        "api_open_plus_work_ns": 184248,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 123040,
+        "process_ns": 5949333,
+        "cpu_ns": 3606000,
+        "peak_rss_bytes": 2572288
+       },
+       {
+        "open_ns": 60542,
+        "api_open_plus_work_ns": 181833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 121291,
+        "process_ns": 5485500,
+        "cpu_ns": 3388000,
+        "peak_rss_bytes": 2572288
+       },
+       {
+        "open_ns": 55417,
+        "api_open_plus_work_ns": 176045,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 120628,
+        "process_ns": 5727000,
+        "cpu_ns": 3385000,
+        "peak_rss_bytes": 2588672
+       },
+       {
+        "open_ns": 57125,
+        "api_open_plus_work_ns": 191289,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 134164,
+        "process_ns": 5708750,
+        "cpu_ns": 3489000,
+        "peak_rss_bytes": 2572288
+       },
+       {
+        "open_ns": 64333,
+        "api_open_plus_work_ns": 185501,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 121168,
+        "process_ns": 5526708,
+        "cpu_ns": 3406000,
+        "peak_rss_bytes": 2588672
+       },
+       {
+        "open_ns": 52542,
+        "api_open_plus_work_ns": 169165,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 116623,
+        "process_ns": 5684125,
+        "cpu_ns": 3412000,
+        "peak_rss_bytes": 2572288
+       },
+       {
+        "open_ns": 66291,
+        "api_open_plus_work_ns": 184917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 118626,
+        "process_ns": 5953459,
+        "cpu_ns": 3503000,
+        "peak_rss_bytes": 2572288
+       }
+      ]
+     },
+     "response_sha256": "52e06e75dd125cd7f3a55317a973047baf9225ea9c38cd983ae8f15080e84a88",
+     "response_bytes": 65664
+    }
+   }
+  },
+  {
+   "file": "wikipedia_zh_chemistry_mini.zim",
+   "size": 15304454,
+   "sha256": "47849c47e10929b55c954a15691191fa1d5ce07570d787e93d9a1d4cfba3933b",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 13513,
+     "path": "PH计",
+     "title": "PH计"
+    },
+    {
+     "kind": "html",
+     "size": 10454,
+     "path": "帕瑟里尼反应",
+     "title": "帕瑟里尼反应"
+    },
+    {
+     "kind": "html",
+     "size": 11932,
+     "path": "孕烯",
+     "title": "孕烯"
+    },
+    {
+     "kind": "html",
+     "size": 17296,
+     "path": "旋光",
+     "title": "旋光"
+    },
+    {
+     "kind": "media",
+     "size": 8381,
+     "path": "_assets_/eb734a37dd21ce173a46342d1cc64c92/65edaeb6bbaea75b6d06325664cb94b18912d8c4.svg",
+     "title": "null"
+    },
+    {
+     "kind": "html",
+     "size": 19561,
+     "path": "美国化学学会应用材料与界面",
+     "title": "美国化学学会应用材料与界面"
+    },
+    {
+     "kind": "html",
+     "size": 11173,
+     "path": "微观结构",
+     "title": "微观结构"
+    },
+    {
+     "kind": "html",
+     "size": 77602,
+     "path": "钙",
+     "title": "钙"
+    },
+    {
+     "kind": "html",
+     "size": 8643,
+     "path": "反应力场",
+     "title": "反应力场"
+    },
+    {
+     "kind": "html",
+     "size": 69789,
+     "path": "镝",
+     "title": "镝"
+    },
+    {
+     "kind": "html",
+     "size": 14288,
+     "path": "斯德哥爾摩公約",
+     "title": "斯德哥爾摩公約"
+    },
+    {
+     "kind": "html",
+     "size": 12968,
+     "path": "加成物",
+     "title": "加成物"
+    },
+    {
+     "kind": "html",
+     "size": 21934,
+     "path": "维蒂希反应",
+     "title": "维蒂希反应"
+    },
+    {
+     "kind": "html",
+     "size": 13204,
+     "path": "协同催化",
+     "title": "协同催化"
+    },
+    {
+     "kind": "html",
+     "size": 17778,
+     "path": "色谱法",
+     "title": "色谱法"
+    },
+    {
+     "kind": "html",
+     "size": 8851,
+     "path": "洛布雷·德·布律-埃肯施泰因转变",
+     "title": "洛布雷·德·布律-埃肯施泰因转变"
+    },
+    {
+     "kind": "html",
+     "size": 23503,
+     "path": "原子轨道线性组合",
+     "title": "原子轨道线性组合"
+    },
+    {
+     "kind": "html",
+     "size": 8709,
+     "path": "亲电取代反应",
+     "title": "亲电取代反应"
+    },
+    {
+     "kind": "html",
+     "size": 12258,
+     "path": "Benkeser反应",
+     "title": "Benkeser反应"
+    },
+    {
+     "kind": "html",
+     "size": 9520,
+     "path": "布赫雷尔咔唑合成",
+     "title": "布赫雷尔咔唑合成"
+    },
+    {
+     "kind": "html",
+     "size": 9318,
+     "path": "罗丹明",
+     "title": "罗丹明"
+    },
+    {
+     "kind": "html",
+     "size": 9128,
+     "path": "稀有元素",
+     "title": "稀有元素"
+    },
+    {
+     "kind": "html",
+     "size": 13768,
+     "path": "矮壮素",
+     "title": "矮壮素"
+    },
+    {
+     "kind": "html",
+     "size": 23677,
+     "path": "镍氢电池",
+     "title": "镍氢电池"
+    },
+    {
+     "kind": "html",
+     "size": 8879,
+     "path": "克莱反应",
+     "title": "克莱反应"
+    },
+    {
+     "kind": "media",
+     "size": 27130,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Polycrystalline-germanium.jpg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 23232,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Silver_crystal.jpg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 15126,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Fluessiger_Stickstoff.jpg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 9656,
+     "path": "_assets_/eb734a37dd21ce173a46342d1cc64c92/e6cbf4f0a03b1e84cf5ae2522459261d2c62495d.svg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 12966,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Iridium_(77_Ir)_(cropped).jpg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 21612,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Calcium_unter_Argon_Schutzgasatmosphäre.jpg",
+     "title": "null"
+    },
+    {
+     "kind": "media",
+     "size": 23152,
+     "path": "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Nickel_chunk.jpg",
+     "title": "null"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1907375,
+        "api_open_plus_work_ns": 1907375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1907375,
+        "process_ns": 11814375,
+        "cpu_ns": 9419000,
+        "peak_rss_bytes": 3833856
+       },
+       {
+        "open_ns": 1904625,
+        "api_open_plus_work_ns": 1904625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1904625,
+        "process_ns": 11713375,
+        "cpu_ns": 9259000,
+        "peak_rss_bytes": 3817472
+       },
+       {
+        "open_ns": 1895208,
+        "api_open_plus_work_ns": 1895208,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1895208,
+        "process_ns": 11860125,
+        "cpu_ns": 9413000,
+        "peak_rss_bytes": 3850240
+       },
+       {
+        "open_ns": 1928542,
+        "api_open_plus_work_ns": 1928542,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1928542,
+        "process_ns": 12161000,
+        "cpu_ns": 9691000,
+        "peak_rss_bytes": 3866624
+       },
+       {
+        "open_ns": 1909917,
+        "api_open_plus_work_ns": 1909917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1909917,
+        "process_ns": 11953209,
+        "cpu_ns": 9395000,
+        "peak_rss_bytes": 3850240
+       },
+       {
+        "open_ns": 1910166,
+        "api_open_plus_work_ns": 1910166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1910166,
+        "process_ns": 11659958,
+        "cpu_ns": 9425000,
+        "peak_rss_bytes": 3850240
+       },
+       {
+        "open_ns": 1912917,
+        "api_open_plus_work_ns": 1912917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1912917,
+        "process_ns": 11444208,
+        "cpu_ns": 9318000,
+        "peak_rss_bytes": 3833856
+       },
+       {
+        "open_ns": 1903583,
+        "api_open_plus_work_ns": 1903583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 1903583,
+        "process_ns": 11992750,
+        "cpu_ns": 9495000,
+        "peak_rss_bytes": 3833856
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 56291,
+        "api_open_plus_work_ns": 56291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 56291,
+        "process_ns": 5285875,
+        "cpu_ns": 2957000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 61917,
+        "api_open_plus_work_ns": 61917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 61917,
+        "process_ns": 5409792,
+        "cpu_ns": 3135000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 66875,
+        "api_open_plus_work_ns": 66875,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 66875,
+        "process_ns": 5373542,
+        "cpu_ns": 3033000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 60666,
+        "api_open_plus_work_ns": 60666,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 60666,
+        "process_ns": 5477292,
+        "cpu_ns": 3271000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 58583,
+        "api_open_plus_work_ns": 58583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 58583,
+        "process_ns": 5234250,
+        "cpu_ns": 3004000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 63125,
+        "api_open_plus_work_ns": 63125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 63125,
+        "process_ns": 5107625,
+        "cpu_ns": 3040000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 62000,
+        "api_open_plus_work_ns": 62000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 62000,
+        "process_ns": 5252209,
+        "cpu_ns": 3181000,
+        "peak_rss_bytes": 2342912
+       },
+       {
+        "open_ns": 59917,
+        "api_open_plus_work_ns": 59917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 59917,
+        "process_ns": 5346791,
+        "cpu_ns": 3064000,
+        "peak_rss_bytes": 2342912
+       }
+      ]
+     },
+     "response_sha256": "903f32491a138fa4e802edd2e7ff307ebf41727f9eb7499fe3f04a27ed67df76",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       13513,
+       "PH计"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1933125,
+        "api_open_plus_work_ns": 3303958,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1370833,
+        "process_ns": 13590083,
+        "cpu_ns": 11035000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1913875,
+        "api_open_plus_work_ns": 3297000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1383125,
+        "process_ns": 13285959,
+        "cpu_ns": 10995000,
+        "peak_rss_bytes": 7847936
+       },
+       {
+        "open_ns": 1905166,
+        "api_open_plus_work_ns": 3267291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1362125,
+        "process_ns": 13453875,
+        "cpu_ns": 11004000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1897833,
+        "api_open_plus_work_ns": 3278708,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1380875,
+        "process_ns": 13296292,
+        "cpu_ns": 10975000,
+        "peak_rss_bytes": 7864320
+       },
+       {
+        "open_ns": 1948041,
+        "api_open_plus_work_ns": 3307749,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1359708,
+        "process_ns": 13517750,
+        "cpu_ns": 10981000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1904292,
+        "api_open_plus_work_ns": 3312667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1408375,
+        "process_ns": 13348625,
+        "cpu_ns": 10982000,
+        "peak_rss_bytes": 7847936
+       },
+       {
+        "open_ns": 1932208,
+        "api_open_plus_work_ns": 3335249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1403041,
+        "process_ns": 13448250,
+        "cpu_ns": 10945000,
+        "peak_rss_bytes": 7897088
+       },
+       {
+        "open_ns": 1923334,
+        "api_open_plus_work_ns": 3306376,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 1383042,
+        "process_ns": 13459167,
+        "cpu_ns": 11125000,
+        "peak_rss_bytes": 7880704
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 65959,
+        "api_open_plus_work_ns": 1619959,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1554000,
+        "process_ns": 7106791,
+        "cpu_ns": 4663000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 72125,
+        "api_open_plus_work_ns": 1625541,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1553416,
+        "process_ns": 7099334,
+        "cpu_ns": 4707000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 58375,
+        "api_open_plus_work_ns": 1593042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1534667,
+        "process_ns": 6592375,
+        "cpu_ns": 4495000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 56875,
+        "api_open_plus_work_ns": 1595250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1538375,
+        "process_ns": 6879167,
+        "cpu_ns": 4647000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 58625,
+        "api_open_plus_work_ns": 1574833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1516208,
+        "process_ns": 7219750,
+        "cpu_ns": 4723000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 56042,
+        "api_open_plus_work_ns": 1585375,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1529333,
+        "process_ns": 7100375,
+        "cpu_ns": 4699000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 63625,
+        "api_open_plus_work_ns": 1600833,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1537208,
+        "process_ns": 7060458,
+        "cpu_ns": 4761000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 61416,
+        "api_open_plus_work_ns": 1588583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 1527167,
+        "process_ns": 6823916,
+        "cpu_ns": 4703000,
+        "peak_rss_bytes": 6864896
+       }
+      ]
+     },
+     "response_sha256": "3f690f659a829cb6ccafc503ce2e9366d57ce79515297bb80374efbb8bebf720",
+     "response_bytes": 13521
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       13513,
+       "PH计"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1892417,
+        "api_open_plus_work_ns": 1930625,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 38208,
+        "process_ns": 14777583,
+        "cpu_ns": 12243000,
+        "peak_rss_bytes": 7897088
+       },
+       {
+        "open_ns": 1993500,
+        "api_open_plus_work_ns": 2042870,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 49370,
+        "process_ns": 14833667,
+        "cpu_ns": 12316000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1920666,
+        "api_open_plus_work_ns": 1996084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 75418,
+        "process_ns": 22012125,
+        "cpu_ns": 13459000,
+        "peak_rss_bytes": 7929856
+       },
+       {
+        "open_ns": 1887334,
+        "api_open_plus_work_ns": 1944166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 56832,
+        "process_ns": 17264041,
+        "cpu_ns": 12737000,
+        "peak_rss_bytes": 7864320
+       },
+       {
+        "open_ns": 1810625,
+        "api_open_plus_work_ns": 1853667,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 43042,
+        "process_ns": 14099625,
+        "cpu_ns": 11506000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1827417,
+        "api_open_plus_work_ns": 1874209,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 46792,
+        "process_ns": 14045834,
+        "cpu_ns": 11753000,
+        "peak_rss_bytes": 7880704
+       },
+       {
+        "open_ns": 1916583,
+        "api_open_plus_work_ns": 1960455,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 43872,
+        "process_ns": 14205666,
+        "cpu_ns": 11615000,
+        "peak_rss_bytes": 7897088
+       },
+       {
+        "open_ns": 1854291,
+        "api_open_plus_work_ns": 1895459,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 1048685,
+        "api_ns": 41168,
+        "process_ns": 14426750,
+        "cpu_ns": 11804000,
+        "peak_rss_bytes": 7913472
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 62792,
+        "api_open_plus_work_ns": 121000,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 58208,
+        "process_ns": 358586667,
+        "cpu_ns": 66822000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 65125,
+        "api_open_plus_work_ns": 111711,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 46586,
+        "process_ns": 7591416,
+        "cpu_ns": 5295000,
+        "peak_rss_bytes": 6864896
+       },
+       {
+        "open_ns": 96292,
+        "api_open_plus_work_ns": 144995,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 48703,
+        "process_ns": 7853542,
+        "cpu_ns": 5393000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 65958,
+        "api_open_plus_work_ns": 110745,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 44787,
+        "process_ns": 7853208,
+        "cpu_ns": 5385000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 54917,
+        "api_open_plus_work_ns": 100877,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 45960,
+        "process_ns": 7081375,
+        "cpu_ns": 4927000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 60208,
+        "api_open_plus_work_ns": 104792,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 44584,
+        "process_ns": 7578333,
+        "cpu_ns": 5034000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 62625,
+        "api_open_plus_work_ns": 107078,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 44453,
+        "process_ns": 7417333,
+        "cpu_ns": 5078000,
+        "peak_rss_bytes": 6848512
+       },
+       {
+        "open_ns": 63208,
+        "api_open_plus_work_ns": 108416,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2093403,
+        "api_ns": 45208,
+        "process_ns": 7326250,
+        "cpu_ns": 5045000,
+        "peak_rss_bytes": 6848512
+       }
+      ]
+     },
+     "response_sha256": "1f4538a723f808278a9782806bad019fcefcde9e75c362127cec00702b8c1f11",
+     "response_bytes": 432672
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       13513,
+       "PH计"
+      ],
+      [
+       0,
+       10454,
+       "帕瑟里尼反应"
+      ],
+      [
+       0,
+       11932,
+       "孕烯"
+      ],
+      [
+       0,
+       17296,
+       "旋光"
+      ],
+      [
+       0,
+       19561,
+       "美国化学学会应用材料与界面"
+      ],
+      [
+       0,
+       11173,
+       "微观结构"
+      ],
+      [
+       0,
+       65536,
+       "钙"
+      ],
+      [
+       0,
+       8643,
+       "反应力场"
+      ],
+      [
+       0,
+       65536,
+       "镝"
+      ],
+      [
+       0,
+       14288,
+       "斯德哥爾摩公約"
+      ],
+      [
+       0,
+       12968,
+       "加成物"
+      ],
+      [
+       0,
+       21934,
+       "维蒂希反应"
+      ],
+      [
+       0,
+       13204,
+       "协同催化"
+      ],
+      [
+       0,
+       17778,
+       "色谱法"
+      ],
+      [
+       0,
+       8851,
+       "洛布雷·德·布律-埃肯施泰因转变"
+      ],
+      [
+       0,
+       23503,
+       "原子轨道线性组合"
+      ],
+      [
+       0,
+       8709,
+       "亲电取代反应"
+      ],
+      [
+       0,
+       12258,
+       "Benkeser反应"
+      ],
+      [
+       0,
+       9520,
+       "布赫雷尔咔唑合成"
+      ],
+      [
+       0,
+       9318,
+       "罗丹明"
+      ],
+      [
+       0,
+       9128,
+       "稀有元素"
+      ],
+      [
+       0,
+       13768,
+       "矮壮素"
+      ],
+      [
+       0,
+       23677,
+       "镍氢电池"
+      ],
+      [
+       0,
+       8879,
+       "克莱反应"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1833042,
+        "api_open_plus_work_ns": 17640543,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15807501,
+        "process_ns": 28433167,
+        "cpu_ns": 26060000,
+        "peak_rss_bytes": 20348928
+       },
+       {
+        "open_ns": 1819917,
+        "api_open_plus_work_ns": 17603459,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15783542,
+        "process_ns": 28317916,
+        "cpu_ns": 26007000,
+        "peak_rss_bytes": 20365312
+       },
+       {
+        "open_ns": 1826291,
+        "api_open_plus_work_ns": 17795125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15968834,
+        "process_ns": 28612750,
+        "cpu_ns": 26187000,
+        "peak_rss_bytes": 20365312
+       },
+       {
+        "open_ns": 1811417,
+        "api_open_plus_work_ns": 17674334,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15862917,
+        "process_ns": 28308208,
+        "cpu_ns": 25870000,
+        "peak_rss_bytes": 20398080
+       },
+       {
+        "open_ns": 1857750,
+        "api_open_plus_work_ns": 17742790,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15885040,
+        "process_ns": 28916333,
+        "cpu_ns": 26050000,
+        "peak_rss_bytes": 20398080
+       },
+       {
+        "open_ns": 1849333,
+        "api_open_plus_work_ns": 17717084,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15867751,
+        "process_ns": 28340583,
+        "cpu_ns": 25930000,
+        "peak_rss_bytes": 20348928
+       },
+       {
+        "open_ns": 1814167,
+        "api_open_plus_work_ns": 17419874,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 15605707,
+        "process_ns": 28446416,
+        "cpu_ns": 25739000,
+        "peak_rss_bytes": 20365312
+       },
+       {
+        "open_ns": 1804875,
+        "api_open_plus_work_ns": 18129582,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4183888,
+        "api_ns": 16324707,
+        "process_ns": 29174875,
+        "cpu_ns": 26539000,
+        "peak_rss_bytes": 20398080
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 61625,
+        "api_open_plus_work_ns": 27705127,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27643502,
+        "process_ns": 34286541,
+        "cpu_ns": 31810000,
+        "peak_rss_bytes": 21774336
+       },
+       {
+        "open_ns": 57042,
+        "api_open_plus_work_ns": 27668296,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27611254,
+        "process_ns": 34301000,
+        "cpu_ns": 31795000,
+        "peak_rss_bytes": 21741568
+       },
+       {
+        "open_ns": 57416,
+        "api_open_plus_work_ns": 27653125,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27595709,
+        "process_ns": 34164458,
+        "cpu_ns": 31701000,
+        "peak_rss_bytes": 21774336
+       },
+       {
+        "open_ns": 59625,
+        "api_open_plus_work_ns": 27666583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27606958,
+        "process_ns": 34535708,
+        "cpu_ns": 31675000,
+        "peak_rss_bytes": 21872640
+       },
+       {
+        "open_ns": 62042,
+        "api_open_plus_work_ns": 27823002,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27760960,
+        "process_ns": 34041667,
+        "cpu_ns": 31723000,
+        "peak_rss_bytes": 21774336
+       },
+       {
+        "open_ns": 56959,
+        "api_open_plus_work_ns": 27902166,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27845207,
+        "process_ns": 34635916,
+        "cpu_ns": 31847000,
+        "peak_rss_bytes": 21872640
+       },
+       {
+        "open_ns": 61000,
+        "api_open_plus_work_ns": 27901209,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27840209,
+        "process_ns": 34158750,
+        "cpu_ns": 31849000,
+        "peak_rss_bytes": 21725184
+       },
+       {
+        "open_ns": 59583,
+        "api_open_plus_work_ns": 27871208,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4180223,
+        "api_ns": 27811625,
+        "process_ns": 34151250,
+        "cpu_ns": 31749000,
+        "peak_rss_bytes": 21741568
+       }
+      ]
+     },
+     "response_sha256": "cf0fa514f0ee17ec8b50a27236a4edc9876cb6ac6878dcfb68cb1b2dfa4d29a4",
+     "response_bytes": 431619
+    },
+    "title_prefixes": {
+     "requested": [
+      [
+       0,
+       0,
+       "PH计"
+      ],
+      [
+       0,
+       0,
+       "帕瑟里"
+      ],
+      [
+       0,
+       0,
+       "孕烯"
+      ],
+      [
+       0,
+       0,
+       "旋光"
+      ],
+      [
+       0,
+       0,
+       "美国化"
+      ],
+      [
+       0,
+       0,
+       "微观结"
+      ],
+      [
+       0,
+       0,
+       "钙"
+      ],
+      [
+       0,
+       0,
+       "反应力"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1834542,
+        "api_open_plus_work_ns": 1944584,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 110042,
+        "process_ns": 11491125,
+        "cpu_ns": 9228000,
+        "peak_rss_bytes": 4014080
+       },
+       {
+        "open_ns": 1813334,
+        "api_open_plus_work_ns": 1918792,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 105458,
+        "process_ns": 11470875,
+        "cpu_ns": 9069000,
+        "peak_rss_bytes": 4014080
+       },
+       {
+        "open_ns": 1829750,
+        "api_open_plus_work_ns": 1934502,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 104752,
+        "process_ns": 11572584,
+        "cpu_ns": 9225000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 1816417,
+        "api_open_plus_work_ns": 1934292,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 117875,
+        "process_ns": 11849750,
+        "cpu_ns": 9318000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 1827000,
+        "api_open_plus_work_ns": 1932291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 105291,
+        "process_ns": 11510583,
+        "cpu_ns": 9180000,
+        "peak_rss_bytes": 4014080
+       },
+       {
+        "open_ns": 1804333,
+        "api_open_plus_work_ns": 1910165,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 105832,
+        "process_ns": 11290750,
+        "cpu_ns": 9034000,
+        "peak_rss_bytes": 3997696
+       },
+       {
+        "open_ns": 1853375,
+        "api_open_plus_work_ns": 1966290,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 112915,
+        "process_ns": 11584166,
+        "cpu_ns": 9289000,
+        "peak_rss_bytes": 3964928
+       },
+       {
+        "open_ns": 1838000,
+        "api_open_plus_work_ns": 1943501,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 16,
+        "api_ns": 105501,
+        "process_ns": 11532167,
+        "cpu_ns": 9139000,
+        "peak_rss_bytes": 3948544
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 58500,
+        "api_open_plus_work_ns": 185418,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 126918,
+        "process_ns": 4920291,
+        "cpu_ns": 2953000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 58625,
+        "api_open_plus_work_ns": 186042,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 127417,
+        "process_ns": 5154667,
+        "cpu_ns": 2995000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 58083,
+        "api_open_plus_work_ns": 178249,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 120166,
+        "process_ns": 5348042,
+        "cpu_ns": 2970000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 63375,
+        "api_open_plus_work_ns": 188707,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 125332,
+        "process_ns": 5468750,
+        "cpu_ns": 3198000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 59250,
+        "api_open_plus_work_ns": 179333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 120083,
+        "process_ns": 5133125,
+        "cpu_ns": 3058000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 54708,
+        "api_open_plus_work_ns": 176333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 121625,
+        "process_ns": 5080417,
+        "cpu_ns": 3027000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 54541,
+        "api_open_plus_work_ns": 190457,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 135916,
+        "process_ns": 5583625,
+        "cpu_ns": 3175000,
+        "peak_rss_bytes": 2654208
+       },
+       {
+        "open_ns": 53708,
+        "api_open_plus_work_ns": 172043,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 0,
+        "api_ns": 118335,
+        "process_ns": 5046875,
+        "cpu_ns": 3047000,
+        "peak_rss_bytes": 2637824
+       }
+      ]
+     },
+     "response_sha256": "8ec569b4d57bcb13f76f65bd8a6485758de66958951938d900f5af6d9cf8e7d9",
+     "response_bytes": 736
+    },
+    "media_ranges": {
+     "requested": [
+      [
+       4190,
+       4096,
+       "_assets_/eb734a37dd21ce173a46342d1cc64c92/65edaeb6bbaea75b6d06325664cb94b18912d8c4.svg"
+      ],
+      [
+       4285,
+       4096,
+       "_assets_/eb734a37dd21ce173a46342d1cc64c92/65edaeb6bbaea75b6d06325664cb94b18912d8c4.svg"
+      ],
+      [
+       13565,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Polycrystalline-germanium.jpg"
+      ],
+      [
+       23034,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Polycrystalline-germanium.jpg"
+      ],
+      [
+       11616,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Silver_crystal.jpg"
+      ],
+      [
+       19136,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Silver_crystal.jpg"
+      ],
+      [
+       7563,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Fluessiger_Stickstoff.jpg"
+      ],
+      [
+       11030,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Fluessiger_Stickstoff.jpg"
+      ],
+      [
+       4828,
+       4096,
+       "_assets_/eb734a37dd21ce173a46342d1cc64c92/e6cbf4f0a03b1e84cf5ae2522459261d2c62495d.svg"
+      ],
+      [
+       5560,
+       4096,
+       "_assets_/eb734a37dd21ce173a46342d1cc64c92/e6cbf4f0a03b1e84cf5ae2522459261d2c62495d.svg"
+      ],
+      [
+       6483,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Iridium_(77_Ir)_(cropped).jpg"
+      ],
+      [
+       8870,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Iridium_(77_Ir)_(cropped).jpg"
+      ],
+      [
+       10806,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Calcium_unter_Argon_Schutzgasatmosphäre.jpg"
+      ],
+      [
+       17516,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Calcium_unter_Argon_Schutzgasatmosphäre.jpg"
+      ],
+      [
+       11576,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Nickel_chunk.jpg"
+      ],
+      [
+       19056,
+       4096,
+       "_assets_/d1f33b1cb42dc60ec0e42c6954875701/Nickel_chunk.jpg"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1814666,
+        "api_open_plus_work_ns": 4222917,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2408251,
+        "process_ns": 14678334,
+        "cpu_ns": 12131000,
+        "peak_rss_bytes": 7897088
+       },
+       {
+        "open_ns": 1824125,
+        "api_open_plus_work_ns": 4165248,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2341123,
+        "process_ns": 14355833,
+        "cpu_ns": 11915000,
+        "peak_rss_bytes": 7864320
+       },
+       {
+        "open_ns": 1831209,
+        "api_open_plus_work_ns": 4236040,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2404831,
+        "process_ns": 14457500,
+        "cpu_ns": 12026000,
+        "peak_rss_bytes": 7946240
+       },
+       {
+        "open_ns": 1836209,
+        "api_open_plus_work_ns": 4218793,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2382584,
+        "process_ns": 14419792,
+        "cpu_ns": 12100000,
+        "peak_rss_bytes": 7897088
+       },
+       {
+        "open_ns": 1868208,
+        "api_open_plus_work_ns": 4289333,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2421125,
+        "process_ns": 14585792,
+        "cpu_ns": 12226000,
+        "peak_rss_bytes": 7946240
+       },
+       {
+        "open_ns": 1822708,
+        "api_open_plus_work_ns": 4199874,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2377166,
+        "process_ns": 14535833,
+        "cpu_ns": 12118000,
+        "peak_rss_bytes": 7864320
+       },
+       {
+        "open_ns": 1882792,
+        "api_open_plus_work_ns": 4345250,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2462458,
+        "process_ns": 14626792,
+        "cpu_ns": 11966000,
+        "peak_rss_bytes": 7864320
+       },
+       {
+        "open_ns": 1956500,
+        "api_open_plus_work_ns": 4554583,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 2040733,
+        "api_ns": 2598083,
+        "process_ns": 15077834,
+        "cpu_ns": 12729000,
+        "peak_rss_bytes": 7946240
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 57792,
+        "api_open_plus_work_ns": 3386501,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3328709,
+        "process_ns": 9244000,
+        "cpu_ns": 6603000,
+        "peak_rss_bytes": 11124736
+       },
+       {
+        "open_ns": 60125,
+        "api_open_plus_work_ns": 3352168,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3292043,
+        "process_ns": 8955667,
+        "cpu_ns": 6762000,
+        "peak_rss_bytes": 11124736
+       },
+       {
+        "open_ns": 57083,
+        "api_open_plus_work_ns": 3352916,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3295833,
+        "process_ns": 8943166,
+        "cpu_ns": 6623000,
+        "peak_rss_bytes": 11124736
+       },
+       {
+        "open_ns": 63292,
+        "api_open_plus_work_ns": 3443085,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3379793,
+        "process_ns": 9494542,
+        "cpu_ns": 6875000,
+        "peak_rss_bytes": 11108352
+       },
+       {
+        "open_ns": 62500,
+        "api_open_plus_work_ns": 3486707,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3424207,
+        "process_ns": 9488834,
+        "cpu_ns": 6858000,
+        "peak_rss_bytes": 11108352
+       },
+       {
+        "open_ns": 61875,
+        "api_open_plus_work_ns": 3359251,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3297376,
+        "process_ns": 10068000,
+        "cpu_ns": 6642000,
+        "peak_rss_bytes": 11124736
+       },
+       {
+        "open_ns": 57125,
+        "api_open_plus_work_ns": 3429332,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3372207,
+        "process_ns": 9093250,
+        "cpu_ns": 6625000,
+        "peak_rss_bytes": 11108352
+       },
+       {
+        "open_ns": 62917,
+        "api_open_plus_work_ns": 3443291,
+        "cache_budget_bytes": 4194304,
+        "cache_retained_bytes": 4062412,
+        "api_ns": 3380374,
+        "process_ns": 9175334,
+        "cpu_ns": 6853000,
+        "peak_rss_bytes": 11124736
+       }
+      ]
+     },
+     "response_sha256": "4fa5155065c7139bcf01d829eeadb7d7693d2fcf373234e9ee65882acbf4e77b",
+     "response_bytes": 65664
+    }
+   }
+  }
+ ]
+}
