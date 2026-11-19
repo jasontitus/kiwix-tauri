@@ -3,6 +3,9 @@
 #import <Foundation/Foundation.h>
 #import <Network/Network.h>
 #include <dns_sd.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 #include <algorithm>
 #include <cstdio>
 #include <vector>
@@ -47,10 +50,62 @@ static DNSServiceErrorType lookup_address(DNSServiceRef *out, DNSServiceFlags fl
     *out = test_ref();
     return kDNSServiceErr_NoError;
 }
+// A two-interface path for the synchronous selected_path check. Only this
+// thread substitutes the path, its interface identities and its address list.
+struct RouteFixture {
+    nw_path_t path = (nw_path_t)[NSObject new];
+    nw_interface_t bound = (nw_interface_t)[NSObject new];
+    nw_interface_t other = (nw_interface_t)[NSObject new];
+    nw_endpoint_t peer;
+    nw_endpoint_t local;
+    ifaddrs records[2] {};
+    unsigned liveBoundIndex = 7;
+    bool reverse = false;
+};
+static thread_local RouteFixture *routeFixture;
+static const char *test_interface_name(nw_interface_t interface) {
+    if (routeFixture && interface == routeFixture->bound) return "test-a";
+    if (routeFixture && interface == routeFixture->other) return "test-b";
+    return nw_interface_get_name(interface);
+}
+static unsigned test_name_to_index(const char *name) {
+    if (routeFixture && !strcmp(name, "test-a")) return routeFixture->liveBoundIndex;
+    if (routeFixture && !strcmp(name, "test-b")) return 8;
+    return if_nametoindex(name);
+}
+static void test_enumerate(nw_path_t path, nw_path_enumerate_interfaces_block_t visit) {
+    if (!routeFixture || path != routeFixture->path) {
+        nw_path_enumerate_interfaces(path, visit);
+        return;
+    }
+    if (visit(routeFixture->reverse ? routeFixture->other : routeFixture->bound)) {
+        visit(routeFixture->reverse ? routeFixture->bound : routeFixture->other);
+    }
+}
+static int test_getifaddrs(ifaddrs **out) {
+    if (!routeFixture) return getifaddrs(out);
+    *out = routeFixture->records;
+    return 0;
+}
+static void test_freeifaddrs(ifaddrs *records) {
+    if (!routeFixture || records != routeFixture->records) freeifaddrs(records);
+}
 static uint32_t test_interface_index(nw_interface_t interface) {
+    if (routeFixture && interface == routeFixture->bound) return 7;
+    if (routeFixture && interface == routeFixture->other) return 8;
     return interface ? nw_interface_get_index(interface) : 7;
 }
 
+#define nw_path_get_status(p) ((routeFixture && (p) == routeFixture->path) ? nw_path_status_satisfied : nw_path_get_status(p))
+#define nw_path_uses_interface_type(p, t) ((routeFixture && (p) == routeFixture->path) ? false : nw_path_uses_interface_type(p, t))
+#define nw_path_copy_effective_local_endpoint(p) ((routeFixture && (p) == routeFixture->path) ? routeFixture->local : nw_path_copy_effective_local_endpoint(p))
+#define nw_path_copy_effective_remote_endpoint(p) ((routeFixture && (p) == routeFixture->path) ? routeFixture->peer : nw_path_copy_effective_remote_endpoint(p))
+#define nw_interface_get_type(i) ((routeFixture && ((i) == routeFixture->bound || (i) == routeFixture->other)) ? nw_interface_type_wifi : nw_interface_get_type(i))
+#define nw_path_enumerate_interfaces test_enumerate
+#define nw_interface_get_name test_interface_name
+#define if_nametoindex test_name_to_index
+#define getifaddrs test_getifaddrs
+#define freeifaddrs test_freeifaddrs
 #define DNSServiceSetDispatchQueue assign_queue
 #define DNSServiceRefDeallocate release_ref
 #define DNSServiceGetAddrInfo lookup_address
@@ -61,6 +116,16 @@ static uint32_t test_interface_index(nw_interface_t interface) {
 #define LOCALSWARM_BRIDGE_SOURCE "localswarm.mm"
 #endif
 #include LOCALSWARM_BRIDGE_SOURCE
+#undef nw_path_get_status
+#undef nw_path_uses_interface_type
+#undef nw_path_copy_effective_local_endpoint
+#undef nw_path_copy_effective_remote_endpoint
+#undef nw_interface_get_type
+#undef nw_path_enumerate_interfaces
+#undef nw_interface_get_name
+#undef if_nametoindex
+#undef getifaddrs
+#undef freeifaddrs
 #undef DNSServiceSetDispatchQueue
 #undef DNSServiceRefDeallocate
 #undef DNSServiceGetAddrInfo
@@ -225,6 +290,113 @@ static bool concurrent_leases_and_exhaustion() {
     return ok;
 }
 
+static bool selected_route_stays_on_bound_subnet() {
+    RouteFixture fixture;
+    sockaddr_in ips[4] {};
+    const char *values[] = {"192.0.2.1", "198.51.100.1", "255.255.255.0", "198.51.100.2"};
+    for (unsigned i = 0; i < 4; ++i) {
+        ips[i].sin_len = sizeof(sockaddr_in);
+        ips[i].sin_family = AF_INET;
+        if (inet_pton(AF_INET, values[i], &ips[i].sin_addr) != 1) return false;
+    }
+    fixture.peer = nw_endpoint_create_address((sockaddr *)&ips[3]);
+    if (!fixture.peer) return false;
+    char names[][7] = {"test-a", "test-b"};
+    for (unsigned i = 0; i < 2; ++i) {
+        auto &record = fixture.records[i];
+        record.ifa_name = names[i];
+        record.ifa_flags = IFF_UP;
+        record.ifa_addr = (sockaddr *)&ips[i];
+        record.ifa_netmask = (sockaddr *)&ips[2];
+    }
+    fixture.records[0].ifa_next = &fixture.records[1];
+    routeFixture = &fixture;
+    auto handle = std::make_shared<Connection>(nil);
+    bool ok = true;
+    for (bool reverse : {false, true}) {
+        fixture.reverse = reverse;
+        // An inbound path may use B. An outbound path bound to A may
+        // never claim B's subnet, even before Rust requests an index.
+        handle->interface = nil;
+        handle->requiredIndex = 0;
+        ok &= selected_path(handle, fixture.path);
+        handle->interface = fixture.bound;
+        ok &= !selected_path(handle, fixture.path);
+        handle->requiredIndex = 7;
+        ok &= !selected_path(handle, fixture.path);
+        fixture.records[0].ifa_addr = (sockaddr *)&ips[1];
+        ok &= selected_path(handle, fixture.path);
+        fixture.liveBoundIndex = 9;
+        ok &= !selected_path(handle, fixture.path);
+        fixture.liveBoundIndex = 7;
+        handle->requiredIndex = 8;
+        ok &= !selected_path(handle, fixture.path);
+        handle->interface = nil;
+        ok &= !selected_path(handle, fixture.path);
+        fixture.records[0].ifa_addr = (sockaddr *)&ips[0];
+    }
+    routeFixture = nullptr;
+    return ok;
+}
+
+static bool route_receipt_uses_effective_endpoints() {
+    RouteFixture fixture;
+    sockaddr_in ips[4] {};
+    const char *values[] = {"192.0.2.1", "192.0.2.19", "255.255.255.0", "192.0.2.42"};
+    for (unsigned i = 0; i < 4; ++i) {
+        ips[i].sin_len = sizeof(sockaddr_in);
+        ips[i].sin_family = AF_INET;
+        if (inet_pton(AF_INET, values[i], &ips[i].sin_addr) != 1) return false;
+    }
+    char name[] = "test-a";
+    for (unsigned i = 0; i < 2; ++i) {
+        auto &record = fixture.records[i];
+        record.ifa_name = name;
+        record.ifa_flags = IFF_UP;
+        record.ifa_addr = (sockaddr *)&ips[i];
+        record.ifa_netmask = (sockaddr *)&ips[2];
+    }
+    fixture.records[0].ifa_next = &fixture.records[1];
+    fixture.peer = nw_endpoint_create_address((sockaddr *)&ips[3]);
+    fixture.local = nw_endpoint_create_address((sockaddr *)&ips[1]);
+    routeFixture = &fixture;
+    const auto receipt = [&] { return route_text(fixture.path, fixture.bound, 7); };
+    bool ok = receipt() == "test-a (infrastructure) 192.0.2.19 -> 192.0.2.42";
+    // Put the alias on another interface with the same reachable subnet.
+    // Unbound inbound routes must select B; an explicit binding to A fails.
+    char otherName[] = "test-b";
+    fixture.records[1].ifa_name = otherName;
+    ok &= receipt().empty();
+    for (bool reverse : {true, false}) {
+        fixture.reverse = reverse;
+        ok &= route_text(fixture.path, nil, 0) == "test-b (infrastructure) 192.0.2.19 -> 192.0.2.42";
+    }
+    // When both live interfaces own the effective IP and are on-link, there
+    // is no unique unbound receipt. Ordinary inbound readiness still works.
+    fixture.records[0].ifa_addr = (sockaddr *)&ips[1];
+    auto incoming = std::make_shared<Connection>(nil);
+    for (bool reverse : {true, false}) {
+        fixture.reverse = reverse;
+        ok &= route_text(fixture.path, nil, 0).empty() && selected_path(incoming, fixture.path);
+        ok &= receipt() == "test-a (infrastructure) 192.0.2.19 -> 192.0.2.42";
+        fixture.liveBoundIndex = 9;
+        ok &= route_text(fixture.path, nil, 0) == "test-b (infrastructure) 192.0.2.19 -> 192.0.2.42";
+        ok &= receipt().empty();
+        fixture.liveBoundIndex = 7;
+    }
+    fixture.records[0].ifa_addr = (sockaddr *)&ips[0];
+    fixture.records[1].ifa_name = name;
+    fixture.local = nil;
+    ok &= receipt().empty();
+    fixture.local = nw_endpoint_create_host("localhost", "443");
+    ok &= receipt().empty();
+    fixture.local = nw_endpoint_create_address((sockaddr *)&ips[1]);
+    fixture.peer = nil;
+    ok &= receipt().empty();
+    routeFixture = nullptr;
+    return ok;
+}
+
 static bool compact_route_masks() {
     sockaddr_in local4 {}, peer4 {};
     local4.sin_len = peer4.sin_len = sizeof(local4);
@@ -237,8 +409,8 @@ static bool compact_route_masks() {
     mask4[1] = AF_INET;
     std::fill(mask4.end() - 3, mask4.end(), 0xff);
     auto check4 = [&] {
-        return on_link_address((const sockaddr *)&peer4, (const sockaddr *)&local4,
-            (const sockaddr *)mask4.data());
+        return on_link_address(copy_socket_address((const sockaddr *)&peer4),
+            copy_socket_address((const sockaddr *)&local4), (const sockaddr *)mask4.data(), 7);
     };
     if (!check4()) return false;
     peer4.sin_addr.s_addr = htonl(0xc0000301);
@@ -266,15 +438,89 @@ static bool compact_route_masks() {
     mask6[1] = AF_INET6;
     std::fill(mask6.end() - 8, mask6.end(), 0xff);
     auto check6 = [&] {
-        return on_link_address((const sockaddr *)&peer6, (const sockaddr *)&local6,
-            (const sockaddr *)mask6.data());
+        return on_link_address(copy_socket_address((const sockaddr *)&peer6),
+            copy_socket_address((const sockaddr *)&local6), (const sockaddr *)mask6.data(), 7);
     };
     if (!check6()) return false;
     peer6.sin6_len = offsetof(sockaddr_in6, sin6_addr) + sizeof(in6_addr) - 1;
     if (check6()) return false;
     peer6.sin6_len = sizeof(peer6);
     peer6.sin6_addr.s6_addr[7] ^= 1;
-    return !check6();
+    if (check6()) return false;
+    peer6.sin6_addr = local6.sin6_addr;
+    peer6.sin6_addr.s6_addr[3] ^= 1; // Global prefixes keep their second word.
+    if (check6()) return false;
+
+    if (inet_pton(AF_INET6, "fe80::1", &local6.sin6_addr) != 1 ||
+        inet_pton(AF_INET6, "fe80::2", &peer6.sin6_addr) != 1) return false;
+    local6.sin6_addr.s6_addr[3] = 7;
+    peer6.sin6_scope_id = 7;
+    if (!check6()) return false;
+    std::swap(local6, peer6);
+    if (!check6()) return false;
+    local6.sin6_scope_id = 8;
+    if (check6()) return false;
+    local6.sin6_scope_id = 7;
+    peer6.sin6_addr.s6_addr[3] = 8;
+    if (check6()) return false;
+    peer6.sin6_scope_id = 7; // A matching explicit zone cannot excuse an embedded mismatch.
+    if (check6()) return false;
+    for (const auto *denied : {"::", "::1", "ff02::1", "::ffff:192.0.2.1"}) {
+        if (inet_pton(AF_INET6, denied, &peer6.sin6_addr) != 1) return false;
+        local6.sin6_addr = peer6.sin6_addr;
+        if (check6()) return false;
+    }
+    return true;
+}
+
+static bool endpoint_addresses_outlive_their_sources() {
+    SocketAddress copied4, copied6;
+    @autoreleasepool {
+        sockaddr_in ip4 {};
+        ip4.sin_len = sizeof(ip4);
+        ip4.sin_family = AF_INET;
+        ip4.sin_port = htons(54321);
+        if (inet_pton(AF_INET, "192.0.2.19", &ip4.sin_addr) != 1) return false;
+        copied4 = copy_endpoint_address(nw_endpoint_create_address((const sockaddr *)&ip4));
+
+        sockaddr_in6 ip6 {};
+        ip6.sin6_len = sizeof(ip6);
+        ip6.sin6_family = AF_INET6;
+        ip6.sin6_port = htons(12345);
+        ip6.sin6_scope_id = if_nametoindex("lo0");
+        if (!ip6.sin6_scope_id || inet_pton(AF_INET6, "fe80::42", &ip6.sin6_addr) != 1) return false;
+        copied6 = copy_endpoint_address(nw_endpoint_create_address((const sockaddr *)&ip6));
+        if (copy_endpoint_address(nil).family() != AF_UNSPEC ||
+            copy_endpoint_address(nw_endpoint_create_host("localhost", "443")).family() != AF_UNSPEC) return false;
+    }
+    std::array<uint8_t, sizeof(in6_addr)> bytes {};
+    if (!copied4.v4() || numeric_address(copied4) != "192.0.2.19" ||
+        copied4.v4()->sin_port != htons(54321) || copy_ip_identity(copied4, bytes.data()) != 4 ||
+        memcmp(bytes.data(), &copied4.v4()->sin_addr, 4)) return false;
+    in6_addr expected {};
+    if (inet_pton(AF_INET6, "fe80::42", &expected) != 1 || !copied6.v6() ||
+        copied6.v6()->sin6_port != htons(12345) || copied6.v6()->sin6_scope_id != if_nametoindex("lo0") ||
+        copy_ip_identity(copied6, bytes.data()) != bytes.size() ||
+        memcmp(bytes.data(), &expected, bytes.size())) return false;
+
+    // Retain the source bytes, but display/compare the IP without Darwin's
+    // embedded zone. The caller checks the interface identity separately.
+    auto embedded = *copied6.v6();
+    embedded.sin6_addr.s6_addr[3] = 7;
+    embedded.sin6_scope_id = 7;
+    const auto scoped = copy_socket_address((const sockaddr *)&embedded);
+    if (!scope_matches_interface(scoped, 7) || scope_matches_interface(scoped, 8) ||
+        !scope_matches_interface(copied4, 8)) return false;
+    if (scoped.v6()->sin6_addr.s6_addr[3] != 7 || numeric_address(scoped) != "fe80::42" || copy_ip_identity(scoped, bytes.data()) != bytes.size() ||
+        memcmp(bytes.data(), &expected, bytes.size())) return false;
+
+    // Truncated/unsupported socket records have no printable address or IP identity.
+    for (auto family : {AF_INET, AF_INET6, AF_UNIX}) {
+        std::array<uint8_t, 2> header {2, static_cast<uint8_t>(family)};
+        const auto absent = copy_socket_address(reinterpret_cast<const sockaddr *>(header.data()));
+        if (absent.family() != AF_UNSPEC || !numeric_address(absent).empty() || copy_ip_identity(absent, bytes.data())) return false;
+    }
+    return true;
 }
 
 static bool resolved_addresses_preserve_endpoint() {
@@ -303,9 +549,9 @@ static bool resolved_addresses_preserve_endpoint() {
     sockaddr_in6 source6 {};
     source6.sin6_len = sizeof(source6);
     source6.sin6_family = AF_INET6;
-    source6.sin6_scope_id = 19;
     for (const char *host : {"fe80::23", "2001:db8::42"}) {
         if (inet_pton(AF_INET6, host, &source6.sin6_addr) != 1) return false;
+        source6.sin6_scope_id = IN6_IS_ADDR_LINKLOCAL(&source6.sin6_addr) ? 0 : 19;
         sockaddr_storage extended {};
         memcpy(&extended, &source6, sizeof(source6));
         extended.ss_len = sizeof(extended);
@@ -316,7 +562,18 @@ static bool resolved_addresses_preserve_endpoint() {
             result6.sin6_port != port || memcmp(&result6.sin6_addr, &source6.sin6_addr, sizeof(in6_addr)) ||
             result6.sin6_scope_id != (IN6_IS_ADDR_LINKLOCAL(&source6.sin6_addr) ? index : 19)) return false;
     }
-    return true;
+    if (inet_pton(AF_INET6, "fe80::23", &source6.sin6_addr) != 1) return false;
+    source6.sin6_scope_id = index;
+    source6.sin6_addr.s6_addr[3] = index;
+    if (!copy_resolved_address((const sockaddr *)&source6, port, index, target)) return false;
+    sockaddr_in6 result6;
+    memcpy(&result6, &target, sizeof(result6));
+    if (result6.sin6_scope_id != index || result6.sin6_addr.s6_addr[3] != 0) return false;
+    source6.sin6_scope_id = index + 1;
+    if (copy_resolved_address((const sockaddr *)&source6, port, index, target)) return false;
+    source6.sin6_scope_id = index;
+    source6.sin6_addr.s6_addr[3] = index + 1;
+    return !copy_resolved_address((const sockaddr *)&source6, port, index, target);
 }
 
 static bool route_queries_reject_retired_callbacks() {
@@ -390,6 +647,12 @@ int main() {
         std::printf("{\"finalPayloadAndRevocation\":%s}\n", read_ok ? "true" : "false");
         const bool ids_ok = retired_ids_do_not_alias() && concurrent_leases_and_exhaustion();
         std::printf("{\"typedHandleLifetimes\":%s}\n", ids_ok ? "true" : "false");
+        const bool receipt_ok = route_receipt_uses_effective_endpoints();
+        std::printf("{\"effectiveEndpointReceipt\":%s}\n", receipt_ok ? "true" : "false");
+        passed &= receipt_ok;
+        const bool endpoint_ok = endpoint_addresses_outlive_their_sources();
+        std::printf("{\"ownedEndpointAddresses\":%s}\n", endpoint_ok ? "true" : "false");
+        passed &= endpoint_ok;
         const bool addresses_ok = resolved_addresses_preserve_endpoint();
         std::printf("{\"resolvedAddressBounds\":%s}\n", addresses_ok ? "true" : "false");
         __block bool queries_ok = false;
@@ -397,6 +660,9 @@ int main() {
             queries_ok = route_queries_reject_retired_callbacks() && route_query_exhaustion_stops_creation();
         });
         std::printf("{\"routeQueryOwnership\":%s}\n", queries_ok ? "true" : "false");
+        const bool routes_ok = selected_route_stays_on_bound_subnet();
+        std::printf("{\"boundRouteSubnet\":%s}\n", routes_ok ? "true" : "false");
+        passed &= routes_ok;
         const bool masks_ok = compact_route_masks();
         std::printf("{\"compactRouteMasks\":%s}\n", masks_ok ? "true" : "false");
         return passed && read_ok && ids_ok && addresses_ok && queries_ok && masks_ok ? 0 : 1;

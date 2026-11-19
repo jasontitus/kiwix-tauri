@@ -11,6 +11,7 @@
 #include <dns_sd.h>
 #include <string>
 #include <array>
+#include <variant>
 #include <algorithm>
 #include <memory>
 #include <mutex>
@@ -185,128 +186,188 @@ static bool sharing_interface(nw_interface_t interface) {
     auto type = nw_interface_get_type(interface);
     return direct_interface(interface) || type == nw_interface_type_wifi || type == nw_interface_type_wired;
 }
-// Darwin routing netmasks may omit trailing zero bytes. Read only the
-// advertised part of the mask; omitted bytes do not constrain the subnet.
-static bool on_link_address(const sockaddr *remote, const sockaddr *local, const sockaddr *mask) {
-    constexpr size_t header = offsetof(sockaddr, sa_data);
-    if (!remote || !local || !mask || remote->sa_len < header ||
-        local->sa_len < header || mask->sa_len < header) return false;
-    const int family = remote->sa_family;
-    if (local->sa_family != family || (mask->sa_family != family && mask->sa_family != AF_UNSPEC))
-        return false;
-    size_t offset, width;
-    if (family == AF_INET) {
-        offset = offsetof(sockaddr_in, sin_addr);
-        width = sizeof(in_addr);
-    } else if (family == AF_INET6) {
-        offset = offsetof(sockaddr_in6, sin6_addr);
-        width = sizeof(in6_addr);
-    } else {
-        return false;
+// Network endpoints, DNS-SD callbacks and getifaddrs entries lend their socket
+// addresses. Keep only a complete, aligned copy of a supported IP family.
+struct SocketAddress {
+    std::variant<std::monostate, sockaddr_in, sockaddr_in6> value;
+    const sockaddr_in *v4() const { return std::get_if<sockaddr_in>(&value); }
+    const sockaddr_in6 *v6() const { return std::get_if<sockaddr_in6>(&value); }
+    int family() const { return v4() ? AF_INET : v6() ? AF_INET6 : AF_UNSPEC; }
+};
+
+static SocketAddress copy_socket_address(const sockaddr *address) {
+    if (!address) return {};
+    const auto *bytes = reinterpret_cast<const uint8_t *>(address);
+    const auto length = bytes[offsetof(sockaddr, sa_len)];
+    if (length < offsetof(sockaddr, sa_data)) return {};
+    const auto family = bytes[offsetof(sockaddr, sa_family)];
+    if (family == AF_INET && length >= sizeof(sockaddr_in)) {
+        sockaddr_in value;
+        memcpy(&value, address, sizeof(value));
+        value.sin_len = sizeof(value);
+        return {value};
     }
-    if (remote->sa_len < offset + width || local->sa_len < offset + width || mask->sa_len <= offset)
-        return false;
-    const auto peer = reinterpret_cast<const uint8_t *>(remote) + offset;
-    const auto own = reinterpret_cast<const uint8_t *>(local) + offset;
+    if (family == AF_INET6 && length >= sizeof(sockaddr_in6)) {
+        sockaddr_in6 value;
+        memcpy(&value, address, sizeof(value));
+        value.sin6_len = sizeof(value);
+        return {value};
+    }
+    return {};
+}
+
+static SocketAddress copy_endpoint_address(nw_endpoint_t endpoint) {
+    // get_address returns storage owned by this Network.framework object.
+    // ARC must retain it through memcpy, including in optimized builds.
+    __attribute__((objc_precise_lifetime)) nw_endpoint_t owner = endpoint;
+    if (!owner || nw_endpoint_get_type(owner) != nw_endpoint_type_address) return {};
+    return copy_socket_address(nw_endpoint_get_address(owner));
+}
+
+// Darwin can embed the link-local scope in IP bytes 2–3. For the Rust IP
+// identity, the separately checked interface index already supplies that scope.
+static in6_addr address_without_scope(in6_addr address) {
+    if (IN6_IS_ADDR_LINKLOCAL(&address)) {
+        address.s6_addr[2] = 0;
+        address.s6_addr[3] = 0;
+    }
+    return address;
+}
+static size_t copy_ip_identity(const SocketAddress &source, uint8_t *buffer) {
+    if (const auto *ip = source.v4()) {
+        memcpy(buffer, &ip->sin_addr, sizeof(in_addr));
+        return sizeof(in_addr);
+    }
+    if (const auto *ip = source.v6()) {
+        const auto value = address_without_scope(ip->sin6_addr);
+        memcpy(buffer, &value, sizeof(value));
+        return sizeof(value);
+    }
+    return 0;
+}
+static bool ip_identity_matches(const SocketAddress &address, const uint8_t *bytes, size_t length) {
+    std::array<uint8_t, sizeof(in6_addr)> actual;
+    return copy_ip_identity(address, actual.data()) == length &&
+        memcmp(actual.data(), bytes, length) == 0;
+}
+static bool scope_matches_interface(const SocketAddress &address, uint32_t index) {
+    const auto *ip = address.v6();
+    if (!ip || !IN6_IS_ADDR_LINKLOCAL(&ip->sin6_addr)) return true;
+    const auto embedded = (uint32_t(ip->sin6_addr.s6_addr[2]) << 8) | ip->sin6_addr.s6_addr[3];
+    return (!ip->sin6_scope_id || ip->sin6_scope_id == index) && (!embedded || embedded == index);
+}
+// Routing netmasks are allowed to omit trailing zero bytes. The peer and
+// local socket records must carry complete IP addresses. Check scope before
+// treating Darwin's embedded and explicit link-local representations as equal.
+static bool on_link_address(const SocketAddress &peer, const SocketAddress &own,
+                            const sockaddr *mask, uint32_t index) {
+    const auto family = peer.family();
+    if (!mask || mask->sa_len < offsetof(sockaddr, sa_data) ||
+        family == AF_UNSPEC || family != own.family()) return false;
+    if (mask->sa_family != family && mask->sa_family != AF_UNSPEC) return false;
+    size_t offset;
+    if (const auto *ip4 = peer.v4()) {
+        const auto host = ntohl(ip4->sin_addr.s_addr);
+        if (!host || (host >> 24) == 127 || (host >> 28) == 14 || host == 0xffffffff) return false;
+        offset = offsetof(sockaddr_in, sin_addr);
+    } else {
+        const auto &ip = peer.v6()->sin6_addr;
+        if (IN6_IS_ADDR_UNSPECIFIED(&ip) || IN6_IS_ADDR_LOOPBACK(&ip) ||
+            IN6_IS_ADDR_MULTICAST(&ip) || IN6_IS_ADDR_V4MAPPED(&ip)) return false;
+        if (IN6_IS_ADDR_LINKLOCAL(&ip) != IN6_IS_ADDR_LINKLOCAL(&own.v6()->sin6_addr) ||
+            !scope_matches_interface(peer, index) || !scope_matches_interface(own, index)) return false;
+        offset = offsetof(sockaddr_in6, sin6_addr);
+    }
+    if (mask->sa_len <= offset) return false;
+    std::array<uint8_t, sizeof(in6_addr)> peerBytes, ownBytes;
+    const auto width = copy_ip_identity(peer, peerBytes.data());
+    copy_ip_identity(own, ownBytes.data());
     const auto bits = reinterpret_cast<const uint8_t *>(mask) + offset;
     const auto count = std::min(width, size_t(mask->sa_len) - offset);
     bool nonzero = false;
     for (size_t i = 0; i < count; ++i) {
-        if ((peer[i] & bits[i]) != (own[i] & bits[i])) return false;
+        if ((peerBytes[i] & bits[i]) != (ownBytes[i] & bits[i])) return false;
         nonzero |= bits[i] != 0;
     }
-    if (!nonzero) return false;
-    if (family == AF_INET) {
-        in_addr address;
-        memcpy(&address, peer, sizeof(address));
-        const auto host = ntohl(address.s_addr);
-        return host && (host >> 24) != 127 && (host >> 28) != 14 && host != 0xffffffff;
-    }
-    in6_addr address;
-    memcpy(&address, peer, sizeof(address));
-    return !IN6_IS_ADDR_UNSPECIFIED(&address) && !IN6_IS_ADDR_LOOPBACK(&address) &&
-        !IN6_IS_ADDR_MULTICAST(&address) && !IN6_IS_ADDR_V4MAPPED(&address);
+    return nonzero;
 }
-static bool local_address(const sockaddr *remote, nw_interface_t interface) {
-    if (!remote || !interface || !sharing_interface(interface)) return false;
+static bool local_address(const SocketAddress &remote, __attribute__((objc_precise_lifetime)) nw_interface_t interface,
+                          const SocketAddress *local = nullptr) {
+    if (remote.family() == AF_UNSPEC || !interface || !sharing_interface(interface)) return false;
     const char *name = nw_interface_get_name(interface);
     if (!name) return false;
+    const auto index = nw_interface_get_index(interface);
+    if (!index || (local && !scope_matches_interface(*local, index))) return false;
+    std::array<uint8_t, sizeof(in6_addr)> localBytes;
+    const auto localSize = local ? copy_ip_identity(*local, localBytes.data()) : 0;
+    if (local && !localSize) return false;
     ifaddrs *addresses = nullptr;
     if (getifaddrs(&addresses) != 0) return false;
-    bool allowed = false;
+    bool onLink = false, assigned = !local;
     for (auto entry = addresses; entry; entry = entry->ifa_next) {
         if (!entry->ifa_name || strcmp(entry->ifa_name, name) || !(entry->ifa_flags & IFF_UP)) continue;
-        allowed = on_link_address(remote, entry->ifa_addr, entry->ifa_netmask);
-        if (allowed) break;
+        const auto own = copy_socket_address(entry->ifa_addr);
+        if (!onLink) onLink = on_link_address(remote, own, entry->ifa_netmask, index);
+        if (!assigned) assigned = scope_matches_interface(own, index) && ip_identity_matches(own, localBytes.data(), localSize);
+        if (onLink && assigned) break;
     }
     freeifaddrs(addresses);
-    return allowed;
+    return onLink && assigned;
 }
-static bool local_path(nw_path_t path) {
+static nw_interface_t on_link_interface(nw_path_t path, const SocketAddress &remote, __attribute__((objc_precise_lifetime)) nw_interface_t bound, uint32_t requiredIndex, const SocketAddress *local = nullptr) {
     if (!path || nw_path_get_status(path) != nw_path_status_satisfied ||
-        nw_path_uses_interface_type(path, nw_interface_type_cellular)) return false;
-    auto endpoint = nw_path_copy_effective_remote_endpoint(path);
-    const sockaddr *remote = endpoint ? nw_endpoint_get_address(endpoint) : nullptr;
-    __block bool allowed = false;
+        nw_path_uses_interface_type(path, nw_interface_type_cellular)) return nil;
+    const auto boundIndex = bound ? nw_interface_get_index(bound) : 0;
+    const char *boundName = bound ? nw_interface_get_name(bound) : nullptr;
+    if ((requiredIndex && requiredIndex != boundIndex) ||
+        (bound && (!boundIndex || !boundName))) return nil;
+    __block nw_interface_t selected = nil;
     nw_path_enumerate_interfaces(path, ^bool(nw_interface_t interface) {
-        allowed = local_address(remote, interface);
-        return !allowed;
-    });
-    return allowed;
-}
-static std::string numeric_address(const sockaddr *address) {
-    char text[INET6_ADDRSTRLEN] = {0};
-    if (!address) return "";
-    if (address->sa_family == AF_INET &&
-        inet_ntop(AF_INET, &((const sockaddr_in *)address)->sin_addr, text, sizeof(text))) return text;
-    if (address->sa_family == AF_INET6 &&
-        inet_ntop(AF_INET6, &((const sockaddr_in6 *)address)->sin6_addr, text, sizeof(text))) return text;
-    return "";
-}
-static std::string interface_address(const char *name, int family) {
-    ifaddrs *addresses = nullptr;
-    if (!name || getifaddrs(&addresses) != 0) return "";
-    std::string text;
-    for (auto entry = addresses; entry; entry = entry->ifa_next) {
-        if (!entry->ifa_addr || !entry->ifa_name || strcmp(entry->ifa_name, name) ||
-            !(entry->ifa_flags & IFF_UP) || entry->ifa_addr->sa_family != family) continue;
-        bool usable = false;
-        if (family == AF_INET) {
-            auto host = ntohl(((const sockaddr_in *)entry->ifa_addr)->sin_addr.s_addr);
-            usable = host && (host >> 24) != 127 && host != 0xffffffff;
-        } else if (family == AF_INET6) {
-            auto ip = &((const sockaddr_in6 *)entry->ifa_addr)->sin6_addr;
-            usable = !IN6_IS_ADDR_UNSPECIFIED(ip) && !IN6_IS_ADDR_LOOPBACK(ip) && !IN6_IS_ADDR_MULTICAST(ip);
+        const auto index = nw_interface_get_index(interface);
+        if (bound || local) {
+            const char *name = nw_interface_get_name(interface);
+            if (!index || !name || if_nametoindex(name) != index) return true;
+            if (bound && (index != boundIndex || strcmp(name, boundName))) return true;
         }
-        if (!usable) continue;
-        text = numeric_address(entry->ifa_addr);
-        if (!text.empty()) break;
-    }
-    freeifaddrs(addresses);
-    return text;
-}
-/// Bounded evidence of the live path: interface, its local address, the peer.
-static std::string route_text(nw_connection_t value) {
-    nw_path_t path = value ? nw_connection_copy_current_path(value) : nil;
-    if (!path) return "";
-    __block std::string interfaceName;
-    nw_path_enumerate_interfaces(path, ^bool(nw_interface_t interface) {
-        const char *name = nw_interface_get_name(interface);
-        // The callback's interface/name is borrowed. Copy while it is alive.
-        if (name && sharing_interface(interface)) { interfaceName = name; return false; }
+        if (local_address(remote, interface, local)) {
+            // An unbound inbound receipt needs a unique interface for both
+            // effective IPs. Enumeration order cannot identify the chosen link.
+            if (selected && nw_interface_get_index(selected) != index) {
+                selected = nil;
+                return false;
+            }
+            selected = interface;
+            return !bound && local != nullptr;
+        }
         return true;
     });
-    if (interfaceName.empty()) return "";
-    auto endpoint = nw_path_copy_effective_remote_endpoint(path);
-    const sockaddr *remote = endpoint ? nw_endpoint_get_address(endpoint) : nullptr;
-    std::string text = interfaceName + (direct_name(interfaceName.c_str()) ? " (peer-to-peer)" : " (infrastructure)");
-    auto local = interface_address(interfaceName.c_str(), remote ? remote->sa_family : AF_INET);
-    auto peer = numeric_address(remote);
-    if (!local.empty()) text += " " + local;
-    if (!peer.empty()) text += " -> " + peer;
-    return text;
+    return selected;
 }
-
+static std::string numeric_address(const SocketAddress &address) {
+    char text[INET6_ADDRSTRLEN] = {};
+    if (const auto *ip = address.v4()) {
+        if (inet_ntop(AF_INET, &ip->sin_addr, text, sizeof(text))) return text;
+    } else if (const auto *ip = address.v6()) {
+        const auto value = address_without_scope(ip->sin6_addr);
+        if (inet_ntop(AF_INET6, &value, text, sizeof(text))) return text;
+    }
+    return "";
+}
+/// Bounded evidence of the live path: selected interface and both effective endpoints.
+static std::string route_text(nw_path_t path, nw_interface_t bound, uint32_t requiredIndex) {
+    if (!path) return "";
+    const auto local = copy_endpoint_address(nw_path_copy_effective_local_endpoint(path));
+    const auto remote = copy_endpoint_address(nw_path_copy_effective_remote_endpoint(path));
+    if (local.family() == AF_UNSPEC || local.family() != remote.family()) return "";
+    __attribute__((objc_precise_lifetime)) nw_interface_t interface = on_link_interface(path, remote, bound, requiredIndex, &local);
+    const char *name = interface ? nw_interface_get_name(interface) : nullptr;
+    if (!name) return "";
+    const auto own = numeric_address(local);
+    const auto peer = numeric_address(remote);
+    if (own.empty() || peer.empty()) return "";
+    return std::string(name) + (direct_name(name) ? " (peer-to-peer) " : " (infrastructure) ") +
+        own + " -> " + peer;
+}
 
 struct RouteQuery {
     uintptr_t id = 0;
@@ -404,17 +465,9 @@ static void cancel_connection(const SwarmConnectionHandle &handle) {
     finished_connection(handle);
 }
 static bool selected_path(const SwarmConnectionHandle &handle, nw_path_t path) {
-    if (!local_path(path)) return false;
-    if (!handle->requiredIndex) return true;
-    if (!handle->interface || nw_interface_get_index(handle->interface) != handle->requiredIndex) return false;
-    const char *name = nw_interface_get_name(handle->interface);
-    if (!name || if_nametoindex(name) != handle->requiredIndex) return false;
-    __block bool selected = false;
-    nw_path_enumerate_interfaces(path, ^bool(nw_interface_t interface) {
-        if (nw_interface_get_index(interface) == handle->requiredIndex) { selected = true; return false; }
-        return true;
-    });
-    return selected;
+    if (!path) return false;
+    const auto remote = copy_endpoint_address(nw_path_copy_effective_remote_endpoint(path));
+    return on_link_interface(path, remote, handle->interface, handle->requiredIndex) != nil;
 }
 static void start_connection(SwarmConnectionHandle handle) {
     handle->connectionStopped = false;
@@ -454,21 +507,22 @@ static void schedule_next(SwarmConnectionHandle handle, int64_t delay) {
 // before inspecting its IP fields and pass the canonical size on to Network.
 static bool copy_resolved_address(const sockaddr *address, uint16_t port, uint32_t index,
                                   sockaddr_storage &target) {
-    if (!address || address->sa_len < offsetof(sockaddr, sa_data)) return false;
-    if (address->sa_family == AF_INET && address->sa_len >= sizeof(sockaddr_in)) {
-        sockaddr_in value;
-        memcpy(&value, address, sizeof(value));
-        value.sin_len = sizeof(value);
+    const auto copy = copy_socket_address(address);
+    if (const auto *ip = copy.v4()) {
+        auto value = *ip;
         value.sin_port = port; // DNS-SD supplies network byte order.
         memcpy(&target, &value, sizeof(value));
         return true;
     }
-    if (address->sa_family == AF_INET6 && address->sa_len >= sizeof(sockaddr_in6)) {
-        sockaddr_in6 value;
-        memcpy(&value, address, sizeof(value));
-        value.sin6_len = sizeof(value);
+    if (const auto *ip = copy.v6()) {
+        if (!scope_matches_interface(copy, index)) return false;
+        auto value = *ip;
         value.sin6_port = port;
-        if (IN6_IS_ADDR_LINKLOCAL(&value.sin6_addr)) value.sin6_scope_id = index;
+        if (IN6_IS_ADDR_LINKLOCAL(&value.sin6_addr)) {
+            if (!index) return false;
+            value.sin6_addr = address_without_scope(value.sin6_addr);
+            value.sin6_scope_id = index;
+        }
         memcpy(&target, &value, sizeof(value));
         return true;
     }
@@ -482,7 +536,7 @@ static void resolved_address(DNSServiceRef ref, DNSServiceFlags flags, uint32_t 
     sockaddr_storage target {};
     if (!(flags & kDNSServiceFlagsAdd) || !ttl || index != nw_interface_get_index(handle->interface) ||
         !copy_resolved_address(address, handle->port, index, target) ||
-        !local_address((const sockaddr *)&target, handle->interface)) {
+        !local_address(copy_socket_address((const sockaddr *)&target), handle->interface)) {
         schedule_next(handle, 300 * NSEC_PER_MSEC);
         return;
     }
@@ -565,9 +619,9 @@ extern "C" uint32_t kiwix_swarm_interface_index(uint64_t id) {
     __block uint32_t index = 0;
     dispatch_sync(queue(), ^{
         if (!handle->ready || handle->stopping || !handle->interface) return;
-        const char *name = nw_interface_get_name(handle->interface);
-        auto actual = nw_interface_get_index(handle->interface);
-        if (name && if_nametoindex(name) == actual && selected_path(handle, nw_connection_copy_current_path(handle->value))) index = actual;
+        if (selected_path(handle, nw_connection_copy_current_path(handle->value))) {
+            index = nw_interface_get_index(handle->interface);
+        }
     });
     return index;
 }
@@ -579,41 +633,34 @@ extern "C" size_t kiwix_swarm_local_address(uint64_t id, uint8_t *buffer, size_t
     dispatch_sync(queue(), ^{
         if (!handle->ready || handle->stopping || !handle->value) return;
         auto path = nw_connection_copy_current_path(handle->value);
-        if (!selected_path(handle, path)) return;
-        auto endpoint = nw_path_copy_effective_local_endpoint(path);
-        const sockaddr *local = endpoint ? nw_endpoint_get_address(endpoint) : nullptr;
-        if (!local) return;
-        if (local->sa_family == AF_INET) {
-            memcpy(buffer, &((const sockaddr_in *)local)->sin_addr, 4); length = 4;
-        } else if (local->sa_family == AF_INET6) {
-            auto address = ((const sockaddr_in6 *)local)->sin6_addr;
-            if (IN6_IS_ADDR_LINKLOCAL(&address)) { address.s6_addr[2] = 0; address.s6_addr[3] = 0; }
-            memcpy(buffer, &address, 16); length = 16;
-        }
+        if (!path) return;
+        const auto local = copy_endpoint_address(nw_path_copy_effective_local_endpoint(path));
+        const auto remote = copy_endpoint_address(nw_path_copy_effective_remote_endpoint(path));
+        if (local.family() == AF_UNSPEC || local.family() != remote.family() ||
+            !on_link_interface(path, remote, handle->interface, handle->requiredIndex, &local)) return;
+        length = copy_ip_identity(local, buffer);
     });
     return length;
 }
 extern "C" bool kiwix_swarm_interface_has_address(uint32_t index, const uint8_t *bytes, size_t length) {
     if (!index || !bytes || (length != 4 && length != 16)) return false;
+    std::array<uint8_t, sizeof(in6_addr)> expected {};
+    if (length == sizeof(in6_addr)) {
+        sockaddr_in6 ip {};
+        memcpy(&ip.sin6_addr, bytes, sizeof(ip.sin6_addr));
+        if (!scope_matches_interface(SocketAddress{ip}, index)) return false;
+        const auto value = address_without_scope(ip.sin6_addr);
+        memcpy(expected.data(), &value, sizeof(value));
+    } else {
+        memcpy(expected.data(), bytes, length);
+    }
     ifaddrs *addresses = nullptr;
     if (getifaddrs(&addresses) != 0) return false;
     bool found = false;
     for (auto item = addresses; item && !found; item = item->ifa_next) {
-        if (!item->ifa_name || !item->ifa_addr || !(item->ifa_flags & IFF_UP) || if_nametoindex(item->ifa_name) != index) continue;
-        if (length == 4 && item->ifa_addr->sa_family == AF_INET) {
-            found = memcmp(bytes, &((const sockaddr_in *)item->ifa_addr)->sin_addr, 4) == 0;
-        } else if (length == 16 && item->ifa_addr->sa_family == AF_INET6) {
-            // Include link-local addresses: the retained interface index is
-            // their scope, so unrelated interfaces with the same IP cannot match.
-            auto actual = ((const sockaddr_in6 *)item->ifa_addr)->sin6_addr;
-            std::array<uint8_t, 16> expected;
-            memcpy(expected.data(), bytes, expected.size());
-            // Darwin may embed the link-local scope in bytes 2–3. The exact
-            // interface index above already supplies that scope independently.
-            if (IN6_IS_ADDR_LINKLOCAL(&actual)) { actual.s6_addr[2] = 0; actual.s6_addr[3] = 0; }
-            if (expected[0] == 0xfe && (expected[1] & 0xc0) == 0x80) { expected[2] = 0; expected[3] = 0; }
-            found = memcmp(expected.data(), &actual, expected.size()) == 0;
-        }
+        if (!item->ifa_name || !(item->ifa_flags & IFF_UP) || if_nametoindex(item->ifa_name) != index) continue;
+        const auto own = copy_socket_address(item->ifa_addr);
+        found = scope_matches_interface(own, index) && ip_identity_matches(own, expected.data(), length);
     }
     freeifaddrs(addresses);
     return found;
@@ -735,22 +782,7 @@ extern "C" long kiwix_swarm_route(uint64_t id, char *buffer, size_t capacity) {
     __block std::string text;
     dispatch_sync(queue(), ^{
         if (!handle->ready || !handle->value || handle->stopping) return;
-        text = route_text(handle->value);
-        if (text.empty() && handle->interface) {
-            // Fall back to the interface the native resolver required. This is
-            // the same route the connection was created on, even if the live
-            // path cannot be enumerated yet.
-            const char *name = nw_interface_get_name(handle->interface);
-            if (name) {
-                auto endpoint = nw_connection_copy_endpoint(handle->value);
-                const sockaddr *remote = endpoint ? nw_endpoint_get_address(endpoint) : nullptr;
-                text = std::string(name) + (direct_name(name) ? " (peer-to-peer)" : " (infrastructure)");
-                auto local = interface_address(name, remote ? remote->sa_family : AF_INET);
-                auto peer = numeric_address(remote);
-                if (!local.empty()) text += " " + local;
-                if (!peer.empty()) text += " -> " + peer;
-            }
-        }
+        text = route_text(nw_connection_copy_current_path(handle->value), handle->interface, handle->requiredIndex);
     });
     if (text.empty() || !buffer || capacity == 0) return -1;
     auto length = text.size() < capacity - 1 ? text.size() : capacity - 1;

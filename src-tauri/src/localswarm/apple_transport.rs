@@ -400,20 +400,24 @@ async fn native_listener_retires_a_peer_that_never_opens_a_request_stream() {
         let connection = client.as_ref().unwrap();
         // Complete TLS but send no stream bytes. The native producer must
         // retire this admitted transport without a Rust request consumer.
-        tokio::time::timeout(Duration::from_secs(10), async {
-            loop {
-                tokio::select! {
-                    incoming = listener.accept() => {
-                        if let Some((unexpected, _)) = incoming {
-                            unexpected.shutdown().await;
-                            return Err("Handshake-only peer produced an application request".to_string());
-                        }
-                        return Err("The admission deadline stopped the entire listener".to_string());
-                    },
-                    _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                        if connection.route().is_none() { return Ok(()); }
-                    },
-                }
+        tokio::time::timeout(Duration::from_secs(12), async {
+            tokio::select! {
+                incoming = listener.accept() => {
+                    if let Some((unexpected, _)) = incoming {
+                        unexpected.shutdown().await;
+                        return Err("Handshake-only peer produced an application request".to_string());
+                    }
+                    Err("The admission deadline stopped the entire listener".to_string())
+                },
+                write = async {
+                    // Leave the transport idle through the native eight-second
+                    // admission deadline, with one second of scheduling grace.
+                    tokio::time::sleep(Duration::from_secs(9)).await;
+                    connection.write_all(&[1]).await
+                } => match write {
+                    Ok(()) => Err("Handshake-only peer could still open a stream".to_string()),
+                    Err(_) => Ok(()),
+                },
             }
         }).await.map_err(|_| "Handshake-only native transport outlived its admission deadline".to_string())?
     }.await;
