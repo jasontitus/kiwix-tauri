@@ -48,6 +48,10 @@ The separate `kiwix-mcp` relay forbids unsafe Rust in its own Unix executable. L
 
 An ARM64 Linux virtual machine exercised the release relay through its normal standard-input interface. With the matching test account it sent the profile handshake and returned the test library. With a different server account it closed the socket before sending the handshake. A subsequent matching server worked. A Mac round trip against the signed app also verified that switching the test library into private mode cut off an existing relay and leaving private mode restored access. This test exposed an early readiness report. The connector now publishes readiness after it obtains the socket or named pipe, and ignores late readiness updates from retired listeners.
 
+## Apple Nearby receives
+
+An incoming Apple QUIC read now carries an operation ID and a borrowed immutable dispatch object. Rust checks the size against the caller's buffer and the 256 KiB per-read cap before copying. Cancelling a read retires its ID, so a late or duplicate callback cannot deliver data to another caller. The request registry forbids unsafe Rust. The call into Objective-C++, Apple networking, dispatch2's native buffer traversal, write and readiness callbacks, and connection handles remain in the inventory. [Runtime and performance checks](benchmarks/2026-11-18-apple-nearby-reads.md)
+
 ## Nearby interface authority
 
 Android's hotspot controller owns the reservation. The Rust socket owner checks its receipt against the kernel interface name and index, link flags, IPv4 address and netmask. It binds a new UDP socket to that device, reads the binding back, binds the local address, checks the live interface again and asks the controller to confirm the lease. A failed check discards the socket. The interface name must be ASCII without an embedded NUL, so lossy conversion of an unrelated kernel name cannot match it.
