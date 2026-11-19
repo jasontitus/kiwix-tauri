@@ -22,14 +22,12 @@
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "raw_value")]
-use ref_cast::RefCast;
 use serde::de::{self, IgnoredAny, IntoDeserializer};
 use serde::ser::{self, SerializeMap, SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf, Bytes};
 #[cfg(feature = "raw_value")]
-use serde_json::value::RawValue;
+use serde_json::value::{BorrowedRawValue, RawValue};
 use serde_json::{
     from_reader, from_slice, from_str, from_value, json, to_string, to_string_pretty, to_value,
     to_vec, Deserializer, Number, Value,
@@ -39,8 +37,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::hash::BuildHasher;
-#[cfg(feature = "raw_value")]
-use std::hash::{Hash, Hasher};
 use std::io;
 use std::iter;
 use std::marker::PhantomData;
@@ -2378,7 +2374,7 @@ fn test_borrowed_raw_value() {
     struct Wrapper<'a> {
         a: i8,
         #[serde(borrow)]
-        b: &'a RawValue,
+        b: BorrowedRawValue<'a>,
         c: i8,
     }
 
@@ -2392,7 +2388,7 @@ fn test_borrowed_raw_value() {
     let wrapper_to_value = serde_json::to_value(&wrapper_from_str).unwrap();
     assert_eq!(json!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
 
-    let array_from_str: Vec<&RawValue> =
+    let array_from_str: Vec<BorrowedRawValue<'_>> =
         serde_json::from_str(r#"["a", 42, {"foo": "bar"}, null]"#).unwrap();
     assert_eq!(r#""a""#, array_from_str[0].get());
     assert_eq!("42", array_from_str[1].get());
@@ -2406,40 +2402,10 @@ fn test_borrowed_raw_value() {
 #[cfg(feature = "raw_value")]
 #[test]
 fn test_raw_value_in_map_key() {
-    #[derive(RefCast)]
-    #[repr(transparent)]
-    struct RawMapKey(RawValue);
-
-    #[allow(unknown_lints)]
-    #[allow(non_local_definitions)] // false positive: https://github.com/rust-lang/rust/issues/121621
-    impl<'de> Deserialize<'de> for &'de RawMapKey {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de>,
-        {
-            let raw_value = <&RawValue>::deserialize(deserializer)?;
-            Ok(RawMapKey::ref_cast(raw_value))
-        }
-    }
-
-    impl PartialEq for RawMapKey {
-        fn eq(&self, other: &Self) -> bool {
-            self.0.get() == other.0.get()
-        }
-    }
-
-    impl Eq for RawMapKey {}
-
-    impl Hash for RawMapKey {
-        fn hash<H: Hasher>(&self, hasher: &mut H) {
-            self.0.get().hash(hasher);
-        }
-    }
-
-    let map_from_str: HashMap<&RawMapKey, &RawValue> =
+    let map_from_str: HashMap<BorrowedRawValue<'_>, BorrowedRawValue<'_>> =
         serde_json::from_str(r#" {"\\k":"\\v"} "#).unwrap();
     let (map_k, map_v) = map_from_str.into_iter().next().unwrap();
-    assert_eq!("\"\\\\k\"", map_k.0.get());
+    assert_eq!("\"\\\\k\"", map_k.get());
     assert_eq!("\"\\\\v\"", map_v.get());
 }
 
@@ -2491,7 +2457,7 @@ fn test_boxed_raw_value() {
 
 #[cfg(feature = "raw_value")]
 #[test]
-fn test_raw_value_from_string_unchecked() {
+fn test_raw_value_owns_original_payload() {
     #[derive(Serialize)]
     struct Wrapper {
         a: i8,
@@ -2499,44 +2465,47 @@ fn test_raw_value_from_string_unchecked() {
         c: i8,
     }
 
-    let json = r#"{"foo":[1,2,3],"bar":"\"escaped\""}"#.to_owned();
-    let checked = RawValue::from_string(json.clone()).unwrap();
-    let unchecked = unsafe { RawValue::from_string_unchecked(json) };
-    assert_eq!(checked.get(), unchecked.get());
+    let input: Box<str> = r#"{"foo":[1,2,3],"bar":"\"escaped\""}"#.into();
+    let input_address = input.as_ptr();
+    let raw = RawValue::from_string(input.into_string()).unwrap();
+    assert_eq!(raw.get().as_ptr(), input_address);
 
-    let wrapper = Wrapper {
-        a: 1,
-        b: unchecked,
-        c: 3,
-    };
-    let wrapper_to_string = serde_json::to_string(&wrapper).unwrap();
+    let wrapper = Wrapper { a: 1, b: raw, c: 3 };
     assert_eq!(
+        serde_json::to_string(&wrapper).unwrap(),
         r#"{"a":1,"b":{"foo":[1,2,3],"bar":"\"escaped\""},"c":3}"#,
-        wrapper_to_string,
     );
 
-    // A string with excess capacity is preserved as-is.
-    let mut spare = String::with_capacity(64);
-    spare.push_str("[1,2,3]");
-    let raw = unsafe { RawValue::from_string_unchecked(spare) };
-    assert_eq!("[1,2,3]", raw.get());
+    let restored: Box<str> = wrapper.b.into();
+    assert_eq!(restored.as_ptr(), input_address);
+    assert_eq!(RawValue::from_string(" \t42\n".to_owned()).unwrap().get(), "42");
+    assert!(RawValue::from_string("[1,".to_owned()).is_err());
+    assert!(RawValue::from_string("1 2".to_owned()).is_err());
+
+    let default = Box::<RawValue>::default();
+    assert_eq!(RawValue::NULL.get(), default.get());
+    assert_eq!(RawValue::TRUE.get(), "true");
+    assert_eq!(RawValue::FALSE.get(), "false");
+    assert_eq!(Box::<str>::from(RawValue::TRUE.to_owned()).as_ref(), "true");
 }
 
-// The debug_assert! inside from_string_unchecked is compiled out of release
-// builds, so #[should_panic] can only be exercised under debug (which is the
-// default `cargo test` profile).
-#[cfg(all(feature = "raw_value", debug_assertions))]
+#[cfg(feature = "raw_value")]
 #[test]
-#[should_panic = "from_string_unchecked"]
-fn test_raw_value_from_string_unchecked_debug_asserts_whitespace() {
-    let _ = unsafe { RawValue::from_string_unchecked(" 42".to_owned()) };
-}
+fn test_raw_value_deserializes_with_borrowed_lifetime() {
+    let input = String::from(" {\"payload\": \"雨の本\"} ");
+    let body: BorrowedRawValue = from_slice(input.as_bytes()).unwrap();
+    assert_eq!(body.get(), "{\"payload\": \"雨の本\"}");
+    assert_eq!(body.get().as_ptr(), input[1..].as_ptr());
 
-#[cfg(all(feature = "raw_value", debug_assertions))]
-#[test]
-#[should_panic = "from_string_unchecked"]
-fn test_raw_value_from_string_unchecked_debug_asserts_well_formed() {
-    let _ = unsafe { RawValue::from_string_unchecked("[1,".to_owned()) };
+    let fields = BTreeMap::<&str, &str>::deserialize(body.into_deserializer()).unwrap();
+    assert_eq!(fields["payload"], "雨の本");
+    let payload_start = input.find("雨の本").unwrap();
+    assert_eq!(fields["payload"].as_ptr(), input[payload_start..].as_ptr());
+    let owned = body.into_owned();
+    assert_eq!(format!("{body:?}"), format!("{owned:?}"));
+    assert_eq!(format!("{body:?}"), "RawValue({\"payload\": \"雨の本\"})");
+    let fields = BTreeMap::<&str, &str>::deserialize(&*owned).unwrap();
+    assert_eq!(fields["payload"], "雨の本");
 }
 
 #[cfg(feature = "raw_value")]

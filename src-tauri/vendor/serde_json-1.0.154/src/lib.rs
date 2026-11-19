@@ -366,7 +366,7 @@
 #![allow(non_upper_case_globals)]
 #![deny(missing_docs)]
 #![no_std]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(unknown_lints, mismatched_lifetime_syntaxes)]
 

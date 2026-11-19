@@ -3,7 +3,6 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::string::String;
 use core::fmt::{self, Debug, Display};
-use core::mem;
 use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{
     self, Deserialize, DeserializeSeed, Deserializer, IntoDeserializer, MapAccess, Unexpected,
@@ -12,8 +11,7 @@ use serde::de::{
 use serde::forward_to_deserialize_any;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-/// Reference to a range of bytes encompassing a single valid JSON value in the
-/// input data.
+/// Owned text for a JSON value whose original formatting is retained.
 ///
 /// A `RawValue` can be used to defer parsing parts of a payload until later,
 /// or to avoid parsing it at all in the case that part of the payload just
@@ -32,112 +30,30 @@ use serde::ser::{Serialize, SerializeStruct, Serializer};
 /// serde_json = { version = "1.0", features = ["raw_value"] }
 /// ```
 ///
-/// # Example
-///
-/// ```
-/// use serde::{Deserialize, Serialize};
-/// use serde_json::{Result, value::RawValue};
-///
-/// #[derive(Deserialize)]
-/// struct Input<'a> {
-///     code: u32,
-///     #[serde(borrow)]
-///     payload: &'a RawValue,
-/// }
-///
-/// #[derive(Serialize)]
-/// struct Output<'a> {
-///     info: (u32, &'a RawValue),
-/// }
-///
-/// // Efficiently rearrange JSON input containing separate "code" and "payload"
-/// // keys into a single "info" key holding an array of code and payload.
-/// //
-/// // This could be done equivalently using serde_json::Value as the type for
-/// // payload, but &RawValue will perform better because it does not require
-/// // memory allocation. The correct range of bytes is borrowed from the input
-/// // data and pasted verbatim into the output.
-/// fn rearrange(input: &str) -> Result<String> {
-///     let input: Input = serde_json::from_str(input)?;
-///
-///     let output = Output {
-///         info: (input.code, input.payload),
-///     };
-///
-///     serde_json::to_string(&output)
-/// }
-///
-/// fn main() -> Result<()> {
-///     let out = rearrange(r#" {"code": 200, "payload": {}} "#)?;
-///
-///     assert_eq!(out, r#"{"info":[200,{}]}"#);
-///
-///     Ok(())
-/// }
-/// ```
-///
-/// # Ownership
-///
-/// The typical usage of `RawValue` will be in the borrowed form:
-///
-/// ```
-/// # use serde::Deserialize;
-/// # use serde_json::value::RawValue;
-/// #
-/// #[derive(Deserialize)]
-/// struct SomeStruct<'a> {
-///     #[serde(borrow)]
-///     raw_value: &'a RawValue,
-/// }
-/// ```
-///
-/// The borrowed form is suitable when deserializing through
-/// [`serde_json::from_str`] and [`serde_json::from_slice`] which support
-/// borrowing from the input data without memory allocation.
-///
-/// When deserializing through [`serde_json::from_reader`] you will need to use
-/// the boxed form of `RawValue` instead. This is almost as efficient but
-/// involves buffering the raw value from the I/O stream into memory.
-///
-/// [`serde_json::from_str`]: crate::from_str
-/// [`serde_json::from_slice`]: crate::from_slice
-/// [`serde_json::from_reader`]: crate::from_reader
-///
-/// ```
-/// # use serde::Deserialize;
-/// # use serde_json::value::RawValue;
-/// #
-/// #[derive(Deserialize)]
-/// struct SomeStruct {
-///     raw_value: Box<RawValue>,
-/// }
-/// ```
+/// Use [`BorrowedRawValue`] to borrow a value from an input string or slice.
+/// Use `Box<RawValue>` when reading from an I/O stream or retaining an owned
+/// value independently of its input.
 #[cfg_attr(docsrs, doc(cfg(feature = "raw_value")))]
-#[repr(transparent)]
 pub struct RawValue {
-    json: str,
+    json: RawText,
+}
+
+enum RawText {
+    Owned(Box<str>),
+    Static(&'static str),
 }
 
 impl RawValue {
-    #[allow(unsafe_code)]
-    const fn from_borrowed(json: &str) -> &Self {
-        // SAFETY: RawValue is a transparent wrapper over str. The cast
-        // preserves the string metadata and the lifetime of the borrow.
-        unsafe { mem::transmute::<&str, &RawValue>(json) }
+    const fn from_static(json: &'static str) -> Self {
+        RawValue {
+            json: RawText::Static(json),
+        }
     }
 
-    #[allow(unsafe_code)]
     fn from_owned(json: Box<str>) -> Box<Self> {
-        // SAFETY: the transparent wrapper has the same layout and string
-        // metadata. The box transfers ownership without reallocating.
-        unsafe { mem::transmute::<Box<str>, Box<RawValue>>(json) }
-    }
-
-    #[allow(unsafe_code)]
-    fn into_owned(raw_value: Box<Self>) -> Box<str> {
-        // SAFETY: the transparent wrapper has the same layout and string
-        // metadata, so the returned box owns the original string allocation.
-        unsafe { mem::transmute::<Box<RawValue>, Box<str>>(raw_value) }
+        Box::new(RawValue {
+            json: RawText::Owned(json),
+        })
     }
 }
 
@@ -151,7 +67,7 @@ impl ToOwned for RawValue {
     type Owned = Box<RawValue>;
 
     fn to_owned(&self) -> Self::Owned {
-        RawValue::from_owned(self.json.to_owned().into_boxed_str())
+        RawValue::from_owned(self.get().into())
     }
 }
 
@@ -161,130 +77,113 @@ impl Default for Box<RawValue> {
     }
 }
 
+fn debug_raw(json: &str, formatter: &mut fmt::Formatter) -> fmt::Result {
+    formatter
+        .debug_tuple("RawValue")
+        .field(&format_args!("{}", json))
+        .finish()
+}
+
 impl Debug for RawValue {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter
-            .debug_tuple("RawValue")
-            .field(&format_args!("{}", &self.json))
-            .finish()
+        debug_raw(self.get(), formatter)
     }
 }
 
 impl Display for RawValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&self.json)
+        f.write_str(self.get())
     }
 }
 
 impl RawValue {
     /// A constant RawValue with the JSON value `null`.
-    pub const NULL: &'static RawValue = RawValue::from_borrowed("null");
+    pub const NULL: &'static RawValue = &RawValue::from_static("null");
     /// A constant RawValue with the JSON value `true`.
-    pub const TRUE: &'static RawValue = RawValue::from_borrowed("true");
+    pub const TRUE: &'static RawValue = &RawValue::from_static("true");
     /// A constant RawValue with the JSON value `false`.
-    pub const FALSE: &'static RawValue = RawValue::from_borrowed("false");
+    pub const FALSE: &'static RawValue = &RawValue::from_static("false");
 
-    /// Convert an owned `String` of JSON data to an owned `RawValue`.
+    /// Validate a single JSON value and retain its original text.
     ///
-    /// This function is equivalent to `serde_json::from_str::<Box<RawValue>>`
-    /// except that we avoid an allocation and memcpy if both of the following
-    /// are true:
-    ///
-    /// - the input has no leading or trailing whitespace, and
-    /// - the input has capacity equal to its length.
+    /// The result excludes surrounding whitespace. If the input contains
+    /// only the value and has capacity equal to its length, the result
+    /// takes ownership of the existing string allocation.
     pub fn from_string(json: String) -> Result<Box<Self>, Error> {
-        let borrowed = tri!(crate::from_str::<&Self>(&json));
-        if borrowed.json.len() < json.len() {
-            return Ok(borrowed.to_owned());
+        let borrowed = tri!(crate::from_str::<BorrowedRawValue<'_>>(&json));
+        if borrowed.get().len() < json.len() {
+            return Ok(borrowed.into_owned());
         }
         Ok(Self::from_owned(json.into_boxed_str()))
     }
 
-    /// Convert an owned `String` of JSON data to an owned `RawValue` without
-    /// checking that it contains valid JSON.
-    ///
-    /// This is the unchecked counterpart of [`RawValue::from_string`], for
-    /// strings that are already known to be valid JSON, such as the output of
-    /// another JSON serializer. Unlike `from_string`, it does not re-parse the
-    /// string; the only cost is `String::into_boxed_str`.
-    ///
-    /// # Safety
-    ///
-    /// The string passed in must contain a single well-formed JSON value with
-    /// no leading or trailing whitespace. `RawValue` is written verbatim into
-    /// JSON output wherever it is embedded, and other code (including unsafe
-    /// code) is allowed to rely on `RawValue` upholding this invariant, in the
-    /// same way that unsafe code may rely on `str` containing valid UTF-8.
-    ///
-    /// In debug builds this contract is checked with a `debug_assert!` that
-    /// re-parses the input; the check is compiled out in release builds, so
-    /// only release performance matches the "no re-parse" guarantee above.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use serde_json::value::RawValue;
-    ///
-    /// let json = serde_json::to_string(&[1, 2, 3])?;
-    ///
-    /// // SAFETY: `json` was produced by serde_json's own serializer, so it is
-    /// // a single well-formed JSON value without surrounding whitespace.
-    /// let raw = unsafe { RawValue::from_string_unchecked(json) };
-    ///
-    /// assert_eq!(raw.get(), "[1,2,3]");
-    /// # Ok::<(), serde_json::Error>(())
-    /// ```
-    #[allow(unsafe_code)]
-    pub unsafe fn from_string_unchecked(json: String) -> Box<Self> {
-        debug_assert!(
-            crate::from_str::<&Self>(&json).is_ok_and(|v| v.json.len() == json.len()),
-            "from_string_unchecked: input is not a single well-formed JSON value \
-             with no leading or trailing whitespace",
-        );
-        Self::from_owned(json.into_boxed_str())
-    }
-
-    /// Access the JSON text underlying a raw value.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use serde::Deserialize;
-    /// use serde_json::{Result, value::RawValue};
-    ///
-    /// #[derive(Deserialize)]
-    /// struct Response<'a> {
-    ///     code: u32,
-    ///     #[serde(borrow)]
-    ///     payload: &'a RawValue,
-    /// }
-    ///
-    /// fn process(input: &str) -> Result<()> {
-    ///     let response: Response = serde_json::from_str(input)?;
-    ///
-    ///     let payload = response.payload.get();
-    ///     if payload.starts_with('{') {
-    ///         // handle a payload which is a JSON map
-    ///     } else {
-    ///         // handle any other type
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    ///
-    /// fn main() -> Result<()> {
-    ///     process(r#" {"code": 200, "payload": {}} "#)?;
-    ///     Ok(())
-    /// }
-    /// ```
+    /// Access the original JSON text.
     pub fn get(&self) -> &str {
-        &self.json
+        match &self.json {
+            RawText::Owned(json) => json,
+            RawText::Static(json) => json,
+        }
     }
 }
 
 impl From<Box<RawValue>> for Box<str> {
     fn from(raw_value: Box<RawValue>) -> Self {
-        RawValue::into_owned(raw_value)
+        match raw_value.json {
+            RawText::Owned(json) => json,
+            RawText::Static(json) => json.into(),
+        }
+    }
+}
+
+/// A JSON value borrowed from an input string or byte slice.
+///
+/// The borrowed value retains a slice of the input text without copying it.
+/// Serializing it writes the value with the same formatting. Equality and
+/// hashing use that text, including whitespace within the value.
+///
+/// ```
+/// use serde::{Deserialize, Serialize};
+/// use serde_json::value::BorrowedRawValue;
+///
+/// #[derive(Deserialize, Serialize)]
+/// struct Message<'a> {
+///     code: u32,
+///     #[serde(borrow)]
+///     payload: BorrowedRawValue<'a>,
+/// }
+///
+/// let message: Message = serde_json::from_str(r#"{"code":200,"payload":[1, 2]}"#)?;
+/// assert_eq!(message.payload.get(), "[1, 2]");
+/// assert_eq!(serde_json::to_string(&message)?, r#"{"code":200,"payload":[1, 2]}"#);
+/// # Ok::<(), serde_json::Error>(())
+/// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "raw_value")))]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct BorrowedRawValue<'a> {
+    json: &'a str,
+}
+
+impl<'a> BorrowedRawValue<'a> {
+    /// Access the original JSON text.
+    pub fn get(&self) -> &'a str {
+        self.json
+    }
+
+    /// Copy the value into owned storage.
+    pub fn into_owned(self) -> Box<RawValue> {
+        RawValue::from_owned(self.json.into())
+    }
+}
+
+impl Debug for BorrowedRawValue<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        debug_raw(self.get(), formatter)
+    }
+}
+
+impl Display for BorrowedRawValue<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.json)
     }
 }
 
@@ -351,18 +250,34 @@ where
 
 pub const TOKEN: &str = "$serde_json::private::RawValue";
 
+fn serialize_raw<S>(json: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut output = tri!(serializer.serialize_struct(TOKEN, 1));
+    tri!(output.serialize_field(TOKEN, json));
+    output.end()
+}
+
 impl Serialize for RawValue {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut s = tri!(serializer.serialize_struct(TOKEN, 1));
-        tri!(s.serialize_field(TOKEN, &self.json));
-        s.end()
+        serialize_raw(self.get(), serializer)
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for &'a RawValue {
+impl Serialize for BorrowedRawValue<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialize_raw(self.get(), serializer)
+    }
+}
+
+impl<'de: 'a, 'a> Deserialize<'de> for BorrowedRawValue<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -370,7 +285,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for &'a RawValue {
         struct ReferenceVisitor;
 
         impl<'de> Visitor<'de> for ReferenceVisitor {
-            type Value = &'de RawValue;
+            type Value = BorrowedRawValue<'de>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "any valid JSON value")
@@ -458,7 +373,7 @@ impl<'de> Deserialize<'de> for RawKey {
 pub struct ReferenceFromString;
 
 impl<'de> DeserializeSeed<'de> for ReferenceFromString {
-    type Value = &'de RawValue;
+    type Value = BorrowedRawValue<'de>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -469,7 +384,7 @@ impl<'de> DeserializeSeed<'de> for ReferenceFromString {
 }
 
 impl<'de> Visitor<'de> for ReferenceFromString {
-    type Value = &'de RawValue;
+    type Value = BorrowedRawValue<'de>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("raw value")
@@ -479,7 +394,7 @@ impl<'de> Visitor<'de> for ReferenceFromString {
     where
         E: de::Error,
     {
-        Ok(RawValue::from_borrowed(s))
+        Ok(BorrowedRawValue { json: s })
     }
 }
 
@@ -588,250 +503,51 @@ impl<'de> MapAccess<'de> for BorrowedRawDeserializer<'de> {
     }
 }
 
-impl<'de> IntoDeserializer<'de, Error> for &'de RawValue {
-    type Deserializer = &'de RawValue;
+// Both representations pass the same original text to the JSON deserializer.
+macro_rules! impl_raw_deserializer {
+    ($raw:ty) => {
+        impl<'de> IntoDeserializer<'de, Error> for $raw {
+            type Deserializer = Self;
 
-    fn into_deserializer(self) -> Self::Deserializer {
-        self
-    }
+            fn into_deserializer(self) -> Self::Deserializer {
+                self
+            }
+        }
+
+        impl<'de> Deserializer<'de> for $raw {
+            type Error = Error;
+
+            raw_deserializer_methods! {
+                deserialize_any, deserialize_bool,
+                deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64, deserialize_i128,
+                deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64, deserialize_u128,
+                deserialize_f32, deserialize_f64, deserialize_char, deserialize_str,
+                deserialize_string, deserialize_bytes, deserialize_byte_buf, deserialize_option,
+                deserialize_unit, deserialize_unit_struct(name: &'static str),
+                deserialize_newtype_struct(name: &'static str), deserialize_seq,
+                deserialize_tuple(len: usize), deserialize_tuple_struct(name: &'static str, len: usize),
+                deserialize_map, deserialize_struct(name: &'static str, fields: &'static [&'static str]),
+                deserialize_enum(name: &'static str, variants: &'static [&'static str]),
+                deserialize_identifier, deserialize_ignored_any,
+            }
+        }
+    };
 }
 
-impl<'de> Deserializer<'de> for &'de RawValue {
-    type Error = Error;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_any(visitor)
-    }
-
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_bool(visitor)
-    }
-
-    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_i8(visitor)
-    }
-
-    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_i16(visitor)
-    }
-
-    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_i32(visitor)
-    }
-
-    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_i64(visitor)
-    }
-
-    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_i128(visitor)
-    }
-
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_u8(visitor)
-    }
-
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_u16(visitor)
-    }
-
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_u32(visitor)
-    }
-
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_u64(visitor)
-    }
-
-    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_u128(visitor)
-    }
-
-    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_f32(visitor)
-    }
-
-    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_f64(visitor)
-    }
-
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_char(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_str(visitor)
-    }
-
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_string(visitor)
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_bytes(visitor)
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_byte_buf(visitor)
-    }
-
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_option(visitor)
-    }
-
-    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_unit(visitor)
-    }
-
-    fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_unit_struct(name, visitor)
-    }
-
-    fn deserialize_newtype_struct<V>(
-        self,
-        name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_newtype_struct(name, visitor)
-    }
-
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_seq(visitor)
-    }
-
-    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_tuple(len, visitor)
-    }
-
-    fn deserialize_tuple_struct<V>(
-        self,
-        name: &'static str,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_tuple_struct(name, len, visitor)
-    }
-
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_map(visitor)
-    }
-
-    fn deserialize_struct<V>(
-        self,
-        name: &'static str,
-        fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_struct(name, fields, visitor)
-    }
-
-    fn deserialize_enum<V>(
-        self,
-        name: &'static str,
-        variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_enum(name, variants, visitor)
-    }
-
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_identifier(visitor)
-    }
-
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        crate::Deserializer::from_str(&self.json).deserialize_ignored_any(visitor)
-    }
+macro_rules! raw_deserializer_methods {
+    ($($method:ident $(($($arg:ident: $ty:ty),+))?),+ $(,)?) => {
+        $(
+            fn $method<V>(
+                self, $($($arg: $ty,)+)? visitor: V,
+            ) -> Result<V::Value, Error>
+            where
+                V: Visitor<'de>,
+            {
+                crate::Deserializer::from_str(self.get()).$method($($($arg,)+)? visitor)
+            }
+        )+
+    };
 }
+
+impl_raw_deserializer!(&'de RawValue);
+impl_raw_deserializer!(BorrowedRawValue<'de>);

@@ -63,7 +63,7 @@ The selected asynchronous gzip path uses initialized slices in the Tokio adapter
 
 The application and MCP relay use a checked integer formatter for JSON. The app also uses it for integer HTTP headers. It retains the pinned itoa version and forbids unsafe Rust in that crate. Archive media length headers and extreme integer MCP request IDs passed runtime checks. [Consumers, platform checks and paired measurements](audit/2026-11-19-checked-itoa.md)
 
-The JSON reader, writer and value formatter now use checked string spans and initialized escape buffers. The app still selects the `raw_value` feature for Tauri. Three representation conversions and an unsafe constructor remain in that feature. The MCP relay leaves it off. The float formatter and other JSON dependencies still need their own review. [JSON checks and paired measurements](audit/2026-11-19-checked-json.md)
+The vendored JSON library forbids unsafe Rust with every feature. It uses checked string spans, initialized escape buffers and typed raw value storage. Tauri retains the boxed `RawValue` API. Deserializers that borrow raw data use `BorrowedRawValue`. The float formatter and other JSON dependencies remain in the app-wide audit. [Raw value ownership and callback checks](audit/2026-11-19-owned-raw-json.md) · [String parsing and formatting checks](audit/2026-11-19-checked-json.md)
 
 ## Performance follow-up
 

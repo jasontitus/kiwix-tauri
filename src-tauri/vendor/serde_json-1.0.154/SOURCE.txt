@@ -5,7 +5,11 @@ Crate SHA-256: e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6
 License: MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
 
 Kiwix changes: use checked string scans, byte writes and text slicing in the
-reader, writer and Value formatter. Deny unsafe Rust with four scoped exceptions
-for the existing `raw_value` feature's representation and unchecked constructor.
-Keep the published API and feature selection. Add coverage of UTF-8 and escapes
-across the reader's scan chunk boundaries.
+reader, writer and Value formatter. Use typed owned storage for boxed RawValue
+and BorrowedRawValue for deserializing a borrowed raw span. The unchecked
+RawValue constructor has been removed. The crate forbids unsafe Rust with all
+features, including raw_value.
+
+Deserialize borrowed raw fields into BorrowedRawValue<'a> by value and call
+into_owned() to copy a retained span into a Box<RawValue>. An existing &RawValue
+can still serve as a Deserializer.
