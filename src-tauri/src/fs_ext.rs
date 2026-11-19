@@ -118,6 +118,10 @@ struct VolumeSpace {
 
 #[cfg(unix)]
 fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
+    use std::os::unix::ffi::OsStrExt;
+    if path.as_os_str().as_bytes().contains(&0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
+    }
     let stat = rustix::fs::statvfs(path)?;
     Ok(VolumeSpace {
         available: stat.f_frsize.saturating_mul(stat.f_bavail),
@@ -221,7 +225,10 @@ mod tests {
     #[test]
     fn volume_query_rejects_an_embedded_path_terminator() {
         let path = std::env::temp_dir().join("archive\0trailing");
-        assert_eq!(available_space(path).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        for error in [available_space(&path).unwrap_err(), total_space(&path).unwrap_err()] {
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(error.to_string(), "path contains a NUL byte");
+        }
     }
 
     #[test]

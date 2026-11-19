@@ -40,11 +40,11 @@ pub fn thread_cpu_time_micros() -> Option<u128> {
 /// Process-wide CPU time, all threads included, in whole microseconds.
 ///
 /// The Android evaluation bridge charges the native import and search workers
-/// that the measured operation starts, which a thread clock would miss. It is
-/// the only caller, so the helper stays available on every Unix target without
-/// a dead-code warning elsewhere.
+/// that the measured operation starts, which a thread clock would miss; the
+/// ignored throughput harness also reports whole-process CPU time. The helper
+/// stays available on every Unix target without a dead-code warning elsewhere.
 #[cfg(unix)]
-#[allow(dead_code, reason = "only the debug Android evaluation bridge reads process CPU time")]
+#[allow(dead_code, reason = "only the debug Android evaluation bridge and the ignored throughput harness read process CPU time")]
 pub fn process_cpu_time_micros() -> Option<u128> {
     Some(micros(clock(rustix::time::ClockId::ProcessCPUTime)?))
 }

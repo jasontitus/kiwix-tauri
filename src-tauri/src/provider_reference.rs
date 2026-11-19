@@ -203,7 +203,7 @@ fn duplicate_provider_file(fd: std::os::fd::BorrowedFd<'_>) -> Result<std::fs::F
         .map_err(|error| std::io::Error::from(error).to_string())?;
     let file = std::fs::File::from(duplicate);
     if !file.metadata().map_err(|error| error.to_string())?.is_file()
-        || rustix::fs::seek(&file, rustix::fs::SeekFrom::Current(0)).is_err()
+        || rustix::fs::tell(&file).is_err()
     {
         return Err("This provider does not offer a seekable regular file. Choose Import archives to make a managed copy.".into());
     }

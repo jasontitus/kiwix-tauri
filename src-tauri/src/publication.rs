@@ -972,4 +972,26 @@ mod tests {
         assert_eq!(std::fs::read(&source).unwrap(), b"new");
         std::fs::remove_dir_all(directory).unwrap();
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn nul_paths_are_rejected_before_the_rename_fallback() {
+        use std::os::unix::ffi::OsStrExt;
+        let nul = Path::new(std::ffi::OsStr::from_bytes(b"bad\0name"));
+        for error in [
+            publish_noreplace(Path::new("missing"), nul).unwrap_err(),
+            publish_noreplace(nul, Path::new("missing")).unwrap_err(),
+        ] {
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(error.to_string(), "Publication path contains NUL");
+        }
+        let directory =
+            std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let dir = Dir::open_ambient_dir(&directory, cap_std::ambient_authority()).unwrap();
+        let error = rename_entry_noreplace(&dir, Path::new("partial"), nul).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "Publication path contains NUL");
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 }

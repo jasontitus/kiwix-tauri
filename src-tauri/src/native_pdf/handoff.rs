@@ -15,6 +15,8 @@ impl Drop for ExportAdmission {
 pub fn admit_export(commit: Commit) -> Result<ExportAdmission, String> {
     // Install through the imported C module, rather than leaving that module
     // with an unresolved Rust symbol in standalone Swift package policy tests.
+    // SAFETY: the bridge stores only this static C-ABI function pointer,
+    // synchronized by its lock. It invokes the callback synchronously.
     unsafe { kiwix_pdf_export_install(kiwix_pdf_commit_action); }
     let token = uuid::Uuid::new_v4().to_string();
     EXPORTS.lock().map_err(|_| "PDF export could not start. Try again")?.insert(token.clone(), commit);
@@ -22,6 +24,8 @@ pub fn admit_export(commit: Commit) -> Result<ExportAdmission, String> {
 }
 extern "C" fn kiwix_pdf_commit_action(token: *const c_char, context: *mut c_void, action: extern "C" fn(*mut c_void)) -> bool {
     if token.is_null() || context.is_null() { return false; }
+    // SAFETY: Swift's withCString keeps the NUL-terminated token readable
+    // throughout the synchronous bridge call. Rust uses it only for the lookup.
     let Ok(token) = (unsafe { CStr::from_ptr(token) }).to_str() else { return false; };
     // Consume before calling UIKit. Duplicate/native reentrant presentations
     // cannot renew the authority or invoke the action a second time.
