@@ -35,16 +35,21 @@ Each row covers both sides of an interface. Moving raw operations behind a safe 
 
 ### Progress since the 2026-11-17 snapshot
 
-`942c36306b`, `84fd93e7de` and `cdfdf64478` (2026-11-19) removed 16 `unsafe` matches from seven files, five
-of which became unsafe-free (`239` → `223` matches; `42` → `37` files):
+`942c36306b`, `84fd93e7de`, `cdfdf64478` and `7b50d62763` (2026-11-19) removed 20 `unsafe` matches from eight
+files, six of which became unsafe-free (`239` → `219` matches; `42` → `36` files):
 
 - **B3, exclusive-rename, volume-space and lock subset.** `publication::platform_publish{,_in}`,
-  `maps::partials::capture_partial`, `library_files::move_exclusive` and
-  `localswarm::storage::rename_directory_noreplace` now use `rustix::fs::renameat_with(…, NOREPLACE)`,
+  `maps::partials::capture_partial`, `library_files::move_exclusive`,
+  `localswarm::storage::rename_directory_noreplace` and `torrent::publication::move_publication_entry` now use
+  `rustix::fs::renameat_with(…, NOREPLACE)`,
   matching `library_root::publish_exclusive`; `fs_ext::volume_space` uses `rustix::fs::statvfs` and
   `try_flock_*` uses `rustix::fs::flock`. No-replace is still filesystem-enforced, the Linux old-kernel
   `link(2)` fallback is preserved, the volume arithmetic and NUL diagnostic are unchanged, and
   `EWOULDBLOCK` still maps to `WouldBlock`. The Windows arms, file identity and the rest of B3 remain open.
+- **B4, document-provider descriptor subset.** `provider_reference`'s native `retain` now duplicates the
+  lease-owned descriptor with `rustix::io::fcntl_dupfd_cloexec` and probes seekability with `rustix::fs::tell`;
+  only the documented `BorrowedFd::borrow_raw` claim remains. Lease lifetimes, revoke/regrant, backup flags,
+  bookmark scope and the Swift `unsafeBitCast` delegate chaining remain open.
 - **B10, diagnostic clocks.** `maps::Control::chunk_sha256` and the ignored throughput benchmark now read
   `cpu_time`'s helpers; no `getrusage` or raw `CLOCK_THREAD_CPUTIME_ID` call remains in `src/`. Test-only
   FIFO/interface/ACL calls, the probes and the JNI entry points remain open.

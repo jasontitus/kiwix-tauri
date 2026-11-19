@@ -274,3 +274,28 @@ it does not independently prove the byte scale of `f_frsize`.
 including the volume-space and NUL assertions) and `library_root::` (35 tests) on macOS; the Android lib
 check with `--features android-evaluation`. Not run: iOS/Linux cross-target checks, device tests,
 sanitizer/Miri.
+
+## Follow-up implemented 2026-11-19 (third batch)
+
+`7b50d62763` removes four more blocks in two files:
+
+- **Torrent publication rename (2 blocks).** `torrent::publication::move_publication_entry` was the last
+  `renameatx_np`/`renameat2` site left out of the first batch. It now uses the same
+  `rustix::fs::renameat_with(…, NOREPLACE)` call, and the file becomes unsafe-free.
+- **Provider descriptor duplication (3 → 1 block).** `provider_reference`'s native `retain` duplicates the
+  lease-owned descriptor with `rustix::io::fcntl_dupfd_cloexec` (the same `F_DUPFD_CLOEXEC` request), turns
+  the resulting `OwnedFd` into a `File` without `from_raw_fd`, and probes seekability with `rustix::fs::tell`
+  (the same `lseek(fd, 0, SEEK_CUR)`). One documented `BorrowedFd::borrow_raw` claim remains: the native
+  lease owns the raw descriptor for the call and the duplicate is owned only by the new `File`.
+
+| Metric | Before | After |
+|---|---:|---:|
+| `unsafe { … }` matches | 223 | **219** |
+| Files containing them | 37 | **36** |
+| `unsafe extern` / `unsafe fn` / `unsafe impl` lines | 58 | **58** |
+
+**Verification exercised:** macOS `cargo check --lib`, `cargo clippy --lib -- -D warnings`,
+`torrent::tests::publication` (16 tests) and `provider_reference` (9 tests). The provider `native` module is
+`cfg(mobile)`, so the host build does not compile it; `cargo check --lib --target aarch64-linux-android
+--features android-evaluation` compiles it. Not run: iOS/Linux cross-target checks, device tests,
+sanitizer/Miri. The descriptor path itself was not exercised against a real document provider.

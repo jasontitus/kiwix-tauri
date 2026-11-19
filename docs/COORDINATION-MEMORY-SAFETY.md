@@ -15,12 +15,14 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 | `src-tauri/src/publication.rs` | `platform_publish` (both Unix arms), `platform_publish_in`, `check_path`, `publication::tests::nul_paths_*` and `dangling_symlink_*` |
 | `src-tauri/src/maps/partials.rs` | `capture_partial` (Unix arm) |
 | `src-tauri/src/library_files.rs` | `move_exclusive` (Unix arm) |
+| `src-tauri/src/torrent/publication.rs` | `move_publication_entry` (Unix arm) |
+| `src-tauri/src/provider_reference.rs` | native `retain` descriptor duplication |
 | `src-tauri/src/localswarm/storage.rs` | `rename_directory_noreplace` (Unix arm) |
 | `src-tauri/src/maps.rs` | `evaluation` module and `Control::chunk_sha256` clock reads |
 | `src-tauri/src/fs_ext.rs` | `volume_space`, `try_flock_exclusive`/`try_flock_shared` (Unix arms) and their tests |
 | `src-tauri/src/acquisition_tests.rs` | `cpu_seconds`, `bench_loopback_throughput` |
 | `src-tauri/src/cpu_time.rs` | documentation and lint reason only |
-| `docs/RUST-UNSAFE-REVIEW.md` | sections `## Follow-up implemented 2026-11-19` and the second batch |
+| `docs/RUST-UNSAFE-REVIEW.md` | the 2026-11-19 follow-up sections (all batches) |
 | `docs/MEMORY-SAFETY-INVENTORY.md` | subsection `### Progress since the 2026-11-17 snapshot` |
 | `CHANGELOG.md` | the memory-safety bullet beginning `- Remove` |
 
@@ -37,19 +39,22 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   and NUL diagnostic.
 - `cdfdf64478` — replaces the Unix `libc::flock` helper with `rustix::fs::flock`; same non-blocking
   operations and `WouldBlock` mapping.
+- `7b50d62763` — torrent publication rename now uses `rustix::fs::renameat_with`; provider descriptor
+  duplication uses `rustix::io::fcntl_dupfd_cloexec` and `rustix::fs::tell` (one documented `borrow_raw`).
 
 ## Status
 
 - Verified on macOS: `cargo check --lib`, `cargo clippy --lib -- -D warnings`, and the publication,
-  exclusive, capture, rename, composer, `fs_ext::`, `instance::` and `library_root::` test filters.
+  exclusive, capture, rename, composer, `fs_ext::`, `instance::`, `library_root::`, torrent-publication and
+  `provider_reference` test filters.
 - Verified for Android: `cargo check --lib --target aarch64-linux-android --features android-evaluation`
   with NDK 28 under Rust 1.99.1.
 - Not run: iOS/Linux cross-target checks, device tests, sanitizer/Miri.
 - First batch: 239 → 226 matches, 42 → 37 files. Second batch (`84fd93e7de`, `cdfdf64478`): 226 → 223.
-  The four initial findings and two follow-up findings from the first batch are fixed and independently
-  verified.
+  Third batch (`7b50d62763`): 223 → 219 matches, 37 → 36 files. The four initial findings and two follow-up
+  findings from the first batch are fixed and independently verified.
 - The second batch is independently reviewed. Two P3 documentation findings (batch count, reservation
-  synchronization) are fixed in the follow-up commit.
+  synchronization) are fixed in the follow-up commit. The third batch awaits independent review.
 
 ## Not reserved (safe for the other session)
 
