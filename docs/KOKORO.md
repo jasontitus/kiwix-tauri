@@ -45,25 +45,16 @@ Changing the bytes requires a new tag and a corresponding code update.
 
 ## Bundled Android offline build
 
-The standard Android APK never contains the model. A separate offline APK can
-embed the extracted pack under `assets/kokoro-en-fp16-v1_0`:
+The standard Android APK omits the voice data. Supply the expanded model directory when building an offline edition.
 
 ```sh
 ORG_GRADLE_PROJECT_kiwixBundledKokoroDir=/path/to/model-root \
   npm run tauri -- android build --target aarch64 --apk --ci
 ```
 
-`model-root` must contain the full `kokoro-en-fp16-v1_0` directory (model,
-voices, tokens, both lexicons, and `espeak-ng-data`); use a staging directory
-containing only that model directory. On first launch `BundledKokoro.kt` checks
-free space, copies the tree into `files/kiwix/models/kokoro-en-fp16-v1_0`,
-verifies the required files and the pinned model SHA-256, and only then writes
-the `bundled-model` marker. The normal performance gate still applies. The
-marker suppresses the network download prompt; the app never needs the network
-for the model. Removing the model clears the marker and writes a durable
-`bundled-model-removed` marker so the app does not silently recopy it. This APK
-is larger by the model payload (about 219 MB extracted; the standard APK
-contains only the sherpa-onnx/ONNX Runtime libraries).
+`model-root/kokoro-en-fp16-v1_0` must contain the pinned distribution. Gradle reads the 360 named files in the same order as the Rust installer's manifest, checks each length and SHA-256, and stores their 221,488,168 bytes as one uncompressed APK asset. Other files in the supplied directory are excluded. A missing or modified required file stops the build. [Pinned model layout](../src-tauri/src/kokoro/pack-v1.tsv)
+
+On Android, AssetManager locates the asset inside the installed base or split APK. The app rechecks that APK's identity and bounds reads to the reported region. The bundled edition and the download share the Rust installer and its file checks. The app can prepare the bundled model offline during writable, non-private startup. Settings can retry an interrupted installation or explicitly reinstall a removed model; a normal launch respects its removal marker. The optional native inference engine still applies its performance gate.
 
 ## Hardware gate
 

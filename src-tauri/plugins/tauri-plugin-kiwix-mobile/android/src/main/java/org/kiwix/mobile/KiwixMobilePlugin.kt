@@ -321,7 +321,6 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         val owner = activityReference.get() ?: return
         if (currentActivity.get() !== owner) return
         CrashIntake.install(applicationContext)
-        BundledKokoro.install(applicationContext)
         bindWebView(webView)
         sweepExportCache()
         val lifecycle = (owner as? LifecycleOwner)?.lifecycle?.currentState
@@ -841,6 +840,11 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             invoke.resolve(JSObject().put("path", applicationContext.filesDir.canonicalPath)
                 .put("cachePath", applicationContext.cacheDir.canonicalPath))
         } catch (error: Exception) { reject(invoke, error) }
+    }
+
+    @Command fun bundledVoicePack(invoke: Invoke) {
+        try { invoke.resolve(BundledKokoro.location(applicationContext)) }
+        catch (error: Exception) { reject(invoke, error) }
     }
 
     /** App-owned library locations, including removable app-specific folders. */
