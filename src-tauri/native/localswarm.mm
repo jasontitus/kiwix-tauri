@@ -542,16 +542,15 @@ extern "C" void kiwix_swarm_start(void *raw, void *context, Completion completio
         nw_browser_start(handle->browser);
     });
 }
-extern "C" void kiwix_swarm_read(void *raw, size_t maximum, void *context, Completion completion) {
+// Network.framework lends its immutable dispatch data for the callback.
+using ReadCompletion = void (*)(uint64_t, int, dispatch_data_t);
+extern "C" void kiwix_swarm_read(void *raw, size_t maximum, uint64_t request, ReadCompletion completion) {
     auto handle = *(SwarmConnectionHandle *)raw;
     dispatch_async(queue(), ^{
-        if (!handle->ready) { completion(context, -1, nullptr, 0); return; }
+        if (!handle->ready) { completion(request, -1, nil); return; }
         nw_connection_receive(handle->value, 1, (uint32_t)maximum, ^(dispatch_data_t data, nw_content_context_t, bool complete, nw_error_t error) {
-            if (error) { completion(context, -1, nullptr, 0); return; }
-            const void *bytes = nullptr; size_t size = 0;
-            __attribute__((objc_precise_lifetime)) dispatch_data_t mapped =
-                data ? dispatch_data_create_map(data, &bytes, &size) : nil;
-            completion(context, (!size && !complete) ? -1 : 0, (const uint8_t *)bytes, size);
+            const bool empty = !data || dispatch_data_get_size(data) == 0;
+            completion(request, error || (empty && !complete) ? -1 : 0, data);
         });
     });
 }
