@@ -19,6 +19,8 @@ interface KokoroStatus {
   bundleCheckFailed?: boolean;
   removalPending?: boolean;
   repairAvailable?: boolean;
+  legacyRetained?: boolean;
+  legacyAudioRetained?: boolean;
 }
 
 interface ModelEvent {
@@ -37,10 +39,14 @@ export default function SpeechModels() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function refresh() {
+  async function refresh(preserved?: Pick<KokoroStatus, "legacyRetained" | "legacyAudioRetained">) {
     try {
       const next = await api<KokoroStatus>("kokoro_status");
-      setStatus(next);
+      setStatus({
+        ...next,
+        legacyRetained: next.legacyRetained || preserved?.legacyRetained,
+        legacyAudioRetained: next.legacyAudioRetained || preserved?.legacyAudioRetained,
+      });
       setError(next.error || "");
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
@@ -71,6 +77,8 @@ export default function SpeechModels() {
         bundleCheckFailed: previous?.bundleCheckFailed ?? false,
         removalPending: previous?.removalPending ?? false,
         repairAvailable: previous?.repairAvailable ?? false,
+        legacyRetained: previous?.legacyRetained,
+        legacyAudioRetained: previous?.legacyAudioRetained,
       }));
       if (payload.state === "error") setError(payload.error || t("The voice model download failed."));
       if (payload.state === "installed") setError("");
@@ -136,8 +144,8 @@ export default function SpeechModels() {
     setBusy(true);
     setError("");
     try {
-      await api("kokoro_delete");
-      await refresh();
+      const preserved = await api<Pick<KokoroStatus, "legacyRetained" | "legacyAudioRetained">>("kokoro_delete");
+      await refresh(preserved);
     } catch (value) {
       await refresh();
       setError(value instanceof Error ? value.message : String(value));
@@ -225,6 +233,8 @@ export default function SpeechModels() {
           {t("Download natural voices")}
         </button>
       )}
+      {status?.legacyRetained && <p className="muted" role="status">{t("Files from an earlier voice model remain in app storage.")}</p>}
+      {status?.legacyAudioRetained && <p className="muted" role="status">{t("Some cached voice audio remains in app storage because its ownership could not be verified.")}</p>}
       {error && <p className="inline-error" role="alert">{error}</p>}
     </div>
   );
