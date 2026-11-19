@@ -472,7 +472,19 @@ fn remove_record(parent: &Dir, name: &str, journal: Journal) -> Result<()> {
 // Keep every changed or unknown entry. Empty directories are removed through
 // their open capabilities. An interrupted cleanup may resume after some entries
 // have gone.
+fn require_record(parent: &Dir, name: &str, journal: &Journal) -> Result<()> {
+    let record = crate::publication::VerifiedFile::new(
+        journal.file.try_clone()?,
+        journal.file.metadata()?.len(),
+    )?;
+    if !record.matches_in(parent, name.as_ref())? {
+        return Err(changed());
+    }
+    Ok(())
+}
+
 fn cleanup(parent: &Dir, name: &str, journal: Journal) -> Result<()> {
+    require_record(parent, name, &journal)?;
     let dir = match journal.header.open(parent) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return remove_record(parent, name, journal)
@@ -563,10 +575,7 @@ fn verify_remaining(
             } else {
                 (size, digest)
             };
-            let checked = authenticated_file(&parent, actual, bytes, expected, Some(cancel))?;
-            if id(&Metadata::from_file(checked.file())?) != row.identity {
-                return Err(changed());
-            }
+            authenticate_owned_member(&parent, actual, bytes, expected, row.identity, cancel)?;
         } else {
             // An interrupted writer did not seal this file. On an authenticated
             // retry, compare its actual prefix to the pinned full member.
@@ -814,54 +823,122 @@ fn preserve_record(parent: &Dir, name: &str, journal: &Journal) -> Result<()> {
     )
 }
 
+fn authenticate_owned_member(
+    dir: &Dir,
+    name: &Path,
+    bytes: u64,
+    digest: &str,
+    identity: Id,
+    cancel: &CancellationToken,
+) -> Result<()> {
+    let checked = authenticated_file(dir, name, bytes, digest, Some(cancel))?;
+    if id(&Metadata::from_file(checked.file())?) != identity || !checked.matches_in(dir, name)? {
+        return Err(changed());
+    }
+    Ok(())
+}
+
+fn verify_complete_files(dir: &Dir, journal: &Journal, cancel: &CancellationToken) -> Result<()> {
+    // Every published payload must still resolve through its expected name.
+    // Partial cleanup alone accepts missing members or removal capture names.
+    for (path, info) in layout() {
+        let Some((size, digest)) = info else { continue };
+        check_cancel(cancel)?;
+        let member = journal.members.get(path).ok_or_else(changed)?;
+        let parent = subdir(&journal.members, dir, path.parent().ok_or_else(changed)?)?;
+        authenticate_owned_member(
+            &parent,
+            Path::new(path.file_name().ok_or_else(changed)?),
+            size,
+            digest,
+            member.identity,
+            cancel,
+        )?;
+    }
+    Ok(())
+}
+
 fn verified_generation(parent: &Dir, journal: &Journal, cancel: &CancellationToken) -> Result<()> {
     let dir = journal.header.open(parent)?;
     if journal.members.len() != layout().count() - 1 {
         return Err(changed());
     }
     validate(&journal.members, &dir, true)?;
-    verify_remaining(journal, &dir, None, cancel)
+    verify_complete_files(&dir, journal, cancel)?;
+    validate(&journal.members, &dir, true)
+}
+
+// A storage or permission failure cannot establish that the user's selection
+// is damaged. Leave both records where they are until verification can run.
+fn verification_outcome(result: Result<()>) -> Result<bool> {
+    match result {
+        Ok(()) => Ok(true),
+        Err(e)
+            if matches!(
+                e.kind(),
+                io::ErrorKind::InvalidData
+                    | io::ErrorKind::NotFound
+                    | io::ErrorKind::NotADirectory
+                    | io::ErrorKind::IsADirectory
+            ) =>
+        {
+            Ok(false)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn recover_previous(parent: &Dir, cancel: &CancellationToken) -> Result<()> {
+    check_cancel(cancel)?;
     let previous = match Journal::load(parent, PREVIOUS) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
-        result => result?,
+        r => r?,
     };
     let current = match Journal::load(parent, INSTALLED) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return move_record(parent, PREVIOUS, INSTALLED, &previous)
         }
-        result => result?,
+        r => r?,
     };
     if current.header.directory_id == previous.header.directory_id {
         return Err(changed());
     }
-    // Never reclaim an intact fallback on the strength of a selected name or
-    // shape. A same-sized changed file is enough to invalidate the selection.
-    if verified_generation(parent, &current, cancel).is_err() {
+    if !verification_outcome(verified_generation(parent, &current, cancel))? {
+        let previous_valid = verification_outcome(verified_generation(parent, &previous, cancel))?;
         check_cancel(cancel)?;
-        if verified_generation(parent, &previous, cancel).is_ok() {
+        if previous_valid {
             preserve_record(parent, INSTALLED, &current)?;
             return move_record(parent, PREVIOUS, INSTALLED, &previous);
         }
-        check_cancel(cancel)?;
         return preserve_record(parent, PREVIOUS, &previous);
     }
-    match previous.header.open(parent) {
-        Ok(dir)
-            if validate(&previous.members, &dir, false).is_ok()
-                && verify_remaining(&previous, &dir, None, cancel).is_ok() =>
-        {
-            drop(dir);
-            cleanup(parent, PREVIOUS, previous)
-        }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => remove_record(parent, PREVIOUS, previous),
-        _ => {
-            check_cancel(cancel)?;
-            preserve_record(parent, PREVIOUS, &previous)
-        }
+    // A complete authenticated selection exists. Resume reclamation of the
+    // previous generation only when its remaining members can be verified.
+    let remaining = previous.header.open(parent).and_then(|dir| {
+        validate(&previous.members, &dir, false)?;
+        verify_remaining(&previous, &dir, None, cancel)
+    });
+    check_cancel(cancel)?;
+    if remaining
+        .as_ref()
+        .is_err_and(|e| e.kind() == io::ErrorKind::NotFound)
+        && !parent.try_exists(&previous.header.directory)?
+    {
+        return remove_record(parent, PREVIOUS, previous);
     }
+    if verification_outcome(remaining)? {
+        reclaim_previous(parent, &current, previous)
+    } else {
+        preserve_record(parent, PREVIOUS, &previous)
+    }
+}
+
+fn reclaim_previous(parent: &Dir, current: &Journal, previous: Journal) -> Result<()> {
+    // Both content verifications can take seconds. Rebind the selected record
+    // and its directory immediately before reclaiming the fallback's payload.
+    require_record(parent, INSTALLED, current)?;
+    current.header.open(parent)?;
+    cleanup(parent, PREVIOUS, previous)
 }
 
 fn selection(parent: &Dir) -> Result<File> {
@@ -1873,6 +1950,99 @@ mod tests {
         assert!(!removal_pending(&root));
         assert!(root.join(super::super::BUNDLED_REMOVED).is_file());
         assert!(Lease::for_install(&root, true, &CancellationToken::new()).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn inconclusive_model_access_keeps_both_selection_records_for_retry() {
+        use std::os::unix::fs::PermissionsExt;
+        let profile = tempdir().unwrap();
+        let root = profile.path().canonicalize().unwrap().join("models");
+        let lease = Lease::admit(&root).unwrap();
+        let (old, _) = Journal::create(&lease.parent, false).unwrap();
+        let (current, _) = Journal::create(&lease.parent, false).unwrap();
+        move_record(&lease.parent, &old.pending_name(), PREVIOUS, &old).unwrap();
+        move_record(&lease.parent, &current.pending_name(), INSTALLED, &current).unwrap();
+        for generation in [&current.header.directory, &old.header.directory] {
+            let path = root.join(generation);
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o770)).unwrap();
+            let e = recover_previous(&lease.parent, &CancellationToken::new()).unwrap_err();
+            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+            assert_eq!(
+                Journal::load(&lease.parent, PREVIOUS)
+                    .unwrap()
+                    .header
+                    .record_id,
+                old.header.record_id
+            );
+            assert_eq!(
+                Journal::load(&lease.parent, INSTALLED)
+                    .unwrap()
+                    .header
+                    .record_id,
+                current.header.record_id
+            );
+            assert!(!root.join(EARLIER).exists());
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        assert!(verification_outcome(Err(io::Error::from(io::ErrorKind::Interrupted))).is_err());
+    }
+
+    #[test]
+    fn complete_authentication_requires_a_member_that_partial_cleanup_can_skip() {
+        let profile = tempdir().unwrap();
+        let root = profile.path().canonicalize().unwrap().join("models");
+        let lease = Lease::admit(&root).unwrap();
+        let (mut journal, dir) = Journal::create(&lease.parent, false).unwrap();
+        let out = file(&dir, "tokens.txt".as_ref(), true).unwrap();
+        journal
+            .add(
+                "tokens.txt".as_ref(),
+                &Metadata::from_file(&out).unwrap(),
+                Some(687),
+            )
+            .unwrap();
+        drop(out);
+        dir.remove_file("tokens.txt").unwrap();
+        let cancel = CancellationToken::new();
+        assert!(verify_remaining(&journal, &dir, None, &cancel).is_ok());
+        assert_eq!(
+            verify_complete_files(&dir, &journal, &cancel)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::NotFound
+        );
+    }
+
+    #[test]
+    fn reclaim_keeps_the_fallback_if_the_selection_directory_or_pointer_changed() {
+        let profile = tempdir().unwrap();
+        let root = profile.path().canonicalize().unwrap().join("models");
+        let lease = Lease::admit(&root).unwrap();
+        let (old, _) = Journal::create(&lease.parent, false).unwrap();
+        let (current, _) = Journal::create(&lease.parent, false).unwrap();
+        move_record(&lease.parent, &old.pending_name(), PREVIOUS, &old).unwrap();
+        move_record(&lease.parent, &current.pending_name(), INSTALLED, &current).unwrap();
+        let selected = root.join(&current.header.directory);
+        fs::rename(&selected, root.join("saved-model")).unwrap();
+        assert!(reclaim_previous(
+            &lease.parent,
+            &current,
+            Journal::load(&lease.parent, PREVIOUS).unwrap()
+        )
+        .is_err());
+        fs::rename(root.join("saved-model"), &selected).unwrap();
+        fs::rename(root.join(INSTALLED), root.join("saved-record")).unwrap();
+        fs::write(root.join(INSTALLED), b"unrelated").unwrap();
+        assert!(reclaim_previous(
+            &lease.parent,
+            &current,
+            Journal::load(&lease.parent, PREVIOUS).unwrap()
+        )
+        .is_err());
+        assert_eq!(fs::read(root.join(INSTALLED)).unwrap(), b"unrelated");
+        assert!(root.join(PREVIOUS).is_file());
+        assert!(root.join(&old.header.directory).is_dir());
     }
 
     #[test]
