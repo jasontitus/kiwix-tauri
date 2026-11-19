@@ -11,6 +11,15 @@ The two builds alternated first position on the same Mac. Each opened its own em
 
 The comparison used native app `f2875d0` with libzim 9.8.2. The current app includes other changes made since that revision. A separate native `zimdump show` supplied the original bytes for each item. The checker verified that removing one contiguous reader insertion from each response recovered those bytes exactly. It checked the insertion for the reader marker. The receipt includes each item’s archive hash, per-request elapsed time, response size, insertion length, HTTP status, content type and response hash. [Compressed JSON measurements](2026-11-18-served-articles.json.gz)
 
+## Mac repeat on the Apple Nearby update
+
+The signed app at `09e57a9` and the same libzim app repeated the ten alternating trials per archive. All 960 responses passed the original byte check. The faster app switched on both archives between the two Mac runs. Both used a shared host, and the archive reader revisions were identical in the two Rust builds. The response arrays list HTTP status, content type, response length, insertion length and response SHA-256 in that order. [Individual times and response checks](2026-11-18-served-articles-owned-callbacks.json.gz)
+
+| Archive | libzim app (ms) | Updated app (ms) | Change |
+|---|---:|---:|---:|
+| Climate | 46.37 | 43.49 | −6.2% |
+| Wikipedia 100 | 64.01 | 68.04 | +6.3% |
+
 ## Linux x86-64
 
 The release Linux app at `7c5abf7` used the same two reader revisions as the signed Mac app. We built historical app `f2875d0` with the retained Linux libzim 9.8.2 SDK. Both ran as the same unprivileged test account. Ten alternating trials per archive used the same 48 paths and profile policy as macOS. The native reference driver read each original item in contiguous ranges of up to 64 KiB. All 201 length-framed ranges reconstructed the same 48 complete article hashes that native zimdump produced on the Mac. All 960 Linux app responses preserved those archived bytes.
