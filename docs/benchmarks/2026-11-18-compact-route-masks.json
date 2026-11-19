@@ -1,0 +1,170 @@
+{
+ "before": "11407736f00c88a7d0d710d984850daa5960cfea",
+ "after": "d7e2124b2cf01808c486a43fa3233b8ee494d565",
+ "platform": "ARM64 iOS 26.5 simulator",
+ "interface_records": [
+  {
+   "family": 4,
+   "address_length": 16,
+   "mask_length": 7,
+   "struct_size": 16,
+   "ip_mask_bytes": 3,
+   "prefix_set_bits": 22,
+   "neighbor_selected": true
+  },
+  {
+   "family": 6,
+   "address_length": 28,
+   "mask_length": 28,
+   "struct_size": 28,
+   "ip_mask_bytes": 16,
+   "prefix_set_bits": 64,
+   "neighbor_selected": false
+  },
+  {
+   "family": 6,
+   "address_length": 28,
+   "mask_length": 28,
+   "struct_size": 28,
+   "ip_mask_bytes": 16,
+   "prefix_set_bits": 64,
+   "neighbor_selected": false
+  }
+ ],
+ "warmup_round": 0,
+ "columns": [
+  "round",
+  "build",
+  "matching_results",
+  "calls",
+  "elapsed_ns"
+ ],
+ "samples": [
+  [
+   0,
+   "base",
+   896,
+   896,
+   190196542
+  ],
+  [
+   0,
+   "candidate",
+   896,
+   896,
+   209552792
+  ],
+  [
+   1,
+   "candidate",
+   896,
+   896,
+   212913375
+  ],
+  [
+   1,
+   "base",
+   896,
+   896,
+   199684375
+  ],
+  [
+   2,
+   "base",
+   896,
+   896,
+   210566334
+  ],
+  [
+   2,
+   "candidate",
+   896,
+   896,
+   207230542
+  ],
+  [
+   3,
+   "candidate",
+   896,
+   896,
+   208784666
+  ],
+  [
+   3,
+   "base",
+   896,
+   896,
+   214610167
+  ],
+  [
+   4,
+   "base",
+   896,
+   896,
+   200546875
+  ],
+  [
+   4,
+   "candidate",
+   896,
+   896,
+   203177333
+  ],
+  [
+   5,
+   "candidate",
+   896,
+   896,
+   215251625
+  ],
+  [
+   5,
+   "base",
+   896,
+   896,
+   187073708
+  ],
+  [
+   6,
+   "base",
+   896,
+   896,
+   187681167
+  ],
+  [
+   6,
+   "candidate",
+   896,
+   896,
+   185332750
+  ],
+  [
+   7,
+   "candidate",
+   896,
+   896,
+   202296500
+  ],
+  [
+   7,
+   "base",
+   896,
+   896,
+   204811625
+  ],
+  [
+   8,
+   "base",
+   896,
+   896,
+   219085458
+  ],
+  [
+   8,
+   "candidate",
+   896,
+   896,
+   165338667
+  ]
+ ]
+}
