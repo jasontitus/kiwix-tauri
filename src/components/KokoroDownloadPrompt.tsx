@@ -1,25 +1,9 @@
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useVoiceModelStatus } from "./useVoiceModelStatus";
 import { Download, X } from "lucide-react";
 import { api, isNative } from "../api";
 import { formatBytes, t } from "../i18n";
 import { errorText } from "./UI";
-
-interface KokoroStatus {
-  available: boolean;
-  downloading: boolean;
-  downloaded: number;
-  total: number;
-  error?: string | null;
-  bundled?: boolean;
-}
-
-interface ModelEvent {
-  state: "downloading" | "installed" | "error";
-  downloaded?: number;
-  total?: number;
-  error?: string | null;
-}
 
 interface Props {
   storageKey: string;
@@ -28,7 +12,7 @@ interface Props {
 
 /** One-time, non-blocking offer for the optional natural-voice pack. */
 export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
-  const [status, setStatus] = useState<KokoroStatus | null>(null);
+  const { status, readError, refresh } = useVoiceModelStatus(enabled);
   const [dismissed, setDismissed] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [busy, setBusy] = useState(false);
@@ -40,32 +24,9 @@ export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
     const updateOnline = () => setOnline(navigator.onLine);
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
-    let disposed = false;
-    const unlisteners: (() => void)[] = [];
-    void api<KokoroStatus>("kokoro_status").then((next) => {
-      if (!disposed) { setStatus(next); if (next.error) setError(next.error); }
-    }).catch(() => { /* Settings still exposes the manual control. */ });
-    void listen<ModelEvent>("kiwix-speech-model", ({ payload }) => {
-      if (disposed) return;
-      setStatus((previous) => ({
-        available: payload.state === "installed" ? true : previous?.available ?? false,
-        downloading: payload.state === "downloading",
-        downloaded: payload.downloaded ?? previous?.downloaded ?? 0,
-        total: payload.total ?? previous?.total ?? 0,
-        error: payload.error ?? null,
-        bundled: previous?.bundled ?? false,
-      }));
-      if (payload.state === "error") setError(payload.error || t("The voice model download failed."));
-      if (payload.state === "installed") setError("");
-    }).then((unlisten) => {
-      if (disposed) unlisten();
-      else unlisteners.push(unlisten);
-    });
     return () => {
-      disposed = true;
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
-      for (const unlisten of unlisteners) unlisten();
     };
   }, [enabled, storageKey]);
 
@@ -82,7 +43,7 @@ export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
     setError("");
     try {
       await api("kokoro_download");
-      setStatus((previous) => previous ? { ...previous, downloading: true } : previous);
+      await refresh();
     } catch (value) {
       const message = errorText(value);
       if (!/cancel/i.test(String(value))) setError(message);
@@ -94,11 +55,12 @@ export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
   async function cancel() {
     if (busy) return;
     setBusy(true);
-    try { await api("kokoro_cancel"); }
+    try { await api("kokoro_cancel"); await refresh(); }
     catch (value) { setError(errorText(value)); }
     finally { setBusy(false); }
   }
 
+  const message = error || readError || status.error;
   if (status.downloading) {
     const percent = status.total ? Math.min(100, Math.round((status.downloaded / status.total) * 100)) : 0;
     return (
@@ -116,7 +78,7 @@ export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
             {t("Cancel download")}
           </button>
         </div>
-        {error && <p className="inline-error" role="alert">{error}</p>}
+        {message && <p className="inline-error" role="alert">{message}</p>}
       </aside>
     );
   }
@@ -139,7 +101,7 @@ export default function KokoroDownloadPrompt({ storageKey, enabled }: Props) {
           <X size={16} /> {t("Not now")}
         </button>
       </div>
-      {error && <p className="inline-error" role="alert">{error}</p>}
+      {message && <p className="inline-error" role="alert">{message}</p>}
     </aside>
   );
 }

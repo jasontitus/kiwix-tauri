@@ -120,6 +120,8 @@ struct AndroidWindowAuthority {
 }
 
 pub struct Service {
+    #[cfg(target_os = "android")]
+    bundled_voice: android_voice_pack::BundledVoice,
     pub store: Arc<Store>,
     pub(crate) update_admission: crate::update_admission::AdmissionGate,
     catalog_cache: crate::catalog::CatalogCache,
@@ -663,6 +665,8 @@ impl Service {
             archive_moves: std::sync::atomic::AtomicUsize::new(0),
             privacy_generation: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             privacy_policy_generation: std::sync::atomic::AtomicU64::new(1),
+            #[cfg(target_os = "android")]
+            bundled_voice: Default::default(),
             privacy_gate: Arc::new(tokio::sync::RwLock::new(())),
             launch_locations: Mutex::new(Vec::new()),
             #[cfg(any(desktop, test))]
@@ -2983,7 +2987,10 @@ impl Service {
         if !self.store.private_mode()? && !self.store.read_only()? {
             self.kokoro.ensure_performance_probe();
         }
-        Ok(self.kokoro.status())
+        let status = self.kokoro.status();
+        #[cfg(target_os = "android")]
+        let status = self.voice_status_with_bundle(status).await;
+        Ok(status)
     }
 
     async fn kokoro_probe(self: &Arc<Self>) -> Result<Value, String> {
@@ -2994,6 +3001,8 @@ impl Service {
 
     async fn kokoro_download(self: &Arc<Self>) -> Result<Value, String> {
         self.normal_writable()?;
+        #[cfg(target_os = "android")]
+        if let Some(status) = self.start_bundled_voice(true).await? { return Ok(status); }
         crate::transfer_policy::require_internet()?;
         let generation = self.launch_generation();
         let service = self.clone();
@@ -3592,6 +3601,9 @@ fn scan(root: &Path, recursive: bool, paths: &mut Vec<String>) -> Result<(), Str
     }
     Ok(())
 }
+
+#[cfg(any(target_os = "android", all(unix, test)))]
+mod android_voice_pack;
 
 mod dispatch;
 

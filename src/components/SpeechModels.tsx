@@ -1,90 +1,24 @@
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useVoiceModelStatus, type RetainedVoiceFiles } from "./useVoiceModelStatus";
 import { Download, RefreshCw, Trash2 } from "lucide-react";
 import { api, isNative } from "../api";
 import { formatBytes, t } from "../i18n";
 
-interface KokoroStatus {
-  available: boolean;
-  downloading: boolean;
-  downloaded: number;
-  total: number;
-  voices: unknown[];
-  error?: string | null;
-  performance?: "unknown" | "realtime" | "slow";
-  probing?: boolean;
-  performanceRatio?: number | null;
-  performanceError?: string | null;
-  bundled?: boolean;
-}
-
-interface ModelEvent {
-  state: "downloading" | "installed" | "error";
-  downloaded?: number;
-  total?: number;
-  error?: string | null;
-}
-
 /**
- * Explicit model installation for offline neural read-aloud. The model is not
- * bundled: it is a large pinned download, and the platform voice path remains
- * usable until the user chooses it.
+ * The standard edition downloads the pinned model on request. An offline
+ * Android edition can install the same files from its signed package.
  */
 export default function SpeechModels() {
-  const [status, setStatus] = useState<KokoroStatus | null>(null);
+  const { status, readError, refresh } = useVoiceModelStatus(isNative);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function refresh() {
-    try {
-      const next = await api<KokoroStatus>("kokoro_status");
-      setStatus(next);
-      if (next.error) setError(next.error);
-    } catch (value) {
-      setError(value instanceof Error ? value.message : String(value));
-    }
-  }
-
   useEffect(() => {
-    // The headless browser preview has no Tauri event bridge or model store.
-    if (!isNative) return;
-    void refresh();
-    let disposed = false;
-    const unlisteners: (() => void)[] = [];
-    void listen<ModelEvent>("kiwix-speech-model", (event) => {
-      if (disposed) return;
-      const payload = event.payload;
-      setStatus((previous) => ({
-        available: payload.state === "installed" ? true : previous?.available ?? false,
-        downloading: payload.state === "downloading",
-        downloaded: payload.downloaded ?? previous?.downloaded ?? 0,
-        total: payload.total ?? previous?.total ?? 0,
-        voices: previous?.voices ?? [],
-        error: payload.error ?? null,
-        performance: previous?.performance ?? "unknown",
-        probing: previous?.probing ?? false,
-        performanceRatio: previous?.performanceRatio ?? null,
-        performanceError: previous?.performanceError ?? null,
-        bundled: previous?.bundled ?? false,
-      }));
-      if (payload.state === "error") setError(payload.error || t("The voice model download failed."));
-      if (payload.state === "installed") setError("");
-    }).then((unlisten) => {
-      if (disposed) unlisten();
-      else unlisteners.push(unlisten);
-    });
-    return () => {
-      disposed = true;
-      for (const unlisten of unlisteners) unlisten();
-    };
-  }, []);
-
-  useEffect(() => {
-    const preparingBundled = status?.bundled === true && !status.available;
-    if ((!status?.available || status.performance !== "unknown" || status.performanceError) && !preparingBundled) return;
+    const preparing = status?.downloading;
+    if ((!status?.available || status.performance !== "unknown" || status.performanceError) && !preparing) return;
     const timer = window.setInterval(() => { void refresh(); }, 1500);
     return () => window.clearInterval(timer);
-  }, [status?.available, status?.bundled, status?.performance, status?.performanceError]);
+  }, [refresh, status?.available, status?.downloading, status?.performance, status?.performanceError]);
 
   async function download() {
     if (busy) return;
@@ -92,7 +26,7 @@ export default function SpeechModels() {
     setError("");
     try {
       await api("kokoro_download");
-      setStatus((previous) => previous ? { ...previous, downloading: true } : previous);
+      await refresh();
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
@@ -105,6 +39,7 @@ export default function SpeechModels() {
     setBusy(true);
     try {
       await api("kokoro_cancel");
+      await refresh();
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
@@ -117,9 +52,8 @@ export default function SpeechModels() {
     setBusy(true);
     setError("");
     try {
-      const next = await api<KokoroStatus>("kokoro_probe");
-      setStatus(next);
-      if (next.error) setError(next.error);
+      await api("kokoro_probe");
+      await refresh();
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
@@ -132,9 +66,10 @@ export default function SpeechModels() {
     setBusy(true);
     setError("");
     try {
-      await api("kokoro_delete");
-      await refresh();
+      const preserved = await api<RetainedVoiceFiles>("kokoro_delete");
+      await refresh(preserved);
     } catch (value) {
+      await refresh();
       setError(value instanceof Error ? value.message : String(value));
     } finally {
       setBusy(false);
@@ -142,15 +77,39 @@ export default function SpeechModels() {
   }
 
   if (!isNative) return null;
+  if (!status) return (
+    <div className="speech-models">
+      {readError ? (
+        <>
+          <p className="inline-error" role="alert">{readError}</p>
+          <button type="button" className="secondary" onClick={() => void refresh()}>{t("Try again")}</button>
+        </>
+      ) : <p className="muted" role="status">{t("Checking natural voices…")}</p>}
+    </div>
+  );
+  const message = error || readError || status?.error;
   const percent = status?.total ? Math.min(100, Math.round((status.downloaded / status.total) * 100)) : 0;
   return (
     <div className="speech-models">
-      <p className="muted">
+      {status && !status.bundled && <p className="muted">
         {t("Natural voices sound clearer than the system voices and work entirely offline. The English voice model is a one-time download of about {size}.", {
           size: formatBytes(status?.total || 181_886_349),
         })}
-      </p>
-      {status?.available ? (
+      </p>}
+      {status?.removalPending ? (
+        <>
+          <p className="muted" role="status">{t("Natural voice removal was interrupted.")}</p>
+          <button type="button" className="secondary" onClick={() => void remove()} disabled={busy}>
+            <Trash2 size={16} /> {t("Retry removal")}
+          </button>
+        </>
+      ) : status?.bundleCheckFailed && (!status.available || status.repairAvailable) ? (
+        <button type="button" className="secondary" onClick={() => void refresh()}>{t("Try again")}</button>
+      ) : status?.repairAvailable && !status.downloading ? (
+        <button type="button" className="primary" onClick={() => void download()} disabled={busy}>
+          {status.bundled ? t("Repair natural voices") : t("Download and repair natural voices")}
+        </button>
+      ) : status?.available && !status.downloading ? (
         <>
           {status.performance === "slow" ? (
             <p className="muted" role="status">
@@ -176,6 +135,17 @@ export default function SpeechModels() {
             <Trash2 size={16} /> {t("Remove natural voice model")}
           </button>
         </>
+      ) : status?.bundled ? (
+        status.downloading ? (
+          <>
+            <p className="muted" role="status">{t("Preparing bundled natural voices…")}</p>
+            <button type="button" className="secondary" onClick={() => void cancel()} disabled={busy}>{t("Cancel")}</button>
+          </>
+        ) : (
+          <button type="button" className="primary" onClick={() => void download()} disabled={busy}>
+            {status.error ? t("Try again") : t("Install natural voices")}
+          </button>
+        )
       ) : status?.downloading ? (
         <>
           <p role="status">
@@ -190,17 +160,15 @@ export default function SpeechModels() {
             {t("Cancel download")}
           </button>
         </>
-      ) : status?.bundled ? (
-        <p className="muted" role="status">
-          {t("Preparing bundled natural voices…")}
-        </p>
       ) : (
         <button type="button" className="primary" onClick={() => void download()} disabled={busy}>
           {busy ? <RefreshCw size={16} className="spin" /> : <Download size={16} />}
           {t("Download natural voices")}
         </button>
       )}
-      {error && <p className="inline-error" role="alert">{error}</p>}
+      {status?.legacyRetained && <p className="muted" role="status">{t("Files from an earlier voice model remain in app storage.")}</p>}
+      {status?.legacyAudioRetained && <p className="muted" role="status">{t("Some cached voice audio remains in app storage because its ownership could not be verified.")}</p>}
+      {message && <p className="inline-error" role="alert">{message}</p>}
     </div>
   );
 }

@@ -11,21 +11,6 @@ val inventoryOnlyProperty = providers.gradleProperty("kiwixEvaluationInventoryOn
 require(inventoryOnlyProperty == "true" || inventoryOnlyProperty == "false")
 val inventoryOnlyBuild = inventoryOnlyProperty == "true"
 val bundledKokoroDir = providers.gradleProperty("kiwixBundledKokoroDir").orNull
-if (!inventoryOnlyBuild && bundledKokoroDir != null) {
-    val bundled = file(bundledKokoroDir)
-    val required = listOf(
-        "model.fp16.onnx", "voices.bin", "tokens.txt",
-        "lexicon-us-en.txt", "lexicon-gb-en.txt",
-    )
-    required.forEach { name ->
-        require(bundled.resolve("kokoro-en-fp16-v1_0/$name").isFile) {
-            "kiwixBundledKokoroDir is missing kokoro-en-fp16-v1_0/$name: $bundled"
-        }
-    }
-    require(bundled.resolve("kokoro-en-fp16-v1_0/espeak-ng-data").isDirectory) {
-        "kiwixBundledKokoroDir is missing kokoro-en-fp16-v1_0/espeak-ng-data: $bundled"
-    }
-}
 // Do not even register Rust/native tasks for the independent inventory APK.
 if (!inventoryOnlyBuild) {
     apply(plugin = "rust")
@@ -83,7 +68,7 @@ android {
         buildConfig = !inventoryOnlyBuild
     }
     if (!inventoryOnlyBuild && bundledKokoroDir != null) {
-        sourceSets.getByName("main").assets.srcDir(file(bundledKokoroDir))
+        androidResources.noCompress.add("voicepack")
     }
     // A probe/external-delivery test APK must not embed multi-GiB fixtures.
     val embedEvaluationFixtures = providers.gradleProperty("kiwixEmbedEvaluationFixtures").orElse("true").get()
@@ -154,6 +139,13 @@ if (!inventoryOnlyBuild) {
 androidComponents {
     onVariants { variant ->
         val capitalized = variant.name.replaceFirstChar { it.uppercaseChar() }
+        if (!inventoryOnlyBuild && bundledKokoroDir != null) {
+            val stageVoice = tasks.register<BundledVoiceAssetsTask>("stage${capitalized}BundledVoice") {
+                model.set(file(bundledKokoroDir).resolve("kokoro-en-fp16-v1_0"))
+                manifest.set(rootProject.file("../../src/kokoro/pack-v1.tsv"))
+            }
+            variant.sources.assets!!.addGeneratedSourceDirectory(stageVoice, BundledVoiceAssetsTask::output)
+        }
         val packagedAbis = if (inventoryOnlyBuild) {
             emptySet()
         } else {

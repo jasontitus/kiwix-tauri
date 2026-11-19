@@ -870,6 +870,11 @@ pub fn run() {
             };
             match start(app) {
                 Ok(service) => {
+                    #[cfg(target_os = "android")]
+                    {
+                        let installing = service.clone();
+                        tauri::async_runtime::spawn(async move { installing.prepare_bundled_voice().await });
+                    }
                     app.manage(service.clone());
                     let listeners = service.clone();
                     tauri::async_runtime::spawn(async move {
