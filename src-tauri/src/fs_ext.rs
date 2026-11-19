@@ -56,22 +56,13 @@ pub fn is_lock_contention(error: &io::Error) -> bool {
 #[cfg(unix)]
 impl FileExt for File {
     fn try_flock_exclusive(&self) -> io::Result<()> {
-        flock(self, libc::LOCK_EX | libc::LOCK_NB)
+        rustix::fs::flock(self, rustix::fs::FlockOperation::NonBlockingLockExclusive)
+            .map_err(io::Error::from)
     }
 
     fn try_flock_shared(&self) -> io::Result<()> {
-        flock(self, libc::LOCK_SH | libc::LOCK_NB)
-    }
-}
-
-#[cfg(unix)]
-fn flock(file: &File, operation: libc::c_int) -> io::Result<()> {
-    use std::os::unix::io::AsRawFd;
-    // SAFETY: the descriptor is owned by `file`, which outlives the call.
-    if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
+        rustix::fs::flock(self, rustix::fs::FlockOperation::NonBlockingLockShared)
+            .map_err(io::Error::from)
     }
 }
 
