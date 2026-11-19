@@ -1,0 +1,9 @@
+flate2 1.1.11 from crates.io, MIT OR Apache-2.0.
+Upstream source commit cd06529164c5447958f309e649ffe6c9d6329865.
+Published archive SHA-256 626d4928326b646e70f65ed36fc7cf9f206bdb68a0019ee7c6b4709da4e084c4.
+
+Workbench initializes spare Vec capacity before using it and restores the
+original length if the codec unwinds. The Miniz compatibility methods for
+MaybeUninit output stage bytes in an initialized buffer. The Rust wrapper
+forbids unsafe code when an optional C backend is absent. Miniz uses its
+portable Adler-32 path unless another consumer explicitly enables SIMD.

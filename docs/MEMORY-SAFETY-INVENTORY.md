@@ -53,6 +53,8 @@ The app now opts out of Zimru's `cli` and `parallel` features. The application's
 
 The app's `crc32fast` dependency uses checked byte loads for its ARM64 and x86 hardware paths. The two release compiler checks each report a single unsafe block for entering a CPU-checked kernel. The DEFLATE buffers, Adler-32 code and the zlib-rs backend used by host-side icon code still require their own coverage. [CRC consumers, verification and measurements](audit/2026-11-19-checked-crc32.md)
 
+The DEFLATE wrapper now uses initialized output buffers and forbids unsafe Rust in its Rust backends. Removing Miniz 0.9.1's SIMD Adler-32 feature also removes that edge from Glass in the app. Both native CJK comparisons reproduced their previous results. The asynchronous buffer adapter, PNG's separate Adler-32 paths and host-side zlib-rs remain in scope. [DEFLATE consumers, tests and measurements](audit/2026-11-19-checked-deflate.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.
