@@ -13,6 +13,7 @@
 #include <array>
 #include <variant>
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -20,9 +21,19 @@
 #include <condition_variable>
 #include <cerrno>
 #include <cstddef>
+#include <cstdint>
 
 using Completion = void (^)(int, size_t);
 using Accepted = void (^)(uint64_t);
+
+// Match the Rust value records in apple_transport.rs. The ABI carries
+// initialized bytes and lengths, independent of the caller's stack storage.
+struct BonjourInstance { uint8_t length; uint8_t bytes[63]; };
+struct AddressValue { uint8_t length; uint8_t bytes[16]; };
+struct RouteValue { uint8_t length; uint8_t bytes[255]; };
+static_assert(sizeof(BonjourInstance) == 64 && offsetof(BonjourInstance, bytes) == 1);
+static_assert(sizeof(AddressValue) == 17 && offsetof(AddressValue, bytes) == 1);
+static_assert(sizeof(RouteValue) == 256 && offsetof(RouteValue, bytes) == 1);
 // Only process-local IDs cross the Rust boundary. Odd/even domains distinguish
 // connections and listeners. Retired and exhausted IDs are never recycled.
 template<class T>
@@ -59,6 +70,8 @@ static dispatch_queue_t queue() {
 }
 static sec_identity_t identity;
 static NSData *certificate;
+static std::once_flag identityOnce;
+static std::atomic<bool> identityReady{false};
 
 #if TARGET_OS_OSX
 // Apple documents SecIdentityCreate as public Security API available since
@@ -92,7 +105,7 @@ static bool identity_signs(SecIdentityRef candidate, SecCertificateRef leaf) {
 }
 #endif
 
-extern "C" bool kiwix_swarm_identity(const uint8_t *p12, size_t length, const uint8_t *der, size_t der_length) {
+static bool import_identity(NSData *p12, NSData *expected) {
     @autoreleasepool {
 #if TARGET_OS_OSX
         // SecIdentityCreate pairs the pinned certificate with a non-permanent
@@ -100,8 +113,7 @@ extern "C" bool kiwix_swarm_identity(const uint8_t *p12, size_t length, const ui
         // so nothing persists or needs cleanup (no keychain access intended).
         // SecPKCS12Import imports into the default keychain on macOS unless
         // kSecImportToMemoryOnly is set, which needs macOS 15 (minimum: 13.3).
-        (void)p12; (void)length;
-        NSData *expected = [NSData dataWithBytes:der length:der_length];
+        (void)p12;
         NSData *keyData = [[NSData alloc] initWithBase64EncodedString:
             @"BMmKB08ZHj337ZVv1rqu+liHOmXlxj3MTDR5ozCmPE0R1xaZNjXbfO2Rw/fbN7W0SrKOFDoUVIiWvf5g0E4ALKDz/tTOlQpFA+XiilAsaH8isuY+k95px2uGaP/1PRGTCw=="
             options:0];
@@ -124,13 +136,12 @@ extern "C" bool kiwix_swarm_identity(const uint8_t *p12, size_t length, const ui
 #else
         CFArrayRef items = nullptr;
         NSMutableDictionary *options = [@{(__bridge id)kSecImportExportPassphrase: @"localswarm"} mutableCopy];
-        OSStatus result = SecPKCS12Import((__bridge CFDataRef)[NSData dataWithBytes:p12 length:length], (__bridge CFDictionaryRef)options, &items);
+        OSStatus result = SecPKCS12Import((__bridge CFDataRef)p12, (__bridge CFDictionaryRef)options, &items);
         if (result != errSecSuccess || !items || CFArrayGetCount(items) != 1) { if (items) CFRelease(items); return false; }
         CFDictionaryRef item = (CFDictionaryRef)CFArrayGetValueAtIndex(items, 0);
         SecIdentityRef imported = (SecIdentityRef)CFDictionaryGetValue(item, kSecImportItemIdentity);
         SecCertificateRef leaf = nullptr;
         bool valid = imported && SecIdentityCopyCertificate(imported, &leaf) == errSecSuccess;
-        NSData *expected = [NSData dataWithBytes:der length:der_length];
         if (valid) {
             NSData *actual = CFBridgingRelease(SecCertificateCopyData(leaf));
             valid = [actual isEqualToData:expected];
@@ -143,8 +154,18 @@ extern "C" bool kiwix_swarm_identity(const uint8_t *p12, size_t length, const ui
     }
 }
 
+extern "C" bool kiwix_swarm_identity(NSData *p12, NSData *expected) {
+    if (!p12 || !expected) return false;
+    // Connect and listen may run on other threads. Publish the pair once,
+    // after both the Security identity and immutable certificate are stored.
+    std::call_once(identityOnce, [&] {
+        identityReady.store(import_identity([p12 copy], [expected copy]), std::memory_order_release);
+    });
+    return identityReady.load(std::memory_order_acquire);
+}
+
 static nw_parameters_t parameters(bool peerToPeer = true) {
-    if (!identity) return nil;
+    if (!identityReady.load(std::memory_order_acquire)) return nil;
     nw_parameters_t params = nw_parameters_create_quic(^(nw_protocol_options_t quic) {
         sec_protocol_options_t tls = nw_quic_copy_sec_protocol_options(quic);
         sec_protocol_options_add_tls_application_protocol(tls, "localswarm-v1");
@@ -598,20 +619,16 @@ static void resolve_next(SwarmConnectionHandle handle) {
     })) { clear_resolution(handle); schedule_next(handle, 0); }
     else schedule_next(handle, NSEC_PER_SEC);
 }
-static uint64_t make_connection(const char *instance, bool peerToPeer, uint32_t requiredIndex, bool isolatedTransport) {
-    if (!identity || !instance || !*instance || strnlen(instance, 64) > 63) return 0;
+extern "C" uint64_t kiwix_swarm_connect(BonjourInstance instance, bool peerToPeer, bool isolatedTransport, uint32_t requiredIndex) {
+    if (!identityReady.load(std::memory_order_acquire) || !instance.length || instance.length > sizeof(instance.bytes)
+        || memchr(instance.bytes, 0, instance.length)) return 0;
     auto handle = std::make_shared<Connection>(nil);
     handle->connectionStopped = true;
-    handle->instance = instance; handle->peerToPeer = peerToPeer;
-    handle->requiredIndex = requiredIndex;
+    handle->instance.assign(reinterpret_cast<const char *>(instance.bytes), instance.length);
+    handle->peerToPeer = peerToPeer;
+    handle->requiredIndex = isolatedTransport ? requiredIndex : 0;
     handle->isolatedTransport = isolatedTransport;
     return connections.insert(handle);
-}
-extern "C" uint64_t kiwix_swarm_connect_on_interface(const char *instance, bool peerToPeer, uint32_t requiredIndex) {
-    return make_connection(instance, peerToPeer, requiredIndex, true);
-}
-extern "C" uint64_t kiwix_swarm_connect(const char *instance, bool peerToPeer) {
-    return make_connection(instance, peerToPeer, 0, false);
 }
 extern "C" uint32_t kiwix_swarm_interface_index(uint64_t id) {
     auto handle = connections.get(id);
@@ -625,11 +642,10 @@ extern "C" uint32_t kiwix_swarm_interface_index(uint64_t id) {
     });
     return index;
 }
-extern "C" size_t kiwix_swarm_local_address(uint64_t id, uint8_t *buffer, size_t capacity) {
-    if (!buffer || capacity < 16) return 0;
+extern "C" AddressValue kiwix_swarm_local_address(uint64_t id) {
     auto handle = connections.get(id);
-    if (!handle) return 0;
-    __block size_t length = 0;
+    if (!handle) return {};
+    __block AddressValue address {};
     dispatch_sync(queue(), ^{
         if (!handle->ready || handle->stopping || !handle->value) return;
         auto path = nw_connection_copy_current_path(handle->value);
@@ -638,21 +654,22 @@ extern "C" size_t kiwix_swarm_local_address(uint64_t id, uint8_t *buffer, size_t
         const auto remote = copy_endpoint_address(nw_path_copy_effective_remote_endpoint(path));
         if (local.family() == AF_UNSPEC || local.family() != remote.family() ||
             !on_link_interface(path, remote, handle->interface, handle->requiredIndex, &local)) return;
-        length = copy_ip_identity(local, buffer);
+        address.length = static_cast<uint8_t>(copy_ip_identity(local, address.bytes));
     });
-    return length;
+    return address;
 }
-extern "C" bool kiwix_swarm_interface_has_address(uint32_t index, const uint8_t *bytes, size_t length) {
-    if (!index || !bytes || (length != 4 && length != 16)) return false;
+extern "C" bool kiwix_swarm_interface_has_address(uint32_t index, AddressValue address) {
+    const auto length = address.length;
+    if (!index || (length != 4 && length != 16)) return false;
     std::array<uint8_t, sizeof(in6_addr)> expected {};
     if (length == sizeof(in6_addr)) {
         sockaddr_in6 ip {};
-        memcpy(&ip.sin6_addr, bytes, sizeof(ip.sin6_addr));
+        memcpy(&ip.sin6_addr, address.bytes, sizeof(ip.sin6_addr));
         if (!scope_matches_interface(SocketAddress{ip}, index)) return false;
         const auto value = address_without_scope(ip.sin6_addr);
         memcpy(expected.data(), &value, sizeof(value));
     } else {
-        memcpy(expected.data(), bytes, length);
+        memcpy(expected.data(), address.bytes, length);
     }
     ifaddrs *addresses = nullptr;
     if (getifaddrs(&addresses) != 0) return false;
@@ -776,19 +793,18 @@ extern "C" void kiwix_swarm_join(uint64_t id) {
 extern "C" void kiwix_swarm_release(uint64_t id) {
     if (auto handle = connections.take(id)) queue_cancel_connection(handle);
 }
-extern "C" long kiwix_swarm_route(uint64_t id, char *buffer, size_t capacity) {
+extern "C" RouteValue kiwix_swarm_route(uint64_t id) {
     auto handle = connections.get(id);
-    if (!handle) return -1;
+    if (!handle) return {};
     __block std::string text;
     dispatch_sync(queue(), ^{
         if (!handle->ready || !handle->value || handle->stopping) return;
         text = route_text(nw_connection_copy_current_path(handle->value), handle->interface, handle->requiredIndex);
     });
-    if (text.empty() || !buffer || capacity == 0) return -1;
-    auto length = text.size() < capacity - 1 ? text.size() : capacity - 1;
-    memcpy(buffer, text.data(), length);
-    buffer[length] = '\0';
-    return (long)length;
+    RouteValue route {};
+    route.length = static_cast<uint8_t>(std::min(text.size(), sizeof(route.bytes)));
+    memcpy(route.bytes, text.data(), route.length);
+    return route;
 }
 
 struct Listener {

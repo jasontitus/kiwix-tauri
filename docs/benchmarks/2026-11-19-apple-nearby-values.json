@@ -1,0 +1,268 @@
+{
+  "base": "d8952206de7911f17686a71eba7379cedeadc159",
+  "candidate_source_manifest_sha256": "a0301ede2185f1f961585058f736666ca4ea679c53ab4213b09671032d95afaa",
+  "macos_configuration": "arm64 custom-protocol unoptimized app test profile",
+  "macos_test_binaries": [
+    {
+      "version": "baseline",
+      "sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "name": "mac-baseline-test"
+    },
+    {
+      "version": "candidate",
+      "sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "name": "mac-candidate-test"
+    }
+  ],
+  "macos_test_runs": [
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "transport",
+      "pair": null,
+      "seconds": 1.697775833075866,
+      "cpu_seconds": 0.03162099999999998,
+      "summary": "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1292 filtered out; finished in 0.01s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "read-requests",
+      "pair": null,
+      "seconds": 0.018936124979518354,
+      "cpu_seconds": 0.013635000000000036,
+      "summary": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1294 filtered out; finished in 0.00s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "discovery",
+      "pair": null,
+      "seconds": 0.023266499978490174,
+      "cpu_seconds": 0.01864099999999995,
+      "summary": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1284 filtered out; finished in 0.01s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "ipv6-link-local",
+      "pair": null,
+      "seconds": 1.6567555840592831,
+      "cpu_seconds": 0.027654000000000026,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 0.00s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "concurrent-native-quic",
+      "pair": null,
+      "seconds": 1.2446396669838578,
+      "cpu_seconds": 0.139734,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.23s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "ipv6-link-local",
+      "pair": null,
+      "seconds": 0.015200458001345396,
+      "cpu_seconds": 0.010833999999999955,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 0.00s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "concurrent-native-quic",
+      "pair": null,
+      "seconds": 1.4679137909552082,
+      "cpu_seconds": 0.13673800000000003,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.45s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "route-0",
+      "pair": 0,
+      "seconds": 1.1698950419668108,
+      "cpu_seconds": 0.066712,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.15s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "route-0",
+      "pair": 0,
+      "seconds": 1.2564762079855427,
+      "cpu_seconds": 0.06891400000000003,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.24s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "route-1",
+      "pair": 1,
+      "seconds": 1.1350021669641137,
+      "cpu_seconds": 0.07140599999999997,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.12s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "route-1",
+      "pair": 1,
+      "seconds": 1.1977444159565493,
+      "cpu_seconds": 0.06858299999999995,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.18s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "route-2",
+      "pair": 2,
+      "seconds": 1.2092188749229535,
+      "cpu_seconds": 0.07071100000000008,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.19s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "route-2",
+      "pair": 2,
+      "seconds": 1.1599593750433996,
+      "cpu_seconds": 0.06002699999999994,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.14s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "route-3",
+      "pair": 3,
+      "seconds": 1.2765624170424417,
+      "cpu_seconds": 0.05973799999999996,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.26s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "route-3",
+      "pair": 3,
+      "seconds": 1.1246177500579506,
+      "cpu_seconds": 0.07271300000000014,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.11s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "baseline",
+      "binary_sha256": "32a6f6a78ab7c9a72d8737de7515d295c9d21564d83bdbf0fe18b80efdf19f31",
+      "case": "route-4",
+      "pair": 4,
+      "seconds": 1.2522839159937575,
+      "cpu_seconds": 0.06915099999999985,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1295 filtered out; finished in 1.23s",
+      "temporary_profiles_empty": true
+    },
+    {
+      "version": "candidate",
+      "binary_sha256": "f8b1cfc45797e0e89c7ab1e36e0518ca76a1e440129cf8025681f19a54536052",
+      "case": "route-4",
+      "pair": 4,
+      "seconds": 1.6795478750718758,
+      "cpu_seconds": 0.06931600000000004,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1297 filtered out; finished in 1.66s",
+      "temporary_profiles_empty": true
+    }
+  ],
+  "route_timing": {
+    "unit": "seconds",
+    "operation": "Complete same-host Bonjour and QUIC inventory test processes with 64 live route receipts per process",
+    "warmup_pair": 0,
+    "measured_pairs": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "first_version_by_pair": [
+      "baseline",
+      "candidate",
+      "baseline",
+      "candidate",
+      "baseline"
+    ],
+    "cpu_measurement": "Child user and system CPU from getrusage"
+  },
+  "macos_sanitizer_sha256": "0146a240880be62a5d3ab51b716ac83a6f91668fff6bb1a424c90af6308358f0",
+  "macos_sanitizer_checks": [
+    {
+      "length": 81,
+      "releaseBeforeCallback": false,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 81,
+      "releaseBeforeCallback": true,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 16384,
+      "releaseBeforeCallback": false,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 16384,
+      "releaseBeforeCallback": true,
+      "ownedContentPreserved": true
+    },
+    {
+      "finalPayloadAndRevocation": true
+    },
+    {
+      "typedHandleLifetimes": true
+    },
+    {
+      "effectiveEndpointReceipt": true
+    },
+    {
+      "ownedEndpointAddresses": true
+    },
+    {
+      "resolvedAddressBounds": true
+    },
+    {
+      "routeQueryOwnership": true
+    },
+    {
+      "boundRouteSubnet": true
+    },
+    {
+      "compactRouteMasks": true
+    }
+  ],
+  "macos_sanitizer_stderr_bytes": 0,
+  "ios_compile_artifacts": [
+    {
+      "artifact": "libkiwix_app-00a5225fd79cd58f.rmeta",
+      "sha256": "7e6ba31f41bb24ba3ae07e91a76a25d7651eebfe369a4d96dc9a84af15b6a11a",
+      "target": "aarch64-apple-ios-sim"
+    },
+    {
+      "artifact": "libkiwix_app-1f811d1254a2f344.rmeta",
+      "sha256": "1f1d9da07d604bd96e24c9317a0ffb3ea51dbe34fbdb89f003ef4e9eb2fc574b",
+      "target": "aarch64-apple-ios"
+    }
+  ]
+}

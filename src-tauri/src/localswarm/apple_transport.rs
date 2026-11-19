@@ -1,28 +1,58 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Narrow byte-stream bridge. Native code owns QUIC/AWDL; Rust owns the protocol.
-use std::{ffi::{c_char, CString}, num::NonZeroU64, sync::{Arc, LazyLock}, time::Duration};
+use std::{ffi::{CStr, CString}, net::{IpAddr, Ipv4Addr, Ipv6Addr}, num::NonZeroU64, sync::{Arc, LazyLock}, time::Duration};
 use block2::{Block, RcBlock};
 use dispatch2::DispatchData;
+use objc2_foundation::NSData;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 mod read_request;
 
+// These C layouts match the fully initialized value records in localswarm.mm.
+// Lengths are integers, so every returned bit pattern is a valid Rust value.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct BonjourInstance {
+    length: u8,
+    bytes: [u8; 63],
+}
+
+#[repr(C)]
+struct AddressValue {
+    length: u8,
+    bytes: [u8; 16],
+}
+
+#[repr(C)]
+struct RouteValue {
+    length: u8,
+    bytes: [u8; 255],
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<BonjourInstance>() == 64);
+    assert!(std::mem::size_of::<AddressValue>() == 17);
+    assert!(std::mem::size_of::<RouteValue>() == 256);
+    assert!(std::mem::offset_of!(BonjourInstance, bytes) == 1);
+    assert!(std::mem::offset_of!(AddressValue, bytes) == 1);
+    assert!(std::mem::offset_of!(RouteValue, bytes) == 1);
+};
+
 type Completion = Block<dyn Fn(i32, usize)>;
 unsafe extern "C" {
-    fn kiwix_swarm_identity(p12: *const u8, length: usize, der: *const u8, der_length: usize) -> bool;
-    fn kiwix_swarm_connect(instance: *const c_char, peer_to_peer: bool) -> u64;
-    fn kiwix_swarm_connect_on_interface(instance: *const c_char, peer_to_peer: bool, required_index: u32) -> u64;
+    safe fn kiwix_swarm_identity(p12: &NSData, der: &NSData) -> bool;
+    safe fn kiwix_swarm_connect(instance: BonjourInstance, peer_to_peer: bool, isolated_transport: bool, required_index: u32) -> u64;
     safe fn kiwix_swarm_interface_index(id: u64) -> u32;
-    fn kiwix_swarm_local_address(id: u64, buffer: *mut u8, capacity: usize) -> usize;
-    fn kiwix_swarm_interface_has_address(index: u32, bytes: *const u8, length: usize) -> bool;
+    safe fn kiwix_swarm_local_address(id: u64) -> AddressValue;
+    safe fn kiwix_swarm_interface_has_address(index: u32, address: AddressValue) -> bool;
     fn kiwix_swarm_start(id: u64, callback: &Completion);
     fn kiwix_swarm_read(id: u64, maximum: usize, request: u64, callback: extern "C" fn(u64, i32, Option<&dispatch2::DispatchData>));
     fn kiwix_swarm_write(id: u64, data: &DispatchData, callback: &Completion);
     safe fn kiwix_swarm_cancel(id: u64);
     safe fn kiwix_swarm_join(id: u64);
     safe fn kiwix_swarm_release(id: u64);
-    fn kiwix_swarm_route(id: u64, buffer: *mut c_char, capacity: usize) -> isize;
+    safe fn kiwix_swarm_route(id: u64) -> RouteValue;
     fn kiwix_swarm_listen(accept: &Block<dyn Fn(u64)>, ready: &Completion, one_request: bool) -> u64;
     safe fn kiwix_swarm_listener_cancel(id: u64);
     safe fn kiwix_swarm_listener_join(id: u64);
@@ -32,9 +62,10 @@ unsafe extern "C" {
 fn identity() -> Result<(), String> {
     static IDENTITY: LazyLock<Result<(), String>> = LazyLock::new(|| {
         let (certificates, _) = super::network::identity()?;
-        let p12 = include_bytes!("../../native/localswarm.p12");
-        let certificate = certificates[0].as_ref();
-        if unsafe { kiwix_swarm_identity(p12.as_ptr(), p12.len(), certificate.as_ptr(), certificate.len()) } { Ok(()) }
+        let certificate = certificates.first().ok_or("Missing LocalSwarm Apple certificate")?;
+        let p12 = NSData::with_bytes(include_bytes!("../../native/localswarm.p12"));
+        let certificate = NSData::with_bytes(certificate.as_ref());
+        if kiwix_swarm_identity(&p12, &certificate) { Ok(()) }
         else { Err("Cannot import the pinned LocalSwarm Apple identity".into()) }
     });
     IDENTITY.clone()
@@ -54,17 +85,44 @@ pub fn service_instance(host: &str) -> Result<CString, String> {
     }
     CString::new(bytes).map_err(|_| "Invalid Bonjour service instance".into())
 }
-pub(super) fn interface_has_address(index: u32, address: std::net::IpAddr) -> bool {
-    match address {
-        std::net::IpAddr::V4(address) => {
-            let bytes = address.octets();
-            unsafe { kiwix_swarm_interface_has_address(index, bytes.as_ptr(), bytes.len()) }
-        },
-        std::net::IpAddr::V6(address) => {
-            let bytes = address.octets();
-            unsafe { kiwix_swarm_interface_has_address(index, bytes.as_ptr(), bytes.len()) }
-        },
+impl BonjourInstance {
+    fn new(instance: &CStr) -> Result<Self, String> {
+        let instance = instance.to_bytes();
+        let mut bytes = [0; 63];
+        bytes.get_mut(..instance.len()).ok_or("Invalid Bonjour service instance")?.copy_from_slice(instance);
+        Ok(Self { length: instance.len() as u8, bytes })
     }
+}
+
+impl AddressValue {
+    fn new(address: IpAddr) -> Self {
+        match address {
+            IpAddr::V4(address) => {
+                let mut bytes = [0; 16];
+                bytes[..4].copy_from_slice(&address.octets());
+                Self { length: 4, bytes }
+            }
+            IpAddr::V6(address) => Self { length: 16, bytes: address.octets() },
+        }
+    }
+
+    fn ip(&self) -> Option<IpAddr> {
+        match self.length {
+            4 => {
+                let [a, b, c, d, ..] = self.bytes;
+                Some(Ipv4Addr::new(a, b, c, d).into())
+            }
+            16 => {
+                let address = Ipv6Addr::from(self.bytes);
+                Some(address.to_ipv4_mapped().map_or(IpAddr::V6(address), IpAddr::V4))
+            }
+            _ => None,
+        }
+    }
+}
+
+pub(super) fn interface_has_address(index: u32, address: IpAddr) -> bool {
+    kiwix_swarm_interface_has_address(index, AddressValue::new(address))
 }
 
 /// Largest single native read. The bridge re-enters its serial dispatch queue
@@ -134,7 +192,7 @@ impl Connection {
     }
     async fn connect_impl(host: &str, cancel: &CancellationToken, direct: bool, required_index: Option<u32>, owns_transport: bool) -> Result<(Self, &'static str), String> {
         identity()?;
-        let instance = service_instance(host)?;
+        let instance = BonjourInstance::new(&service_instance(host)?)?;
         // Peer-to-peer is AWDL/llw and infrastructure is Wi-Fi/Ethernet. The
         // default order is unchanged: infrastructure first (the fast path when
         // both peers share a network), then AWDL for routerless use. Direct
@@ -149,13 +207,7 @@ impl Connection {
         let mut last_error = "No local peer route is available".to_string();
         for &(peer_to_peer, bound) in routes {
             if cancel.is_cancelled() { return Err("LocalSwarm operation cancelled".into()); }
-            let raw = NonZeroU64::new(unsafe {
-                if owns_transport {
-                    kiwix_swarm_connect_on_interface(instance.as_ptr(), peer_to_peer, required_index.unwrap_or(0))
-                } else {
-                    kiwix_swarm_connect(instance.as_ptr(), peer_to_peer)
-                }
-            })
+            let raw = NonZeroU64::new(kiwix_swarm_connect(instance, peer_to_peer, owns_transport, required_index.unwrap_or(0)))
                 .ok_or("Cannot create Apple QUIC connection")?;
             let (connection, ready) = Self::start(raw);
             let result = super::network::guarded(cancel, async {
@@ -191,24 +243,15 @@ impl Connection {
         if index == 0 { return Err("Native QUIC has no live required interface".into()); }
         Ok(index)
     }
-    pub(super) fn local_address(&self) -> Result<std::net::IpAddr, String> {
-        let mut bytes = [0; 16];
-        match unsafe { kiwix_swarm_local_address(self.0.id.get(), bytes.as_mut_ptr(), bytes.len()) } {
-            4 => Ok(std::net::Ipv4Addr::new(bytes[0], bytes[1], bytes[2], bytes[3]).into()),
-            16 => {
-                let address = std::net::Ipv6Addr::from(bytes);
-                Ok(address.to_ipv4_mapped().map_or(std::net::IpAddr::V6(address), std::net::IpAddr::V4))
-            },
-            _ => Err("Native QUIC has no live effective local address".into()),
-        }
+    pub(super) fn local_address(&self) -> Result<IpAddr, String> {
+        kiwix_swarm_local_address(self.0.id.get()).ip().ok_or_else(|| "Native QUIC has no live effective local address".into())
     }
     /// Bounded description of the live Network.framework path, for the job
     /// receipt. The native side reports the interface name plus its local
     /// address and the resolved peer address, e.g. `awdl0 192.168.1.5 -> ...`.
     pub fn route(&self) -> Option<String> {
-        let mut buffer = [0u8; 256];
-        let length = unsafe { kiwix_swarm_route(self.0.id.get(), buffer.as_mut_ptr().cast(), buffer.len()) };
-        let bytes = buffer.get(..usize::try_from(length).ok()?)?;
+        let route = kiwix_swarm_route(self.0.id.get());
+        let bytes = route.bytes.get(..usize::from(route.length))?;
         let text = std::str::from_utf8(bytes).ok()?.trim();
         (!text.is_empty() && text.len() <= 240 && !text.chars().any(char::is_control)).then(|| text.to_string())
     }
@@ -314,6 +357,27 @@ impl Drop for Listener { fn drop(&mut self) { self.close(); } }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn address_values_retain_families_and_normalize_ipv4_mapped_ipv6() {
+        for value in ["192.0.2.1", "fe80::42", "2001:db8::52"] {
+            let ip = value.parse::<IpAddr>().unwrap();
+            assert_eq!(AddressValue::new(ip).ip(), Some(ip));
+        }
+        let mapped = "::ffff:192.0.2.1".parse::<IpAddr>().unwrap();
+        assert_eq!(AddressValue::new(mapped).ip(), Some("192.0.2.1".parse().unwrap()));
+        assert!(AddressValue { length: 255, bytes: [0; 16] }.ip().is_none());
+    }
+
+    #[test]
+    fn missing_handles_return_initialized_empty_values() {
+        let route = kiwix_swarm_route(0);
+        assert_eq!(route.length, 0);
+        assert_eq!(route.bytes, [0; 255]);
+        let address = kiwix_swarm_local_address(0);
+        assert!(address.ip().is_none());
+        assert_eq!(address.bytes, [0; 16]);
+        assert!(!kiwix_swarm_interface_has_address(0, AddressValue::new("::1".parse().unwrap())));
+    }
     #[test]
     fn write_completion_is_counted_once_even_if_the_receiver_leaves() {
         let stats = Arc::new(super::super::network::SeedStats::default());
