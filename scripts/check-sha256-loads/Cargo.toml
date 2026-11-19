@@ -14,3 +14,4 @@ reference = { package = "sha2", version = "=0.10.9", features = ["asm"] }
 
 [patch.crates-io]
 block-buffer = { path = "../../src-tauri/vendor/block-buffer-0.12.1" }
+hybrid-array = { path = "../../src-tauri/vendor/hybrid-array-0.4.15" }

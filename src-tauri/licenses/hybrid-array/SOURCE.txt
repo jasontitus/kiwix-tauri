@@ -1,0 +1,14 @@
+RustCrypto hybrid-array is offered under the MIT License or Apache License,
+Version 2.0. Both license texts accompany this notice.
+
+Published source version: 0.4.15
+Upstream source revision: 09310c55b75e2cd408951c7e2e86dba16c63fc68
+https://github.com/RustCrypto/hybrid-array
+Published archive SHA-256:
+27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17
+Archive in this source distribution:
+upstream/rustcrypto-hybrid-array/hybrid-array-0.4.15.crate
+
+The local copy uses native array construction and slice access for ordinary
+array operations. The fallible constructor uses checked access to the
+initialized prefix. The generic representation conversions remain in source.

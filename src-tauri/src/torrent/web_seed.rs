@@ -645,7 +645,7 @@ fn verify_pieces(
             buffer.extend_from_slice(&bytes[at..at + take]);
             at += take;
             if buffer.len() == seed.piece_length as usize {
-                if Sha1::digest(&buffer).as_slice()
+                if &Sha1::digest(&buffer)[..]
                     != seed
                         .pieces
                         .get(*piece)
@@ -700,7 +700,7 @@ fn verify_pieces(
         }
     }
     if !buffer.is_empty() {
-        if Sha1::digest(&buffer).as_slice()
+        if &Sha1::digest(&buffer)[..]
             != seed
                 .pieces
                 .get(piece)

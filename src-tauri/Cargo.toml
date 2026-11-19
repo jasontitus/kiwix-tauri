@@ -225,6 +225,8 @@ siphasher = { path = "vendor/siphasher-1.0.4" }
 sha2 = { path = "vendor/sha2-0.11.1" }
 # Initialized storage and checked cursors for the shared digest buffer.
 block-buffer = { path = "vendor/block-buffer-0.12.1" }
+# Use native arrays for digest initialization, iteration and indexing.
+hybrid-array = { path = "vendor/hybrid-array-0.4.15" }
 # Shared checked token strings across exports, PDF validation and selector consumers.
 cssparser = { path = "vendor/cssparser-0.37.0" }
 # 0.7.0 selects Linux interface binding on iOS; use Apple's indexed binding.
