@@ -176,6 +176,11 @@ impl Service {
     pub(super) async fn export_pdf(self: Arc<Self>, args: Value, mut job: PdfJob) -> Result<Value, String> {
         let app = self.app.lock().map_err(|_| "Application handle unavailable")?.clone()
             .ok_or("Article PDF export requires a native application window")?;
+        #[cfg(target_os = "macos")]
+        let print_window = if job.print {
+            Some(app.get_webview_window(&job.identity.label)
+                .ok_or("The window you started printing from has closed")?)
+        } else { None };
         let name = text(&args, "suggestedName")?.to_string();
         if name.is_empty() || name.len() > 240 || !name.to_ascii_lowercase().ends_with(".pdf")
             || name.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*')) {
@@ -258,13 +263,12 @@ impl Service {
             #[cfg(target_os = "android")]
             Outcome::Cancelled => Ok(json!({"cancelled":true})),
             Outcome::Pdf(pdf) if job.print => {
-                // macOS prints the validated PDF; other desktop providers open
-                // their own webview print panel and return SystemPrintOpened.
-                // The system panel is bounded in native code and this future
-                // settles before the OwnedPdf (and its private temp file) drops.
+                // macOS prints the validated PDF from its originating window.
+                // Other desktop providers already handed it off to system UI.
                 #[cfg(target_os = "macos")]
                 {
-                    crate::native_pdf::print_pdf(pdf.path(), &name, print_authority, job.cancel.clone()).await?;
+                    let window = print_window.ok_or("The window you started printing from has closed")?;
+                    crate::native_pdf::print_pdf(window, &pdf, &name, print_authority, commit, job.cancel.clone()).await?;
                     drop(pdf);
                     // The panel closing does not prove paper was produced: the
                     // user may have cancelled or chosen Save as PDF.

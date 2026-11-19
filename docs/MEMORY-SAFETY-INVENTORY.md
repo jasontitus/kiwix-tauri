@@ -8,7 +8,7 @@ The Apple silicon desktop release at `f7fc9b8` compiled **86 distinct unsafe Rus
 
 The earlier Bonjour change reduced the Rust discovery worker from 29 sites to 24. It followed an integer-handle change that removed eleven sites from Nearby transport, which still accounts for eleven. The voice decoder change removed another 100 target-side sites from the old bzip2 libraries. [Handle and voice checkpoint](audit/2026-11-18-macos-handle-ids-compiled-unsafe.json)
 
-The Apple PDF renderer now returns numeric request IDs and result codes across its native callback boundary. The source census counts **171 explicit production Rust `unsafe` blocks** across the application and MCP relay, down from 174. It includes source for all supported platforms and excludes dependencies and test-only code. macOS printing still crosses a separate native callback boundary. [Renderer changes and printing follow-up](audit/2026-11-19-apple-pdf-renderer-ids.md)
+The Apple PDF renderer and macOS print bridge now return numeric request IDs and result codes. The source census counts **166 explicit production Rust `unsafe` blocks** across the application and MCP relay, down from 174 before these changes. It includes source for all supported platforms and excludes dependencies and test-only code. The macOS print bridge still calls AppKit and retains the private PDF until AppKit reports completion. [Renderer changes](audit/2026-11-19-apple-pdf-renderer-ids.md) · [Print ownership and verification](audit/2026-11-19-macos-print-lifecycle.md)
 
 | Path | Runtime migration and remaining work |
 |---|---|
