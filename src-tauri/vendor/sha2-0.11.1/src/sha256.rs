@@ -51,6 +51,22 @@ cfg_if::cfg_if! {
                 cpufeatures::new!(shani_cpuid, "sha", "sse4.1");
             } else if #[cfg(target_arch = "aarch64")] {
                 mod aarch64_sha2;
+                #[cfg(any(target_os = "android", target_os = "linux"))]
+                mod sha2_hwcap {
+                    #[cfg(feature = "std")]
+                    #[inline]
+                    pub(super) fn get() -> bool {
+                        std::arch::is_aarch64_feature_detected!("sha2")
+                    }
+
+                    #[cfg(not(feature = "std"))]
+                    #[inline]
+                    pub(super) fn get() -> bool {
+                        cfg!(target_feature = "sha2")
+                    }
+                }
+
+                #[cfg(not(any(target_os = "android", target_os = "linux")))]
                 cpufeatures::new!(sha2_hwcap, "sha2");
             }
         }

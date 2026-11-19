@@ -41,8 +41,8 @@ futures-util = "0.3"
 roxmltree = "0.21"
 uuid = { version = "1", features = ["v4", "serde"] }
 url = "2"
-sha1 = "0.11"
-sha2 = "=0.11.1"
+sha1 = { version = "0.11", features = ["std"] }
+sha2 = { version = "=0.11.1", features = ["std"] }
 # Archive-derived spelling index pages use the checked Zimru SHA-256 backend.
 chksum-hash-sha2-256 = "=0.0.1"
 md5 = "0.8.1"

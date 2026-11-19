@@ -16,7 +16,7 @@ description = "SHA-1 hash function"
 digest = "0.11"
 cfg-if = "1.0"
 
-[target.'cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64", all(target_arch = "aarch64", not(any(target_os = "android", target_os = "linux")))))'.dependencies]
 cpufeatures = "0.3"
 
 [dev-dependencies]
@@ -24,6 +24,7 @@ digest = { version = "0.11", features = ["dev"] }
 hex-literal = "1"
 
 [features]
+std = []
 default = ["alloc", "oid"]
 alloc = ["digest/alloc"]
 oid = ["digest/oid"] # Enable OID support

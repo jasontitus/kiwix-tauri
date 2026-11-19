@@ -48,6 +48,22 @@ cfg_if::cfg_if! {
                 cpufeatures::new!(avx2_cpuid, "avx2");
             } else if #[cfg(target_arch = "aarch64")] {
                 mod aarch64_sha3;
+                #[cfg(any(target_os = "android", target_os = "linux"))]
+                mod sha3_hwcap {
+                    #[cfg(feature = "std")]
+                    #[inline]
+                    pub(super) fn get() -> bool {
+                        std::arch::is_aarch64_feature_detected!("sha3")
+                    }
+
+                    #[cfg(not(feature = "std"))]
+                    #[inline]
+                    pub(super) fn get() -> bool {
+                        cfg!(target_feature = "sha3")
+                    }
+                }
+
+                #[cfg(not(any(target_os = "android", target_os = "linux")))]
                 cpufeatures::new!(sha3_hwcap, "sha3");
             }
         }

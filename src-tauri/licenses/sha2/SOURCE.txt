@@ -16,3 +16,7 @@ Kiwix changes the local copy in src-tauri/vendor/sha2-0.11.1. The AArch64 and
 x86 SHA-256 compressors use checked message and state loads and stores. The
 portable SHA-256 compressor uses checked access to the round constants. The
 local copy also corrects the explicit SHA-256 and SHA-512 backend selectors.
+The AArch64 SHA-512 and x86 AVX2 compressors use checked word loads and extract
+words from registers. The app enables the std feature for the standard CPU
+detector on ARM64 Linux and Android. Without std on those targets, the library
+uses a hardware backend when the compiler target guarantees its instructions.

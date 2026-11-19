@@ -17,6 +17,14 @@
 )]
 #![allow(clippy::needless_range_loop)]
 
+// Modified by Kiwix to use the standard CPU detector on ARM64 Linux and Android.
+#[cfg(all(
+    feature = "std",
+    target_arch = "aarch64",
+    any(target_os = "android", target_os = "linux")
+))]
+extern crate std;
+
 pub use digest::{self, Digest};
 
 use digest::{

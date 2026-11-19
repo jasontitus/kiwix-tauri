@@ -1,4 +1,7 @@
 // Implementation adapted from mbedtls.
+// Kiwix modification: replace raw vector loads and stores with checked word operations.
+#![forbid(unsafe_code)]
+
 use core::arch::aarch64::*;
 
 #[cfg(not(target_arch = "aarch64"))]
@@ -17,7 +20,7 @@ pub(super) fn compress(state: &mut [u64; 8], blocks: &[[u8; 128]]) {
         let ef_orig = ef;
         let gh_orig = gh;
 
-        // Load the message block into vectors, assuming little endianness.
+        // Load the big-endian message words into vectors.
         let [
             mut s0,
             mut s1,
@@ -164,35 +167,40 @@ pub(super) fn compress(state: &mut [u64; 8], blocks: &[[u8; 128]]) {
 
 #[inline]
 #[target_feature(enable = "neon")]
+fn vector([a, b]: [u64; 2]) -> uint64x2_t {
+    vsetq_lane_u64::<1>(b, vdupq_n_u64(a))
+}
+
+#[inline]
+#[target_feature(enable = "neon")]
 fn rk(i: usize) -> uint64x2_t {
-    let chunk = &crate::consts::K64[i..][..2];
-    unsafe { vld1q_u64(chunk.as_ptr()) }
+    vector(crate::consts::K64[i..][..2].try_into().unwrap())
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
 fn load_block(block: &[u8; 128]) -> [uint64x2_t; 8] {
+    let (words, _) = block.as_chunks::<8>();
     core::array::from_fn(|i| {
-        let chunk = &block[16 * i..][..16];
-        let b = unsafe { vld1q_u8(chunk.as_ptr()) };
-        vreinterpretq_u64_u8(vrev64q_u8(b))
+        vector([
+            u64::from_be_bytes(words[2 * i]),
+            u64::from_be_bytes(words[2 * i + 1]),
+        ])
     })
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
 fn load_state(state: &[u64; 8]) -> [uint64x2_t; 4] {
-    core::array::from_fn(|i| {
-        let chunk = &state[2 * i..][..2];
-        unsafe { vld1q_u64(chunk.as_ptr()) }
-    })
+    let (words, _) = state.as_chunks::<2>();
+    core::array::from_fn(|i| vector(words[i]))
 }
 
 #[inline]
 #[target_feature(enable = "neon")]
 fn store_state(state_dst: &mut [u64; 8], state: [uint64x2_t; 4]) {
-    for i in 0..4 {
-        let chunk = &mut state_dst[2 * i..][..2];
-        unsafe { vst1q_u64(chunk.as_mut_ptr(), state[i]) };
+    let (words, _) = state_dst.as_chunks_mut::<2>();
+    for (dst, lanes) in words.iter_mut().zip(state) {
+        *dst = [vgetq_lane_u64::<0>(lanes), vgetq_lane_u64::<1>(lanes)];
     }
 }

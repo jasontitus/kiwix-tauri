@@ -40,6 +40,7 @@ repository = "https://github.com/RustCrypto/hashes"
 all-features = true
 
 [features]
+std = []
 alloc = ["digest/alloc"]
 default = [
     "alloc",
@@ -73,7 +74,7 @@ features = ["dev"]
 [dev-dependencies.hex-literal]
 version = "1"
 
-[target.'cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))'.dependencies.cpufeatures]
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64", all(target_arch = "aarch64", not(any(target_os = "android", target_os = "linux")))))'.dependencies.cpufeatures]
 version = "0.3"
 
 [lints.rust.unexpected_cfgs]

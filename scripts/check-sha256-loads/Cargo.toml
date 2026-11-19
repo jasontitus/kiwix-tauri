@@ -4,6 +4,10 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+[features]
+default = ["std-detector"]
+std-detector = ["checked/std", "sha1/std"]
+
 [dependencies]
 checked = { package = "sha2", path = "../../src-tauri/vendor/sha2-0.11.1" }
 reference = { package = "sha2", version = "=0.10.9", features = ["compress"] }

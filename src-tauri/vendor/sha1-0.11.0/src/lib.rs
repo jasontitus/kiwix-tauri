@@ -7,6 +7,14 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs, unreachable_pub)]
 
+// Modified by Kiwix to use the standard CPU detector on ARM64 Linux and Android.
+#[cfg(all(
+    feature = "std",
+    target_arch = "aarch64",
+    any(target_os = "android", target_os = "linux")
+))]
+extern crate std;
+
 pub use digest::{self, Digest};
 
 /// Block-level types

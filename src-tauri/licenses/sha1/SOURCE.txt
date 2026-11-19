@@ -12,3 +12,6 @@ upstream/rustcrypto-sha1/sha1-0.11.0.crate
 The local copy dispatches borrowed native blocks to the SHA-1 compressor.
 An incomplete block remains in the digest buffer until it is filled or padded.
 The ARM64 and x86 SHA instruction paths load checked words into registers.
+The app enables the std feature for the standard CPU detector on ARM64 Linux
+and Android. Without std on those targets, the library uses the hardware
+backend when the compiler target guarantees its instructions.

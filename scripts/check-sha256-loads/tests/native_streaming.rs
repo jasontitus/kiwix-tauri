@@ -120,6 +120,33 @@ fn all_sha2_digests_match_the_reference_across_partitions() {
 }
 
 #[test]
+fn sha512_compression_matches_reference_from_arbitrary_states() {
+    use reference::digest::generic_array::GenericArray;
+
+    for offset in [0, 1, 15] {
+        for count in [0, 1, 2, 3, 127, 128] {
+            let input: Vec<u8> = (0..offset + count * 128)
+                .map(|i| (i * 137 + i / 17 + count * 47) as u8)
+                .collect();
+            let (blocks, tail) = input[offset..].as_chunks::<128>();
+            assert!(tail.is_empty());
+            let reference_blocks: Vec<_> = blocks
+                .iter()
+                .map(|block| GenericArray::clone_from_slice(block))
+                .collect();
+            let initial = core::array::from_fn(|i| {
+                0x8123_4567_89ab_cdef_u64.rotate_left((i * 7) as u32) ^ count as u64 ^ offset as u64
+            });
+            let mut checked = initial;
+            let mut reference = initial;
+            checked::block_api::compress512(&mut checked, blocks);
+            reference::compress512(&mut reference, &reference_blocks);
+            assert_eq!(checked, reference, "offset {offset}, blocks {count}");
+        }
+    }
+}
+
+#[test]
 fn core_proxy_and_object_update_keep_the_buffer_and_reset() {
     use checked::{
         digest::{block_api::CoreProxy, DynDigest},
