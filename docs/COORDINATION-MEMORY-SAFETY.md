@@ -40,8 +40,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - Verified for Android: `cargo check --lib --target aarch64-linux-android --features android-evaluation`
   with NDK 28 under Rust 1.99.1.
 - Not run: iOS/Linux cross-target checks, device tests, sanitizer/Miri.
-- Independent review completed; all four findings are fixed in `cf24679f21` and `28a8d06b37`. Final
-  reviewer verification of those two fixes is in progress.
+- The four initial findings and two follow-up findings are fixed and independently verified (`cf24679f21`,
+  `28a8d06b37`).
 
 ## Not reserved (safe for the other session)
 
