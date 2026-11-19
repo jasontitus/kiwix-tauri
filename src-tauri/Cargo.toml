@@ -199,6 +199,10 @@ windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com"
 # Desktop only; macOS opens through NSWorkspace instead (src/os_open.rs).
 opener = "0.8"
 
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSPathUtilities"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"

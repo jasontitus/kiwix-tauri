@@ -106,28 +106,6 @@ public func kiwixMobileIncomingCanOpenInPlace(_ bytes: UnsafePointer<UInt8>?, _ 
   return IncomingOriginalAuthority.canOpenInPlace(uri) ? 1 : 0
 }
 
-// Bootstrap Rust's directory capabilities at the OS-owned sandbox root, not `/`.
-// The returned descriptor is caller-owned; Foundation supplies the root, never JS.
-@_cdecl("kiwix_mobile_open_app_root")
-public func kiwixMobileOpenAppRoot(_ path: UnsafeMutablePointer<CChar>?, _ capacity: Int) -> Int32 {
-  guard let path, capacity >= Int(PATH_MAX) else { errno = EINVAL; return -1 }
-  // Match Rust std::fs::canonicalize exactly, including physical /var aliases.
-  // Foundation URL normalization alone need not return that POSIX spelling.
-  return NSHomeDirectory().withCString { source in
-    guard realpath(source, path) != nil else { return -1 }
-    let fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-    guard fd >= 0 else { return -1 }
-    var info = stat()
-    guard fstat(fd, &info) == 0 else {
-      let saved = errno; close(fd); errno = saved; return -1
-    }
-    guard (info.st_mode & S_IFMT) == S_IFDIR, info.st_uid == geteuid() else {
-      close(fd); errno = EPERM; return -1
-    }
-    return fd
-  }
-}
-
 struct MobileFailure: Error {
   let code: String
   let detail: String?

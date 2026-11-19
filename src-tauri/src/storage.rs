@@ -165,20 +165,22 @@ static IOS_CONTAINER: std::sync::LazyLock<std::io::Result<IosContainer>> = std::
 /// Bootstrap only from Foundation's native container, before profile initialization.
 #[cfg(target_os = "ios")]
 fn open_ios_container() -> std::io::Result<IosContainer> {
-    use std::{ffi::CStr, os::{fd::FromRawFd, unix::ffi::OsStrExt}};
-    unsafe extern "C" {
-        fn kiwix_mobile_open_app_root(path: *mut std::ffi::c_char, capacity: usize) -> i32;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+
+    // Foundation selects the installed app's container. Resolve its OS path
+    // aliases once; later caller paths are traversed from the retained handle.
+    let home = objc2::rc::autoreleasepool(|_| objc2_foundation::NSHomeDirectory().to_string());
+    if !Path::new(&home).is_absolute() {
+        return Err(std::io::Error::other("Invalid native iOS container path"));
     }
-    let mut path = [0 as std::ffi::c_char; libc::PATH_MAX as usize];
-    let fd = unsafe { kiwix_mobile_open_app_root(path.as_mut_ptr(), path.len()) };
-    if fd < 0 { return Err(std::io::Error::last_os_error()); }
-    let file = unsafe { std::fs::File::from_raw_fd(fd) };
-    let path = CStr::from_bytes_until_nul(unsafe {
-        std::slice::from_raw_parts(path.as_ptr().cast::<u8>(), path.len())
-    }).map_err(|_| std::io::Error::other("Native iOS container path is not terminated"))?;
-    let path = PathBuf::from(std::ffi::OsStr::from_bytes(path.to_bytes()));
-    if !path.is_absolute() || !file.metadata()?.is_dir() {
-        return Err(std::io::Error::other("Invalid native iOS container capability"));
+    let path = std::fs::canonicalize(home)?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(&path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_dir() || metadata.uid() != rustix::process::geteuid().as_raw() {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Invalid native iOS container owner or type"));
     }
     Ok(IosContainer { path, directory: cap_std::fs::Dir::from_std_file(file) })
 }
