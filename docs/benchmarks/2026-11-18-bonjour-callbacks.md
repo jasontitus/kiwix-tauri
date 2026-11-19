@@ -34,3 +34,18 @@ Using ordinary system interface selection, both revisions discovered the first r
 A separate local-only control exposed a difference in system registration behavior. The simulator’s default local-only host was `localhost.`, which both revisions rejected under the existing requirement for a name ending in `.local.`. An explicitly named local-only host passed on both versions, including independent observations of two address records and their removal.
 
 A separate timing fixture replayed callbacks locally in the simulator. One callback per scope took 44.12 ns before and 47.09 ns after the change. For 16 callbacks per scope it took 27.50 and 27.48 ns per event. The median within-pair changes were +2.75% and +1.23% respectively. Each of the 32 measured processes verified 262,144 events. These times include entering and leaving the scope and enqueueing the event. Dequeue, event-field verification and OS discovery were outside the timer. Physical-device discovery remains unverified. [Individual simulator timings and live probe identities](2026-11-18-ios-bonjour-callbacks.json)
+
+## Outgoing Apple connection resolution
+
+At `e46993d`, the native connection resolver supplies a fresh operation number for each service and address lookup. The serial callback queue finds a weak connection reference by number and checks the active stage. Successful callbacks also have to match the SDK reference. Retirement removes the number before deallocating the reference. A late callback cannot act on a replacement, including when the SDK reuses the same reference address. Service-to-address handoff preserves the route fallback timer. The resolver still reads SDK-owned hostnames and addresses and uses native DNS-SD and Network.framework.
+
+On macOS the optimized and sanitizer fixtures covered failed creation, failed queue assignment, stale callbacks, reused references, cancellation and exhaustion. Independent checks exercised 4,096 callbacks during deallocation and eight concurrent lookups for the local host through the real DNS service. The app passed all four live Nearby networking regressions. They include a real Bonjour and QUIC library request, route selection and concurrent stream retirement. On the iOS simulator, the probe resolved a temporary service to its bound private address and port, rejected an unexpected hostname, advanced past an unpublished route and found a late registration. It withdrew its temporary records. The simulator probe stopped before TLS and QUIC.
+
+| Measurement | Previous | With operation numbers | Coverage |
+|---|---:|---:|---|
+| Mac callback owner lookup, one active operation | 14.61 ns | 14.47 ns | 12 pairs, 32,768 lookups per process |
+| Mac callback owner lookup, 32 active operations | 10.57 ns | 10.86 ns | Same local fixture |
+| Mac library request and route test | 1,209 ms | 1,267 ms | Whole process, including publisher setup, real QUIC and cleanup |
+| iOS simulator DNS route selection | 4.99 ms | 4.66 ms | Pooled median of 96 checked selections per version |
+
+The Mac library test used ten alternating fresh-process pairs after two warm-up pairs. Its median within-pair elapsed time increased 3.8%. The simulator used six alternating process pairs, each with one discarded warm-up and 16 measured selections. Its median within-pair change was −8.6%. These measure different parts of a request. Other workloads shared the Mac, and physical radio performance remains open. [Individual timings and binary identities](2026-11-18-apple-route-queries.json)

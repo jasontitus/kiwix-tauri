@@ -1,0 +1,851 @@
+{
+ "before": "69ca9fc2b0d57a7a10835eae66a439b353231fba",
+ "after": "e46993de7062b4c0697af725b4fcb3b8b14f577c",
+ "mac_query_lookup": {
+  "shas": {
+   "previous": "585574e3f2a8a122093a04ed518d90b90f1540bfcabfe2214f08cb5af2293230",
+   "current": "3278329dee46f018bb8a43100524b0bf4f10195b86173bf8fcfdae47ed5bd55b"
+  },
+  "rows": [
+   {
+    "round": 0,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 465125
+   },
+   {
+    "round": 0,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 476208
+   },
+   {
+    "round": 0,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357250
+   },
+   {
+    "round": 0,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 345250
+   },
+   {
+    "round": 1,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 495375
+   },
+   {
+    "round": 1,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 479250
+   },
+   {
+    "round": 1,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346459
+   },
+   {
+    "round": 1,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357167
+   },
+   {
+    "round": 2,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 477958
+   },
+   {
+    "round": 2,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 480250
+   },
+   {
+    "round": 2,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357833
+   },
+   {
+    "round": 2,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346250
+   },
+   {
+    "round": 3,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 463541
+   },
+   {
+    "round": 3,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 466125
+   },
+   {
+    "round": 3,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346625
+   },
+   {
+    "round": 3,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357417
+   },
+   {
+    "round": 4,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 465667
+   },
+   {
+    "round": 4,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 483625
+   },
+   {
+    "round": 4,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357042
+   },
+   {
+    "round": 4,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346166
+   },
+   {
+    "round": 5,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 463667
+   },
+   {
+    "round": 5,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 485708
+   },
+   {
+    "round": 5,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 333958
+   },
+   {
+    "round": 5,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 357833
+   },
+   {
+    "round": 6,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 477875
+   },
+   {
+    "round": 6,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 468083
+   },
+   {
+    "round": 6,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 348250
+   },
+   {
+    "round": 6,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346250
+   },
+   {
+    "round": 7,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 467500
+   },
+   {
+    "round": 7,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 479375
+   },
+   {
+    "round": 7,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 331708
+   },
+   {
+    "round": 7,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 371542
+   },
+   {
+    "round": 8,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 479459
+   },
+   {
+    "round": 8,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 481666
+   },
+   {
+    "round": 8,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 341000
+   },
+   {
+    "round": 8,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346375
+   },
+   {
+    "round": 9,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 465333
+   },
+   {
+    "round": 9,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 460750
+   },
+   {
+    "round": 9,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 334750
+   },
+   {
+    "round": 9,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 342417
+   },
+   {
+    "round": 10,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 466958
+   },
+   {
+    "round": 10,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 482542
+   },
+   {
+    "round": 10,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 345167
+   },
+   {
+    "round": 10,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346375
+   },
+   {
+    "round": 11,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 482333
+   },
+   {
+    "round": 11,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 479250
+   },
+   {
+    "round": 11,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346375
+   },
+   {
+    "round": 11,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 354333
+   },
+   {
+    "round": 12,
+    "width": 1,
+    "build": "previous",
+    "n": 32768,
+    "t": 480584
+   },
+   {
+    "round": 12,
+    "width": 1,
+    "build": "current",
+    "n": 32768,
+    "t": 461708
+   },
+   {
+    "round": 12,
+    "width": 32,
+    "build": "current",
+    "n": 32768,
+    "t": 353500
+   },
+   {
+    "round": 12,
+    "width": 32,
+    "build": "previous",
+    "n": 32768,
+    "t": 346334
+   }
+  ]
+ },
+ "mac_library_route_workflow": {
+  "test": "localswarm::apple_transport::native_route_detail_owns_the_enumerated_interface_name",
+  "executables_sha256": {
+   "before": "ca2952630be8e9d9069537c2cc47e07f3b7c7146221b251d0f368574a015c4b8",
+   "after": "b8f6af6278c32c4ea310404211d12fbdc471e4e7060179cd85e7d2be24575e36"
+  },
+  "columns": [
+   "pair",
+   "build",
+   "process_elapsed_ns"
+  ],
+  "rows": [
+   [
+    -2,
+    "before",
+    1157527292
+   ],
+   [
+    -2,
+    "after",
+    1127905083
+   ],
+   [
+    -1,
+    "after",
+    1196000709
+   ],
+   [
+    -1,
+    "before",
+    1189118250
+   ],
+   [
+    0,
+    "before",
+    1178245000
+   ],
+   [
+    0,
+    "after",
+    1299236542
+   ],
+   [
+    1,
+    "after",
+    1120250292
+   ],
+   [
+    1,
+    "before",
+    1407100000
+   ],
+   [
+    2,
+    "before",
+    1366970084
+   ],
+   [
+    2,
+    "after",
+    1349518750
+   ],
+   [
+    3,
+    "after",
+    1181372042
+   ],
+   [
+    3,
+    "before",
+    1309904792
+   ],
+   [
+    4,
+    "before",
+    1141827000
+   ],
+   [
+    4,
+    "after",
+    1273464416
+   ],
+   [
+    5,
+    "after",
+    1260181000
+   ],
+   [
+    5,
+    "before",
+    1188171625
+   ],
+   [
+    6,
+    "before",
+    1150078792
+   ],
+   [
+    6,
+    "after",
+    1166985958
+   ],
+   [
+    7,
+    "after",
+    1316228000
+   ],
+   [
+    7,
+    "before",
+    1230175292
+   ],
+   [
+    8,
+    "before",
+    1244723833
+   ],
+   [
+    8,
+    "after",
+    1194926084
+   ],
+   [
+    9,
+    "after",
+    1414159791
+   ],
+   [
+    9,
+    "before",
+    1108899500
+   ]
+  ]
+ },
+ "ios_route_selection": {
+  "binaries": {
+   "base": {
+    "rev": "69ca9fc",
+    "sources": {
+     "localswarm.mm": "eb2dc6358c1170335bfda91ef0d4e5628fe841506117c867b7aba239611b8ea0",
+     "localswarm_tests.mm": "e34033f882a27d6491ab8d4004d0e3209beef3a68eb784551769ca405641dba6",
+     "route.mm": "3af7fdb150992cd4d0298a1eab9eaa7274aedeef5d020a1d2fd55b13c5a91838"
+    },
+    "binaries": {
+     "route-base": "e3e4cc12181ddf40aa0640d883706dfea8d494817adb61656268791f89c059ba"
+    }
+   },
+   "candidate": {
+    "rev": "e46993d",
+    "sources": {
+     "localswarm.mm": "d798cc7c6fc1b2dc2d1d6e8308cbfac5a5b31e4179ecb73b3f0706eaa9ebc426",
+     "localswarm_tests.mm": "ec1480e3b6644b3c904dee7ab75259551cabb084ff8c90a2750cfecb1382b49a",
+     "route.mm": "c143c47b363416995261a5f68a944dbc3dfa23b41efb155f6b260724ba1e3b14"
+    },
+    "binaries": {
+     "route-candidate": "8a375bb0ffad69d89f62d98e15d4615f1b48cdca8875b0721f8f5043c3d1dc8a",
+     "native-tickets": "b0d63a9bd36c6b112b689fa1e03dd0458a8ac54b293f50ba973fa17f3c04f476"
+    }
+   }
+  },
+  "samples": [
+   {
+    "round": 1,
+    "lane": "base",
+    "durations_ns": [
+     6773208,
+     5519167,
+     5931875,
+     5223583,
+     5810167,
+     4394625,
+     5355250,
+     4727166,
+     4555125,
+     5204958,
+     6372292,
+     6166250,
+     6214125,
+     6442333,
+     6874541,
+     7188625
+    ],
+    "warmup_ns": 264015333,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 1,
+    "lane": "candidate",
+    "durations_ns": [
+     4523042,
+     5363709,
+     4953709,
+     4852541,
+     5875042,
+     3191750,
+     3584917,
+     3017375,
+     2918584,
+     2409500,
+     3431083,
+     2817834,
+     2389042,
+     2755375,
+     2787750,
+     2703834
+    ],
+    "warmup_ns": 274740875,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 2,
+    "lane": "candidate",
+    "durations_ns": [
+     5934459,
+     5002958,
+     5162875,
+     4355291,
+     4563917,
+     4706375,
+     5618708,
+     6045875,
+     6077000,
+     4522500,
+     4250625,
+     5061625,
+     3811458,
+     3364792,
+     4274333,
+     3932208
+    ],
+    "warmup_ns": 268618667,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 2,
+    "lane": "base",
+    "durations_ns": [
+     7290833,
+     4402750,
+     5328750,
+     4991709,
+     6620041,
+     5861542,
+     5796750,
+     5304875,
+     5394875,
+     5507708,
+     2248750,
+     2581375,
+     2696667,
+     2310875,
+     2408583,
+     2133208
+    ],
+    "warmup_ns": 260482875,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 3,
+    "lane": "base",
+    "durations_ns": [
+     5619291,
+     8319000,
+     6706959,
+     4820917,
+     5205750,
+     5402541,
+     5470917,
+     6235875,
+     3048625,
+     3692875,
+     4081791,
+     3518833,
+     3820542,
+     4156958,
+     3516250,
+     3275375
+    ],
+    "warmup_ns": 286398625,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 3,
+    "lane": "candidate",
+    "durations_ns": [
+     5640708,
+     5893583,
+     7792708,
+     6613125,
+     5695708,
+     4090125,
+     3065375,
+     2718084,
+     2899167,
+     3280291,
+     2768916,
+     2850750,
+     3028916,
+     2678583,
+     2871584,
+     3511208
+    ],
+    "warmup_ns": 265242500,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 4,
+    "lane": "candidate",
+    "durations_ns": [
+     4520375,
+     4447375,
+     5613917,
+     5135208,
+     4802625,
+     5516917,
+     5523750,
+     5708917,
+     6203458,
+     5637083,
+     5830542,
+     5361042,
+     5027541,
+     4559041,
+     4799083,
+     5021333
+    ],
+    "warmup_ns": 261996709,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 4,
+    "lane": "base",
+    "durations_ns": [
+     4342708,
+     5586333,
+     3827709,
+     4963125,
+     5848958,
+     5347750,
+     5711667,
+     4692875,
+     5801292,
+     4836500,
+     4805417,
+     4587625,
+     4509041,
+     4318375,
+     3982625,
+     3795958
+    ],
+    "warmup_ns": 262994750,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 5,
+    "lane": "base",
+    "durations_ns": [
+     6014167,
+     4705625,
+     6603375,
+     5122833,
+     6078125,
+     7863292,
+     6194084,
+     6093333,
+     5585500,
+     4876541,
+     4759792,
+     4867250,
+     4897916,
+     4984667,
+     4432583,
+     7957750
+    ],
+    "warmup_ns": 264678083,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 5,
+    "lane": "candidate",
+    "durations_ns": [
+     6370917,
+     5117750,
+     5733166,
+     5582791,
+     6211083,
+     4613208,
+     5221417,
+     5377625,
+     4823250,
+     4095875,
+     4027542,
+     7371334,
+     3040041,
+     3186917,
+     2752208,
+     3534125
+    ],
+    "warmup_ns": 261012042,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 6,
+    "lane": "candidate",
+    "durations_ns": [
+     4956833,
+     5184625,
+     5206292,
+     4523166,
+     5008834,
+     4764542,
+     4269417,
+     5071750,
+     4827833,
+     4001417,
+     4517667,
+     4180000,
+     5006750,
+     4301542,
+     4442083,
+     4778208
+    ],
+    "warmup_ns": 262287709,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   },
+   {
+    "round": 6,
+    "lane": "base",
+    "durations_ns": [
+     5074750,
+     4650625,
+     4329167,
+     5552125,
+     6622792,
+     4657500,
+     4526125,
+     4252833,
+     3628625,
+     4231625,
+     3722458,
+     5091833,
+     4524375,
+     4633541,
+     5280625,
+     3987583
+    ],
+    "warmup_ns": 261272208,
+    "withdrawn": true,
+    "own_socket": true,
+    "no_quic": true
+   }
+  ]
+ }
+}
