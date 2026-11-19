@@ -1,0 +1,115 @@
+{
+  "source_commit": "000655dd4d592cd1d420472a99a3ba331b985134",
+  "macos": {
+    "release_tests": {
+      "passed": 1257,
+      "failed": 0,
+      "ignored": 25
+    },
+    "signed_executable_sha256": "7d69252429d1d6b92a86d61ec6b8ed50975f6b4934c76b7be84bb1007432c10f",
+    "matched_signed_previews": 7,
+    "matched_signed_mhtml_exports": 2,
+    "suite_log_sha256": "9d82e1ff35e1125944afa8e1204f5ae9601d954243a00c580424c40a08d29954",
+    "signed_smoke_record_sha256": "f9f6174b69e47962c771eca5d3805c25d1a1a782fa6e0355a10a46f7c6289b79"
+  },
+  "linux": {
+    "platform": "Ubuntu 24.04 x86-64",
+    "source_tree_sha": "83d71154e7d23e031f94b275237b4a835689aa20",
+    "source_commit": "000655dd4d592cd1d420472a99a3ba331b985134",
+    "release_tests": {
+      "passed": 1240,
+      "failed": 0,
+      "ignored": 16
+    },
+    "exe_sha256": "6b2e6ed97a492c27449941c683072f2a4a3f0025c995ee4fe0150de10fe85558",
+    "appimage_sha256": "9fe114563c971bc79cdda42b3b93960f0e619bf09fff96c9c56aa316cdeb4614",
+    "actual_service_scenarios": [
+      "single",
+      "reopen",
+      "split",
+      "image"
+    ],
+    "matching_canonical_and_packaged_json_sha256": "32af9591968fed540af1a63afcafbb4f1afade61bc8ddf3c30c06d87db8733b4",
+    "raw_receipts_sha256": "ec8cc05e44d9528b4cf8e652cbbe2c9aa089257bba4006ded24e4ce38c053729",
+    "license_and_source_resources": 70,
+    "new_resource_sha256": {
+      "SOURCE.txt": "7261ca731475c58304540acb24a42620680aee9c23a2c55b78aa9d7a94603df6",
+      "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "LICENSE-MIT": "62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3"
+    }
+  },
+  "mobile_target_compiler_metadata": {
+    "aarch64-apple-ios-sim": {
+      "checked_string_cache_rmeta_sha256": "4cb6cf25817e427cbd9edb80347eafcf08e2c32d2c84979bce9549713e303a05",
+      "kiwix_app_rmeta_sha256": "d5a2a7c3d3faccd8574421a6fdb27144efd6a7c492498ae0dffe19bb1bc33fe7"
+    },
+    "aarch64-apple-ios": {
+      "checked_string_cache_rmeta_sha256": "4aaead72d0f367efeb03f6f71bc241f67ef4b6cd2430f986cc2ca81444879d7d",
+      "kiwix_app_rmeta_sha256": "3aaab2d32d575e705a958ebba493dbde232e33d011fad491157126e88a44e4e6"
+    },
+    "aarch64-linux-android": {
+      "checked_string_cache_rmeta_sha256": "e58c8056ac58ec94936a32743ddf0a8cc57c89760f61d78f3eb84dd4b3a18680",
+      "kiwix_app_rmeta_sha256": "ed2f6b406c8e2a10974d8827e5d3d8c7d04e8397c7c470066a372901596c25a9"
+    },
+    "armv7-linux-androideabi": {
+      "checked_string_cache_rmeta_sha256": "4a42d046d68484af645ac1817f191b782d7b97fa416ba991feb3ac85f9ed1ec9",
+      "kiwix_app_rmeta_sha256": "fa3423b6b743928c77651b34e1a86d7f2b8f2d85913ec4b06a6b277817bad400"
+    }
+  },
+  "ios": {
+    "mode": "ARM64 iOS 26.5 Simulator",
+    "signed_zip_sha256": "84febc22f3d52de5667284940d8ac49ff1b799e424887c3fc1af4af90fa6dead",
+    "main_sha256": "304f1ef12a5d5c4fe0f81199cfa872df1ce1353d1983a785a8843e014a10b046",
+    "verified_notice_count": 55,
+    "actual_ui_result": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tested": "Real Climate import, selected article, spelling correction and cold article restoration before further navigation.",
+    "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_simulator_removed": true,
+    "raw_receipt_sha256": "e928c4ccbcce7cc6108e05175c7fae5a2385c78dbe070aa0e12978a87b8cb2b6"
+  },
+  "android": {
+    "mode": "ARM64 Android API 35 emulator",
+    "signed_apk_sha256": "09464d490d657e9ffbc19f2b111d24f9c76f6cbd64752cf36575276b36f92bfc",
+    "unsigned_apk_sha256": "76154a370b1f688f76de7b37a3a779d28e205e0e384216c5404a9d3ce6a81248",
+    "main_sha256": "7519da6485c53f70d09a234872d3dbbc8b4b7bd6f930685899798a9bd2518b7b",
+    "verified_notice_count": 55,
+    "native_library_count": 5,
+    "observations": [
+      "about-zimru",
+      "about-glass",
+      "opt-in-checked",
+      "open-file",
+      "android-downloads",
+      "picker",
+      "library",
+      "home",
+      "build-index",
+      "index-ready",
+      "correction",
+      "accepted",
+      "corrected-hit",
+      "corrected-article",
+      "title-results",
+      "title-hit",
+      "title-article",
+      "fulltext-results",
+      "fulltext-hit",
+      "fulltext-article",
+      "restored",
+      "cold-index-ready",
+      "cold-correction",
+      "cold-accepted",
+      "cold-hit",
+      "cold-article"
+    ],
+    "tested": "Native archive import, title and full-text search, spelling correction, opened articles and cold restoration.",
+    "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_emulator_and_data_removed": true,
+    "raw_receipt_sha256": "6247b29bc8eb674d30c5810a892eb94b516c51daf47759aa9fe8c40a0a1000f6"
+  },
+  "limit": "These runs verify desktop release workflows and mobile simulator/emulator behavior. No new physical-device performance, peak memory or mobile PDF measurements."
+}
