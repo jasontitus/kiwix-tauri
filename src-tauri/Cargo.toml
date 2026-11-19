@@ -216,6 +216,8 @@ android-evaluation = ["dep:jni"]
 localswarm-profiling = []
 
 [patch.crates-io]
+# Format JSON and HTTP integers in initialized stack storage.
+itoa = { path = "vendor/itoa-1.0.19" }
 # Keep accelerated gzip and PNG CRCs on checked byte loads.
 crc32fast = { path = "vendor/crc32fast-1.5.5" }
 # Use initialized DEFLATE output buffers and the portable Miniz checksum path.

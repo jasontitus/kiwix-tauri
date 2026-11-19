@@ -34,6 +34,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
 ] }
 
+[patch.crates-io]
+itoa = { path = "../src-tauri/vendor/itoa-1.0.19" }
+
 [profile.release]
 opt-level = "s"
 lto = true

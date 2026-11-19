@@ -1,0 +1,10 @@
+itoa 1.0.19
+Upstream: https://github.com/dtolnay/itoa
+Revision: 9339ca99a43c550b5ee36e2afe524d1c90413461
+Crate SHA-256: 3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4
+License: MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
+
+Kiwix changes: format into initialized stack storage with checked indexing and
+UTF-8 conversion, and forbid unsafe Rust. Retain the upstream decimal grouping
+and integer API. Omit the upstream optional no-panic instrumentation, which
+cannot prove all of the checked operations away. Kiwix did not select it.
