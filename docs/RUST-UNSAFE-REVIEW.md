@@ -174,7 +174,9 @@ boundary.
 
 ## Follow-up implemented 2026-11-19
 
-Scope: `942c36306b`, hand-written Rust under `src-tauri/src`. Counts use
+Scope: counts are for `942c36306b`, hand-written Rust under `src-tauri/src`. The NUL precheck and its
+regression test were added in the corrective follow-up `cf24679f21`; the preserved NUL diagnostic described
+below applies to `publication.rs` at that revision. Counts use
 `git grep -o -e 'unsafe[[:space:]]*{'` over `src-tauri/src/*.rs`, so they include matches in comments and
 are comparable only with the same command at the two revisions below.
 

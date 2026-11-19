@@ -945,6 +945,8 @@ mod tests {
             std::fs::read_link(&destination).unwrap(),
             Path::new("missing-user-target")
         );
+        assert_eq!(std::fs::read(&source).unwrap(), b"new");
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[cfg(unix)]
