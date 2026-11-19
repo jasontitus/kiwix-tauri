@@ -9,9 +9,14 @@ checked = { package = "sha2", path = "../../src-tauri/vendor/sha2-0.11.1" }
 reference = { package = "sha2", version = "=0.10.9", features = ["compress"] }
 hex = "0.4"
 
+[dev-dependencies]
+sha1 = "=0.11.0"
+
 [target.'cfg(all(target_arch = "aarch64", not(target_os = "windows")))'.dependencies]
 reference = { package = "sha2", version = "=0.10.9", features = ["asm"] }
 
 [patch.crates-io]
 block-buffer = { path = "../../src-tauri/vendor/block-buffer-0.12.1" }
 hybrid-array = { path = "../../src-tauri/vendor/hybrid-array-0.4.15" }
+sha1 = { path = "../../src-tauri/vendor/sha1-0.11.0" }
+digest = { path = "../../src-tauri/vendor/digest-0.11.3" }

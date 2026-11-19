@@ -223,6 +223,9 @@ string_cache = { path = "vendor/string_cache-0.9.0" }
 siphasher = { path = "vendor/siphasher-1.0.4" }
 # Checked SHA-256 loads for acquisition, ownership, sharing and archive imports.
 sha2 = { path = "vendor/sha2-0.11.1" }
+# Feed SHA-1 and SHA-2 from checked runs of complete input blocks.
+sha1 = { path = "vendor/sha1-0.11.0" }
+digest = { path = "vendor/digest-0.11.3" }
 # Initialized storage and checked cursors for the shared digest buffer.
 block-buffer = { path = "vendor/block-buffer-0.12.1" }
 # Use native arrays for digest initialization, iteration and indexing.

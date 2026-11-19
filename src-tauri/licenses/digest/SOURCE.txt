@@ -1,0 +1,13 @@
+RustCrypto digest is offered under the MIT License or Apache License,
+Version 2.0. Both license texts accompany this notice.
+
+Published source version: 0.11.3
+Upstream source revision: 2fb9ed8922e244117040bb037a7d141a6a2b8228
+https://github.com/RustCrypto/traits
+Published archive SHA-256:
+f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2
+Archive in this source distribution:
+upstream/rustcrypto-digest/digest-0.11.3.crate
+
+The local copy lets digest cores receive input with their partial block
+buffer. Existing cores use the default wrapped-block update.

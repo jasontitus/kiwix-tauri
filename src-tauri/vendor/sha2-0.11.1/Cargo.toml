@@ -89,3 +89,9 @@ check-cfg = [
     'cfg(sha2_backend_soft, values("compact"))',
     'cfg(sha2_backend_riscv_zknh, values("compact"))',
 ]
+
+# Keep the standalone crate checks on the paired local digest stack.
+[patch.crates-io]
+block-buffer = { path = "../block-buffer-0.12.1" }
+digest = { path = "../digest-0.11.3" }
+hybrid-array = { path = "../hybrid-array-0.4.15" }

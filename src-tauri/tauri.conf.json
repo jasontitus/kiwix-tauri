@@ -57,6 +57,8 @@
       "licenses/string-cache": "licenses/string-cache",
       "licenses/siphasher": "licenses/siphasher",
       "licenses/sha2": "licenses/sha2",
+      "licenses/sha1": "licenses/sha1",
+      "licenses/digest": "licenses/digest",
       "licenses/block-buffer": "licenses/block-buffer",
       "licenses/hybrid-array": "licenses/hybrid-array",
       "licenses/voice/bzip2-turbo-rs-0BSD": "licenses/voice/bzip2-turbo-rs-0BSD",

@@ -1,3 +1,5 @@
+// Modified by Kiwix. Use native borrowed blocks for streaming input.
+
 use crate::consts;
 use core::fmt;
 use digest::{
@@ -7,6 +9,7 @@ use digest::{
         AlgorithmName, Block, BlockSizeUser, Buffer, BufferKindUser, Eager, OutputSizeUser,
         TruncSide, UpdateCore, VariableOutputCore,
     },
+    block_buffer::{BlockBuffer, BufferKind},
     common::hazmat::{DeserializeStateError, SerializableState, SerializedState},
     typenum::{U32, U40, U64, U80, U128, Unsigned},
 };
@@ -23,6 +26,14 @@ pub struct Sha256VarCore {
     block_len: u64,
 }
 
+impl Sha256VarCore {
+    #[inline]
+    fn update_native_blocks(&mut self, blocks: &[[u8; 64]]) {
+        self.block_len += blocks.len() as u64;
+        compress256(&mut self.state, blocks);
+    }
+}
+
 impl HashMarker for Sha256VarCore {}
 
 impl BlockSizeUser for Sha256VarCore {
@@ -36,9 +47,20 @@ impl BufferKindUser for Sha256VarCore {
 impl UpdateCore for Sha256VarCore {
     #[inline]
     fn update_blocks(&mut self, blocks: &[Block<Self>]) {
-        self.block_len += blocks.len() as u64;
-        let blocks = Array::cast_slice_to_core(blocks);
-        compress256(&mut self.state, blocks);
+        self.update_native_blocks(Array::cast_slice_to_core(blocks));
+    }
+
+    #[inline]
+    fn update_buffered_blocks<K: BufferKind>(
+        &mut self,
+        buffer: &mut BlockBuffer<U64, K>,
+        data: &[u8],
+    ) {
+        buffer.digest_block_bytes(data, |bytes| {
+            let (blocks, tail) = bytes.as_chunks();
+            assert!(tail.is_empty());
+            self.update_native_blocks(blocks);
+        });
     }
 }
 
@@ -146,6 +168,14 @@ pub struct Sha512VarCore {
     block_len: u128,
 }
 
+impl Sha512VarCore {
+    #[inline]
+    fn update_native_blocks(&mut self, blocks: &[[u8; 128]]) {
+        self.block_len += blocks.len() as u128;
+        compress512(&mut self.state, blocks);
+    }
+}
+
 impl HashMarker for Sha512VarCore {}
 
 impl BlockSizeUser for Sha512VarCore {
@@ -159,9 +189,20 @@ impl BufferKindUser for Sha512VarCore {
 impl UpdateCore for Sha512VarCore {
     #[inline]
     fn update_blocks(&mut self, blocks: &[Block<Self>]) {
-        self.block_len += blocks.len() as u128;
-        let blocks = Array::cast_slice_to_core(blocks);
-        compress512(&mut self.state, blocks);
+        self.update_native_blocks(Array::cast_slice_to_core(blocks));
+    }
+
+    #[inline]
+    fn update_buffered_blocks<K: BufferKind>(
+        &mut self,
+        buffer: &mut BlockBuffer<U128, K>,
+        data: &[u8],
+    ) {
+        buffer.digest_block_bytes(data, |bytes| {
+            let (blocks, tail) = bytes.as_chunks();
+            assert!(tail.is_empty());
+            self.update_native_blocks(blocks);
+        });
     }
 }
 

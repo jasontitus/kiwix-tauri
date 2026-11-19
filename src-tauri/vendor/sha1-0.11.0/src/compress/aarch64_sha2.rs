@@ -1,0 +1,186 @@
+//! SHA-1 `aarch64` backend.
+// Modified by Kiwix to load and store checked native words.
+
+use crate::consts::K;
+
+#[cfg(not(target_arch = "aarch64"))]
+compile_error!("aarch64-sha2 backend can be used only aarch64 target arches");
+
+// note that `sha2` implicitly enables `neon`
+#[target_feature(enable = "sha2")]
+#[allow(unused_unsafe)]
+pub(crate) unsafe fn compress<'a>(state: &mut [u32; 5], blocks: impl Iterator<Item = &'a [u8; 64]>) {
+    // SAFETY: the dispatch checks the target features. These intrinsics
+    // operate on register values with constant lane indices.
+    unsafe {
+        use core::arch::aarch64::*;
+
+        let pack = |[a, b, c, d]: [u32; 4]| {
+            let words = vdupq_n_u32(a);
+            let words = vsetq_lane_u32::<1>(b, words);
+            let words = vsetq_lane_u32::<2>(c, words);
+            vsetq_lane_u32::<3>(d, words)
+        };
+        let [a, b, c, d, mut e0] = *state;
+        let mut abcd = pack([a, b, c, d]);
+        let [k0, k1, k2, k3] = K.map(|k| vdupq_n_u32(k));
+        let (mut e1, mut tmp0, mut tmp1);
+
+        for block in blocks {
+            let abcd_cpy = abcd;
+            let e0_cpy = e0;
+
+            let [mut msg0, mut msg1, mut msg2, mut msg3] = [0, 16, 32, 48].map(|offset| {
+                pack(core::array::from_fn(|lane| {
+                    let word = offset + 4 * lane;
+                    u32::from_be_bytes(block[word..word + 4].try_into().unwrap())
+                }))
+            });
+
+            tmp0 = vaddq_u32(msg0, k0);
+            tmp1 = vaddq_u32(msg1, k0);
+
+            // Rounds 0-3
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1cq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg2, k0);
+            msg0 = vsha1su0q_u32(msg0, msg1, msg2);
+
+            // Rounds 4-7
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1cq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg3, k0);
+            msg0 = vsha1su1q_u32(msg0, msg3);
+            msg1 = vsha1su0q_u32(msg1, msg2, msg3);
+
+            // Rounds 8-11
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1cq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg0, k0);
+            msg1 = vsha1su1q_u32(msg1, msg0);
+            msg2 = vsha1su0q_u32(msg2, msg3, msg0);
+
+            // Rounds 12-15
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1cq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg1, k1);
+            msg2 = vsha1su1q_u32(msg2, msg1);
+            msg3 = vsha1su0q_u32(msg3, msg0, msg1);
+
+            // Rounds 16-19
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1cq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg2, k1);
+            msg3 = vsha1su1q_u32(msg3, msg2);
+            msg0 = vsha1su0q_u32(msg0, msg1, msg2);
+
+            // Rounds 20-23
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg3, k1);
+            msg0 = vsha1su1q_u32(msg0, msg3);
+            msg1 = vsha1su0q_u32(msg1, msg2, msg3);
+
+            // Rounds 24-27
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg0, k1);
+            msg1 = vsha1su1q_u32(msg1, msg0);
+            msg2 = vsha1su0q_u32(msg2, msg3, msg0);
+
+            // Rounds 28-31
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg1, k1);
+            msg2 = vsha1su1q_u32(msg2, msg1);
+            msg3 = vsha1su0q_u32(msg3, msg0, msg1);
+
+            // Rounds 32-35
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg2, k2);
+            msg3 = vsha1su1q_u32(msg3, msg2);
+            msg0 = vsha1su0q_u32(msg0, msg1, msg2);
+
+            // Rounds 36-39
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg3, k2);
+            msg0 = vsha1su1q_u32(msg0, msg3);
+            msg1 = vsha1su0q_u32(msg1, msg2, msg3);
+
+            // Rounds 40-43
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1mq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg0, k2);
+            msg1 = vsha1su1q_u32(msg1, msg0);
+            msg2 = vsha1su0q_u32(msg2, msg3, msg0);
+
+            // Rounds 44-47
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1mq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg1, k2);
+            msg2 = vsha1su1q_u32(msg2, msg1);
+            msg3 = vsha1su0q_u32(msg3, msg0, msg1);
+
+            // Rounds 48-51
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1mq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg2, k2);
+            msg3 = vsha1su1q_u32(msg3, msg2);
+            msg0 = vsha1su0q_u32(msg0, msg1, msg2);
+
+            // Rounds 52-55
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1mq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg3, k3);
+            msg0 = vsha1su1q_u32(msg0, msg3);
+            msg1 = vsha1su0q_u32(msg1, msg2, msg3);
+
+            // Rounds 56-59
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1mq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg0, k3);
+            msg1 = vsha1su1q_u32(msg1, msg0);
+            msg2 = vsha1su0q_u32(msg2, msg3, msg0);
+
+            // Rounds 60-63
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg1, k3);
+            msg2 = vsha1su1q_u32(msg2, msg1);
+            msg3 = vsha1su0q_u32(msg3, msg0, msg1);
+
+            // Rounds 64-67
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e0, tmp0);
+            tmp0 = vaddq_u32(msg2, k3);
+            msg3 = vsha1su1q_u32(msg3, msg2);
+
+            // Rounds 68-71
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+            tmp1 = vaddq_u32(msg3, k3);
+
+            // Rounds 72-75
+            e1 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e0, tmp0);
+
+            // Rounds 76-79
+            e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            abcd = vsha1pq_u32(abcd, e1, tmp1);
+
+            // Update state
+            abcd = vaddq_u32(abcd_cpy, abcd);
+            e0 = e0.wrapping_add(e0_cpy);
+        }
+
+        *state = [
+            vgetq_lane_u32::<0>(abcd),
+            vgetq_lane_u32::<1>(abcd),
+            vgetq_lane_u32::<2>(abcd),
+            vgetq_lane_u32::<3>(abcd),
+            e0,
+        ];
+    }
+}

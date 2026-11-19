@@ -1,0 +1,14 @@
+RustCrypto sha1 is offered under the MIT License or Apache License,
+Version 2.0. Both license texts accompany this notice.
+
+Published source version: 0.11.0
+Upstream source revision: 2f00175af936de46b3ddefe65c4de93cb4e876e4
+https://github.com/RustCrypto/hashes
+Published archive SHA-256:
+aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214
+Archive in this source distribution:
+upstream/rustcrypto-sha1/sha1-0.11.0.crate
+
+The local copy dispatches borrowed native blocks to the SHA-1 compressor.
+An incomplete block remains in the digest buffer until it is filled or padded.
+The ARM64 and x86 SHA instruction paths load checked words into registers.

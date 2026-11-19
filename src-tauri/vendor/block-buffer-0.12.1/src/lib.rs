@@ -92,6 +92,11 @@ impl fmt::Display for Error {
     }
 }
 
+enum BlockBatch<'a, BS: BlockSizes> {
+    Buffered(&'a Array<u8, BS>),
+    Input(&'a [u8]),
+}
+
 /// Buffer for block processing of data.
 pub struct BlockBuffer<BS: BlockSizes, K: BufferKind> {
     buffer: Array<u8, BS>,
@@ -157,7 +162,31 @@ impl<BS: BlockSizes, K: BufferKind> BlockBuffer<BS, K> {
     /// Digest data in `input` in blocks of size `BlockSize` using
     /// the `compress` function, which accepts slice of blocks.
     #[inline]
-    pub fn digest_blocks(&mut self, mut input: &[u8], mut compress: impl FnMut(&[Array<u8, BS>])) {
+    pub fn digest_blocks(&mut self, input: &[u8], mut compress: impl FnMut(&[Array<u8, BS>])) {
+        self.digest_batches(input, |batch| match batch {
+            BlockBatch::Buffered(block) => compress(slice::from_ref(block)),
+            BlockBatch::Input(bytes) => {
+                let (blocks, tail) = Array::slice_as_chunks(bytes);
+                debug_assert!(tail.is_empty());
+                compress(blocks);
+            }
+        });
+    }
+
+    /// Digest consecutive whole blocks without casting input to wrapped arrays.
+    ///
+    /// Each call to `compress` borrows a nonempty slice of complete blocks,
+    /// either one completed buffered block or a contiguous run from `input`.
+    #[inline]
+    pub fn digest_block_bytes(&mut self, input: &[u8], mut compress: impl FnMut(&[u8])) {
+        self.digest_batches(input, |batch| match batch {
+            BlockBatch::Buffered(block) => compress(block.0.as_ref()),
+            BlockBatch::Input(bytes) => compress(bytes),
+        });
+    }
+
+    #[inline]
+    fn digest_batches(&mut self, mut input: &[u8], mut compress: impl FnMut(BlockBatch<'_, BS>)) {
         let pos = self.get_pos();
         let rem = self.size() - pos;
         if K::invariant(input.len(), rem) {
@@ -175,12 +204,17 @@ impl<BS: BlockSizes, K: BufferKind> BlockBuffer<BS, K> {
             // Filling an eager block replaces the stored cursor with the final byte.
             // The guard resets the cursor even if the callback panics.
             block.0.as_mut()[pos..].copy_from_slice(left);
-            compress(slice::from_ref(block));
+            compress(BlockBatch::Buffered(block));
         }
 
-        let (blocks, leftover) = K::split_blocks(input);
-        if !blocks.is_empty() {
-            compress(blocks);
+        let size = self.size();
+        let mut whole_len = input.len() - input.len() % size;
+        if whole_len == input.len() && K::invariant(size, size) {
+            whole_len = whole_len.saturating_sub(size);
+        }
+        let (whole, leftover) = input.split_at(whole_len);
+        if !whole.is_empty() {
+            compress(BlockBatch::Input(whole));
         }
 
         self.set_data(leftover);
