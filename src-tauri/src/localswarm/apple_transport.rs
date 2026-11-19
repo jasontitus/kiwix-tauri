@@ -4,6 +4,8 @@ use std::{ffi::{c_char, c_void, CString}, ptr::NonNull, sync::{Arc, LazyLock}, t
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
+mod read_request;
+
 type Completion = unsafe extern "C" fn(*mut c_void, i32, *const u8, usize);
 unsafe extern "C" {
     fn kiwix_swarm_identity(p12: *const u8, length: usize, der: *const u8, der_length: usize) -> bool;
@@ -13,7 +15,7 @@ unsafe extern "C" {
     fn kiwix_swarm_local_address(raw: *mut c_void, buffer: *mut u8, capacity: usize) -> usize;
     fn kiwix_swarm_interface_has_address(index: u32, bytes: *const u8, length: usize) -> bool;
     fn kiwix_swarm_start(raw: *mut c_void, context: *mut c_void, callback: Completion);
-    fn kiwix_swarm_read(raw: *mut c_void, maximum: usize, context: *mut c_void, callback: Completion);
+    fn kiwix_swarm_read(raw: *mut c_void, maximum: usize, request: u64, callback: extern "C" fn(u64, i32, Option<&dispatch2::DispatchData>));
     fn kiwix_swarm_write(raw: *mut c_void, bytes: *const u8, length: usize, context: *mut c_void, callback: Completion);
     fn kiwix_swarm_cancel(raw: *mut c_void);
     fn kiwix_swarm_join(raw: *mut c_void);
@@ -69,10 +71,9 @@ const MAX_READ: usize = 256 * 1024;
 
 enum Request {
     Ready(oneshot::Sender<Result<usize, String>>),
-    Read(oneshot::Sender<Result<Vec<u8>, String>>),
     Write { reply: oneshot::Sender<Result<usize, String>>, stats: Option<Arc<super::network::SeedStats>> },
 }
-unsafe extern "C" fn completed(context: *mut c_void, status: i32, bytes: *const u8, length: usize) {
+unsafe extern "C" fn completed(context: *mut c_void, status: i32, _bytes: *const u8, length: usize) {
     // Every native request calls back exactly once, including cancel/failure.
     // Native dispatch data owns write bytes independently of this request.
     let request = unsafe { Box::from_raw(context.cast::<Request>()) };
@@ -84,12 +85,6 @@ unsafe extern "C" fn completed(context: *mut c_void, status: i32, bytes: *const 
             // Count a piece as soon as the transport accepts it, even if the
             // serving loop is already retiring and never polls this handle.
             if let (Ok(count), Some(stats)) = (&result, stats) { stats.record_upload(*count as u64); }
-            let _ = reply.send(result);
-        }
-        Request::Read(reply) => {
-            let result = if status != 0 || length > MAX_READ || (length != 0 && bytes.is_null()) { Err(error()) }
-                else if length == 0 { Ok(Vec::new()) }
-                else { Ok(unsafe { std::slice::from_raw_parts(bytes, length) }.to_vec()) };
             let _ = reply.send(result);
         }
     }
@@ -203,11 +198,9 @@ impl Connection {
     /// receipt. The native side reports the interface name plus its local
     /// address and the resolved peer address, e.g. `awdl0 192.168.1.5 -> ...`.
     pub fn route(&self) -> Option<String> {
-        let mut buffer = [0 as c_char; 256];
-        let length = unsafe { kiwix_swarm_route(self.0.0.as_ptr(), buffer.as_mut_ptr(), buffer.len()) };
-        let length = usize::try_from(length).ok()?.min(buffer.len());
-        if length == 0 { return None; }
-        let bytes = unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), length) };
+        let mut buffer = [0u8; 256];
+        let length = unsafe { kiwix_swarm_route(self.0.0.as_ptr(), buffer.as_mut_ptr().cast(), buffer.len()) };
+        let bytes = buffer.get(..usize::try_from(length).ok()?)?;
         let text = std::str::from_utf8(bytes).ok()?.trim();
         (!text.is_empty() && text.len() <= 240 && !text.chars().any(char::is_control)).then(|| text.to_string())
     }
@@ -220,11 +213,13 @@ impl Connection {
     }
     pub async fn read(&self, output: &mut [u8]) -> Result<Option<usize>, String> {
         if output.is_empty() { return Ok(Some(0)); }
-        let (reply, received) = oneshot::channel();
-        unsafe { kiwix_swarm_read(self.0.0.as_ptr(), output.len().min(MAX_READ), Box::into_raw(Box::new(Request::Read(reply))).cast(), completed); }
+        let maximum = output.len().min(MAX_READ);
+        let (ticket, received) = read_request::register(maximum)?;
+        // The native operation retains the connection and only echoes the ID.
+        unsafe { kiwix_swarm_read(self.0.0.as_ptr(), maximum, ticket.id(), read_request::complete); }
         let bytes = received.await.map_err(|_| "Apple QUIC receive callback lost")??;
         if bytes.is_empty() { return Ok(None); }
-        output[..bytes.len()].copy_from_slice(&bytes);
+        output.get_mut(..bytes.len()).ok_or("Apple QUIC receive exceeded its request")?.copy_from_slice(&bytes);
         Ok(Some(bytes.len()))
     }
     /// Hand every piece of `input` to Network.framework without waiting for the

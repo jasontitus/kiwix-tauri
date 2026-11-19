@@ -3119,6 +3119,7 @@ dependencies = [
  "chksum-hash-sha2-256",
  "cssparser",
  "directories",
+ "dispatch2",
  "dom_query",
  "futures-util",
  "getrandom 0.3.4",
