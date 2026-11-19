@@ -24,8 +24,9 @@ pub fn admit_export(commit: Commit) -> Result<ExportAdmission, String> {
 }
 extern "C" fn kiwix_pdf_commit_action(token: *const c_char, context: *mut c_void, action: extern "C" fn(*mut c_void)) -> bool {
     if token.is_null() || context.is_null() { return false; }
-    // SAFETY: native passes a NUL-terminated token string valid for this call;
-    // the map lookup copies the key before returning.
+    // SAFETY: native passes a NUL-terminated token string that stays valid
+    // through this synchronous bridge call; `to_str` borrows it only for the map
+    // lookup, and nothing retains the borrow afterwards.
     let Ok(token) = (unsafe { CStr::from_ptr(token) }).to_str() else { return false; };
     // Consume before calling UIKit. Duplicate/native reentrant presentations
     // cannot renew the authority or invoke the action a second time.

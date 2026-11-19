@@ -52,7 +52,7 @@ files, six of which became unsafe-free (`239` → `219` matches; `42` → `36` f
   bookmark scope and the Swift `unsafeBitCast` delegate chaining remain open.
 - **SAFETY documentation.** `dd2c6738f5` added 25 missing `SAFETY:` comments to Apple share, PDF
   handoff/render/print and notification boundaries, naming pointer lifetime and exactly-once ownership. No
-  behavior change. An eight-line audit still finds 160 of 218 same-line blocks without one.
+  behavior change. An eight-line audit still finds 161 of 218 code blocks without one.
 - **B10, diagnostic clocks.** `maps::Control::chunk_sha256` and the ignored throughput benchmark now read
   `cpu_time`'s helpers; no `getrusage` or raw `CLOCK_THREAD_CPUTIME_ID` call remains in `src/`. Test-only
   FIFO/interface/ACL calls, the probes and the JNI entry points remain open.

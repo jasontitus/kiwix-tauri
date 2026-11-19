@@ -30,8 +30,9 @@ unsafe extern "C" {
 /// Tauri's event loop. In particular, Builder::setup is too late for scene-based
 /// iOS cold notification responses. Installation never asks for authorization.
 pub(crate) fn install_early() {
-    // SAFETY: the native installer takes no arguments, is idempotent
-    // (`dispatch_once`) and touches only the Apple notification delegate.
+    // SAFETY: the native installer takes no arguments and is idempotent
+    // (`dispatch_once`), but it writes the global delegate. Callers must run it at
+    // startup before any concurrent capability or permission call reads that state.
     unsafe { kiwix_notifications_install_early() }
 }
 
@@ -42,7 +43,9 @@ pub(crate) fn install_waker(service: &Arc<crate::service::Service>) -> Result<()
         .map_err(|_| "Notification wakeup is unavailable")? = Arc::downgrade(service);
     // SAFETY: `wake_root` is an `extern "C"` function with a 'static lifetime and
     // no captured state; native stores it atomically and may call it from any
-    // thread, where it only locks `SERVICE_WAKER`.
+    // thread. It locks `SERVICE_WAKER` only long enough to upgrade the weak
+    // service; `notify_library_changed` then locks that service's app and emits
+    // an event.
     unsafe { kiwix_notifications_set_waker(wake_root) };
     Ok(())
 }

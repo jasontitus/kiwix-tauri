@@ -62,8 +62,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   synchronization) are fixed in its follow-up commit.
 - The third batch is independently reviewed; two P3 documentation findings (cumulative file count, Android
   seek-probe wording) are fixed in its follow-up commit.
-- Fourth batch (`dd2c6738f5`, comment-only) awaits independent review. An eight-line audit still finds 160
-  of 218 same-line blocks without a `SAFETY:` comment.
+- Fourth batch (`dd2c6738f5`, comment-only) is independently reviewed; three P2 comment corrections and the
+  coverage recount (161 of 218 blocks) are fixed in its follow-up commit.
 
 ## Not reserved (safe for the other session)
 

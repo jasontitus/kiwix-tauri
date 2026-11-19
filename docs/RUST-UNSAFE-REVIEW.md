@@ -309,15 +309,16 @@ control flow or error text changed.
 | File | Comments | Invariants now named |
 |---|---:|---|
 | `native_pdf/apple.rs` | 12 | exactly-once completion reclaims the `Box` from `into_raw`; authority hooks borrow only before completion; native copies input C strings synchronously; `print_start` false means no ownership; cancel of a finished token is a no-op |
-| `notifications.rs` | 8 | `strdup` reply ownership and single free; callback context is the unique `Box<oneshot::Sender>` and native calls back exactly once; stored waker has a `'static` lifetime; installer is idempotent |
+| `notifications.rs` | 8 | `strdup` reply ownership and single free; callback context is the unique `Box<oneshot::Sender>` and native calls back exactly once; stored waker has a `'static` lifetime; installer is idempotent but must run at startup before concurrent readers |
 | `share.rs` | 3 | token is an opaque integer, never dereferenced; path copied synchronously; completion message valid only for the callback |
-| `native_pdf/handoff.rs` | 2 | installed function pointer is `'static` with no captures; token string is copied during the call |
+| `native_pdf/handoff.rs` | 2 | installed function pointer is `'static` with no captures; token string is borrowed only for the synchronous lookup |
 
-An audit with an eight-line lookback now finds **160 of 218** remaining same-line blocks without a `SAFETY:`
-comment (the earlier 201/238 figure used a six-line lookback on the pre-change tree). Largest remaining
-gaps: `localswarm/apple_transport.rs` (22), `localswarm/ios_discovery.rs` (21), `agent_connector.rs` (16),
-`native_pdf/linux.rs` (15), `private_sync_identity.rs` (13), `nearby_route.rs` (11),
-`native_pdf/windows_print.rs` (11), `windows.rs` (10), `localswarm/library_route.rs` (9), `storage.rs` (7).
+An audit with an eight-line lookback now finds **161 of 218** remaining code blocks without a `SAFETY:`
+comment, occupying 160 of 217 code lines (`native_pdf/windows_print.rs:29` has two blocks on one line). The
+earlier 201/238 figure used a six-line lookback on the pre-change tree. Largest remaining gaps:
+`localswarm/apple_transport.rs` (22), `localswarm/ios_discovery.rs` (21), `agent_connector.rs` (16),
+`native_pdf/linux.rs` (15), `private_sync_identity.rs` (13), `native_pdf/windows_print.rs` (12),
+`nearby_route.rs` (11), `windows.rs` (10), `localswarm/library_route.rs` (9), `storage.rs` (7).
 
 **Verification exercised:** `cargo check --lib`, `cargo clippy --lib -- -D warnings`, `notifications::`
 (2 tests), `native_pdf` (22) and `share` (28) on macOS. Comment-only change; the callback paths themselves
