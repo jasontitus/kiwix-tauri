@@ -33,6 +33,24 @@ Each row covers both sides of an interface. Moving raw operations behind a safe 
 | ☐ B9. Android startup, JNI and mobile plugin | `android_tls.rs` reconstructs a Java VM and context for platform certificate verification and calls native logging. The mobile plugin's `src/{android,android_pdf}.rs` contains JNI exports even without an unsafe block at the export. Android main activity, Kotlin plugin and Apple generated launcher/bindings also connect app code to native runtime entry points. | Keep one initialized VM, correctly scoped local/global references and typed callbacks. Verify cold start, Activity recreation, HTTPS trust failure and a pending callback during shutdown. Review regenerated bindings when updating Tauri. |
 | ☐ B10. Diagnostics and test scaffolding | `cpu_time.rs` uses Windows thread timing. Test code in `acquisition_tests.rs`, `maps.rs`, `torrent_tests.rs`, `localswarm/library_route.rs` and `private_sync_identity.rs` calls native clocks, FIFO, interface or ACL APIs. Repository probes include `scripts/android-https-tracker-probe/`, `scripts/test-native-location.mm`, `src-tauri/native/localswarm_tests.mm` and `docs/windows-agent-tools/probe/rename_probe.c`. `android_evaluation.rs` has feature-gated JNI entry points. | Prefer existing safe helpers for diagnostics. Keep test fixtures and probe binaries out of release artifacts and check the applicable feature/profile before counting a site as shipping. |
 
+### Progress since the 2026-11-17 snapshot
+
+`942c36306b` (2026-11-19) removed 13 `unsafe` matches from six files, five of which became unsafe-free
+(`239` → `226` matches; `42` → `37` files):
+
+- **B3, exclusive-rename subset.** `publication::platform_publish{,_in}`, `maps::partials::capture_partial`,
+  `library_files::move_exclusive` and `localswarm::storage::rename_directory_noreplace` now use
+  `rustix::fs::renameat_with(…, NOREPLACE)`, matching `library_root::publish_exclusive`. No-replace is still
+  filesystem-enforced, and the Linux old-kernel `link(2)` fallback is preserved. The Windows arms, locking,
+  volume queries, file identity and the rest of B3 remain open.
+- **B10, diagnostic clocks.** `maps::Control::chunk_sha256` and the ignored throughput benchmark now read
+  `cpu_time`'s helpers; no `getrusage` or raw `CLOCK_THREAD_CPUTIME_ID` call remains in `src/`. Test-only
+  FIFO/interface/ACL calls, the probes and the JNI entry points remain open.
+
+Host check, Clippy, the publication/move/capture/composer, connector and library-recovery tests, and an
+Android lib type check were exercised; iOS, Linux, device and sanitizer verification were not. See the
+[review's 2026-11-19 section](RUST-UNSAFE-REVIEW.md#follow-up-implemented-2026-11-19).
+
 The eight handwritten Rust thread-safety assertions in the app deserve explicit sign-off. They cover `archive::Handle` (Send), `RawConnection` and `RawListener` (Send and Sync each), `power_activity::Token` (Send), and the Windows connector's `Descriptor` (Send and Sync). Retirement requires checking who can use each handle concurrently, who may destroy it, and whether native callbacks can still run at that point. The [earlier Rust review](RUST-UNSAFE-REVIEW.md) records completed reductions, including effective-UID checks and Linux app-side peer credentials.
 
 ## Dependencies reached through safe application code

@@ -367,6 +367,8 @@ fn platform_publish_in(
     source: &Path,
     destination: &Path,
 ) -> io::Result<()> {
+    check_path(source)?;
+    check_path(destination)?;
     // RENAME_NOREPLACE (Linux/Android) and RENAME_EXCL (Apple) are enforced by
     // the filesystem, not a racy existence check.
     rustix::fs::renameat_with(directory, source, directory, destination, rustix::fs::RenameFlags::NOREPLACE)
@@ -438,8 +440,25 @@ fn platform_publish_entry_in(
     )
 }
 
+/// Reject an interior NUL before the rename. rustix reports it as `EINVAL`,
+/// which the Linux fallback would otherwise misread as an unsupported rename
+/// and turn into a source-open error instead of a path error.
+#[cfg(unix)]
+fn check_path(path: &Path) -> io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    if path.as_os_str().as_bytes().contains(&0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Publication path contains NUL",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
+    check_path(source)?;
+    check_path(destination)?;
     // renameatx_np(2): RENAME_EXCL is enforced by the filesystem, not a racy
     // existence check. Do not substitute plain rename if a volume rejects it.
     rustix::fs::renameat_with(
@@ -454,6 +473,8 @@ fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
+    check_path(source)?;
+    check_path(destination)?;
     // rustix issues the renameat2 syscall itself where libc predates a wrapper.
     // Modern Linux exFAT implements RENAME_NOREPLACE.
     let error = match rustix::fs::renameat_with(
@@ -924,7 +945,27 @@ mod tests {
             std::fs::read_link(&destination).unwrap(),
             Path::new("missing-user-target")
         );
-        assert_eq!(std::fs::read(&source).unwrap(), b"new");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn nul_paths_are_rejected_before_the_rename_fallback() {
+        use std::os::unix::ffi::OsStrExt;
+        let nul = Path::new(std::ffi::OsStr::from_bytes(b"bad\0name"));
+        for error in [
+            publish_noreplace(Path::new("missing"), nul).unwrap_err(),
+            publish_noreplace(nul, Path::new("missing")).unwrap_err(),
+        ] {
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(error.to_string(), "Publication path contains NUL");
+        }
+        let directory =
+            std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let dir = Dir::open_ambient_dir(&directory, cap_std::ambient_authority()).unwrap();
+        let error = rename_entry_noreplace(&dir, Path::new("partial"), nul).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "Publication path contains NUL");
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

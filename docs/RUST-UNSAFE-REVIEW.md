@@ -171,3 +171,73 @@ boundary.
   documented Apple-only path.
 - **Test CPU time (`acquisition_tests.rs` `getrusage`, `maps.rs` `thread_cpu_us`).** Out of scope for the
   files this pass owned; both are the same class of read now centralized for the other callers.
+
+## Follow-up implemented 2026-11-19
+
+Scope: `942c36306b`, hand-written Rust under `src-tauri/src`. Counts use
+`git grep -o -e 'unsafe[[:space:]]*{'` over `src-tauri/src/*.rs`, so they include matches in comments and
+are comparable only with the same command at the two revisions below.
+
+| Metric | Before (`942c36306b^`) | After |
+|---|---:|---:|
+| `unsafe { … }` matches | 239 | **226** |
+| Files containing them | 42 | **37** |
+| `unsafe extern` / `unsafe fn` / `unsafe impl` lines | 58 | **58** |
+| `getrusage` / `CLOCK_THREAD_CPUTIME_ID` call sites | 2 | **0** |
+
+This closes the two candidates the 2026-11-12 section left open. It is again an inventory change, not a
+soundness proof; no Miri, sanitizer or fuzz run was added.
+
+**Eliminated from this crate**
+
+1. **Exclusive rename (10 blocks, six functions in four files).** `publication::platform_publish` (both
+   cfg arms), `publication::platform_publish_in`, `maps::partials::capture_partial`,
+   `library_files::move_exclusive` (Unix arm) and `localswarm::storage::rename_directory_noreplace` now call
+   `rustix::fs::renameat_with(…, RenameFlags::NOREPLACE)`, the same call `library_root::publish_exclusive`
+   already used. rustix maps the flag to `RENAME_NOREPLACE` on Linux/Android and `RENAME_EXCL` on Apple, so
+   the filesystem still enforces no-replace rather than a racy existence check. The raw `CString`/fd
+   plumbing is gone; an interior NUL is still rejected with the same `InvalidInput` error and message
+   before the rename, so the Linux fallback cannot misread it as an unsupported rename.
+   Behavior notes:
+   - Linux keeps the old fallback: `ENOSYS`, `EINVAL` or `EOPNOTSUPP` from the exclusive rename still falls
+     back to atomic `link(2)` + unlink for regular files. rustix issues the `renameat2` syscall itself when
+     libc lacks a wrapper (`weak_or_syscall!`), and its default Linux backend is the raw syscall.
+   - Android uses rustix's libc backend, which also calls `SYS_renameat2` directly.
+   - Apple uses `renameatx_np` through a weak symbol. A host without the symbol now gets `ENOSYS` at the
+     call instead of a load-time link failure; every supported deployment target provides it.
+   - Error text is unchanged: `Errno`'s `Display` delegates to `std::io::Error`, and the publication
+     fallback still inspects `raw_os_error`.
+2. **Diagnostic CPU clocks (3 blocks).** `maps::Control::chunk_sha256` (Android debug evaluation) now
+   reads `cpu_time::thread_cpu_time_micros` directly instead of a module-local helper, and the ignored
+   `bench_loopback_throughput` harness calls `cpu_time::process_cpu_time_micros` instead of `getrusage`
+   plus `assume_init`. Both are the same clocks the 2026-11-12 pass centralized, at the same microsecond
+   granularity. The bench keeps failing loudly if the process clock is unreadable, as the old
+   `assert_eq!` did.
+
+**Files that became unsafe-free:** `acquisition_tests.rs`, `library_files.rs`, `localswarm/storage.rs`,
+`maps.rs`, `maps/partials.rs`.
+
+**Kept, with reasons**
+
+- `fs_ext.rs` flock/statvfs and `instance.rs` `getpeereid`: unchanged from the 2026-11-12 rationale.
+- Windows rename arms (`storage::rename_into_directory_noreplace`, `MoveFileExW`): the handle-based NT
+  rename is a different contract and was not part of this pass.
+- The SAFETY-comment gap remains: an audit of the pre-change tree found 201 of its 238 same-line blocks
+  with no `SAFETY:` comment within six lines. That sweep needs a dedicated review, not a mechanical
+  comment insert.
+
+**Verification actually exercised**
+
+- `cargo check --lib` and `cargo clippy --lib -- -D warnings` pass on macOS (host, `aarch64-apple-darwin`).
+- Targeted tests passed: `publication::` (9, including the new interior-NUL regression), `exclusive` (6,
+  including `library_files::exclusive_move…`, `maps::cleanup_captures…`,
+  `startup_recovers_a_split_archive…`), `capture` (24), `rename` (9), `composer` (5), `instance::` (4) and
+  `library_root::` (35). The last two exercise `rename_entry_noreplace` and the library recovery/publication
+  paths that call it.
+- `cargo check --lib --target aarch64-linux-android --features android-evaluation` passes with NDK 28 under
+  Rust 1.99.1. Toolchain roles: `CC_aarch64_linux_android=aarch64-linux-android24-clang`,
+  `CXX_aarch64_linux_android=aarch64-linux-android24-clang++`, `AR_aarch64_linux_android=llvm-ar`,
+  `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=aarch64-linux-android24-clang`. This covers the Android rename
+  arms, rustix's libc backend and the changed `android-evaluation`-gated hash caller.
+- Not run: iOS/Linux cross-target checks (this host's toolchains lack those std targets or C cross
+  toolchains), any device or installed-app test, and sanitizer/fuzz runs.
