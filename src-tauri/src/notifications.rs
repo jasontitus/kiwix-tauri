@@ -30,6 +30,8 @@ unsafe extern "C" {
 /// Tauri's event loop. In particular, Builder::setup is too late for scene-based
 /// iOS cold notification responses. Installation never asks for authorization.
 pub(crate) fn install_early() {
+    // SAFETY: the native installer takes no arguments, is idempotent
+    // (`dispatch_once`) and touches only the Apple notification delegate.
     unsafe { kiwix_notifications_install_early() }
 }
 
@@ -38,6 +40,9 @@ static SERVICE_WAKER: Mutex<Weak<crate::service::Service>> = Mutex::new(Weak::ne
 pub(crate) fn install_waker(service: &Arc<crate::service::Service>) -> Result<(), String> {
     *SERVICE_WAKER.lock()
         .map_err(|_| "Notification wakeup is unavailable")? = Arc::downgrade(service);
+    // SAFETY: `wake_root` is an `extern "C"` function with a 'static lifetime and
+    // no captured state; native stores it atomically and may call it from any
+    // thread, where it only locks `SERVICE_WAKER`.
     unsafe { kiwix_notifications_set_waker(wake_root) };
     Ok(())
 }
@@ -50,12 +55,19 @@ unsafe extern "C" fn wake_root() {
 fn native(request: Value) -> Result<Value, String> {
     let encoded = CString::new(serde_json::to_vec(&request).map_err(|error| error.to_string())?)
         .map_err(|_| "Invalid native notification request")?;
+    // SAFETY: `encoded` is a live NUL-terminated CString for this call; native
+    // reads it synchronously with `strlen` and returns a newly allocated
+    // NUL-terminated reply (or NULL) owned by the caller.
     let reply = unsafe { kiwix_notifications_call(encoded.as_ptr()) };
     if reply.is_null() {
         return Err("Allocating native notification reply".into());
     }
     // The native allocation is freed even when decoding fails.
+    // SAFETY: `reply` is non-NULL here, NUL-terminated and valid until the
+    // matching `kiwix_notifications_free`; the bytes are copied into `Value`.
     let decoded = unsafe { serde_json::from_slice::<Value>(CStr::from_ptr(reply).to_bytes()) };
+    // SAFETY: `reply` came from the native allocator and is freed exactly once
+    // after the copy above; it is not used again.
     unsafe { kiwix_notifications_free(reply) };
     let decoded = decoded.map_err(|error| format!("Invalid native notification reply: {error}"))?;
     if let Some(error) = decoded.get("error").and_then(Value::as_str) {
@@ -163,6 +175,9 @@ impl NotificationManager {
         };
         let (sender, receiver) = oneshot::channel::<Result<bool, String>>();
         let context = Box::into_raw(Box::new(sender)).cast::<c_void>();
+        // SAFETY: `context` is the unique `Box<oneshot::Sender>` for this request
+        // and is transferred to native, which calls `permission_result` exactly
+        // once on every path and never retains the pointer afterwards.
         unsafe { kiwix_notifications_request_permission(context, permission_result) };
         let granted = receiver.await.map_err(|_| "Native notification permission response was lost")??;
         Ok((granted, revision))
@@ -271,10 +286,16 @@ fn notice_id(profile_id: &str, receipt: &str, installation_id: &str) -> String {
 
 unsafe extern "C" fn permission_result(context: *mut c_void, result: c_int, error: *const c_char) {
     // Native calls this exactly once, including immediate policy/busy failures.
+    // SAFETY: native invokes this callback exactly once, so this is the unique
+    // reclaim of the pointer from `Box::into_raw` in `request_permission`.
     let sender = unsafe { Box::from_raw(context.cast::<oneshot::Sender<Result<bool, String>>>()) };
     let value = if result < 0 {
         Err(if error.is_null() { "Native notification authorization failed".into() }
-            else { unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned() })
+            else {
+                // SAFETY: the native callback passes either NULL or a
+                // NUL-terminated message valid for this callback; it is copied.
+                unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned()
+            })
     } else { Ok(result == 1) };
     let _ = sender.send(value);
 }

@@ -34,6 +34,8 @@ mod macos {
         let result = if error.is_null() {
             Ok(())
         } else {
+            // SAFETY: the native completion passes either NULL or a NUL-terminated
+            // UTF-8 message valid for this callback; it is copied before returning.
             Err(unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned())
         };
         if let Some(sender) = sender {
@@ -43,6 +45,8 @@ mod macos {
     struct CancelOnDrop(u64);
     impl Drop for CancelOnDrop {
         fn drop(&mut self) {
+            // SAFETY: the token is the opaque integer this request registered;
+            // native only looks it up and never dereferences it as a pointer.
             unsafe { kiwix_share_cancel(self.0) };
         }
     }
@@ -58,6 +62,9 @@ mod macos {
             .insert(token, sender);
         // Drop always retires the native request, including task cancellation.
         let _guard = CancelOnDrop(token);
+        // SAFETY: `path` is a live NUL-terminated CString and native copies it into
+        // an NSString before dispatching. The context carries only the integer
+        // token, and native calls `complete` at most once for this token.
         unsafe {
             kiwix_share_present(token, path.as_ptr(), token as usize as *mut c_void, complete);
         }
