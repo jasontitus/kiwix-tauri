@@ -1,0 +1,47 @@
+{
+  "source": "f7fc9b815459d5c931a95e06024c2a77dedd712d",
+  "cross_checks": {
+    "aarch64-apple-ios": 0,
+    "aarch64-apple-ios-sim": 0,
+    "aarch64-linux-android": 0,
+    "armv7-linux-androideabi": 0
+  },
+  "source_closure": "Actual target compiler fingerprints select checked html5ever and markup5ever 0.39.0 with published Tendril 0.5.1 in all four application builds.",
+  "html_notices_identical_in_both_packages_sha256": {
+    "licenses/html5ever/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "licenses/html5ever/AUTHORS": "02930215f07fb88b2ec9503a2a1b2345fdcbd351f525c652583fb9df6bc271b9",
+    "licenses/html5ever/SOURCE.txt": "5c3717abc826561f97d7efe1e9cffee0675cabbf936499f5a2f2dc9e61cf0e28",
+    "licenses/html5ever/COPYRIGHT": "c6b91503fc0a9852e688b56eef715dba9a1ab4b074e86875af2471ce0163b2e5",
+    "licenses/html5ever/LICENSE-MIT": "86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f3"
+  },
+  "ios": {
+    "target": "ARM64, iOS Simulator 26.5, iPhone 17",
+    "device_os_static_archive": "6ba62738eea2778698c8eb24f66e735f108f55c45ad1f6f88d313b46ddbd0ad9",
+    "signed_simulator_zip": "dd96ab4b6ebe4abbfa696a1d4a5636e562dbca21fb6ecd55db6a99e935eb4e9c",
+    "app_main": "eedec3640f8f3e1ac70dc45d41f94664373e3033338a5394d722a4291a09085a",
+    "ordinary_bundle_files": 141,
+    "linked_images": 3,
+    "matching_license_files": 49,
+    "ui_tests": {
+      "passed": 1,
+      "failed": 0
+    },
+    "article_path": "Managed Climate import, title search and Greenhouse effect, opt-in spelling build, climtae to climate, Climate 200, did restore article before input after cold relaunch, reused spelling correction, untouched ordinary voice Download.",
+    "managed_and_source_archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_simulator_withdrawn": true
+  },
+  "android": {
+    "target": "ARM64, Android API 35 emulator; minSdk 24, compile/target SDK 37",
+    "apk": "7a05b6644fb9ae4e7332bed7f835dbc803cae215af4ef1c02bd49c1a0b2a2ffc",
+    "unsigned_apk": "1d7abebd53bb64e2a499e6a98c9dcc939a2ae14552109872c277edd8b0d47a3b",
+    "app_native": "8d2f5d6257e3fa6e10ebd6991c93da66e1f37741b11b36beebcefade1bfe5a5c",
+    "packaged_native": 3,
+    "matching_license_files": 49,
+    "positive_ui_observations": 26,
+    "article_path": "About pins, archive import with native picker, approximately 35 title hits and 271 full-text hits, Solar energy and Solar power article content, spelling build/correction, Solar power restored before navigation on cold relaunch, Climate 200 correction reused.",
+    "fixture_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_emulator_transport_withdrawn": true,
+    "dedicated_profile_removed": true
+  },
+  "limits": "No physical hardware, mobile throughput, peak memory or final PDF rendering measured. Android ARMv7 received an app compiler check only. The ARM64 Android release used the two required speech libraries recovered from the verified previous package through the supported SHERPA_ONNX_LIB_DIR. No speech model was used in either UI run."
+}

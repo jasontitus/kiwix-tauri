@@ -1,0 +1,134 @@
+{
+  "tested_commit": "f7fc9b815459d5c931a95e06024c2a77dedd712d",
+  "reconstructed_with": {
+    "base": "6928f6fe37e1c7aaa42d9c0dcf1c600dfca22306",
+    "private_scanner_code": "18388c223c21c4d7921c105ead667c893fe152d5",
+    "private_docs_tip": "e1253d513127ea1d23ee93218443adcbc8131f35",
+    "transfer_patch_sha256": "91ba0822c74b5c1280bc1f9aa19f16798c71d7b1231e0ca1ace5ceeeba18d750",
+    "comparison": "Frozen tracked application, package and dependency inputs match the tested commit. git archive applied the configured CRLF checkout ending for Android gradlew.bat. Descriptive docs followed the original runtime snapshot."
+  },
+  "authorship": "Independent production validation by backend reviewer on an isolated Linux fixture. The integration owner transferred the checked scanner from its previously reviewed experimental app checkpoint.",
+  "environment": {
+    "os": "Ubuntu 24.04 x86-64 container",
+    "rustc": "1.100.0",
+    "webkitgtk": "2.52.6",
+    "gtk3": "3.24.41",
+    "tauri_cli": "2.12.4",
+    "features": [
+      "custom-protocol"
+    ],
+    "cargo": "build and test --locked --release, cloned private dependency cache and target directory, offline build, clang/lld, 5 jobs",
+    "frontend": "Exact application sources compiled by ordinary npm run build on ARM64 macOS with the project\u2019s installed locked dependencies. The generated static files were embedded by the Linux native build.",
+    "bundle": "Locked Tauri CLI bundle --bundles deb and --bundles appimage. Test-only outputs, no install or signing. Both ran unprivileged on fresh temporary virtual desktop profiles. AppImage ran with APPIMAGE_EXTRACT_AND_RUN=1."
+  },
+  "source_sha256": {
+    "src-tauri/Cargo.lock": "f356e912c4711a790c2f73be0fd26b54ee0b9f60bc46f6662b0338846f400cdc",
+    "src-tauri/vendor/html5ever-0.39.0/src/tokenizer/mod.rs": "ced32114915ce1664a93d4a5372c51082ca4f97f6ccb223009e2fe34f9c4f32b",
+    "src-tauri/vendor/markup5ever-0.39.0/util/buffer_queue.rs": "71f1879dffcf746b885733481b4f71a068ebd5eb26ad438e7955bb449b64c80c",
+    "src-tauri/tauri.conf.json": "821d8fb59f8afd0585acf0affde717c8620d23511c23675d7015703d5769a9fa"
+  },
+  "readers": {
+    "zimru": "ff8b0ab5e561b0019151d6d614131f59920ff2ee",
+    "zimfile_xapian": "380d84d7bb4ba9f30144462fd6bb18e932493fc0"
+  },
+  "fixture_sha256": {
+    "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "climate_split_aa": "fe90e1dd65a2897b353b747b161c48ca626c493c6b0d03db010da729b4e7d548",
+    "climate_split_ab": "e0437f173a62da22c33e1822d170da1a61666672ffe065ea0450c396bb55fd03",
+    "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613"
+  },
+  "artifacts_sha256": {
+    "linked_app": "22d85402e0418c2011e4a025570db339a3e9d119432f96391e62dd10374c20ea",
+    "linked_relay": "ffba59850b459c4cf0161cc0ed0a806729b9b1783913d18c347970fd6e7a6d69",
+    "deb": "e92c4c90052d5e8a184c985568c6ea863e203e1ef162e4b8d3d1964bd4e7496e",
+    "appimage": "e6ac2fb933f22d60186b55d565915a4442c1315f96008f0c97c64d029dd13d27",
+    "deb_executable": "6ff8886d4104ddcf8bc89c240d6413d559df5bda778ee7030e240d3bed5569ff",
+    "appimage_executable": "bba32fb495aeb20246ed88a003a76c53fc2b4ce612bc64c91b258bd84cbbc4fd"
+  },
+  "package_verification": "Both contained byte-identical copies of all five HTML parser notices and passed the project ELF archive-library scan. AppImage contained the expected desktop entry. The Debian ELF matched the release binary except the package-kind marker. AppImage ELF loader metadata changed during packaging. Its executable sections, GNU build ID and read-only data matched the original, apart from the application package-kind marker.",
+  "native_suite": {
+    "passed": 1240,
+    "failed": 0,
+    "ignored": 16,
+    "seconds": 96.48,
+    "scope": {
+      "exports::": {
+        "passed": 41,
+        "ignored": 1
+      },
+      "search::": {
+        "passed": 19,
+        "ignored": 1
+      },
+      "native_pdf::": {
+        "passed": 22,
+        "ignored": 0
+      },
+      "service::tests::article_exports_require_the_selected_installation_through_publication": {
+        "passed": 1,
+        "ignored": 0
+      }
+    },
+    "first_run": "The isolated test checkout lacked TypeScript for one live bridge test. Installed lockfile-verified TypeScript 5.9.3 into that checkout and repeated the entire suite."
+  },
+  "headless": {
+    "artifacts": [
+      "linked_app",
+      "AppImage via actual no-FUSE launcher"
+    ],
+    "runs_per_artifact": {
+      "Climate single": 1,
+      "Climate same-profile reopen": 1,
+      "Climate split": 1,
+      "100 maxi WebP full and range": 1
+    },
+    "climate": {
+      "article": "Climate 200",
+      "search_results_per_page": {
+        "title": 5,
+        "fulltext": 5,
+        "suggest": 5
+      },
+      "preview_characters": 437,
+      "article_text_sha256": "8ce39c87ea8ebce66b4f242ba8c2342bba87ee9facede38bed115551711dd2e7",
+      "export_article_and_save_resource_same_bytes": true,
+      "mhtml_root_equals_original": true,
+      "articleBytes": 7669,
+      "originalSha256": "f5309503c148af7dc688cf9a50e53d2136a5823bd54c30488f291136e725815c",
+      "attachedResources": 24,
+      "integrity": "valid"
+    },
+    "webp": {
+      "bytes": 12414,
+      "sha256": "c11e2ccd984681167b7ea8e333882ca3c801cdb9fa302d402b9a46c266723811",
+      "mime": "image/webp",
+      "rangeStatus": 206,
+      "contentRange": "bytes 137-1111/12414"
+    },
+    "comparator": "Result values identical across the two executables and all three Climate openings. Fixed WebP and byte-range output matched their independent known oracle."
+  },
+  "gtk_pdf": {
+    "workflow": "Accessible search, choose Climate 200, inspect rendered text, send trusted Save shortcut, confirm the GTK native file dialog and publish into an owned folder. Each output was independently opened with Poppler.",
+    "deb_pdf_sha256": "02880508321551ee3687e9c0326c5a94968bf6f7b0add785aa5f6b9c8fb9a9fd",
+    "appimage_pdf_sha256": "a59233599ff1fe560a5cee60694c537ace93b940ba03ad2bff880c3f917b7ad3",
+    "both": {
+      "pages": 1,
+      "page_size": "A4",
+      "bytes": 2089116,
+      "pdftotext_layout_sha256": "66d7da049ab053512d1ebfb4886fe6a377fe0ae61a12746160c75c7b980aec56",
+      "text_comparison": "Exact equality across both packages, including the distinctive Australian political funding opening and article body."
+    }
+  },
+  "limits": [
+    "Temporary unprivileged virtual Ubuntu desktop, software rendering, existing host system runtime. No physical device, production install, clean-distribution compatibility matrix, FUSE mount, signing, or update delivery tested.",
+    "The first AppImage wrapper-only shutdown left its temporary application child. The child was matched to the precise disposable profile, retired, and the full successful rerun explicitly signalled and checked each native child and waited for the wrapper.",
+    "Earlier PDF picker attempts did not submit or declined an unexpected folder. Successful reruns verified the destination folder and filename before Save.",
+    "Prior and current AppImages separately reproduced GStreamer media initialization failure on a silent VP8 archive. The Debian package played the full two-second clip. Audio and other codecs were not tested. See the separate media study."
+  ],
+  "review_evidence": {
+    "suite_log_sha256": "9afe3591426cfdd653722c0d2ac54e57053e9002803e663e156644fb0c92c76f",
+    "headless_native_json_sha256": "32af9591968fed540af1a63afcafbb4f1afade61bc8ddf3c30c06d87db8733b4",
+    "headless_appimage_json_sha256": "32af9591968fed540af1a63afcafbb4f1afade61bc8ddf3c30c06d87db8733b4",
+    "generated_pdf_text_sha256": "66d7da049ab053512d1ebfb4886fe6a377fe0ae61a12746160c75c7b980aec56"
+  }
+}

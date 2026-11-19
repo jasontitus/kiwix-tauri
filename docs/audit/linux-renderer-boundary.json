@@ -1,0 +1,233 @@
+{
+  "current_app_commit": "f7fc9b815459d5c931a95e06024c2a77dedd712d",
+  "prior_app_commit": "ab440ad49e43d444f035a045a99316d102832f6f",
+  "parser_validation_sha256": "1d2aa2a4ec1d6c1e05e0017f080779c2d2a9d9396d7573d30b9427b661062a5e",
+  "target": "Ubuntu 24.04 x86-64 virtual desktop, WebKitGTK 2.52.6, GTK 3.24.41, headless Xvfb. Unprivileged fresh profile/home per case. Software rendering. No audio track, no physical device.",
+  "fixture": {
+    "archive_sha256": "16208b10a5a5c2cfa1663ee7e7c323b1b625808a44f1d8ed26abd754fda09a59",
+    "webm_sha256": "d475f490b5e5c0821df851bcaa6049685cf6d1ace2eee739b6e1031044abb025",
+    "html_sha256": "f5d332f4496e5f01f1d19ceeb8712a235fcea0609bc0304aaafd8de4713a0485",
+    "content": "Two-second 160×120 VP8/WebM silent test pattern; archived HTML records an actual trusted click before creating the video element and starting muted playback. Status from document, process lifetime and accessibility tree. Frame presentation and physical sound were not measured."
+  },
+  "artifact_sha256": {
+    "current_deb": "e92c4c90052d5e8a184c985568c6ea863e203e1ef162e4b8d3d1964bd4e7496e",
+    "current_appimage": "e6ac2fb933f22d60186b55d565915a4442c1315f96008f0c97c64d029dd13d27",
+    "prior_appimage": "6489c4016b03a730d14b5d5aea0ea3acafcf693bf8d950fabbf74a692d47b8d6",
+    "experimental_system_stack_appimage": "4772e88c3cc425dfc4076dd02e1be69691a87a34f31eee5783b324e9238f5689"
+  },
+  "mapping_method": "Captured executable mappings from /proc for the owned app, WebKit network and WebKit web processes in their own session while the offline document was visible and again after media handling. Origins distinguish temporary AppImage extraction, extracted Debian app and host libraries. Counts are unique file basenames per role and origin. Detailed inventory contains filenames, selected file hashes and origin only.",
+  "module_inventory": {
+    "file": "linux-renderer-module-origins.json",
+    "sha256": "f43c3f4740b30ca8f1d3072ff19f54e05fc11332e5da7f2bdef8c047540577d5"
+  },
+  "conditions": {
+    "map-deb": "Current DEB, normal OS runtime.",
+    "map-image": "Current AppImage, normal launcher.",
+    "map-image-system-plugins": "Current AppImage with explicit requests for the system GStreamer plugin and scanner paths.",
+    "map-deb-no-vp8": "Current DEB using a directory of symlinks to installed host plugins, excluding the named decoder families.",
+    "stack-normal": "Disposable system-runtime AppImage. Exact release app with AppImage marker and relay, Debian package resources, direct AppRun, existing outer AppImage runtime and Zstandard filesystem. The only payload ELFs were the app and relay. Launcher sets no custom browser, codec or GTK library paths.",
+    "stack-no-codec": "Same experimental AppImage and withheld decoder families as map-deb-no-vp8."
+  },
+  "withheld_plugin_families": [
+    "libgstvpx.so",
+    "libgstlibav.so",
+    "libgstva*.so",
+    "libgstvideo4linux2.so",
+    "libgstv4l2codecs.so",
+    "libgstopenh264.so"
+  ],
+  "observations": {
+    "map-deb": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": true,
+        "mediaTime": 2,
+        "ready": 4,
+        "width": 160,
+        "ended": true,
+        "error": 0,
+        "rejection": ""
+      },
+      "renderer_present_after": true,
+      "accessible_web_documents_after": 2,
+      "loaded_file_counts": {
+        "app": {
+          "DEB": 1,
+          "system": 147
+        },
+        "network": {
+          "system": 147
+        },
+        "renderer": {
+          "system": 145
+        }
+      }
+    },
+    "map-image": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": false,
+        "mediaTime": 0,
+        "ready": 0,
+        "width": 0,
+        "ended": false,
+        "error": 0,
+        "rejection": ""
+      },
+      "renderer_present_after": false,
+      "accessible_web_documents_after": 0,
+      "loaded_file_counts": {
+        "app": {
+          "AppDir": 105,
+          "system": 43
+        },
+        "network": {
+          "AppDir": 122,
+          "system": 25
+        },
+        "renderer": {
+          "AppDir": 106,
+          "system": 39
+        }
+      }
+    },
+    "map-image-system-plugins": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": false,
+        "mediaTime": 0,
+        "ready": 0,
+        "width": 0,
+        "ended": false,
+        "error": 0,
+        "rejection": ""
+      },
+      "renderer_present_after": false,
+      "accessible_web_documents_after": 0,
+      "loaded_file_counts": {
+        "app": {
+          "AppDir": 105,
+          "system": 43
+        },
+        "network": {
+          "AppDir": 122,
+          "system": 25
+        },
+        "renderer": {
+          "AppDir": 106,
+          "system": 39
+        }
+      }
+    },
+    "map-deb-no-vp8": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": true,
+        "mediaTime": 0,
+        "ready": 0,
+        "width": 0,
+        "ended": false,
+        "error": 4,
+        "rejection": "AbortError"
+      },
+      "renderer_present_after": true,
+      "accessible_web_documents_after": 2,
+      "loaded_file_counts": {
+        "app": {
+          "DEB": 1,
+          "system": 147
+        },
+        "network": {
+          "system": 147
+        },
+        "renderer": {
+          "system": 145
+        }
+      }
+    },
+    "stack-normal": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": true,
+        "mediaTime": 2,
+        "ready": 4,
+        "width": 160,
+        "ended": true,
+        "error": 0,
+        "rejection": ""
+      },
+      "renderer_present_after": true,
+      "accessible_web_documents_after": 2,
+      "loaded_file_counts": {
+        "app": {
+          "AppDir": 1,
+          "system": 147
+        },
+        "network": {
+          "system": 147
+        },
+        "renderer": {
+          "system": 145
+        }
+      }
+    },
+    "stack-no-codec": {
+      "after_trusted_click": {
+        "clicked": true,
+        "trusted": true,
+        "setup": true,
+        "mediaTime": 0,
+        "ready": 0,
+        "width": 0,
+        "ended": false,
+        "error": 4,
+        "rejection": "AbortError"
+      },
+      "renderer_present_after": true,
+      "accessible_web_documents_after": 2,
+      "loaded_file_counts": {
+        "app": {
+          "AppDir": 1,
+          "system": 147
+        },
+        "network": {
+          "system": 147
+        },
+        "renderer": {
+          "system": 145
+        }
+      }
+    }
+  },
+  "prior_appimage": {
+    "media_state_after_click": {
+      "clicked": true,
+      "trusted": true,
+      "setup": false,
+      "mediaTime": 0,
+      "ready": 0,
+      "width": 0,
+      "ended": false,
+      "error": 0,
+      "rejection": ""
+    },
+    "accessible_web_documents_after": 0,
+    "renderer_exit": "The WebKitWebProcess that emitted the native warning was subsequently absent. The same result occurred with the current AppImage. The native frame remained."
+  },
+  "packaging_boundary": {
+    "stock_appimage": "The app, WebKit web process and network process mapped bundled WebKitGTK, JavaScriptCore and GStreamer. Both WebKit helper executables came from the AppImage. The renderer also mapped bundled libjpeg, libpng, libwebp, libxml2, libxslt, libzstd and GStreamer support libraries. Packaging and updating these native components is part of this application distribution.",
+    "stock_deb": "The app is packaged. The three processes resolved WebKitGTK, JavaScriptCore and GStreamer from system packages. Both helper executables were system copies. During successful playback the renderer mapped system libgstapp, libgstmatroska and libgstvpx among 17 system GStreamer plugins.",
+    "why_media_option_is_inadequate": "Locked Tauri appimage.bundleMediaFramework defaults to false. Enabling the supplied linuxdeploy GStreamer plugin would copy every available plugin from its selected directory, the plugins’ resolved native libraries and helper executables. Each addition would require its own inventory, build/source/license notices, security updates and codec coverage. That option expands the application-owned native decoding surface.",
+    "verified_minimum_architecture": "Use the supported OS WebKitGTK/GTK/GStreamer installation for the whole Linux rendering stack. The tested Debian artifact already does so. A rebuilt disposable AppImage with only app/relay payload executables demonstrated this on the same host. Merely requesting the host plugin paths inside the current mixed-runtime AppImage did not repair it."
+  },
+  "limitations": [
+    "Single Linux image, one video codec and one synthetic silent archive. The attempted unavailable-codec model excluded named plugins while retaining the rest of the installed OS framework. Systems missing the entire declared GTK/WebKit runtime, distribution versions, FUSE, other codecs, licensing of additional components, production updater/install behavior and candidate release compatibility remain untested.",
+    "The earliest metadata-preloaded AppImage fixture did not record a post-click status. The reported controlled trial delays element creation until an observed trusted click. The first experimental package used an unsupported filesystem compression and never launched; the retained runtime successfully ran the Zstandard candidate.",
+    "Failed stock AppImages logged missing appsink and autoaudiosink and GLib errors, followed by loss of the measured web process and accessible documents. Root cause inside that process was not further isolated. The explicit host plugin-path experiment still mapped the bundled runtime; it does not prove host plugins loaded."
+  ]
+}
