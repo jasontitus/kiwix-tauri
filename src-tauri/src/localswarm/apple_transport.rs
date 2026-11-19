@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Narrow byte-stream bridge. Native code owns QUIC/AWDL; Rust owns the protocol.
 use std::{ffi::{c_char, c_void, CString}, ptr::NonNull, sync::{Arc, LazyLock}, time::Duration};
+use block2::{Block, RcBlock};
+use dispatch2::DispatchData;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 mod read_request;
 
-type Completion = unsafe extern "C" fn(*mut c_void, i32, *const u8, usize);
+type Completion = Block<dyn Fn(i32, usize)>;
 unsafe extern "C" {
     fn kiwix_swarm_identity(p12: *const u8, length: usize, der: *const u8, der_length: usize) -> bool;
     fn kiwix_swarm_connect(instance: *const c_char, peer_to_peer: bool) -> *mut c_void;
@@ -14,14 +16,14 @@ unsafe extern "C" {
     fn kiwix_swarm_interface_index(raw: *mut c_void) -> u32;
     fn kiwix_swarm_local_address(raw: *mut c_void, buffer: *mut u8, capacity: usize) -> usize;
     fn kiwix_swarm_interface_has_address(index: u32, bytes: *const u8, length: usize) -> bool;
-    fn kiwix_swarm_start(raw: *mut c_void, context: *mut c_void, callback: Completion);
+    fn kiwix_swarm_start(raw: *mut c_void, callback: &Completion);
     fn kiwix_swarm_read(raw: *mut c_void, maximum: usize, request: u64, callback: extern "C" fn(u64, i32, Option<&dispatch2::DispatchData>));
-    fn kiwix_swarm_write(raw: *mut c_void, bytes: *const u8, length: usize, context: *mut c_void, callback: Completion);
+    fn kiwix_swarm_write(raw: *mut c_void, data: &DispatchData, callback: &Completion);
     fn kiwix_swarm_cancel(raw: *mut c_void);
     fn kiwix_swarm_join(raw: *mut c_void);
     fn kiwix_swarm_release(raw: *mut c_void);
     fn kiwix_swarm_route(raw: *mut c_void, buffer: *mut c_char, capacity: usize) -> isize;
-    fn kiwix_swarm_listen(context: *mut c_void, accept: unsafe extern "C" fn(*mut c_void, *mut c_void), dispose: unsafe extern "C" fn(*mut c_void), ready_context: *mut c_void, ready: Completion, one_request: bool) -> *mut c_void;
+    fn kiwix_swarm_listen(accept: &Block<dyn Fn(*mut c_void)>, ready: &Completion, one_request: bool) -> *mut c_void;
     fn kiwix_swarm_listener_cancel(raw: *mut c_void);
     fn kiwix_swarm_listener_join(raw: *mut c_void);
     fn kiwix_swarm_listener_release(raw: *mut c_void);
@@ -69,25 +71,39 @@ pub(super) fn interface_has_address(index: u32, address: std::net::IpAddr) -> bo
 /// per read, so a 16 KiB cap bounded the whole transfer at single-digit MB/s.
 const MAX_READ: usize = 256 * 1024;
 
-enum Request {
-    Ready(oneshot::Sender<Result<usize, String>>),
-    Write { reply: oneshot::Sender<Result<usize, String>>, stats: Option<Arc<super::network::SeedStats>> },
+// block2 erases these bounds from its block type. Check them before handing a
+// closure to the native dispatch queue, which can invoke and dispose it there.
+fn queue_callback<F: Send + Sync + 'static>(callback: F) -> F { callback }
+
+enum Operation {
+    Ready,
+    Write { bytes: usize, stats: Option<Arc<super::network::SeedStats>> },
 }
-unsafe extern "C" fn completed(context: *mut c_void, status: i32, _bytes: *const u8, length: usize) {
-    // Every native request calls back exactly once, including cancel/failure.
-    // Native dispatch data owns write bytes independently of this request.
-    let request = unsafe { Box::from_raw(context.cast::<Request>()) };
-    let error = || "LocalSwarm Apple QUIC connection failed or left the local link".to_string();
-    match *request {
-        Request::Ready(reply) => { let _ = reply.send(if status == 0 { Ok(length) } else { Err(error()) }); }
-        Request::Write { reply, stats } => {
-            let result = if status == 0 { Ok(length) } else { Err(error()) };
-            // Count a piece as soon as the transport accepts it, even if the
-            // serving loop is already retiring and never polls this handle.
-            if let (Ok(count), Some(stats)) = (&result, stats) { stats.record_upload(*count as u64); }
-            let _ = reply.send(result);
-        }
-    }
+
+fn completion(operation: Operation) ->
+    (RcBlock<dyn Fn(i32, usize)>, oneshot::Receiver<Result<usize, String>>)
+{
+    let (reply, received) = oneshot::channel();
+    let reply = std::sync::Mutex::new(Some(reply));
+    let block = RcBlock::new(queue_callback(move |status: i32, length: usize| {
+        let sender = reply.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let Some(sender) = sender else { return; };
+        let result = if status != 0 {
+            Err("LocalSwarm Apple QUIC connection failed or left the local link".into())
+        } else if let Operation::Write { bytes, stats } = &operation {
+            if *bytes == length {
+                // Accepted pieces count even after the serving loop drops its receipt.
+                if let Some(stats) = stats { stats.record_upload(length as u64); }
+                Ok(length)
+            } else {
+                Err("Apple QUIC send completion length mismatch".into())
+            }
+        } else {
+            Ok(length)
+        };
+        let _ = sender.send(result);
+    }));
+    (block, received)
 }
 
 struct RawConnection(NonNull<c_void>);
@@ -108,8 +124,8 @@ pub struct Connection(Arc<RawConnection>);
 impl Connection {
     fn start(raw: NonNull<c_void>) -> (Self, oneshot::Receiver<Result<usize, String>>) {
         let connection = Self(Arc::new(RawConnection(raw)));
-        let (reply, ready) = oneshot::channel();
-        unsafe { kiwix_swarm_start(raw.as_ptr(), Box::into_raw(Box::new(Request::Ready(reply))).cast(), completed); }
+        let (callback, ready) = completion(Operation::Ready);
+        unsafe { kiwix_swarm_start(raw.as_ptr(), &callback); }
         (connection, ready)
     }
     /// Longest infrastructure attempt. An idle local network answers in
@@ -229,7 +245,7 @@ impl Connection {
     }
     /// Hand every piece of `input` to Network.framework without waiting for the
     /// sends to be accepted, returning one completion per piece in wire order.
-    /// The bridge copies the bytes synchronously, so `input` may be released on
+    /// The dispatch data owns a synchronous copy, so `input` may be released on
     /// return. Calls made from one task stay ordered on the QUIC stream, which
     /// lets a seeder keep several chunk responses in flight instead of paying a
     /// send-completion round trip per piece.
@@ -239,9 +255,9 @@ impl Connection {
         let mut completions = Vec::with_capacity(input.len().div_ceil(super::network::UNLIMITED_PIECE));
         while !input.is_empty() {
             let length = input.len().min(super::network::UNLIMITED_PIECE);
-            let (reply, sent) = oneshot::channel();
-            let request = Box::into_raw(Box::new(Request::Write { reply, stats: stats.clone() }));
-            unsafe { kiwix_swarm_write(self.0.0.as_ptr(), input.as_ptr(), length, request.cast(), completed); }
+            let data = DispatchData::from_bytes(&input[..length]);
+            let (callback, sent) = completion(Operation::Write { bytes: length, stats: stats.clone() });
+            unsafe { kiwix_swarm_write(self.0.0.as_ptr(), &data, &callback); }
             completions.push(sent);
             input = &input[length..];
         }
@@ -256,14 +272,6 @@ impl Connection {
 }
 
 type Incoming = (Connection, oneshot::Receiver<Result<usize, String>>);
-unsafe extern "C" fn accepted(context: *mut c_void, raw: *mut c_void) {
-    let Some(raw) = NonNull::new(raw) else { return; };
-    let sender = unsafe { &*context.cast::<mpsc::Sender<Incoming>>() };
-    let incoming = Connection::start(raw);
-    // Full queues drop/cancel the connection, never grow the peer population.
-    let _ = sender.try_send(incoming);
-}
-unsafe extern "C" fn disposed(context: *mut c_void) { drop(unsafe { Box::from_raw(context.cast::<mpsc::Sender<Incoming>>()) }); }
 struct RawListener(NonNull<c_void>);
 // SAFETY: as for `RawConnection`, the listener handle is owned here and Rust
 // never dereferences it. The native bridge serializes accept, cancel and
@@ -289,9 +297,16 @@ impl Listener {
     async fn new_inner(cancel: &CancellationToken, one_request: bool) -> Result<Self, String> {
         identity()?;
         let (sender, incoming) = mpsc::channel(16);
-        let (reply, ready) = oneshot::channel();
-        let raw = unsafe { kiwix_swarm_listen(Box::into_raw(Box::new(sender)).cast(), accepted, disposed,
-            Box::into_raw(Box::new(Request::Ready(reply))).cast(), completed, one_request) };
+        let (raw, ready) = {
+            let accept = RcBlock::new(queue_callback(move |raw: *mut c_void| {
+                if let Some(raw) = NonNull::new(raw) {
+                    // A full or closed channel drops the incoming connection and cancels it.
+                    let _ = sender.try_send(Connection::start(raw));
+                }
+            }));
+            let (callback, ready) = completion(Operation::Ready);
+            (unsafe { kiwix_swarm_listen(&accept, &callback, one_request) }, ready)
+        };
         let raw = NonNull::new(raw).ok_or("Cannot create Apple QUIC listener")?;
         let mut listener = Self { raw: Arc::new(RawListener(raw)), incoming, port: 0 };
         let result = super::network::guarded(cancel, async { ready.await.map_err(|_| "Apple QUIC listener callback lost".to_string())? }).await;
@@ -315,6 +330,36 @@ impl Drop for Listener { fn drop(&mut self) { self.close(); } }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn write_completion_is_counted_once_even_if_the_receiver_leaves() {
+        let stats = Arc::new(super::super::network::SeedStats::default());
+        let (callback, receiver) = completion(Operation::Write { bytes: 17, stats: Some(stats.clone()) });
+        drop(receiver);
+        callback.call((0, 17));
+        callback.call((0, 17));
+        assert_eq!(stats.uploaded(), 17);
+        for (status, length) in [(-1, 17), (0, 18)] {
+            let (callback, receiver) = completion(Operation::Write { bytes: 17, stats: Some(stats.clone()) });
+            callback.call((status, length));
+            assert!(receiver.blocking_recv().unwrap().is_err());
+        }
+        assert_eq!(stats.uploaded(), 17);
+    }
+
+    #[test]
+    fn readiness_follows_the_retained_block_lifetime() {
+        let (callback, ready) = completion(Operation::Ready);
+        let retained = callback.clone();
+        drop(callback);
+        retained.call((0, 4242));
+        retained.call((-1, 0));
+        assert_eq!(ready.blocking_recv().unwrap(), Ok(4242));
+
+        let (callback, ready) = completion(Operation::Ready);
+        drop(callback);
+        assert!(ready.blocking_recv().is_err());
+    }
+
     #[test]
     fn service_tokens_are_local_instances_not_dns_targets() {
         let name = "Archive. café";

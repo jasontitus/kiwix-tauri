@@ -16,9 +16,8 @@
 #include <condition_variable>
 #include <cerrno>
 
-using Completion = void (*)(void *, int, const uint8_t *, size_t);
-using Accepted = void (*)(void *, void *);
-using Dispose = void (*)(void *);
+using Completion = void (^)(int, size_t);
+using Accepted = void (^)(void *);
 static dispatch_queue_t queue() {
     static dispatch_queue_t value = dispatch_queue_create("org.kiwix.localswarm.quic", DISPATCH_QUEUE_SERIAL);
     return value;
@@ -275,7 +274,6 @@ struct Connection : std::enable_shared_from_this<Connection> {
     bool ready = false; // All fields except cancelled are confined to queue().
     bool readEnded = false;
     Completion completion = nullptr;
-    void *context = nullptr;
     explicit Connection(nw_connection_t value): value(value) {}
 };
 using SwarmConnectionHandle = std::shared_ptr<Connection>;
@@ -290,7 +288,7 @@ static void finished_connection(const SwarmConnectionHandle &handle) {
     if (!handle->stopping || !handle->connectionStopped || !handle->browserStopped) return;
     if (handle->completion) {
         auto callback = handle->completion; handle->completion = nullptr;
-        callback(handle->context, -1, nullptr, 0);
+        callback(-1, 0);
     }
     if (!handle->transportStopped) return;
     { std::lock_guard<std::mutex> lock(handle->mutex); handle->cancelled = true; }
@@ -328,7 +326,7 @@ static void start_connection(SwarmConnectionHandle handle) {
             if (!handle->ready) { cancel_connection(handle); return; }
             if (handle->completion) {
                 auto callback = handle->completion; handle->completion = nullptr;
-                callback(handle->context, 0, nullptr, 0);
+                callback(0, 0);
             }
         } else if (state == nw_connection_state_failed) {
             cancel_connection(handle);
@@ -500,10 +498,10 @@ extern "C" bool kiwix_swarm_interface_has_address(uint32_t index, const uint8_t 
     freeifaddrs(addresses);
     return found;
 }
-extern "C" void kiwix_swarm_start(void *raw, void *context, Completion completion) {
+extern "C" void kiwix_swarm_start(void *raw, Completion completion) {
     auto handle = *(SwarmConnectionHandle *)raw;
     dispatch_async(queue(), ^{
-        handle->completion = completion; handle->context = context;
+        handle->completion = completion;
         if (handle->value) { start_connection(handle); return; }
         auto params = nw_parameters_create();
         nw_parameters_set_include_peer_to_peer(params, handle->peerToPeer);
@@ -575,15 +573,14 @@ extern "C" void kiwix_swarm_read(void *raw, size_t maximum, uint64_t request, Re
         });
     });
 }
-extern "C" void kiwix_swarm_write(void *raw, const uint8_t *bytes, size_t length, void *context, Completion completion) {
+extern "C" void kiwix_swarm_write(void *raw, dispatch_data_t data, Completion completion) {
     auto handle = *(SwarmConnectionHandle *)raw;
-    // QUIC may retain content after the send callback (before acknowledgement).
-    // Copy synchronously: Rust's borrowed input may be released on callback/cancel.
-    auto data = dispatch_data_create(bytes, length, nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+    const size_t length = dispatch_data_get_size(data);
+    // ARC retains the immutable bytes and the completion across queue handoffs.
     dispatch_async(queue(), ^{
-        if (!handle->ready) { completion(context, -1, nullptr, 0); return; }
+        if (!handle->ready) { completion(-1, 0); return; }
         nw_connection_send(handle->value, data, NW_CONNECTION_DEFAULT_MESSAGE_CONTEXT, false, ^(nw_error_t error) {
-            completion(context, error ? -1 : 0, nullptr, length);
+            completion(error ? -1 : 0, length);
         });
     });
 }
@@ -646,13 +643,9 @@ struct Listener {
     bool oneRequest;
     size_t groupCount = 0;
     Completion ready = nullptr;
-    void *ready_context = nullptr;
     Accepted accept;
-    Dispose dispose;
-    void *context;
-    Listener(nw_listener_t value, void *context, Accepted accept, Dispose dispose, bool oneRequest):
-        value(value), oneRequest(oneRequest), accept(accept), dispose(dispose), context(context) {}
-    ~Listener() { if (context) dispose(context); }
+    Listener(nw_listener_t value, Accepted accept, Completion ready, bool oneRequest):
+        value(value), oneRequest(oneRequest), ready(ready), accept(accept) {}
 };
 using ListenerHandle = std::shared_ptr<Listener>;
 static void finished_listener(const ListenerHandle &listener) {
@@ -668,12 +661,11 @@ static void cancel_listener(const ListenerHandle &listener) {
     if (listener->value && !listener->listenerStopped) nw_listener_cancel(listener->value);
     finished_listener(listener);
 }
-extern "C" void *kiwix_swarm_listen(void *context, Accepted accept, Dispose dispose, void *ready_context, Completion ready, bool oneRequest) {
+extern "C" void *kiwix_swarm_listen(Accepted accept, Completion ready, bool oneRequest) {
     auto params = parameters();
     auto value = params ? nw_listener_create(params) : nil;
-    if (!value) { dispose(context); ready(ready_context, -1, nullptr, 0); return nullptr; }
-    auto listener = std::make_shared<Listener>(value, context, accept, dispose, oneRequest);
-    listener->ready = ready; listener->ready_context = ready_context;
+    if (!value) { ready(-1, 0); return nullptr; }
+    auto listener = std::make_shared<Listener>(value, accept, ready, oneRequest);
     nw_listener_set_queue(value, queue());
     // A multiplex listener owns QUIC transports separately from their incoming
     // application streams. Bound and retain the transports here; Rust receives
@@ -681,7 +673,7 @@ extern "C" void *kiwix_swarm_listen(void *context, Accepted accept, Dispose disp
     nw_listener_set_new_connection_group_handler(value, ^(nw_connection_group_t group) {
         size_t slot = 0;
         while (slot < listener->groups.size() && listener->groups[slot]) ++slot;
-        if (listener->stopping || !listener->context || slot == listener->groups.size()) {
+        if (listener->stopping || !listener->accept || slot == listener->groups.size()) {
             nw_connection_group_cancel(group); return;
         }
         listener->groups[slot] = group;
@@ -699,7 +691,7 @@ extern "C" void *kiwix_swarm_listen(void *context, Accepted accept, Dispose disp
                 }
             });
         nw_connection_group_set_new_connection_handler(group, ^(nw_connection_t incoming) {
-            if (listener->stopping || !listener->context || (__bridge void *)listener->groups[slot] != key ||
+            if (listener->stopping || !listener->accept || (__bridge void *)listener->groups[slot] != key ||
                 listener->groupEpochs[slot] != epoch || listener->groupPhases[slot] == Listener::GroupPhase::Retiring ||
                 (listener->oneRequest && listener->groupPhases[slot] != Listener::GroupPhase::AwaitingStream)) {
                 nw_connection_cancel(incoming); return;
@@ -722,7 +714,7 @@ extern "C" void *kiwix_swarm_listen(void *context, Accepted accept, Dispose disp
                     nw_connection_group_cancel(owner->groups[slot]);
                 };
             }
-            listener->accept(listener->context, new SwarmConnectionHandle(std::move(request)));
+            listener->accept(new SwarmConnectionHandle(std::move(request)));
         });
         nw_connection_group_set_state_changed_handler(group,
             ^(nw_connection_group_state_t state, __unused nw_error_t error) {
@@ -762,19 +754,16 @@ extern "C" void *kiwix_swarm_listen(void *context, Accepted accept, Dispose disp
     nw_listener_set_state_changed_handler(value, ^(nw_listener_state_t state, __unused nw_error_t error) {
         if (state == nw_listener_state_ready && listener->ready && !listener->stopping) {
             auto callback = listener->ready; listener->ready = nullptr;
-            callback(listener->ready_context, 0, nullptr, nw_listener_get_port(listener->value));
+            callback(0, nw_listener_get_port(listener->value));
         } else if (state == nw_listener_state_failed) { cancel_listener(listener); }
         else if (state == nw_listener_state_cancelled) {
             listener->stopping = true;
             listener->listenerStopped = true;
             listener->value = nil;
-            if (listener->ready) { auto callback = listener->ready; listener->ready = nullptr; callback(listener->ready_context, -1, nullptr, 0); }
+            if (listener->ready) { auto callback = listener->ready; listener->ready = nullptr; callback(-1, 0); }
             // All accept callbacks precede cancellation on this queue. Closing
             // the Rust sender wakes its supervisor after initial readiness too.
-            if (listener->context) {
-                listener->dispose(listener->context);
-                listener->context = nullptr;
-            }
+            listener->accept = nil;
             for (size_t index = 0; index < listener->groups.size(); ++index) {
                 if (listener->groups[index]) nw_connection_group_cancel(listener->groups[index]);
             }
