@@ -27,6 +27,7 @@ The same probe with GPL `380d84d` emitted 974 diagnostics across 15 package vers
 ## Performance follow-up
 
 - [ ] Decide which platforms should enable Zimru’s `retained-cluster-buffers` feature by testing the release app against its current reader and libzim. Compare random articles, first article and media ranges on the same archives. Record elapsed time, CPU, peak memory and response-byte equality. Include physical Android and iOS measurements before selecting mobile defaults. Android emulator results varied by archive. [Four-platform measurements](benchmarks/2026-11-18-retained-clusters.md) · [Selectable MIT implementation](https://github.com/jasontitus/zimru-xapian/commit/1c0f5e3a8d748bf7304588e7db73022555323561)
+- [ ] Evaluate the early Zstandard sequence update in the signed Mac app before considering a Mac-specific default. It reduced direct random-read time on both Mac test archives and increased it on both Linux archives. The shipping app keeps the current decoder. [MIT experiment and native comparisons](https://github.com/jasontitus/zimru-xapian/blob/5c7f4de7e9ffcff11cb48475b5c3ea73099b4fbd/docs/rust-codecs.md#experimental-zstandard-sequence-update-order)
 
 ## Historical search-only integration, 2026-11-18
 
