@@ -1,0 +1,14 @@
+librqbit-sha1-wrapper, version 9.1.0, is licensed under Apache License 2.0.
+The upstream copyright notice and full license accompany this notice.
+
+Upstream release commit:
+4309d38769ef93f6ee4f01a1ab147009a197fa8f
+https://github.com/ikatson/rqbit
+Upstream crate archive and SHA-256:
+upstream/librqbit-sha1-wrapper/librqbit-sha1-wrapper-9.1.0.crate
+4633bfa4c77dd7153be92584947d669a0ff8f61b82bb8bf283ff5f11ddee75be
+Local source directory:
+src-tauri/vendor/librqbit-sha1-wrapper-9.1.0
+
+The local sha1-ring feature selects RustCrypto SHA-1 and SHA-256 for
+compatibility with the feature names of the released librqbit-core.

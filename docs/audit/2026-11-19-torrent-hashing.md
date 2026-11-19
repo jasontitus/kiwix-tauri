@@ -1,0 +1,34 @@
+# Checked torrent hashing in the application
+
+The app pins librqbit 9.1.0 and uses a local Apache-2.0 wrapper for torrent SHA-1. The retained `rust-tls` feature forwards `sha1-ring` to that wrapper and enables reqwest 0.13's existing TLS configuration. The wrapper now passes metadata and piece bytes to the app's checked RustCrypto SHA-1. Its SHA-256 API uses the corresponding RustCrypto backend. The released librqbit calls SHA-1 for v1 metadata, piece verification and torrent creation. The SHA-256 tests exercise the wrapper API. [Original crate, attribution and license](../../src-tauri/licenses/librqbit-sha1-wrapper/SOURCE.txt)
+
+The reviewed production snapshot overlays 13 paths on `59130d50e2b1a980a578e166f80735f97b2253ee`. The overlay manifest SHA-256 is `ca3f4d74f67f32611b6a384e262151cc1d31706afdffd21de7dd6d303f32f6f7`. The original wrapper archive matches the published registry checksum. The bundle includes the upstream copyright notice, Apache-2.0 text and source notice. Zimru and the Xapian companion retain their separate source and licensing boundaries. [Hash wrapper](../../src-tauri/vendor/librqbit-sha1-wrapper-9.1.0/src/lib.rs)
+
+Normal locked graphs were compared on ARM64 macOS, iOS, iOS Simulator and Android, ARMv7 Android, ARM64 and x86-64 Linux, and x86-64 Windows. On all eight, the wrapper's native AWS-LC edge and `untrusted` 0.7.1 disappear. The resolved reqwest, Rustls, Quinn, ring and platform-verifier feature sets match the baseline. AWS-LC remains reachable through the reqwest 0.13 TLS path. Its extra features activated by the old wrapper are gone. The wrapper itself forbids unsafe Rust. The digest dependencies still use checked hardware dispatch and architecture-specific standard-library intrinsics on supported targets. The optional upstream wrapper feature for `crypto-hash` is outside the app's selected graphs. [Earlier checked SHA backend review](2026-11-19-checked-sha-backends.md)
+
+## Hash and transfer verification
+
+The wrapper's two independent known vectors passed in a release build with normal dispatch and again with software SHA-1 and SHA-256 forced. The standalone test manifest names the selected backend dependencies at the versions used by the app and compiles the exact wrapper source. The macOS ARM64 release app-library executable passed all 90 tests under `torrent::`, including independent v1 info-hash comparison, local transfer and publication from a magnet, a web-seed-only transfer, and checks for cancellation and publication recovery. Both ARM64 iOS device and simulator targets passed locked application-library compile checks with the same vendored wrapper. This checkpoint's iOS evidence is compile-time.
+
+The Linux release app-library test used the same release profile, test-only instrumentation and assets as the previous paired experiment. This candidate applies the 13-path wrapper integration and keeps the stock TLS provider. The reused stock binary was built from `549f91e2423893cc9c8957b690b1e838d67e6e9f`. The intervening commit changed four documents. Both binaries passed the independent v1 info-hash check before measurement. On the x86-64 Intel Core i7-8809G, six alternating pairs per archive followed the warmups, for 28 passes total. Each transfer ran in a new profile, reopened the published ZIM, compared every byte with the pinned input, and verified the original after cleanup. Docker restricted the transfer to loopback and used a 2 GiB temporary filesystem. [Raw samples and binary checksums](../benchmarks/2026-11-19-torrent-hashing-loopback.json)
+
+| Archive and app-observed operation | Stock median | Rust hashing median | Median paired candidate / stock |
+| --- | ---: | ---: | ---: |
+| Climate, 8.98 MB, start sharing | 360.44 ms | 361.45 ms | 1.0004 |
+| Climate, receive and publish | 606.09 ms | 600.43 ms | 0.9988 |
+| Wikipedia 100, 36.52 MB, start sharing | 359.04 ms | 361.20 ms | 1.0035 |
+| Wikipedia 100, receive and publish | 739.55 ms | 741.08 ms | 1.0022 |
+
+The paired median publication differences were −0.12% and +0.22%. The app reports completion on a 250 ms manager tick. Whole-test median CPU, which covers setup, verification and cleanup, was 0.496 s stock and 0.514 s with Rust hashing for Climate, and 1.399 s stock and 1.456 s with Rust hashing for Wikipedia 100. The benchmark measures what the app reports on two local transfers. The earlier piece benchmark measures isolated hashing cost, and the archive comparison measures reader performance against libzim. [Piece hashing](2026-11-19-portable-sha1-torrent-crypto.md) · [Reader and libzim measurements](../benchmarks/2026-11-18-portable-decoder.md)
+
+## Android package and TLS coverage
+
+The signed ARM64 release APK has SHA-256 `a0af5b970f221a79b02cff617e18691824270517106d46c4c666aff110c459ac`. Independent inspection verified its test signature, five native library bytes, 16 KiB alignment, 76 license resources, and the app library's strong imports against its API 24 dependency closure. Release compiler receipts show the app links the vendored wrapper through `sha1-ring` and Rustls retains its `aws_lc_rs` and `ring` features. The three Android verifier provenance tests also passed.
+
+A fresh Android 35 ARM64 emulator installed that exact APK. The tracker fixture used a temporary CA in the guest user store, a P-521 ECDSA server key, and an RSA issuer. The trusted server required TLS 1.3 and accepted only the hybrid `X25519MLKEM768` group. The app negotiated that group, sent `/announce` with the expected 20-byte info hash `9ece7269bddf24c876ea731ac0bce0e55c518832` and the Kiwix Workbench user agent, and the server returned HTTP 200. The separately signed server received `UNKNOWN_CA` and zero HTTP requests. The test disabled the guest's external captive-portal probe and routed both listeners through loopback.
+
+An earlier emulator attempt stopped before installation when its default data partition exceeded the available disk space. The rerun used the same verified APK and scripts after cleanup of owned build caches. Both emulator profiles and transports were withdrawn. The final tracker event receipt has SHA-256 `43fbb060509949d875fdb16f02d38acdbce7a53b1175dac383a4f8bcb0e8636f`. Public-root revocation, physical-device timing and other TLS algorithms fall outside this emulator test.
+
+## Review and remaining scope
+
+Independent review covered the 13 production paths, all eight resolved dependency graphs, licensing and package provenance, macOS and Linux test evidence, and the Android runner, package and observed results. Raw build, investigation, runtime and cleanup receipts are retained in `.native/2026-11-19-torrent-hashing`. The app's full TLS and QUIC memory-safety work remains open. AWS-LC and ring still handle network input, and the user-visible transfer measurements cover the two local Linux workloads. [Whole-app worklist](../MEMORY-SAFETY-INVENTORY.md)

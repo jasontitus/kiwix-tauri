@@ -64,7 +64,9 @@ html5ever = "0.39.0"
 # Already in the graph through dom_query; the PDF sanitizer tokenizes <style>
 # text with it to tell a CSS `<` delimiter from a `<` inside a string or URL.
 cssparser = "0.37.0"
-librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
+# The rust-tls feature enables reqwest's existing TLS and selects the patched
+# SHA wrapper through the upstream sha1-ring feature. Recheck both on upgrade.
+librqbit = { version = "=9.1.0", default-features = false, features = ["rust-tls"] }
 zimfile-xapian = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "380d84d7bb4ba9f30144462fd6bb18e932493fc0" }
 zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "ff8b0ab5e561b0019151d6d614131f59920ff2ee", default-features = false }
 cap-std = "4"
@@ -232,6 +234,8 @@ block-buffer = { path = "vendor/block-buffer-0.12.1" }
 hybrid-array = { path = "vendor/hybrid-array-0.4.15" }
 # Shared checked token strings across exports, PDF validation and selector consumers.
 cssparser = { path = "vendor/cssparser-0.37.0" }
+# Use checked RustCrypto SHA-1 and SHA-256 for torrent data and metadata.
+librqbit-sha1-wrapper = { path = "vendor/librqbit-sha1-wrapper-9.1.0" }
 # 0.7.0 selects Linux interface binding on iOS; use Apple's indexed binding.
 librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
 # Wry's fresh incognito GTK contexts must each receive the app/IPC protocols.

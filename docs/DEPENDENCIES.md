@@ -104,19 +104,13 @@ Regenerate with `cargo metadata --format-version 1 --locked --all-features`, com
 
 ## To do
 
-- [ ] **File the librqbit PR** (candidate 1). The patch and PR text are in [`upstream/librqbit-sha1-rustcrypto.patch`](upstream/librqbit-sha1-rustcrypto.patch) and [`upstream/librqbit-sha1-rustcrypto.md`](upstream/librqbit-sha1-rustcrypto.md); they were prepared against rqbit `main` at f23bacdd. Fork `ikatson/rqbit`, `git am` the patch onto a branch, re-run `cargo fmt --all -- --check`, `cargo test -p librqbit-sha1-wrapper --no-default-features --features sha1-rustcrypto` and `cargo clippy -p librqbit --no-default-features --features rust-tls-no-provider --all-targets`, then open the PR with that description.
-- [ ] **After it is released**, switch the app to librqbit's `rust-tls-no-provider` and install the `ring` process provider before the torrent session starts (candidate 1), then remove aws-lc from this page.
+- [ ] **Track an upstream RustCrypto torrent hash backend.** The app uses a pinned local wrapper as of 2026-11-19. Recheck upstream's hashing interface and verify algorithm coverage before changing the app's TLS provider.
 
 ## Reduction candidates
 
 Roughly ordered by payoff over effort.
 
-1. **Two crypto stacks (upstream change prepared).** The app's rustls and quinn use `ring`, but **aws-lc-rs** (a large C library with a CMake build) also gets in, through two paths in librqbit's `rust-tls` feature: (a) it enables `reqwest/rustls` on librqbit's **reqwest 0.13**, whose default rustls provider is aws-lc-rs; feature unification then also compiles aws-lc into the app's shared `rustls`; (b) it enables `librqbit-sha1-wrapper/sha1-ring`, which despite the name has used aws-lc-rs since upstream commit e25612b (August 2024). No librqbit feature set avoids both, and librqbit 9.1.0 is unchanged.
-   - **Do not point SHA-1 back at `ring`.** SHA-1 is librqbit's hot path. On x86_64 with SHA-NI (256 MiB, release build), aws-lc-rs measured 1,746 MB/s, RustCrypto `sha1` 1,653 MB/s and `ring` 0.17 only 440 MB/s, because ring's SHA-1 has no hardware path. RustCrypto `sha1` 0.11 also selects the ARMv8 SHA extensions at runtime.
-   - **Upstream PR prepared** (not yet filed): a pure-Rust `sha1-rustcrypto` backend in librqbit-sha1-wrapper, and a librqbit `rust-tls-no-provider` feature (reqwest `rustls-no-provider` plus that backend). It is additive, adds no packages to rqbit's lockfile, and comes with FIPS 180-1 vectors and CI.
-   - **Once it is released**, the app switches librqbit to `features = ["rust-tls-no-provider"]` and installs `rustls::crypto::ring::default_provider()` as the process default before starting a torrent session. That removes aws-lc-rs, aws-lc-sys, cmake, fs_extra, jobserver and untrusted 0.7, and adds RustCrypto `sha1`. No vendoring or fork is involved; patching librqbit locally was tried and rejected for that reason.
-   - `torrent::tests::created_torrent_info_hash_matches_independent_sha1` pins an info hash computed with Python's hashlib, so a backend switch cannot silently change hashing.
-   - Moving the app's own reqwest from 0.12 to 0.13 would leave one HTTP client. `rustls-platform-verifier` is already in the Android graph (through librqbit's reqwest 0.13 and Tauri), but it needs JNI initialisation on Android before it can verify, and no such initialisation was found in the app. The app's catalog and download client would then depend on it, so this is a separate change, which should first check librqbit's HTTPS trackers on Android.
+1. **Two TLS providers, with torrent hashing moved to Rust.** The pinned librqbit 9.1.0 `rust-tls` feature retains reqwest 0.13's AWS-LC-backed TLS configuration. Kiwix's patched `librqbit-sha1-wrapper` uses checked RustCrypto digest code through the historical `sha1-ring` feature. AWS-LC remains in the TLS graph and ring remains available to Rustls and Quinn. The normal app graphs across eight targets drop `untrusted` 0.7.1 along with the wrapper's AWS-LC feature edge. The app already initializes the Android platform verifier for torrent startup. Moving the separate reqwest 0.12 catalog and download client or changing TLS providers needs its own verification. [Verified dependency and runtime scope](audit/2026-11-19-torrent-hashing.md)
 2. **Small, stable but idle crates:** `hex` 0.4.3 (2021) and `mime_guess` 2.0.5 (2024; used once, for the headless server's embedded frontend assets) are feature-complete and small (`mime_guess` alone brings `unicase`), so they are low priority. `mime_guess` could become a small extension table over the known `dist/` file types.
 3. **Many duplicate versions** (base64 ×3, getrandom ×3, hashbrown ×5, rand ×2, syn ×3, windows-sys ×5, and others). Most come from Tauri and librqbit; `cargo deny check bans` lists them. Upgrades upstream will collapse some of them.
 4. **Optional features.** BitTorrent (librqbit, the largest subtree), StreetZim maps and private sync could become Cargo features, so a minimal reader build can leave them out.
@@ -145,7 +139,7 @@ On 2026-11-05 every registry crate in the lockfile was checked against crates.io
 
 **Upstream only:**
 - *Tauri and the GTK3 stack:* cesu8 (2016, via jni), vswhom, foreign-types, embed_plist, ndk-context, field-offset, x11 and x11-dl, winapi 0.3 with its two target shims, and proc-macro-error (RUSTSEC-2024-0370, through `glib-macros` 0.18). These leave when Tauri moves to gtk-rs ≥ 0.20 and drops winapi.
-- *librqbit:* size_format (2018), core_detect, nonzero_ext, intervaltree, assert_cfg, and tap, funty and wyz (through bitvec). fs_extra and untrusted 0.7 come from aws-lc and leave with candidate 1.
+- *librqbit:* size_format (2018), core_detect, nonzero_ext, intervaltree, assert_cfg, and tap, funty and wyz (through bitvec). The torrent hashing change retires `untrusted` 0.7.1 from the app lockfile. AWS-LC's TLS build still uses `fs_extra`.
 - *snow:* curve25519-dalek-derive.
 - *selectors (Tauri, and the app before and after the scraper port):* precomputed-hash (2017).
 - *Lockfile only, not compiled for any shipping target:* libappindicator and libappindicator-sys (Tauri's optional tray backend).

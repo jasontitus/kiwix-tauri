@@ -20,6 +20,7 @@ Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), 
 | html5ever and markup5ever | Five Rust source and test files across two crates | Kiwix memory-safety hardening | Published 0.39.0 uses intrinsics and unchecked slices | Keep the original crates, token behavior, bounded consumer tests and platform measurements with the forks |
 | cssparser | Five changed Rust source files | Memory-safety hardening | Audited at 0.37.0 | Keep the source and fixtures with the app and compare CSS behavior on upgrades |
 | mdns-sd | ~1,900 lines | Hardening against hostile LAN packets | Partly fixed in 0.21 | Rebase onto 0.21.7, then offer the cache bounds upstream |
+| librqbit-sha1-wrapper 9.1.0 | Checked RustCrypto SHA-1 and SHA-256 | Application memory-safety hardening | Published 9.1.0 selects AWS-LC with `sha1-ring` | Preserve both torrent hash parity and TLS algorithm coverage on upgrades |
 | librqbit-dualstack-sockets | iOS binding and checked interface handling | Yes: does not build for iOS | Yes, in 0.7.0 | Upstream PR; trivial |
 | rustls-platform-verifier (Android Kotlin) | Unchanged source; build files only | No: vendored instead of upstream's GitHub-hosted Maven archive | n/a | Keep pinned to Cargo.lock; re-vendor on every crate update |
 
@@ -153,6 +154,10 @@ The local edits in `lib.rs`, `cow_rc_str.rs`, `tokenizer.rs`, `serializer.rs` an
 Nearby sharing listens to mDNS from any device on the LAN. The fork (based on 0.17.2) bounds cache entries, owners, payload sizes, reverse indexes, pending removals, resolver/retry/probe state, packet-processing work per turn and subscriber queues. It also adds cycle and length bounds to DNS name decompression and makes TTL arithmetic overflow-safe. Without the cache bounds, a hostile device on the same network can grow memory without limit or stall the daemon.
 
 Upstream 0.21.7 now caps expanded names at 255 bytes (which stops compression loops), uses saturating TTL arithmetic, fixes a truncated-HINFO panic and limits outgoing packet size. It has no cache-size limits. Plan: rebase onto 0.21.7, drop the parser and TTL changes it covers, and offer the cache and queue bounds upstream.
+
+### librqbit-sha1-wrapper: checked torrent hashes
+
+The app pins librqbit 9.1.0 and its local Apache-2.0 hash wrapper. The existing `rust-tls` feature enables reqwest's TLS provider and forwards the historical `sha1-ring` feature to the wrapper. The fork uses the app's checked RustCrypto SHA-1 and SHA-256 implementations for that feature. Keep the hash backend and HTTPS provider selection independent when updating the dependency. The original crate archive, source revision, attribution and full license accompany the fork. [Wrapper source notice](../src-tauri/licenses/librqbit-sha1-wrapper/SOURCE.txt) · [Runtime verification](audit/2026-11-19-torrent-hashing.md)
 
 ### librqbit-dualstack-sockets: iOS interface binding
 
