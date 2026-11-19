@@ -61,7 +61,9 @@ PNG's remaining Rust Adler-32 paths now use the checked `adler2` implementation 
 
 The selected asynchronous gzip path uses initialized slices in the Tokio adapter, codec and buffer crates. The same release configuration reports zero unsafe-code diagnostics in those three crates, down from 17. The app leaves this torrent engine's IP-list URLs unset. Tokio's implementation and optional codecs still require separate coverage. The adapter tests verified short reads before transport errors and retries without losing bytes. [Async gzip review, platform checks and measurements](audit/2026-11-19-checked-async-gzip.md)
 
-The application and MCP relay use a checked integer formatter for JSON. The app also uses it for integer HTTP headers. It retains the pinned itoa version and forbids unsafe Rust in that crate. Archive media length headers and extreme integer MCP request IDs passed runtime checks. The JSON parser and float formatter remain separate dependency work. [Consumers, platform checks and paired measurements](audit/2026-11-19-checked-itoa.md)
+The application and MCP relay use a checked integer formatter for JSON. The app also uses it for integer HTTP headers. It retains the pinned itoa version and forbids unsafe Rust in that crate. Archive media length headers and extreme integer MCP request IDs passed runtime checks. [Consumers, platform checks and paired measurements](audit/2026-11-19-checked-itoa.md)
+
+The JSON reader, writer and value formatter now use checked string spans and initialized escape buffers. The app still selects the `raw_value` feature for Tauri. Three representation conversions and an unsafe constructor remain in that feature. The MCP relay leaves it off. The float formatter and other JSON dependencies still need their own review. [JSON checks and paired measurements](audit/2026-11-19-checked-json.md)
 
 ## Performance follow-up
 

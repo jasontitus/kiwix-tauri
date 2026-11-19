@@ -1,0 +1,11 @@
+serde_json 1.0.154
+Upstream: https://github.com/serde-rs/json
+Revision: 20572a6d066958542d79cdd6cf1a7cd9f0c8e1f8
+Crate SHA-256: e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6
+License: MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
+
+Kiwix changes: use checked string scans, byte writes and text slicing in the
+reader, writer and Value formatter. Deny unsafe Rust with four scoped exceptions
+for the existing `raw_value` feature's representation and unchecked constructor.
+Keep the published API and feature selection. Add coverage of UTF-8 and escapes
+across the reader's scan chunk boundaries.
