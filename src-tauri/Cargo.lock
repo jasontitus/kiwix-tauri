@@ -5702,8 +5702,9 @@ dependencies = [
 [[package]]
 name = "simd-adler32"
 version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
+dependencies = [
+ "adler2",
+]
 
 [[package]]
 name = "simd_cesu8"

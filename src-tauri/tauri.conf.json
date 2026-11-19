@@ -62,6 +62,8 @@
       "vendor/flate2-1.1.11/LICENSE-MIT": "licenses/flate2/LICENSE-MIT",
       "vendor/flate2-1.1.11/LICENSE-APACHE": "licenses/flate2/LICENSE-APACHE",
       "vendor/flate2-1.1.11/SOURCE.txt": "licenses/flate2/SOURCE.txt",
+      "vendor/simd-adler32-0.3.10/LICENSE.md": "licenses/simd-adler32/LICENSE.md",
+      "vendor/simd-adler32-0.3.10/SOURCE.txt": "licenses/simd-adler32/SOURCE.txt",
       "licenses/sha2": "licenses/sha2",
       "licenses/sha1": "licenses/sha1",
       "licenses/librqbit-sha1-wrapper": "licenses/librqbit-sha1-wrapper",

@@ -220,6 +220,8 @@ localswarm-profiling = []
 crc32fast = { path = "vendor/crc32fast-1.5.5" }
 # Use initialized DEFLATE output buffers and the portable Miniz checksum path.
 flate2 = { path = "vendor/flate2-1.1.11" }
+# Keep the PNG codecs on the same checked Adler-32 implementation as Miniz 0.9.
+simd-adler32 = { path = "vendor/simd-adler32-0.3.10" }
 # Use checked UTF-8 slices throughout the app's HTML tokenizer and its input queue.
 html5ever = { path = "vendor/html5ever-0.39.0" }
 markup5ever = { path = "vendor/markup5ever-0.39.0" }

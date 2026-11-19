@@ -1,0 +1,8 @@
+simd-adler32 0.3.10 from crates.io, MIT.
+Upstream source commit d93164f98d7fe2daf883f2e1bec82778dd26199a.
+Published archive SHA-256 3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea.
+
+The local fork keeps streaming, seeded, one-shot, and no_std checksum APIs.
+It delegates to adler2 2.0.1 and omits the hidden architecture-specific
+implementations. The portable scalar helper remains available. The nightly
+feature name is retained for dependency compatibility.

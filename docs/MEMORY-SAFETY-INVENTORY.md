@@ -55,6 +55,8 @@ The app's `crc32fast` dependency uses checked byte loads for its ARM64 and x86 h
 
 The DEFLATE wrapper now uses initialized output buffers and forbids unsafe Rust in its Rust backends. Removing Miniz 0.9.1's SIMD Adler-32 feature also removes that edge from Glass in the app. Both native CJK comparisons reproduced their previous results. The asynchronous buffer adapter, PNG's separate Adler-32 paths and host-side zlib-rs remain in scope. [DEFLATE consumers, tests and measurements](audit/2026-11-19-checked-deflate.md)
 
+PNG's remaining Rust Adler-32 paths now use the checked `adler2` implementation through a compatible local wrapper. Both packages forbid unsafe Rust. The Mac and Linux PNG tests matched pixels and rejected bad Adler-32 checksums with verification enabled. The asynchronous DEFLATE adapter and host-side zlib-rs are tracked separately. [PNG dependency coverage and timings](audit/2026-11-19-checked-png-adler.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.
