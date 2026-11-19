@@ -13,3 +13,5 @@ cargo test --locked --no-default-features --manifest-path src-tauri/vendor/sipha
 ```
 
 The private application branch selected the local crate at `52d9f07`. The app comparison exercised complete previews and exports beside the previous Rust and historical libzim builds on macOS and Ubuntu. [Full app outputs and timing samples](../benchmarks/2026-11-19-checked-phf-app.json)
+
+The optimized app suites passed 1,257 tests on macOS and 1,240 on Ubuntu. The local Mac bundle and Ubuntu AppImage reproduced the archive reference workflows. Both iOS compiler targets and both Android compiler targets selected the checked crate. The signed iOS simulator and Android emulator imported the Climate archive, corrected a misspelled search, and restored the open article after a cold start. Both virtual devices were removed. A separate default-feature SipHasher compile on ARM64 macOS produced 12 forced unsafe-code diagnostics for the original crate and one for the local crate. The remaining diagnostic is the existing initialized-local volatile read. [Platform and compiler verification](2026-11-19-checked-phf-platforms.json)

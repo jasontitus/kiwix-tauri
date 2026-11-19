@@ -1,0 +1,269 @@
+{
+  "source_commit": "52d9f07fc754d976ae3aa7c9728a4fccd2a67414",
+  "macos": {
+    "release_tests": {
+      "passed": 1257,
+      "failed": 0,
+      "ignored": 25
+    },
+    "signed_executable_sha256": "d75f41f769afaf978cd6dcc67247c16305404bca8be4778cf07fc17fef1511c8",
+    "matched_signed_previews": 7,
+    "matched_signed_mhtml_exports": 2,
+    "bundle_zip_sha256": "04a3e55580477825441dc335793b58c5ef258cce45bd87971ae9dad46b30ee6d",
+    "suite_log_sha256": "abc91d3abaf83e4a860350829741cf1446e7ca4f8b0d373b6be3d253073ca4b7",
+    "signed_smoke_record_sha256": "5f6bcca723b9ad8f47fbe6440ec5ea68869251784b09d294c85e42b145bd7a49"
+  },
+  "linux": {
+    "platform": "Ubuntu 24.04 x86-64",
+    "runtime_source": "52d9f07fc754d976ae3aa7c9728a4fccd2a67414",
+    "source_tree_sha": "2416017de0f1b57be35ef6a6a170ce3639cdbe58",
+    "source_tree_equivalence": "Two documentation files differ from the commit. All application and packaging build inputs are identical.",
+    "release_tests": {
+      "passed": 1240,
+      "failed": 0,
+      "ignored": 16
+    },
+    "exe_sha256": "21029a3a163905241d6e206e68aa837a7528adefe8c72a74fe4d399bda2f2499",
+    "appimage_sha256": "f4706a424e2d7efeb33aa3e86f72db6ac88be4e10070a6354bf302c879f64e8b",
+    "actual_service_scenarios": [
+      "single",
+      "reopen",
+      "split",
+      "image"
+    ],
+    "matching_reference_service_json_sha256": "32af9591968fed540af1a63afcafbb4f1afade61bc8ddf3c30c06d87db8733b4",
+    "raw_receipts_sha256": "f0c2d215231bf08b1e44a156c084a4410517ba51883359c67bc7fca1da2e8acb",
+    "license_and_source_resources": 73,
+    "new_resource_sha256": {
+      "SOURCE.txt": "81b9712ab366e9a613f5126073c0042dd26133095bc080c57c54a4556a705244",
+      "LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "LICENSE-MIT": "f9c4c77baa3828004ee54b8a4f2db2e88ed44a6237a493965bf551fac0fcb62d"
+    }
+  },
+  "standalone_siphasher_compiler_audit": {
+    "scope": "ARM64 macOS release with default features. Forced unsafe_code diagnostics for the SipHasher crate only.",
+    "evidence": {
+      "published": {
+        "sites": [
+          {
+            "diagnostic": "declaration of an `unsafe` function",
+            "file": "src/common.rs",
+            "line": 44
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip.rs",
+            "line": 307
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip.rs",
+            "line": 316
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip.rs",
+            "line": 481
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip.rs",
+            "line": 499
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip.rs",
+            "line": 508
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 33
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 355
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 364
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 541
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 559
+          },
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 568
+          }
+        ],
+        "log_sha256": "a288acf818884a75abdc7fbff94bc5dedd9ff5ad660a6a20b848d6e4edc5bacd"
+      },
+      "checked": {
+        "sites": [
+          {
+            "diagnostic": "usage of an `unsafe` block",
+            "file": "src/sip128.rs",
+            "line": 35
+          }
+        ],
+        "log_sha256": "937e539a778554adbb15a164e58fb9006f0bcd02bac04469dc91703e3388cd6a"
+      }
+    }
+  },
+  "mobile_target_compiler_metadata": {
+    "aarch64-apple-ios-sim": {
+      "siphasher": {
+        "rmeta_sha256": "b5460f8798ca063bae2e1c9af7b59c731a3f467b97e0d8a7867e33045159c9f1",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "phf_shared": {
+        "rmeta_sha256": "32fe7074e3a1fd64786d7c4322904800dabaf2dfaa067beb9b815fc7888c47d6",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "kiwix_app": {
+        "rmeta_sha256": "f16796579079c8aa5ec9c15f5d48edd6899a50efe73f7692954e7a875d949c4a",
+        "features": [
+          "custom-protocol"
+        ]
+      }
+    },
+    "aarch64-apple-ios": {
+      "siphasher": {
+        "rmeta_sha256": "e719ce0dab93d8c1cf417ba6da14e3a46a2cbaeb86ff51f4ea8e844dc3f44712",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "phf_shared": {
+        "rmeta_sha256": "4304980314a5404d071cb8e62be4cdb6429338eeb837df7d07a2a8186d28ae09",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "kiwix_app": {
+        "rmeta_sha256": "9b05e3fa638aefe10478d79e92b79d64b836585c094770548598ae5e58b420e8",
+        "features": [
+          "custom-protocol"
+        ]
+      }
+    },
+    "aarch64-linux-android": {
+      "siphasher": {
+        "rmeta_sha256": "91530b379daa1ce7c0e6fa9efaeb02873da9b445cc9241221e9998b02088cdc8",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "phf_shared": {
+        "rmeta_sha256": "89c383f43003369ff65ef32c6fadd293c979b768432cedf6c3ff77824e5ad990",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "kiwix_app": {
+        "rmeta_sha256": "478b7edbc4116e20e5ae2d0bb35fd1b8652143315d95e332201b68bc39ad9ce7",
+        "features": [
+          "custom-protocol"
+        ]
+      }
+    },
+    "armv7-linux-androideabi": {
+      "siphasher": {
+        "rmeta_sha256": "48dfd245fdc15426f576914a3e71d47fce345eea5468d3c7eba99be185b6f754",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "phf_shared": {
+        "rmeta_sha256": "0f2b3f8bbb892ef5be1dbb5a498a2bd2f86671576c13a0d333285711d71ea835",
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "kiwix_app": {
+        "rmeta_sha256": "d373f9fecd44accded61bf88f780674fe9f351153add712398ca2644e1011fc7",
+        "features": [
+          "custom-protocol"
+        ]
+      }
+    }
+  },
+  "ios": {
+    "mode": "ARM64 iOS 26.5 Simulator",
+    "signed_zip_sha256": "1949015d7ce3dba48a95c028ee6fbea4493bf1033a91799228c3f7ff76ff1593",
+    "main_sha256": "fedcce82febc932e37a565dd156ffada728483a82954978e9f70b0797b9c522a",
+    "verified_notice_count": 58,
+    "actual_ui_result": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tested": "Real Climate import, selected article, spelling correction and cold article restoration before further navigation.",
+    "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_simulator_removed": true,
+    "raw_receipt_sha256": "0633366b875ab525b9ef08240981449833e6bc219dfa0978c735c45967dd1fb4"
+  },
+  "android": {
+    "mode": "ARM64 Android API 35 emulator",
+    "signed_apk_sha256": "85fa4e141b809da08854c109bb0c7d9a6d6ba599113de57ec626e62e7d507388",
+    "unsigned_apk_sha256": "507c7452a336535c10a95b1ac032302c50bcf47e2a7b4004295464a40ffadcc2",
+    "main_sha256": "fb45dee745721a3817f3cbeeacf94d2ac3547f23df2cdafdeaf59bb8f5bded71",
+    "verified_notice_count": 58,
+    "native_library_count": 5,
+    "observations": [
+      "about-zimru",
+      "about-glass",
+      "opt-in-checked",
+      "open-file",
+      "android-downloads",
+      "picker",
+      "library",
+      "home",
+      "build-index",
+      "index-ready",
+      "correction",
+      "accepted",
+      "corrected-hit",
+      "corrected-article",
+      "title-results",
+      "title-hit",
+      "title-article",
+      "fulltext-results",
+      "fulltext-hit",
+      "fulltext-article",
+      "restored",
+      "cold-index-ready",
+      "cold-correction",
+      "cold-accepted",
+      "cold-hit",
+      "cold-article"
+    ],
+    "tested": "Native archive import, title and full-text search, spelling correction, opened articles and cold restoration.",
+    "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "owned_emulator_and_data_removed": true,
+    "raw_receipt_sha256": "75a77fad2e1f0b90396e3518bffe035f4fd6e112cc83c2b02ca35dd55f1c26c1"
+  },
+  "limit": "These runs verify desktop release workflows and mobile simulator/emulator behavior. No new physical-device performance, peak memory or mobile PDF measurements."
+}
