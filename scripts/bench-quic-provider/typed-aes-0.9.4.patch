@@ -1,0 +1,607 @@
+--- a/vendor/aes-0.9.4/src/lib.rs
++++ b/vendor/aes-0.9.4/src/lib.rs
+@@ -113,6 +113,17 @@
+ //! [`block-modes`]: https://github.com/RustCrypto/block-modes/
+
+ #![no_std]
++#![cfg_attr(
++    any(
++        aes_backend = "soft",
++        not(any(
++            target_arch = "x86",
++            target_arch = "x86_64",
++            all(target_arch = "aarch64", not(miri))
++        ))
++    ),
++    forbid(unsafe_code)
++)]
+ #![doc(
+     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg",
+     html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg"
+@@ -229,21 +240,21 @@
+                         if token.aes.get() {
+                             // SAFETY: we confirmed that the required target features are available
+                             let aes = unsafe { backends::x86_aes::$name::new(key) };
+-                            let inner = Inner { aes };
++                            let inner = Inner::Aes(aes);
+                             return Self { inner, token };
+                         }
+                     } else if #[cfg(all(target_arch = "aarch64", not(miri)))] {
+                         if token.aes.get() {
+                             // SAFETY: we confirmed that the required target features are available
+                             let aes = unsafe { backends::aarch64_aes::$name::new(key) };
+-                            let inner = Inner { aes };
++                            let inner = Inner::Aes(aes);
+                             return Self { inner, token };
+                         }
+                     }
+                 }
+
+                 let soft = backends::soft::$soft_name::new(key);
+-                let inner = Inner { soft };
++                let inner = Inner::Soft(soft);
+                 Self { inner, token }
+             }
+         }
+@@ -251,141 +262,111 @@
+ }
+
+ macro_rules! impl_encrypt {
+-    ($ty_name:ident, $name:ident) => {
++    ($ty_name:ident, $name:ident, $inner:path) => {
+         impl BlockCipherEncrypt for $ty_name {
+             #[inline]
+             fn encrypt_with_backend(&self, f: impl BlockCipherEncClosure<BlockSize = U16>) {
+-                #[cfg(not(aes_backend = "soft"))]
+-                cfg_if! {
+-                    if #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] {
+-                        if self.token.vaes512.get() {
+-                            // SAFETY: we access correct union variant
+-                            let enc_rk = unsafe { &self.inner.aes.enc_rk };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backends::x86_vaes512::$name::encrypt(enc_rk, f) };
+-                            return;
++                type Inner = $inner;
++                match &self.inner {
++                    Inner::Soft(soft) => soft.encrypt(f),
++                    #[cfg(all(
++                        not(aes_backend = "soft"),
++                        any(
++                            target_arch = "x86",
++                            target_arch = "x86_64",
++                            all(target_arch = "aarch64", not(miri))
++                        )
++                    ))]
++                    Inner::Aes(aes) => {
++                        #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
++                        {
++                            if self.token.vaes512.get() {
++                                // SAFETY: the required target features were detected.
++                                unsafe { backends::x86_vaes512::$name::encrypt(&aes.enc_rk, f) };
++                                return;
++                            }
++                            if self.token.vaes256.get() {
++                                // SAFETY: the required target features were detected.
++                                unsafe { backends::x86_vaes256::$name::encrypt(&aes.enc_rk, f) };
++                                return;
++                            }
+                         }
+
+-                        if self.token.vaes256.get() {
+-                            // SAFETY: we access correct union variant
+-                            let enc_rk = unsafe { &self.inner.aes.enc_rk };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backends::x86_vaes256::$name::encrypt(enc_rk, f) };
+-                            return;
+-                        }
+-
+-                        if self.token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let aes = unsafe { &self.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { aes.encrypt(f) };
+-                            return;
+-                        }
+-                    } else if #[cfg(all(target_arch = "aarch64", not(miri)))] {
+-                        if self.token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let aes = unsafe { &self.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { aes.encrypt(f) };
+-                            return;
+-                        }
++                        // SAFETY: this variant is constructed only after AES detection.
++                        unsafe { aes.encrypt(f) };
+                     }
+                 }
+-
+-                // SAFETY: we access correct union variant
+-                let aes = unsafe { &self.inner.soft };
+-                aes.encrypt(f);
+             }
+         }
+     };
+ }
+
+ macro_rules! impl_decrypt {
+-    ($name:ident, $alg_name:ident) => {
+-        impl BlockCipherDecrypt for $name {
++    ($ty_name:ident, $name:ident, $inner:path) => {
++        impl BlockCipherDecrypt for $ty_name {
+             #[inline]
+             fn decrypt_with_backend(&self, f: impl BlockCipherDecClosure<BlockSize = U16>) {
+-                #[cfg(not(aes_backend = "soft"))]
+-                cfg_if! {
+-                    if #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] {
+-                        if self.token.vaes512.get() {
+-                            // SAFETY: we access correct union variant
+-                            let dec_rk = unsafe { &self.inner.aes.dec_rk };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backends::x86_vaes512::$alg_name::decrypt(dec_rk, f) };
+-                            return;
++                type Inner = $inner;
++                match &self.inner {
++                    Inner::Soft(soft) => soft.decrypt(f),
++                    #[cfg(all(
++                        not(aes_backend = "soft"),
++                        any(
++                            target_arch = "x86",
++                            target_arch = "x86_64",
++                            all(target_arch = "aarch64", not(miri))
++                        )
++                    ))]
++                    Inner::Aes(aes) => {
++                        #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
++                        {
++                            if self.token.vaes512.get() {
++                                // SAFETY: the required target features were detected.
++                                unsafe { backends::x86_vaes512::$name::decrypt(&aes.dec_rk, f) };
++                                return;
++                            }
++                            if self.token.vaes256.get() {
++                                // SAFETY: the required target features were detected.
++                                unsafe { backends::x86_vaes256::$name::decrypt(&aes.dec_rk, f) };
++                                return;
++                            }
+                         }
+
+-                        if self.token.vaes256.get() {
+-                            // SAFETY: we access correct union variant
+-                            let dec_rk = unsafe { &self.inner.aes.dec_rk };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backends::x86_vaes256::$alg_name::decrypt(dec_rk, f) };
+-                            return;
+-                        }
+-
+-                        if self.token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let backend = unsafe { &self.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backend.decrypt(f) };
+-                            return;
+-                        }
+-                    } else if #[cfg(all(target_arch = "aarch64", not(miri)))] {
+-                        if self.token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let backend = unsafe { &self.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            unsafe { backend.decrypt(f) };
+-                            return;
+-                        }
++                        // SAFETY: this variant is constructed only after AES detection.
++                        unsafe { aes.decrypt(f) };
+                     }
+                 }
+-
+-                // SAFETY: we access correct union variant
+-                let aes = unsafe { &self.inner.soft };
+-                aes.decrypt(f);
+             }
+         }
+     };
+ }
+
+ macro_rules! impl_from_enc {
+-    ($name:ident, $name_enc:ident, $inner:path, $into_fn:ident) => {
++    ($name:ident, $name_enc:ident, $inner:path, $enc_inner:path, $into_fn:ident) => {
+         impl From<&$name_enc> for $name {
+             #[inline]
+             fn from(enc: &$name_enc) -> $name {
+                 type Inner = $inner;
+-
+-                let token = enc.token;
+-
+-                #[cfg(not(aes_backend = "soft"))]
+-                cfg_if! {
+-                    if #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] {
+-                        if token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let aes_enc = unsafe { &enc.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            let aes = unsafe { aes_enc.$into_fn() };
+-                            let inner = Inner { aes };
+-                            return Self { inner, token };
+-                        }
+-                    } else if #[cfg(all(target_arch = "aarch64", not(miri)))] {
+-                        if token.aes.get() {
+-                            // SAFETY: we access correct union variant
+-                            let aes_enc = unsafe { &enc.inner.aes };
+-                            // SAFETY: we confirmed that the required target features are available
+-                            let aes = unsafe { aes_enc.$into_fn() };
+-                            let inner = Inner { aes };
+-                            return Self { inner, token };
+-                        }
++                type EncInner = $enc_inner;
++                let inner = match &enc.inner {
++                    EncInner::Soft(soft) => Inner::Soft(*soft),
++                    #[cfg(all(
++                        not(aes_backend = "soft"),
++                        any(
++                            target_arch = "x86",
++                            target_arch = "x86_64",
++                            all(target_arch = "aarch64", not(miri))
++                        )
++                    ))]
++                    EncInner::Aes(aes) => {
++                        // SAFETY: this variant is constructed only after AES detection.
++                        Inner::Aes(unsafe { aes.$into_fn() })
+                     }
+-                }
+-
+-                // SAFETY: we access correct union variant
+-                let soft = unsafe { enc.inner.soft };
+-                let inner = Inner { soft };
+-                Self { inner, token }
++                };
++                Self {
++                    inner,
++                    token: enc.token,
++                }
+             }
+         }
+
+@@ -398,6 +379,40 @@
+     };
+ }
+
++macro_rules! define_storage {
++    ($inner:ident, $name:ident, $soft:ident) => {
++        #[derive(Copy, Clone)]
++        pub(super) enum $inner {
++            #[cfg(all(
++                any(target_arch = "x86_64", target_arch = "x86"),
++                not(aes_backend = "soft"),
++            ))]
++            Aes(backends::x86_aes::$name),
++            #[cfg(all(target_arch = "aarch64", not(miri), not(aes_backend = "soft")))]
++            Aes(backends::aarch64_aes::$name),
++            Soft(backends::soft::$soft),
++        }
++
++        #[cfg(feature = "zeroize")]
++        impl $inner {
++            pub(super) fn erase(&mut self) {
++                match self {
++                    Self::Soft(soft) => soft.erase(),
++                    #[cfg(all(
++                        not(aes_backend = "soft"),
++                        any(
++                            target_arch = "x86",
++                            target_arch = "x86_64",
++                            all(target_arch = "aarch64", not(miri))
++                        )
++                    ))]
++                    Self::Aes(aes) => aes.erase(),
++                }
++            }
++        }
++    };
++}
++
+ macro_rules! common_impls {
+     ($name:ident) => {
+         impl BlockSizeUser for $name {
+@@ -420,9 +435,7 @@
+             #[inline]
+             fn drop(&mut self) {
+                 #[cfg(feature = "zeroize")]
+-                unsafe {
+-                    zeroize::zeroize_flat_type(self);
+-                }
++                self.inner.erase();
+             }
+         }
+
+@@ -443,41 +456,9 @@
+         mod $module {
+             use crate::backends;
+
+-            #[derive(Copy, Clone)]
+-            pub(super) union Inner {
+-                #[cfg(all(
+-                    any(target_arch = "x86_64", target_arch = "x86"),
+-                    not(aes_backend = "soft"),
+-                ))]
+-                pub(super) aes: backends::x86_aes::$name,
+-                #[cfg(all(target_arch = "aarch64", not(miri), not(aes_backend = "soft")))]
+-                pub(super) aes: backends::aarch64_aes::$name,
+-                pub(super) soft: backends::soft::$name,
+-            }
+-
+-            #[derive(Copy, Clone)]
+-            pub(super) union InnerEnc {
+-                #[cfg(all(
+-                    any(target_arch = "x86_64", target_arch = "x86"),
+-                    not(aes_backend = "soft"),
+-                ))]
+-                pub(super) aes: backends::x86_aes::$name_enc,
+-                #[cfg(all(target_arch = "aarch64", not(miri), not(aes_backend = "soft")))]
+-                pub(super) aes: backends::aarch64_aes::$name_enc,
+-                pub(super) soft: backends::soft::$name,
+-            }
+-
+-            #[derive(Copy, Clone)]
+-            pub(super) union InnerDec {
+-                #[cfg(all(
+-                    any(target_arch = "x86_64", target_arch = "x86"),
+-                    not(aes_backend = "soft"),
+-                ))]
+-                pub(super) aes: backends::x86_aes::$name_dec,
+-                #[cfg(all(target_arch = "aarch64", not(miri), not(aes_backend = "soft")))]
+-                pub(super) aes: backends::aarch64_aes::$name_dec,
+-                pub(super) soft: backends::soft::$name,
+-            }
++            define_storage!(Inner, $name, $name);
++            define_storage!(InnerEnc, $name_enc, $name);
++            define_storage!(InnerDec, $name_dec, $name);
+         }
+
+         #[doc=$doc]
+@@ -485,42 +466,63 @@
+         #[derive(Clone)]
+         pub struct $name {
+             inner: $module::Inner,
+-            #[allow(dead_code, reason = "this field is not used on software-only targets")]
++            #[allow(
++                dead_code,
++                reason = "only used by x86 runtime dispatch after construction"
++            )]
+             token: Token,
+         }
+
+         common_impls!($name);
+         impl_key_init!($name, $name, $key_size, $module::Inner);
+-        impl_encrypt!($name, $name);
+-        impl_decrypt!($name, $name);
+-        impl_from_enc!($name, $name_enc, $module::Inner, as_encdec);
++        impl_encrypt!($name, $name, $module::Inner);
++        impl_decrypt!($name, $name, $module::Inner);
++        impl_from_enc!(
++            $name,
++            $name_enc,
++            $module::Inner,
++            $module::InnerEnc,
++            as_encdec
++        );
+
+         #[doc=$doc]
+         #[doc = "block cipher (encrypt-only)"]
+         #[derive(Clone)]
+         pub struct $name_enc {
+             inner: $module::InnerEnc,
+-            #[allow(dead_code, reason = "this field is not used on software-only targets")]
++            #[allow(
++                dead_code,
++                reason = "only used by x86 runtime dispatch after construction"
++            )]
+             token: Token,
+         }
+
+         common_impls!($name_enc);
+         impl_key_init!($name_enc, $name, $key_size, $module::InnerEnc);
+-        impl_encrypt!($name_enc, $name);
++        impl_encrypt!($name_enc, $name, $module::InnerEnc);
+
+         #[doc=$doc]
+         #[doc = "block cipher (decrypt-only)"]
+         #[derive(Clone)]
+         pub struct $name_dec {
+             inner: $module::InnerDec,
+-            #[allow(dead_code, reason = "this field is not used on software-only targets")]
++            #[allow(
++                dead_code,
++                reason = "only used by x86 runtime dispatch after construction"
++            )]
+             token: Token,
+         }
+
+         common_impls!($name_dec);
+         impl_key_init!($name_dec, $name, $key_size, $module::InnerDec);
+-        impl_decrypt!($name_dec, $name);
+-        impl_from_enc!($name_dec, $name_enc, $module::InnerDec, as_dec);
++        impl_decrypt!($name_dec, $name, $module::InnerDec);
++        impl_from_enc!(
++            $name_dec,
++            $name_enc,
++            $module::InnerDec,
++            $module::InnerEnc,
++            as_dec
++        );
+     };
+ }
+
+--- a/vendor/aes-0.9.4/src/backends/soft.rs
++++ b/vendor/aes-0.9.4/src/backends/soft.rs
+@@ -33,6 +33,11 @@
+             pub(crate) fn new(key: &[u8; $key_size]) -> Self {
+                 let rk = fixslice::$module::key_schedule(key);
+                 Self { rk }
++            }
++
++            #[cfg(feature = "zeroize")]
++            pub(crate) fn erase(&mut self) {
++                zeroize::Zeroize::zeroize(&mut self.rk[..]);
+             }
+
+             #[inline]
+@@ -123,3 +128,19 @@
+     module = aes256,
+     doc = "AES-256",
+ );
++
++#[cfg(all(test, feature = "zeroize"))]
++#[test]
++fn erase_software_round_keys() {
++    macro_rules! check_erasure {
++        ($cipher:ident, $length:literal) => {{
++            let mut cipher = $cipher::new(&[0x42; $length]);
++            assert!(cipher.rk.iter().any(|&word| word != 0));
++            cipher.erase();
++            assert!(cipher.rk.iter().all(|&word| word == 0));
++        }};
++    }
++    check_erasure!(Aes128, 16);
++    check_erasure!(Aes192, 24);
++    check_erasure!(Aes256, 32);
++}
+--- a/vendor/aes-0.9.4/src/backends/x86_aes.rs
++++ b/vendor/aes-0.9.4/src/backends/x86_aes.rs
+@@ -36,6 +36,12 @@
+ }
+
+ impl<const RK: usize> Aes<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.enc_rk);
++        zeroize::Zeroize::zeroize(&mut self.dec_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn encrypt(&self, f: impl BlockCipherEncClosure<BlockSize = U16>) {
+@@ -95,6 +101,11 @@
+ }
+
+ impl<const RK: usize> AesEnc<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.enc_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn as_encdec(&self) -> Aes<RK> {
+@@ -147,6 +158,11 @@
+ }
+
+ impl<const RK: usize> AesDec<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.dec_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn decrypt(&self, f: impl BlockCipherDecClosure<BlockSize = U16>) {
+--- a/vendor/aes-0.9.4/src/backends/aarch64_aes.rs
++++ b/vendor/aes-0.9.4/src/backends/aarch64_aes.rs
+@@ -35,6 +35,12 @@
+ }
+
+ impl<const RK: usize> Aes<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.enc_rk);
++        zeroize::Zeroize::zeroize(&mut self.dec_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn encrypt(&self, f: impl BlockCipherEncClosure<BlockSize = U16>) {
+@@ -94,6 +100,11 @@
+ }
+
+ impl<const RK: usize> AesEnc<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.enc_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn as_encdec(&self) -> Aes<RK> {
+@@ -146,6 +157,11 @@
+ }
+
+ impl<const RK: usize> AesDec<RK> {
++    #[cfg(feature = "zeroize")]
++    pub(crate) fn erase(&mut self) {
++        zeroize::Zeroize::zeroize(&mut self.dec_rk);
++    }
++
+     #[inline]
+     #[target_feature(enable = "aes")]
+     pub(crate) fn decrypt(&self, f: impl BlockCipherDecClosure<BlockSize = U16>) {
+--- a/vendor/aes-0.9.4/tests/mod.rs
++++ b/vendor/aes-0.9.4/tests/mod.rs
+@@ -13,3 +13,60 @@
+ cipher::block_cipher_test!(aes128_dec, "aes128", aes::Aes128Dec, decrypt_test);
+ cipher::block_cipher_test!(aes192_dec, "aes192", aes::Aes192Dec, decrypt_test);
+ cipher::block_cipher_test!(aes256_dec, "aes256", aes::Aes256Dec, decrypt_test);
++
++#[test]
++fn encrypt_only_key_conversions() {
++    use aes::{
++        Aes128, Aes128Dec, Aes128Enc, Aes192, Aes192Dec, Aes192Enc, Aes256, Aes256Dec, Aes256Enc,
++        Block,
++        cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit},
++    };
++    use hex_literal::hex;
++
++    let plaintext = Block::from(hex!("00112233445566778899aabbccddeeff"));
++    macro_rules! check_conversions {
++        ($aes:ty, $enc:ty, $dec:ty, $key:expr, $ciphertext:expr) => {{
++            let enc = <$enc>::new(&$key.into());
++            let full_borrowed = <$aes>::from(&enc);
++            let full_owned = <$aes>::from(enc.clone());
++            let dec_borrowed = <$dec>::from(&enc);
++            let dec_owned = <$dec>::from(enc);
++
++            let expected = Block::from($ciphertext);
++            for full in [full_borrowed, full_owned] {
++                let mut block = plaintext;
++                full.encrypt_block(&mut block);
++                assert_eq!(block, expected);
++                full.decrypt_block(&mut block);
++                assert_eq!(block, plaintext);
++            }
++            for dec in [dec_borrowed, dec_owned] {
++                let mut block = expected;
++                dec.decrypt_block(&mut block);
++                assert_eq!(block, plaintext);
++            }
++        }};
++    }
++
++    check_conversions!(
++        Aes128,
++        Aes128Enc,
++        Aes128Dec,
++        hex!("000102030405060708090a0b0c0d0e0f"),
++        hex!("69c4e0d86a7b0430d8cdb78070b4c55a")
++    );
++    check_conversions!(
++        Aes192,
++        Aes192Enc,
++        Aes192Dec,
++        hex!("000102030405060708090a0b0c0d0e0f1011121314151617"),
++        hex!("dda97ca4864cdfe06eaf70a0ec0d7191")
++    );
++    check_conversions!(
++        Aes256,
++        Aes256Enc,
++        Aes256Dec,
++        hex!("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
++        hex!("8ea2b7ca516745bfeafc49904b496089")
++    );
++}
