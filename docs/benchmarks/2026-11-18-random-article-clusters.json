@@ -1,0 +1,496 @@
+[
+ {
+  "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+  "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+  "framed_response_sha256": "bc514602d1dc29103d6f0fa5a1f29b493c0a33eed7d1cfabbbaf98c3e89a08c6",
+  "totals": {
+   "requested_bytes": 185277,
+   "decoded_bytes": 22608838,
+   "furthest_requested_end_sum": 13338598
+  },
+  "clusters": [
+   {
+    "cluster": 11,
+    "decoded_bytes": 2091939,
+    "furthest_requested_end": 1775672
+   },
+   {
+    "cluster": 4,
+    "decoded_bytes": 2096688,
+    "furthest_requested_end": 1185679
+   },
+   {
+    "cluster": 6,
+    "decoded_bytes": 2093820,
+    "furthest_requested_end": 1894658
+   },
+   {
+    "cluster": 2,
+    "decoded_bytes": 2094033,
+    "furthest_requested_end": 2016138
+   },
+   {
+    "cluster": 0,
+    "decoded_bytes": 2086197,
+    "furthest_requested_end": 1000981
+   },
+   {
+    "cluster": 1,
+    "decoded_bytes": 2091807,
+    "furthest_requested_end": 841318
+   },
+   {
+    "cluster": 8,
+    "decoded_bytes": 2095122,
+    "furthest_requested_end": 1212847
+   },
+   {
+    "cluster": 14,
+    "decoded_bytes": 1918127,
+    "furthest_requested_end": 1394092
+   },
+   {
+    "cluster": 5,
+    "decoded_bytes": 2094509,
+    "furthest_requested_end": 622115
+   },
+   {
+    "cluster": 9,
+    "decoded_bytes": 2092757,
+    "furthest_requested_end": 672909
+   },
+   {
+    "cluster": 12,
+    "decoded_bytes": 1853839,
+    "furthest_requested_end": 722189
+   }
+  ],
+  "requests": [
+   {
+    "path": "The_Green_Grid",
+    "cluster": 11,
+    "blob": 211,
+    "start": 1534533,
+    "bytes": 8622
+   },
+   {
+    "path": "Leipzig_Declaration",
+    "cluster": 4,
+    "blob": 147,
+    "start": 1180314,
+    "bytes": 5365
+   },
+   {
+    "path": "Drawdown_(book)",
+    "cluster": 6,
+    "blob": 60,
+    "start": 357811,
+    "bytes": 4535
+   },
+   {
+    "path": "Land_cover",
+    "cluster": 11,
+    "blob": 127,
+    "start": 895645,
+    "bytes": 4720
+   },
+   {
+    "path": "2015_United_Nations_Climate_Change_Conference",
+    "cluster": 6,
+    "blob": 254,
+    "start": 1884468,
+    "bytes": 10190
+   },
+   {
+    "path": "\u00d6ko-Institut",
+    "cluster": 2,
+    "blob": 259,
+    "start": 1985355,
+    "bytes": 9539
+   },
+   {
+    "path": "Drought_in_Chile",
+    "cluster": 0,
+    "blob": 91,
+    "start": 855049,
+    "bytes": 3778
+   },
+   {
+    "path": "Evelyn_Acham",
+    "cluster": 1,
+    "blob": 108,
+    "start": 833871,
+    "bytes": 7447
+   },
+   {
+    "path": "2013_United_Nations_Climate_Change_Conference",
+    "cluster": 2,
+    "blob": 262,
+    "start": 2008806,
+    "bytes": 7332
+   },
+   {
+    "path": "Nature_Climate_Change",
+    "cluster": 11,
+    "blob": 156,
+    "start": 1102428,
+    "bytes": 11954
+   },
+   {
+    "path": "Build_Back_Better_World",
+    "cluster": 8,
+    "blob": 0,
+    "start": 1148,
+    "bytes": 6733
+   },
+   {
+    "path": "Renewable_energy_in_Kenya",
+    "cluster": 14,
+    "blob": 149,
+    "start": 1387664,
+    "bytes": 6428
+   },
+   {
+    "path": "Nationally_determined_contribution",
+    "cluster": 8,
+    "blob": 160,
+    "start": 1206740,
+    "bytes": 6107
+   },
+   {
+    "path": "Esi_Buobasa",
+    "cluster": 5,
+    "blob": 86,
+    "start": 617257,
+    "bytes": 4858
+   },
+   {
+    "path": "Oceanic_Platform_of_the_Canary_Islands",
+    "cluster": 11,
+    "blob": 162,
+    "start": 1160427,
+    "bytes": 8826
+   },
+   {
+    "path": "Lower_Manhattan_Coastal_Resiliency",
+    "cluster": 6,
+    "blob": 141,
+    "start": 1029590,
+    "bytes": 4293
+   },
+   {
+    "path": "Dorjee_Sun",
+    "cluster": 14,
+    "blob": 69,
+    "start": 809018,
+    "bytes": 5165
+   },
+   {
+    "path": "Landfill_gas",
+    "cluster": 11,
+    "blob": 129,
+    "start": 904797,
+    "bytes": 5071
+   },
+   {
+    "path": "Internal_wave_breaking",
+    "cluster": 6,
+    "blob": 129,
+    "start": 936492,
+    "bytes": 5003
+   },
+   {
+    "path": "Energy_policy_of_Scotland",
+    "cluster": 0,
+    "blob": 108,
+    "start": 996628,
+    "bytes": 4353
+   },
+   {
+    "path": "Gina_McCarthy",
+    "cluster": 6,
+    "blob": 94,
+    "start": 609899,
+    "bytes": 14131
+   },
+   {
+    "path": "Greenhouse_gas_emissions_by_Russia",
+    "cluster": 9,
+    "blob": 85,
+    "start": 665722,
+    "bytes": 7187
+   },
+   {
+    "path": "Jem_Bendell",
+    "cluster": 12,
+    "blob": 107,
+    "start": 716388,
+    "bytes": 5801
+   },
+   {
+    "path": "2022_Brazilian_general_election",
+    "cluster": 11,
+    "blob": 239,
+    "start": 1747833,
+    "bytes": 27839
+   }
+  ]
+ },
+ {
+  "archive": "wikipedia_en_100_maxi_2024-01.zim",
+  "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+  "framed_response_sha256": "4ce892f5e1dcb4180c19a806bf4ebf29dfe278b32c6b63e8b164c9e5dfebb5d3",
+  "totals": {
+   "requested_bytes": 1572864,
+   "decoded_bytes": 28081626,
+   "furthest_requested_end_sum": 13932988
+  },
+  "clusters": [
+   {
+    "cluster": 4,
+    "decoded_bytes": 1971912,
+    "furthest_requested_end": 1374502
+   },
+   {
+    "cluster": 1,
+    "decoded_bytes": 1918455,
+    "furthest_requested_end": 1323519
+   },
+   {
+    "cluster": 16,
+    "decoded_bytes": 1891989,
+    "furthest_requested_end": 1430186
+   },
+   {
+    "cluster": 6,
+    "decoded_bytes": 2065214,
+    "furthest_requested_end": 727385
+   },
+   {
+    "cluster": 19,
+    "decoded_bytes": 1654835,
+    "furthest_requested_end": 1258190
+   },
+   {
+    "cluster": 21,
+    "decoded_bytes": 1878000,
+    "furthest_requested_end": 791252
+   },
+   {
+    "cluster": 7,
+    "decoded_bytes": 1923380,
+    "furthest_requested_end": 497726
+   },
+   {
+    "cluster": 8,
+    "decoded_bytes": 1776588,
+    "furthest_requested_end": 873984
+   },
+   {
+    "cluster": 13,
+    "decoded_bytes": 1870737,
+    "furthest_requested_end": 1690407
+   },
+   {
+    "cluster": 15,
+    "decoded_bytes": 1961104,
+    "furthest_requested_end": 1113524
+   },
+   {
+    "cluster": 11,
+    "decoded_bytes": 2076436,
+    "furthest_requested_end": 478265
+   },
+   {
+    "cluster": 10,
+    "decoded_bytes": 1911299,
+    "furthest_requested_end": 65556
+   },
+   {
+    "cluster": 3,
+    "decoded_bytes": 1810819,
+    "furthest_requested_end": 715163
+   },
+   {
+    "cluster": 12,
+    "decoded_bytes": 1695216,
+    "furthest_requested_end": 923655
+   },
+   {
+    "cluster": 17,
+    "decoded_bytes": 1675642,
+    "furthest_requested_end": 669674
+   }
+  ],
+  "requests": [
+   {
+    "path": "A/Amazon_(company)",
+    "cluster": 4,
+    "blob": 1,
+    "start": 317040,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Solar_eclipse",
+    "cluster": 1,
+    "blob": 3,
+    "start": 1257983,
+    "bytes": 65536
+   },
+   {
+    "path": "A/William_Shakespeare",
+    "cluster": 16,
+    "blob": 3,
+    "start": 793583,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Elizabeth_II",
+    "cluster": 1,
+    "blob": 1,
+    "start": 396212,
+    "bytes": 65536
+   },
+   {
+    "path": "A/List_of_presidents_of_the_United_States",
+    "cluster": 6,
+    "blob": 1,
+    "start": 661849,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Tiger",
+    "cluster": 19,
+    "blob": 2,
+    "start": 768671,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Evolution",
+    "cluster": 4,
+    "blob": 5,
+    "start": 1308966,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Aristotle",
+    "cluster": 16,
+    "blob": 4,
+    "start": 1364650,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Anatomical_terms_of_location",
+    "cluster": 21,
+    "blob": 1,
+    "start": 725716,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Midfielder",
+    "cluster": 4,
+    "blob": 4,
+    "start": 1156330,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Native_Americans_in_the_United_States",
+    "cluster": 7,
+    "blob": 1,
+    "start": 432190,
+    "bytes": 65536
+   },
+   {
+    "path": "A/World_Heritage_Site",
+    "cluster": 8,
+    "blob": 1,
+    "start": 808448,
+    "bytes": 65536
+   },
+   {
+    "path": "A/List_of_national_parks_of_the_United_States",
+    "cluster": 1,
+    "blob": 2,
+    "start": 976285,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Anfield",
+    "cluster": 13,
+    "blob": 3,
+    "start": 1624871,
+    "bytes": 65536
+   },
+   {
+    "path": "A/African_Americans",
+    "cluster": 6,
+    "blob": 0,
+    "start": 24,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Virus",
+    "cluster": 15,
+    "blob": 2,
+    "start": 1047988,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Bat",
+    "cluster": 11,
+    "blob": 1,
+    "start": 412729,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Rodent",
+    "cluster": 15,
+    "blob": 1,
+    "start": 690826,
+    "bytes": 65536
+   },
+   {
+    "path": "A/YouTube",
+    "cluster": 10,
+    "blob": 0,
+    "start": 20,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Martin_Luther_King_Jr.",
+    "cluster": 3,
+    "blob": 1,
+    "start": 649627,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Dublin",
+    "cluster": 19,
+    "blob": 3,
+    "start": 1192654,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Elvis_Presley",
+    "cluster": 12,
+    "blob": 1,
+    "start": 858119,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Plant",
+    "cluster": 4,
+    "blob": 0,
+    "start": 28,
+    "bytes": 65536
+   },
+   {
+    "path": "A/Carl_Linnaeus",
+    "cluster": 17,
+    "blob": 2,
+    "start": 604138,
+    "bytes": 65536
+   }
+  ]
+ }
+]

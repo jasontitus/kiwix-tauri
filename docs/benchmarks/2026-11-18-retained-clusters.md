@@ -29,6 +29,17 @@ The reader validates each compressed cluster and its offsets before exposing an 
 
 Independent review covered the Rust and C accessors, concurrent publication, pointer lifetime and cache eviction. A real Climate article kept its original bytes across 1,000 mixed calls on ten threads, a one-byte cache budget and the drop of the archive and item handles. The C and C++ view tests passed. The candidate also compiled for 32-bit ARM. The MIT reader-only, default and all-feature suites passed 118, 189 and 198 tests respectively, including doctests. The GPL workspace passed 67 tests. Six complete archive comparisons reproduced all 314,625,161 framed bytes from a reference using native codecs. Separate Xapian tests reproduced the existing ordered CJK results on versions 1.4 and 2.0, including their previously recorded differences. [CJK comparison](2026-11-18-portable-decoder.md)
 
+## Where the random article reads spend decoded bytes
+
+The 24 random article requests touched 11 compressed clusters on Climate and 15 on Wikipedia 100. For each archive we located the requested blobs in the directory, decoded each distinct cluster once with native Zstandard and verified the length-framed response hash against the original benchmark. All 26 frames lacked a Zstandard content checksum. The prefix column sums the furthest requested byte position within each distinct cluster, including its blob-offset table. [Per-item positions, cluster sizes and byte verification](2026-11-18-random-article-clusters.json)
+
+| Archive | Bytes returned | Decoded bytes across distinct clusters | Bytes through last requested position | Decoded bytes beyond that position |
+|---|---:|---:|---:|---:|
+| Climate | 185,277 | 22,608,838 | 13,338,598 | 41.0% |
+| Wikipedia 100 | 1,572,864 | 28,081,626 | 13,932,988 | 50.4% |
+
+The final column is a ceiling on output that could be left unmaterialized for these particular requests. It gives no timing estimate. A reader experiment would still have to validate the entire compressed stream, blob offsets, output size and history distances, handle checksummed frames, and preserve later reads from the same cluster. The measurements use the existing reader and leave the performance switch on the worklist.
+
 ## Reproduction
 
 Build the repository's native and Rust reader drivers, with the two MIT revisions checked out separately. Use Rust release settings with one code-generation unit and the package override of 16 for `zstd-rs`. Configure both readers with a 32 MiB cache and disable native eager Xapian loading. Replay the recorded first-article, random-article and media requests on the exact Climate and Wikipedia 100 archives. Discard one warm-up per reader and phase, alternate the reader order, and verify the length-framed output SHA-256 for every process. The primary comparisons used 18 measured rounds on each desktop and Android, and 12 on the iOS simulator. The native version was 9.8.2 except for the iOS simulator, which used 9.6.0. [Driver setup](../../scripts/bench-archive-readers/README.md) · [Requests and reference responses](2026-11-18-linux-archive-readers.json) · [Android collection procedure](../../scripts/bench-archive-readers/ANDROID.md)
