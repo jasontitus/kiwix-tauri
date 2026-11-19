@@ -26,3 +26,11 @@ The actual callback code ran against the same C replay fixture on both builds. T
 | Resolve, 2,048-byte TXT | 32 | 716.27 | 714.01 | +0.70% |
 
 For a single 32-byte resolve event, the observed difference was about 22 ns. Operation creation, operating-system discovery latency, network transfer and user-interface work were outside the timer.
+
+## iOS simulator discovery
+
+Using ordinary system interface selection, both revisions discovered the first registration of a temporary library and withdrew it. After browsing restarted, the reader discovered generation 2 and retained it after a stale withdrawal. An independent DNS query observed its explicit IPv4 address record being added and removed. Both workers shut down. This test used an ephemeral socket on an assigned address and shared no archive contents.
+
+A separate local-only control exposed a difference in system registration behavior. The simulator’s default local-only host was `localhost.`, which both revisions rejected under the existing requirement for a name ending in `.local.`. An explicitly named local-only host passed on both versions, including independent observations of two address records and their removal.
+
+A separate timing fixture replayed callbacks locally in the simulator. One callback per scope took 44.12 ns before and 47.09 ns after the change. For 16 callbacks per scope it took 27.50 and 27.48 ns per event. The median within-pair changes were +2.75% and +1.23% respectively. Each of the 32 measured processes verified 262,144 events. These times include entering and leaving the scope and enqueueing the event. Dequeue, event-field verification and OS discovery were outside the timer. Physical-device discovery remains unverified. [Individual simulator timings and live probe identities](2026-11-18-ios-bonjour-callbacks.json)

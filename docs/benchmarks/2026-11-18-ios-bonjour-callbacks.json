@@ -1,0 +1,367 @@
+{
+ "timing": {
+  "source": {
+   "revisions": {
+    "base": "26ced3277ccf3a9f0bf0a6197888a8a50d3344bd",
+    "candidate": "7a561091ac67dfc99625dab0e3f0681a32447fd9"
+   },
+   "hashes": {
+    "base/src/publisher.rs": "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee",
+    "base/src/localswarm/discovery.rs": "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8",
+    "base/src/localswarm/ios_discovery.rs": "d87b1f7052f7206027a2532e12ea8c05751c0548033cc4a9675f0646e6e99a71",
+    "base-live": "64517127a91253e89e07ed052c55d838cc3669d39c300f5c52e6233a374b419a",
+    "base-bench": "0153e2b94760e326b71c08ca4a8c42e3b8acc0795696648d04b3332d53cfb06e",
+    "candidate/src/publisher.rs": "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee",
+    "candidate/src/localswarm/discovery.rs": "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8",
+    "candidate/src/localswarm/ios_discovery.rs": "0d8d148e64fd7f471515620e46645fd913150ccad5c92c2ec87858fa08fcc2ea",
+    "candidate-live": "1a9f08eea7370aa2331317cd415b3a8c1525256782cf52f7712dbccf364b13b8",
+    "candidate-bench": "b2985d1400a90cd27b58f4a95d1cbce129a5a9fd6923129c986c52b9d0bdc863"
+   }
+  },
+  "method": "Fresh guest process for each width+lane, alternating order by round and width; first pair per width discarded. Clocks include callback event enqueue and one enter/exit of production scope per width. Tag, count and data verified outside clock, no native poll or network in this timing.",
+  "rows": [
+   {
+    "round": 0,
+    "warmup": true,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11146638
+   },
+   {
+    "round": 0,
+    "warmup": true,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 11678098
+   },
+   {
+    "round": 0,
+    "warmup": true,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 6968353
+   },
+   {
+    "round": 0,
+    "warmup": true,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 6789696
+   },
+   {
+    "round": 1,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 11581086
+   },
+   {
+    "round": 1,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11261384
+   },
+   {
+    "round": 1,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 6865385
+   },
+   {
+    "round": 1,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7298190
+   },
+   {
+    "round": 2,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11126556
+   },
+   {
+    "round": 2,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 11423685
+   },
+   {
+    "round": 2,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7108923
+   },
+   {
+    "round": 2,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 7206815
+   },
+   {
+    "round": 3,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 12363205
+   },
+   {
+    "round": 3,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 12089343
+   },
+   {
+    "round": 3,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 7277297
+   },
+   {
+    "round": 3,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7378752
+   },
+   {
+    "round": 4,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11546736
+   },
+   {
+    "round": 4,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 12442232
+   },
+   {
+    "round": 4,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7401860
+   },
+   {
+    "round": 4,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 7323975
+   },
+   {
+    "round": 5,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 12912351
+   },
+   {
+    "round": 5,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 12059430
+   },
+   {
+    "round": 5,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 7244727
+   },
+   {
+    "round": 5,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 6987966
+   },
+   {
+    "round": 6,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11567830
+   },
+   {
+    "round": 6,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 11793441
+   },
+   {
+    "round": 6,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7040229
+   },
+   {
+    "round": 6,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 7212220
+   },
+   {
+    "round": 7,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 12441484
+   },
+   {
+    "round": 7,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 11563053
+   },
+   {
+    "round": 7,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 6896936
+   },
+   {
+    "round": 7,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7045360
+   },
+   {
+    "round": 8,
+    "warmup": false,
+    "width": 1,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 12064185
+   },
+   {
+    "round": 8,
+    "warmup": false,
+    "width": 1,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 12327521
+   },
+   {
+    "round": 8,
+    "warmup": false,
+    "width": 16,
+    "lane": "candidate",
+    "verified_events": 262144,
+    "callback_ns_sum": 7447857
+   },
+   {
+    "round": 8,
+    "warmup": false,
+    "width": 16,
+    "lane": "base",
+    "verified_events": 262144,
+    "callback_ns_sum": 6888142
+   }
+  ]
+ },
+ "discovery": {
+  "source": {
+   "base": "26ced3277ccf3a9f0bf0a6197888a8a50d3344bd",
+   "candidate": "7a561091ac67dfc99625dab0e3f0681a32447fd9"
+  },
+  "ios": "iOS 26.5 ARM64 simulator, two ephemeral workers/fixture peer; no physical hardware or full app UI",
+  "local_only": {
+   "default_system_host": "Both OS resolvers returned localhost.; interface/name/port/TXT matched, existing .local. validation withheld the peer.",
+   "explicit_addresses": "Both revisions resolved, retired and rediscovered the same service, rejected stale withdrawal, and observed both TEST-NET A records added then removed through a separate mDNSResponder query. There was no network traffic to those addresses."
+  },
+  "ordinary_lan": {
+   "base": {
+    "passed": true,
+    "exit": 0
+   },
+   "candidate": {
+    "passed": true,
+    "exit": 0
+   }
+  },
+  "accepted_callback_nanoseconds_per_event": {
+   "1": {
+    "base": 44.1186580657959,
+    "candidate": 47.09382247924805,
+    "paired_median_percent_change": 2.754685893563691
+   },
+   "16": {
+    "base": 27.502126693725586,
+    "candidate": 27.479387283325195,
+    "paired_median_percent_change": 1.2287777615667128
+   }
+  },
+  "native_network_latency_measured": false,
+  "compiled_executable_trust_scope": "Source hashes for both original engines plus reproducible fixture isolation and diagnostic edits; timings use separate non-instrumented callback executables and controlled accepted event queue (quota reset between batches).",
+  "confirmed_owned_simulator_withdrawn": true,
+  "evidence_sha256": {
+   "provenance.json": "cb991150faee6b96b67e08c21428a35a7ac6c5bb991b73e2c09987f6a6e88ee6",
+   "live-results.json": "c828f9487cede670dadd2999d76c832437dbdc53c3f380a9af1f6e36b73bcaa2",
+   "diagnostic-results.json": "7eab394978ff83350d69d56e53128e8acbcd2e19c1682fb1bfe541a785e06a9d",
+   "bench-results.json": "94d55a87bd4b8eba1c4dd005c54daee4d13d6a6ab8b0bb76829260cebde7cfd6",
+   "normal-results.json": "53bc7d0f90c5ea960513918e9690b77804592c54b122c3ece1c9b2b401614326",
+   "normal-hashes.json": "011a5e7815f68b722c7b6ec89dad0e6a819645e7e761e442ded2c65da2d15bc0",
+   "diag-hashes.json": "f7d0febc4d51771577e84e1948d04fc9b1587477bd3fddcace0f6ae5fb49ee0f",
+   "cleanup.json": "80edbde0a8b92bae7d8d04797ee6c36470c731a88ac775b4f1239965422abfc0"
+  },
+  "ordinary_probe_sha256": {
+   "base-normal-exe": "240c6187f8e79191cdd3208f67e16a8ab2a9a7854ef2c0242f6de5ab4c05184b",
+   "candidate-normal-exe": "c7825b141e3e56fcfc2b540274e66454e73ae19b43c482d474c4e6f721468b78"
+  },
+  "local_only_diagnostic_probe_sha256": {
+   "base": "5a83abfae9d81d5a8445ad4a49217a12ba0929eef18c33d817aa4bab3f087178",
+   "candidate": "0990532cbb11c2f6d68a9498acaaf9e625e8ce27d369e127dbf863c908ce9ca4"
+  }
+ }
+}
