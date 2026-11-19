@@ -1,11 +1,11 @@
 //! Apple DNS-SD uses mDNSResponder, including routerless peer-to-peer interfaces.
 //! QUIC libraries and ordinary swarms use system-host records, including AWDL.
 //!
-//! Native references, poll sets and callback contexts belong to one worker.
+//! Native references and poll sets belong to one worker. The callback cookie is an integer.
 //! Callbacks only copy bounded events; they never mutate worker state, acquire
-//! snapshot locks, deallocate references, or call back into DNS-SD. An operation
-//! deallocates its reference before dropping its boxed callback context. No
-//! dispatch queues or shared DNSServiceRef connections are used.
+//! snapshot locks, deallocate references, or call back into DNS-SD. Callbacks
+//! run inside the operation that creates or processes the native reference.
+//! One address registration can own multiple A records on the same reference.
 use super::{protocol, truncate_utf8, library_addresses, library_instance, valid_library_session_id, Manifest, Peer, MAX_ADVERTISEMENTS, MAX_PEERS, MAX_TXT, SERVICE};
 use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, ffi::{c_char, c_void, CString},
     ptr, rc::Rc, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, Ordering}},
@@ -228,10 +228,32 @@ struct Source {
 #[derive(Clone)]
 enum Kind { Browse, Advertisement(String), Watch(SourceKey, usize), Resolve(SourceKey) }
 struct Context { tag: u64, queue: Rc<RefCell<Queue>> }
+thread_local! {
+    static ACTIVE_CALLBACK: RefCell<Option<Context>> = const { RefCell::new(None) };
+}
+
+// No borrow of the scope survives the call into DNS-SD. Restore the previous
+// operation if a nested call returns or Rust unwinds outside a native callback.
+fn with_callbacks<T>(tag: u64, queue: &Rc<RefCell<Queue>>, call: impl FnOnce() -> T) -> T {
+    struct Restore<'a>(&'a RefCell<Option<Context>>, Option<Context>);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) { self.0.replace(self.1.take()); }
+    }
+    ACTIVE_CALLBACK.with(|active| {
+        let previous = active.replace(Some(Context { tag, queue: Rc::clone(queue) }));
+        let _restore = Restore(active, previous);
+        call()
+    })
+}
+
+fn allocate_cookie(counter: &Mutex<usize>) -> Result<usize, String> {
+    let mut next = counter.lock().map_err(|_| "Bonjour cookie allocator unavailable")?;
+    let cookie = *next;
+    *next = cookie.checked_add(1).ok_or("Bonjour operation limit reached")?;
+    Ok(cookie)
+}
 struct Operation {
     raw: Ref,
-    // DNS-SD borrows this stable allocation until raw is deallocated in Drop.
-    _context: Box<Context>,
     kind: Kind,
 }
 impl Drop for Operation {
@@ -250,24 +272,25 @@ enum Event {
 }
 struct Engine {
     self_id: String, snapshot: Arc<Mutex<Snapshot>>, browsing: Arc<AtomicBool>, direct: bool,
-    queue: Rc<RefCell<Queue>>, next: u64, operations: BTreeMap<u64, Operation>,
+    queue: Rc<RefCell<Queue>>, operations: BTreeMap<u64, Operation>,
     browse: Option<u64>, failed: bool, sources: BTreeMap<SourceKey, Source>, advertisements: BTreeMap<String, Vec<u64>>,
     pending_admissions: Vec<PendingAdmission>,
 }
 impl Engine {
     fn new(self_id: String, snapshot: Arc<Mutex<Snapshot>>, browsing: Arc<AtomicBool>, direct: bool) -> Self {
         Self { self_id, snapshot, browsing, direct, queue: Rc::new(RefCell::new(Queue {
-            events: VecDeque::new(), window: Instant::now(), count: 0, overflow: false })), next: 1,
+            events: VecDeque::new(), window: Instant::now(), count: 0, overflow: false })),
             operations: BTreeMap::new(), browse: None, failed: false, sources: BTreeMap::new(), advertisements: BTreeMap::new(), pending_admissions: Vec::new() }
     }
     fn operation(&mut self, kind: Kind, create: impl FnOnce(*mut Ref, *mut c_void) -> i32) -> Result<u64, String> {
-        let tag = self.next; self.next = self.next.checked_add(1).ok_or("Bonjour operation limit reached")?;
-        let mut context = Box::new(Context { tag, queue: self.queue.clone() });
+        static NEXT_COOKIE: Mutex<usize> = Mutex::new(1);
+        let cookie = allocate_cookie(&NEXT_COOKIE)?;
+        let tag = cookie as u64;
         let mut raw = ptr::null_mut();
-        let code = create(&mut raw, (&mut *context as *mut Context).cast());
+        let code = with_callbacks(tag, &self.queue, || create(&mut raw, ptr::without_provenance_mut(cookie)));
         if code != 0 { return Err(native_error(code)); }
         if raw.is_null() { return Err("Bonjour returned no operation".into()); }
-        self.operations.insert(tag, Operation { raw, _context: context, kind });
+        self.operations.insert(tag, Operation { raw, kind });
         Ok(tag)
     }
     fn error(&self, error: String) { self.snapshot.lock().unwrap_or_else(|e| e.into_inner()).error = Some(error); }
@@ -387,10 +410,24 @@ impl Engine {
             Err(error) => { for tag in tags { self.operations.remove(&tag); } Err(error) }
         }
     }
+    fn drain_events(&mut self) {
+        loop {
+            let event = self.queue.borrow_mut().events.pop_front();
+            let Some((tag, event)) = event else { break; };
+            self.event(tag, event);
+        }
+        if self.queue.borrow().overflow {
+            self.error("Local network discovery traffic limit exceeded; stop and restart discovery".into());
+            self.stop_browse(); self.failed = true;
+            self.operations.clear(); self.advertisements.clear();
+            let mut queue = self.queue.borrow_mut(); queue.events.clear(); queue.overflow = false;
+        }
+    }
     fn run(mut self, mut commands: mpsc::Receiver<Command>, stop: Arc<AtomicBool>) {
         let mut refs = Vec::new(); let mut polls = Vec::new();
         while !stop.load(Ordering::Acquire) {
             self.retire_admissions();
+            self.drain_events();
             if self.operations.is_empty() {
                 match commands.blocking_recv() {
                     Some(command) if !stop.load(Ordering::Acquire) => self.command(command),
@@ -407,6 +444,8 @@ impl Engine {
                 }
             }
             if stop.load(Ordering::Acquire) { break; }
+            self.drain_events();
+            if self.operations.is_empty() { continue; }
             refs.clear(); refs.extend(self.operations.iter().map(|(tag, op)| (*tag, op.raw)));
             polls.clear(); polls.extend(refs.iter().map(|(_, raw)| libc::pollfd {
                 fd: unsafe { DNSServiceRefSockFD(*raw) }, events: libc::POLLIN, revents: 0 }));
@@ -422,19 +461,9 @@ impl Engine {
                 } else if poll.revents & libc::POLLIN != 0 {
                     // No Rust reference into the operations map or callback queue
                     // is borrowed while native code invokes the callback.
-                    let code = unsafe { DNSServiceProcessResult(raw) };
+                    let code = with_callbacks(tag, &self.queue, || unsafe { DNSServiceProcessResult(raw) });
                     if code != 0 { self.event(tag, Event::Error(code)); }
-                    loop {
-                        let event = self.queue.borrow_mut().events.pop_front();
-                        let Some((tag, event)) = event else { break; };
-                        self.event(tag, event);
-                    }
-                }
-                if self.queue.borrow().overflow {
-                    self.error("Local network discovery traffic limit exceeded; stop and restart discovery".into());
-                    self.stop_browse(); self.failed = true;
-                    self.operations.clear(); self.advertisements.clear();
-                    let mut queue = self.queue.borrow_mut(); queue.events.clear(); queue.overflow = false;
+                    self.drain_events();
                 }
             }
             let expired: Vec<_> = self.sources.iter().filter_map(|(key, source)|
@@ -641,8 +670,7 @@ fn native_error(code: i32) -> String {
 }
 
 // All callback pointers/byte lengths are borrowed from mDNSResponder for this
-// invocation only. Context points to the operation's stable Box, which outlives
-// ProcessResult and is freed only after synchronous RefDeallocate on this thread.
+// invocation only. DNS-SD echoes the cookie without dereferencing it.
 unsafe fn bounded_string(value: *const c_char, cap: usize) -> Option<String> {
     if value.is_null() { return None; }
     for len in 0..cap {
@@ -652,13 +680,17 @@ unsafe fn bounded_string(value: *const c_char, cap: usize) -> Option<String> {
     }
     None
 }
-unsafe fn enqueue(context: *mut c_void, event: impl FnOnce() -> Event) {
-    let context = unsafe { &*context.cast::<Context>() };
-    let mut queue = context.queue.borrow_mut();
-    if queue.window.elapsed() >= Duration::from_secs(60) { queue.window = Instant::now(); queue.count = 0; }
-    queue.count = queue.count.saturating_add(1);
-    if queue.overflow || queue.count > 8192 || queue.events.len() >= MAX_EVENTS { queue.overflow = true; return; }
-    queue.events.push_back((context.tag, event()));
+fn enqueue(cookie: *mut c_void, event: impl FnOnce() -> Event) {
+    let _ = ACTIVE_CALLBACK.try_with(|active| {
+        let active = active.borrow();
+        let Some(context) = active.as_ref() else { return; };
+        if context.tag != cookie.addr() as u64 { return; }
+        let mut queue = context.queue.borrow_mut();
+        if queue.window.elapsed() >= Duration::from_secs(60) { queue.window = Instant::now(); queue.count = 0; }
+        queue.count = queue.count.saturating_add(1);
+        if queue.overflow || queue.count > 8192 || queue.events.len() >= MAX_EVENTS { queue.overflow = true; return; }
+        queue.events.push_back((context.tag, event()));
+    });
 }
 unsafe extern "C" fn browse_callback(_: Ref, flags: u32, interface: u32, code: i32, name: *const c_char, ty: *const c_char, domain: *const c_char, context: *mut c_void) {
     unsafe { enqueue(context, || {
@@ -670,7 +702,7 @@ unsafe extern "C" fn browse_callback(_: Ref, flags: u32, interface: u32, code: i
     }); }
 }
 unsafe extern "C" fn register_callback(_: Ref, flags: u32, code: i32, _: *const c_char, _: *const c_char, _: *const c_char, context: *mut c_void) {
-    unsafe { enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(flags & ADD != 0) }); }
+    enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(flags & ADD != 0) });
 }
 unsafe extern "C" fn resolve_callback(_: Ref, _: u32, interface: u32, code: i32, full: *const c_char, host: *const c_char, port: u16, len: u16, txt: *const u8, context: *mut c_void) {
     unsafe { enqueue(context, || {
@@ -682,20 +714,82 @@ unsafe extern "C" fn resolve_callback(_: Ref, _: u32, interface: u32, code: i32,
     }); }
 }
 unsafe extern "C" fn query_callback(_: Ref, flags: u32, interface: u32, code: i32, _: *const c_char, _: u16, _: u16, len: u16, _: *const c_void, ttl: u32, context: *mut c_void) {
-    unsafe { enqueue(context, || {
+    enqueue(context, || {
         if code != 0 { Event::Error(code) } else if len as usize > MAX_TXT { Event::Invalid }
         else { Event::Watch { interface, add: flags & ADD != 0 && ttl != 0 } }
-    }); }
+    });
 }
 
 unsafe extern "C" fn record_callback(_: Ref, _: Ref, _: u32, code: i32, context: *mut c_void) {
-    unsafe { enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(true) }); }
+    enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(true) });
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn callback_cookie_only_routes_during_its_own_native_call() {
+        let outer = engine();
+        let inner = engine();
+        let tag = 41;
+        let cookie = ptr::without_provenance_mut(tag);
+        let reject = || panic!("A stale callback decoded its payload");
+        enqueue(cookie, reject);
+        with_callbacks(tag as u64, &outer.queue, || {
+            enqueue(cookie, || Event::Registered(true));
+            with_callbacks(42, &inner.queue, || {
+                enqueue(cookie, reject);
+                enqueue(ptr::without_provenance_mut(42), || Event::Invalid);
+            });
+            thread::spawn(move || enqueue(ptr::without_provenance_mut(tag), reject)).join().unwrap();
+            enqueue(cookie, || Event::Error(-65570));
+        });
+        enqueue(cookie, reject);
+        assert_eq!(outer.queue.borrow().count, 2);
+        assert_eq!(inner.queue.borrow().count, 1);
+        assert!(matches!(outer.queue.borrow_mut().events.pop_front(), Some((41, Event::Registered(true)))));
+        assert!(matches!(outer.queue.borrow_mut().events.pop_front(), Some((41, Event::Error(-65570)))));
+        assert!(matches!(inner.queue.borrow_mut().events.pop_front(), Some((42, Event::Invalid))));
+    }
+
+    #[test]
+    fn failed_creation_events_cannot_reach_a_new_operation() {
+        let mut engine = engine();
+        let mut previous = 0;
+        for _ in 0..2 {
+            let result = engine.operation(Kind::Browse, |_, cookie| {
+                assert!(cookie.addr() > previous);
+                previous = cookie.addr();
+                unsafe { browse_callback(ptr::null_mut(), 0, 0, -65570, ptr::null(), ptr::null(), ptr::null(), cookie) };
+                -65570
+            });
+            assert!(result.is_err());
+        }
+        assert_eq!(engine.queue.borrow().events.len(), 2);
+        engine.drain_events();
+        assert!(engine.queue.borrow().events.is_empty());
+        assert!(engine.snapshot.lock().unwrap().error.is_none());
+        assert!(!engine.failed);
+    }
+
+    #[test]
+    fn exhausted_callback_cookies_never_repeat_and_overflow_stays_bounded() {
+        let counter = Mutex::new(usize::MAX - 1);
+        assert_eq!(allocate_cookie(&counter).unwrap(), usize::MAX - 1);
+        assert!(allocate_cookie(&counter).is_err());
+        assert!(allocate_cookie(&counter).is_err());
+        let engine = engine();
+        let cookie = ptr::without_provenance_mut(11);
+        with_callbacks(11, &engine.queue, || {
+            for _ in 0..MAX_EVENTS { enqueue(cookie, || Event::Invalid); }
+            enqueue(cookie, || panic!("An overflowing queue decoded a payload"));
+        });
+        let queue = engine.queue.borrow();
+        assert_eq!(queue.events.len(), MAX_EVENTS);
+        assert!(queue.overflow);
+    }
 
     fn txt(properties: &[(&str, &str)]) -> Vec<u8> {
         let mut txt = Vec::new();

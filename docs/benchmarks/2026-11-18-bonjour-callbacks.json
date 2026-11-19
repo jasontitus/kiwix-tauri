@@ -1,0 +1,2134 @@
+{
+  "revisions": {
+    "baseline": {
+      "revision": "26ced3277ccf3a9f0bf0a6197888a8a50d3344bd",
+      "dns_source_sha256": "d87b1f7052f7206027a2532e12ea8c05751c0548033cc4a9675f0646e6e99a71",
+      "sha256": "059caeaac9fcedc0bf76f9901f8f24a07684b1292b13303900485b9afb11c668"
+    },
+    "candidate": {
+      "revision": "7a561091ac67dfc99625dab0e3f0681a32447fd9",
+      "dns_source_sha256": "0d8d148e64fd7f471515620e46645fd913150ccad5c92c2ec87858fa08fcc2ea",
+      "sha256": "d6d6d2650efbe16264e9edcd6aead36371d55e0a4b521a03082904d609340146"
+    }
+  },
+  "macOS": "27.2.1",
+  "arch": "arm64",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)",
+  "method": "One fresh arm64 macOS process per lane and case. One balanced warm-up pair and 16 measured paired rounds per case. Cases rotate; each lane occupies first position 8/16. Timed duration covers C replay call with actual production callback, enqueue and worker-side drain with per-event oracle. Each process creates eight independent engine epochs with 4096 callbacks each, avoiding quota saturation. Initial operation creation and retirement occur outside each timer. Zero bytes represents a TXT watch callback, 32 and 2048 represent a resolve with hostname, service name and TXT. No real Bonjour/OS service, native discovery delay, parsing a published peer, network or UI is measured. Concurrent host work uncontrolled. Per-process mean ns/callback and paired percent changes are summarized.",
+  "results": [
+    {
+      "payload_bytes": 0,
+      "batch": 1,
+      "baseline": 83.98564147949219,
+      "candidate": 90.14643859863281,
+      "median_paired_percent": 6.649074729027005,
+      "quartile_paired_percent": [
+        1.985655126549718,
+        8.064774028910136
+      ],
+      "candidate_faster": 1
+    },
+    {
+      "payload_bytes": 0,
+      "batch": 32,
+      "baseline": 88.05143737792969,
+      "candidate": 89.86985778808594,
+      "median_paired_percent": 1.4438286584044113,
+      "quartile_paired_percent": [
+        1.2561620687844055,
+        2.6757119962026623
+      ],
+      "candidate_faster": 2
+    },
+    {
+      "payload_bytes": 32,
+      "batch": 1,
+      "baseline": 419.4081573486328,
+      "candidate": 440.9891815185547,
+      "median_paired_percent": 5.2793239830914445,
+      "quartile_paired_percent": [
+        3.496689901114186,
+        7.541302494509838
+      ],
+      "candidate_faster": 2
+    },
+    {
+      "payload_bytes": 32,
+      "batch": 32,
+      "baseline": 400.1872100830078,
+      "candidate": 402.77923583984375,
+      "median_paired_percent": 1.807094562857392,
+      "quartile_paired_percent": [
+        -0.6948865183770386,
+        2.5041793407553525
+      ],
+      "candidate_faster": 5
+    },
+    {
+      "payload_bytes": 2048,
+      "batch": 1,
+      "baseline": 718.0804901123047,
+      "candidate": 725.7391204833984,
+      "median_paired_percent": 1.6306127513473156,
+      "quartile_paired_percent": [
+        -0.6849858241869511,
+        3.735832961253349
+      ],
+      "candidate_faster": 7
+    },
+    {
+      "payload_bytes": 2048,
+      "batch": 32,
+      "baseline": 716.2660217285156,
+      "candidate": 714.0141143798828,
+      "median_paired_percent": 0.7049298046575392,
+      "quartile_paired_percent": [
+        -3.115735815459292,
+        2.052795800073909
+      ],
+      "candidate_faster": 6
+    }
+  ],
+  "observations": [
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2933291
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2580541
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2889585
+    },
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2926082
+    },
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14447251
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 15811666
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13547293
+    },
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12920502
+    },
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24411001
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23642416
+    },
+    {
+      "round": -1,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22691709
+    },
+    {
+      "round": -1,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23416373
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2927501
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2887124
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13730126
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14526041
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13497125
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12841960
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23107042
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24396709
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23132332
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24472083
+    },
+    {
+      "round": 0,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2743834
+    },
+    {
+      "round": 0,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2876457
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14158459
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14169124
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13386999
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13001042
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24065541
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23179667
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22888127
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22909167
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2908834
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2865001
+    },
+    {
+      "round": 1,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2882248
+    },
+    {
+      "round": 1,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2921501
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13265542
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12978250
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23068499
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23031751
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 25781416
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22625375
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2735664
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2952582
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2919375
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2896166
+    },
+    {
+      "round": 2,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13820918
+    },
+    {
+      "round": 2,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14479042
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23507542
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24508833
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22959126
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23505166
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2953961
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2897793
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2874917
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2950127
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 18033000
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13895916
+    },
+    {
+      "round": 3,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12889459
+    },
+    {
+      "round": 3,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13092875
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23108790
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22847459
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2721165
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2978125
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2927000
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2881501
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13845333
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14012210
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13182291
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12919251
+    },
+    {
+      "round": 4,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22929000
+    },
+    {
+      "round": 4,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23544540
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2991582
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 5133210
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2898792
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2941959
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14303585
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13818335
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13088043
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13103749
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24850002
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23514290
+    },
+    {
+      "round": 5,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24128710
+    },
+    {
+      "round": 5,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23398335
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2947752
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2911082
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13685794
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 15358042
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13051832
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13138626
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22932916
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23783082
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23757666
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23694626
+    },
+    {
+      "round": 6,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2723457
+    },
+    {
+      "round": 6,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2894876
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 15177667
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13756207
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13277002
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13641541
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23164790
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 26056583
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 26006000
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 25389042
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2908585
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2732625
+    },
+    {
+      "round": 7,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2872500
+    },
+    {
+      "round": 7,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2954499
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13209791
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 17507000
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24056292
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23417666
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23062540
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 22575917
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2895916
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2953876
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 3008000
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2881000
+    },
+    {
+      "round": 8,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13682083
+    },
+    {
+      "round": 8,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14293374
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23733958
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24116419
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24831456
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23991667
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2956251
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2749291
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2881166
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 3008999
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13970584
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14191374
+    },
+    {
+      "round": 9,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13916376
+    },
+    {
+      "round": 9,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14641293
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24438376
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23618126
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2815333
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2863042
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2919332
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2883415
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13527376
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14421625
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13297833
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13010248
+    },
+    {
+      "round": 10,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23684291
+    },
+    {
+      "round": 10,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 25385958
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 3432042
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2802377
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2877707
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2971585
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14219918
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13659459
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13277749
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13414875
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23925082
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23967041
+    },
+    {
+      "round": 11,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23323084
+    },
+    {
+      "round": 11,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23793875
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2936084
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2896207
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13580917
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14049709
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13268166
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12914666
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23545833
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23778957
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23395294
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23036124
+    },
+    {
+      "round": 12,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2730126
+    },
+    {
+      "round": 12,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2948874
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 15504500
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13455668
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13292791
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13186749
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23165541
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23254999
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 26156501
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23307665
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2955040
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2717540
+    },
+    {
+      "round": 13,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2925500
+    },
+    {
+      "round": 13,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2925042
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13177168
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 12864998
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23352167
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24165208
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23374876
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23079291
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2754792
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2981290
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2953042
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 3057750
+    },
+    {
+      "round": 14,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13680543
+    },
+    {
+      "round": 14,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14531581
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 24436708
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23894041
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 27191040
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 2048,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 67108864,
+      "sequence_sum": 67125248,
+      "ns": 23164833
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2976957
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2785876
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2915252
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 0,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 0,
+      "sequence_sum": 67125248,
+      "ns": 2969416
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14947960
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 1,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 14065290
+    },
+    {
+      "round": 15,
+      "source": "baseline",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 16919625
+    },
+    {
+      "round": 15,
+      "source": "candidate",
+      "payload_bytes": 32,
+      "batch": 32,
+      "callbacks": 32768,
+      "copied_txt": 1048576,
+      "sequence_sum": 67125248,
+      "ns": 13121875
+    }
+  ]
+}
