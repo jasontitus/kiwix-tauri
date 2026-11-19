@@ -835,12 +835,8 @@ pub fn apply(state: &mut State, snapshot: WireSnapshot, categories: Categories) 
 fn revision(parts: &[&str], value: &impl Serialize) -> String {
     let mut hash = Sha256::new();
     for part in parts { hash.update((part.len() as u64).to_be_bytes()); hash.update(part.as_bytes()); }
-    struct HashSink<'a>(&'a mut Sha256);
-    impl std::io::Write for HashSink<'_> {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> { self.0.update(bytes); Ok(bytes.len()) }
-        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
-    }
-    serde_json::to_writer(HashSink(&mut hash), value).expect("validated portable values serialize to an infallible hash sink");
+    serde_json::to_writer(crate::integrity::Sha256Writer(&mut hash), value)
+        .expect("validated portable values serialize to an infallible hash sink");
     hex::encode(hash.finalize())
 }
 fn add_conflict<T: Clone + PartialEq + Serialize>(out: &mut Vec<Conflict>, id: &str, g: &str, title: &str, field: &str, reg: &Register<T>, display: impl Fn(&T) -> String) {

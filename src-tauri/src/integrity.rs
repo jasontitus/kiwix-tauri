@@ -6,8 +6,23 @@ use crate::{library_files, store::{Book, Store}};
 #[cfg(test)]
 use crate::archive::Archive;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{collections::HashMap, sync::{Arc, Mutex}, time::UNIX_EPOCH};
 use tokio_util::sync::CancellationToken;
+
+/// Let readers and serializers feed a SHA-256 state through `io::Write`.
+pub(crate) struct Sha256Writer<'a>(pub(crate) &'a mut Sha256);
+
+impl std::io::Write for Sha256Writer<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

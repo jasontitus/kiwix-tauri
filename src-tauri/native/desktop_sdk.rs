@@ -31,7 +31,7 @@ fn hash_file(path: &Path) -> String {
         }
         hash.update(&buffer[..count]);
     }
-    format!("{:x}", hash.finalize())
+    hex::encode(hash.finalize())
 }
 
 fn sdk_file(root: &Path, relative: &str) -> PathBuf {

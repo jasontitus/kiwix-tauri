@@ -56,6 +56,7 @@
       "licenses/tendril": "licenses/tendril",
       "licenses/string-cache": "licenses/string-cache",
       "licenses/siphasher": "licenses/siphasher",
+      "licenses/sha2": "licenses/sha2",
       "licenses/voice/bzip2-turbo-rs-0BSD": "licenses/voice/bzip2-turbo-rs-0BSD",
       "licenses/zimru/LICENSE": "licenses/zimru/LICENSE",
       "licenses/zimru/zstd-rs-MIT": "licenses/zimru/zstd-rs-MIT",

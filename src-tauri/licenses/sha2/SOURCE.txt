@@ -1,0 +1,18 @@
+RustCrypto SHA-2 is offered under the MIT License or Apache License, Version 2.0.
+Both license texts accompany this notice.
+
+Published source version: 0.11.1
+Upstream source revision: 138dc5a05b93f8e49cda177fc6cfd7cc43673e5d
+https://github.com/RustCrypto/hashes
+Published archive SHA-256:
+47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19
+Archive in this source distribution: upstream/rustcrypto-sha2/sha2-0.11.1.crate
+
+The upstream AArch64 implementations were adapted from Mbed TLS.
+Copyright The Mbed TLS Contributors. Licensed under the Apache License, Version 2.0.
+https://github.com/RustCrypto/hashes/pull/490
+
+Kiwix changes the local copy in src-tauri/vendor/sha2-0.11.1. The AArch64 and
+x86 SHA-256 compressors use checked message and state loads and stores. The
+portable SHA-256 compressor uses checked access to the round constants. The
+local copy also corrects the explicit SHA-256 and SHA-512 backend selectors.

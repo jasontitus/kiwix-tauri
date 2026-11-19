@@ -1,0 +1,1129 @@
+{
+  "source_base": "69f2b9e1ef4fb15fe2bdaa8cab560254e3292286",
+  "in_memory_sha256_macos_arm64": {
+    "method": "Twelve alternating pairs. Each timed sample hashes the whole archive five times, using 256 KiB updates over an input already loaded into memory. Every digest matches Python hashlib.",
+    "rustcrypto": "Published sha2 0.10.9 with the prior sha2-asm feature",
+    "sha2-011": "Local checked sha2 0.11.1",
+    "comparison_executable_sha256": "b53562431191f6cc913d841b36237b97671247f63ed70b756b60cfcd8e71e678",
+    "fixtures": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": {
+        "bytes": 8978471,
+        "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+        "median_digest_ms": {
+          "rustcrypto": 4.5178917,
+          "sha2-011": 4.5258874
+        },
+        "paired_candidate_to_baseline_ratio": 1.0043291715815665,
+        "samples": [
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 23436208,
+              "sha2-011": 22574375
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 22597833,
+              "rustcrypto": 22598208
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 22803750,
+              "sha2-011": 22661041
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 22669417,
+              "rustcrypto": 22580709
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 22678833,
+              "sha2-011": 22837541
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 22731625,
+              "rustcrypto": 22682792
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 22655250,
+              "sha2-011": 22787042
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 22711083,
+              "rustcrypto": 21805708
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 21882916,
+              "sha2-011": 21723333
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 21804583,
+              "rustcrypto": 21688917
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 21571459,
+              "sha2-011": 21748000
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 21746792,
+              "rustcrypto": 21644417
+            }
+          }
+        ]
+      },
+      "wikipedia_en_100_maxi_2024-01.zim": {
+        "bytes": 36522122,
+        "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+        "median_digest_ms": {
+          "rustcrypto": 17.183575,
+          "sha2-011": 17.1568959
+        },
+        "paired_candidate_to_baseline_ratio": 0.999959476198921,
+        "samples": [
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 88164500,
+              "sha2-011": 88205459
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 85628500,
+              "rustcrypto": 85907792
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 86140167,
+              "sha2-011": 86093167
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 85926750,
+              "rustcrypto": 85143416
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 84948625,
+              "sha2-011": 85495708
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 86228084,
+              "rustcrypto": 85838959
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 86131500,
+              "sha2-011": 85412292
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 85629792,
+              "rustcrypto": 86163750
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 85927958,
+              "sha2-011": 86086959
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 86017042,
+              "rustcrypto": 85836125
+            }
+          },
+          {
+            "order": [
+              "rustcrypto",
+              "sha2-011"
+            ],
+            "five_digests_ns": {
+              "rustcrypto": 87022125,
+              "sha2-011": 85642209
+            }
+          },
+          {
+            "order": [
+              "sha2-011",
+              "rustcrypto"
+            ],
+            "five_digests_ns": {
+              "sha2-011": 85372292,
+              "rustcrypto": 85454917
+            }
+          }
+        ]
+      }
+    }
+  },
+  "acquisition_loopback": {
+    "method": "The existing optimized Rust app library benchmark transfers 256 MiB over loopback, with checksum verification and publication. Both lanes report four range requests. Each pair alternates the order. Before is the preceding checksum-bounds source. Metrics include process CPU time.",
+    "macos_arm64": {
+      "bytes": 268435456,
+      "accepted_size_compared_by_test": true,
+      "executables": {
+        "before": "c6a1c22fb7fbea9613d2a86c05278bc52ccde5929ded24e5c66b4afb54617d44",
+        "checked": "1c7f0ad35771bc16805ba4b830944c06f04ac96022d06ab8aae7ff85f224ecea"
+      },
+      "measurements": [
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 113.3,
+              "elapsed_s": 2.26,
+              "cpu_s": 0.74,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 172.4,
+              "elapsed_s": 1.48,
+              "cpu_s": 0.69,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 210.9,
+              "elapsed_s": 1.21,
+              "cpu_s": 0.67,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 197.2,
+              "elapsed_s": 1.3,
+              "cpu_s": 0.67,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 191.3,
+              "elapsed_s": 1.34,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 150.5,
+              "elapsed_s": 1.7,
+              "cpu_s": 0.75,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 139.4,
+              "elapsed_s": 1.84,
+              "cpu_s": 0.7,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 138.8,
+              "elapsed_s": 1.85,
+              "cpu_s": 0.71,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 169.6,
+              "elapsed_s": 1.51,
+              "cpu_s": 0.71,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 182.8,
+              "elapsed_s": 1.4,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 159.7,
+              "elapsed_s": 1.6,
+              "cpu_s": 0.7,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 182.1,
+              "elapsed_s": 1.41,
+              "cpu_s": 0.69,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 194.8,
+              "elapsed_s": 1.31,
+              "cpu_s": 0.66,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 189.0,
+              "elapsed_s": 1.35,
+              "cpu_s": 0.71,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 217.7,
+              "elapsed_s": 1.18,
+              "cpu_s": 0.64,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 185.5,
+              "elapsed_s": 1.38,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 118.9,
+              "elapsed_s": 2.15,
+              "cpu_s": 0.67,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 209.0,
+              "elapsed_s": 1.22,
+              "cpu_s": 0.65,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 203.4,
+              "elapsed_s": 1.26,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 211.4,
+              "elapsed_s": 1.21,
+              "cpu_s": 0.62,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 184.9,
+              "elapsed_s": 1.38,
+              "cpu_s": 0.7,
+              "range_requests": 4
+            },
+            "checked": {
+              "rate_mib_s": 190.9,
+              "elapsed_s": 1.34,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 166.0,
+              "elapsed_s": 1.54,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            },
+            "before": {
+              "rate_mib_s": 196.3,
+              "elapsed_s": 1.3,
+              "cpu_s": 0.68,
+              "range_requests": 4
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rate_mib_s": {
+          "before": 185.2,
+          "checked": 185.9
+        },
+        "elapsed_s": {
+          "before": 1.38,
+          "checked": 1.375
+        },
+        "cpu_s": {
+          "before": 0.68,
+          "checked": 0.68
+        }
+      }
+    },
+    "ubuntu_x86_64_without_sha_instructions": {
+      "bytes": 268435456,
+      "executables": {
+        "before": "ef4852a13c0df29efad66d8bfce0dce355f9829e37720546d1d2f34732bb25e9",
+        "checked": "ac42ec81113ef72ce070498a0f79acdb440a907217211bdc2516e564057bc448"
+      },
+      "measurements": [
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 153.3,
+              "elapsed_s": 1.67,
+              "cpu_s": 1.67,
+              "ranges": 4
+            },
+            "checked": {
+              "rate_mib_s": 150.8,
+              "elapsed_s": 1.7,
+              "cpu_s": 1.67,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 152.0,
+              "elapsed_s": 1.68,
+              "cpu_s": 1.66,
+              "ranges": 4
+            },
+            "before": {
+              "rate_mib_s": 151.2,
+              "elapsed_s": 1.69,
+              "cpu_s": 1.65,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 148.9,
+              "elapsed_s": 1.72,
+              "cpu_s": 1.69,
+              "ranges": 4
+            },
+            "checked": {
+              "rate_mib_s": 147.4,
+              "elapsed_s": 1.74,
+              "cpu_s": 1.71,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 142.5,
+              "elapsed_s": 1.8,
+              "cpu_s": 1.66,
+              "ranges": 4
+            },
+            "before": {
+              "rate_mib_s": 151.1,
+              "elapsed_s": 1.69,
+              "cpu_s": 1.66,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 150.0,
+              "elapsed_s": 1.71,
+              "cpu_s": 1.69,
+              "ranges": 4
+            },
+            "checked": {
+              "rate_mib_s": 151.7,
+              "elapsed_s": 1.69,
+              "cpu_s": 1.68,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 152.1,
+              "elapsed_s": 1.68,
+              "cpu_s": 1.69,
+              "ranges": 4
+            },
+            "before": {
+              "rate_mib_s": 151.1,
+              "elapsed_s": 1.69,
+              "cpu_s": 1.66,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "before",
+            "checked"
+          ],
+          "samples": {
+            "before": {
+              "rate_mib_s": 152.5,
+              "elapsed_s": 1.68,
+              "cpu_s": 1.64,
+              "ranges": 4
+            },
+            "checked": {
+              "rate_mib_s": 150.5,
+              "elapsed_s": 1.7,
+              "cpu_s": 1.67,
+              "ranges": 4
+            }
+          }
+        },
+        {
+          "order": [
+            "checked",
+            "before"
+          ],
+          "samples": {
+            "checked": {
+              "rate_mib_s": 152.7,
+              "elapsed_s": 1.68,
+              "cpu_s": 1.64,
+              "ranges": 4
+            },
+            "before": {
+              "rate_mib_s": 150.6,
+              "elapsed_s": 1.7,
+              "cpu_s": 1.66,
+              "ranges": 4
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rate_mib_s": {
+          "before": 151.1,
+          "checked": 151.25
+        },
+        "elapsed_s": {
+          "before": 1.69,
+          "checked": 1.6949999999999998
+        },
+        "cpu_s": {
+          "before": 1.66,
+          "checked": 1.67
+        }
+      }
+    }
+  },
+  "real_signed_macos_downloads": {
+    "method": "Six alternating pairs per archive. Timing starts at download admission and ends at the first poll returning complete. It includes the local HTTP fixture, Metalink parsing, hashing, durability and application polling. Both signed builds accept the same valid digests and reject the wrong digest. The earlier signed build predates the download checksum read bound.",
+    "results": {
+      "binaries": {
+        "before": "d75f41f769afaf978cd6dcc67247c16305404bca8be4778cf07fc17fef1511c8",
+        "checked": "dd6e2deabbb8cd3692a76aafd34ddbaa44a808e9346f552826cc9a9f8339fc98"
+      },
+      "files": {
+        "wikipedia_en_climate_change_mini_2024-06.zim": {
+          "bytes": 8978471,
+          "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "samples": [
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 217499333,
+                "checked": 321404458
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 361981042,
+                "before": 325222083
+              }
+            },
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 271977792,
+                "checked": 233256834
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 226532125,
+                "before": 235628292
+              }
+            },
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 243732667,
+                "checked": 308675334
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 259913209,
+                "before": 235120292
+              }
+            }
+          ],
+          "median_ms": {
+            "before": 239.6804795,
+            "checked": 284.2942715
+          }
+        },
+        "wikipedia_en_100_maxi_2024-01.zim": {
+          "bytes": 36522122,
+          "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "samples": [
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 297298542,
+                "checked": 335504791
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 327596708,
+                "before": 333536500
+              }
+            },
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 353264583,
+                "checked": 312016542
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 321277292,
+                "before": 387730958
+              }
+            },
+            {
+              "order": [
+                "before",
+                "checked"
+              ],
+              "elapsed_ns": {
+                "before": 338326292,
+                "checked": 329468667
+              }
+            },
+            {
+              "order": [
+                "checked",
+                "before"
+              ],
+              "elapsed_ns": {
+                "checked": 358624292,
+                "before": 349313709
+              }
+            }
+          ],
+          "median_ms": {
+            "before": 343.8200005,
+            "checked": 328.5326875
+          }
+        }
+      },
+      "cross_reopen": [
+        "wikipedia_en_climate_change_mini_2024-06.zim",
+        "wikipedia_en_100_maxi_2024-01.zim"
+      ]
+    }
+  },
+  "macos_archive_reader": {
+    "method": "Seven preview paths across two real ZIMs and a small fixture and two MHTML export paths, with six balanced app orderings. Compared exact preview values and MHTML content after normalizing only the random multipart boundary.",
+    "lanes": {
+      "native": {
+        "binary_sha256": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+        "preview_count": 42,
+        "preview_median_ms": 5.138479500000001,
+        "preview_max_ms": 11.044792,
+        "export_count": 12,
+        "export_median_ms": 31.476333500000003,
+        "export_max_ms": 49.539916
+      },
+      "published": {
+        "binary_sha256": "d75f41f769afaf978cd6dcc67247c16305404bca8be4778cf07fc17fef1511c8",
+        "preview_count": 42,
+        "preview_median_ms": 4.8514995,
+        "preview_max_ms": 11.494125,
+        "export_count": 12,
+        "export_median_ms": 28.176021,
+        "export_max_ms": 36.030792
+      },
+      "checked": {
+        "binary_sha256": "dd6e2deabbb8cd3692a76aafd34ddbaa44a808e9346f552826cc9a9f8339fc98",
+        "preview_count": 42,
+        "preview_median_ms": 4.745333499999999,
+        "preview_max_ms": 11.426375,
+        "export_count": 12,
+        "export_median_ms": 28.912292,
+        "export_max_ms": 38.217708
+      }
+    },
+    "fixtures": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "preview.zim": "64c381c2d63bff5f30ac3223292b613e6f6bbec9ef2b9e2d6818c7d9a4a578d8"
+    },
+    "result_digests": {
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "2d9dc4c1b47e896098503d5c9c70f50be4388ef666511008d301081b142aee90",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Nationally_determined_contribution": "aef45fe2c638c151fdea713635e63b03b9a45a34c4759733504ea0de9d96a608",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Greenhouse_gas_emissions_by_Russia": "67790c1864ce4be33c4a254ed43044e826e8a08ea3f5237c0e07720478d91adb",
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": [
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/Land%5Fcover",
+          "text/html",
+          4720,
+          "087b8e53dce024959e7ec995658c3f5bc33e30f1c7af97f3da9d6c1adfc70748"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.css",
+          "text/css",
+          878,
+          "732cab0693bce7583f0413e9eea5f3562ec2c48a2cc87809ffb8c2eaf590167e"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.css",
+          "text/css",
+          0,
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.styles.css",
+          "text/css",
+          3147,
+          "e77e47ceba89ba5599b3056cf105c7ee42492f2127539d5c7af8408bfc35899f"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/skins.minerva.base.reset|skins.minerva.content.styles|ext.cite.style|site.styles|mobile.app.pagestyles.android|mediawiki.page.gallery.styles|mediawiki.skinning.content.parsoid.css",
+          "text/css",
+          33750,
+          "602b591b6d2acd76fb67cfeec50816a1a247accaf90744f3f75922ca40a79d2a"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/style.css",
+          "text/css",
+          2050,
+          "564289803262093733e99d72f6dee8eafff6e9ab92461b5e4c9191afe812a819"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/content.parsoid.css",
+          "text/css",
+          5375,
+          "f7dc0ccb4820fed986c31d6180d7c8bc66cb360e4607c1b17e1f399802355169"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/inserted_style.css",
+          "text/css",
+          111686,
+          "695296296b92ec5d8157ea781e67ff29b84f160778e11f01279104a913730c0d"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/script.js",
+          "application/javascript",
+          1900,
+          "3500dda3d51b31bf3f4999148c8fab1759b89b595c4e7ca9eb0bd31c1ee69462"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/masonry.min.js",
+          "application/javascript",
+          24103,
+          "367d6afdfc741fb48d2d9310e47c3924b693459a74c882c0fc545ec5ed7d55d2"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/article_list_home.js",
+          "application/javascript",
+          714,
+          "ce1953c7f98ca0bce16d0efb9acfb379b884df46aa673d48f7617599dfd6c9e5"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/images_loaded.min.js",
+          "application/javascript",
+          6398,
+          "3998be5e1fd8869eefddbc2a16cfcc9bc75165f208f6f5100dd8394879c027a9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/node_module/details-element-polyfill/dist/details-element-polyfill.js",
+          "application/javascript",
+          6953,
+          "caeb7871c711b90e300cca886bc958a1fd0551e15223db9dd03fee447a539e5b"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jsConfigVars.js",
+          "application/javascript",
+          2654,
+          "3d20f0a12949ccca3037a2232afed85f176960c7a6068c1c705944e03f4748be"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/startup.js",
+          "application/javascript",
+          175478,
+          "e4e7782237cb0073d2e02f398d12c23fb6e96a4e929afe32273fe99504a1b330"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery,mediawiki.js",
+          "application/javascript",
+          285385,
+          "0815440e4f8e22410773d2d45f34bc04b817de6bcbe5422e46aa8da39ca19a79"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.base.js",
+          "application/javascript",
+          55803,
+          "cf7a785e48226eb022a288069652a909d963b4becf7eb2ead8cb9a32281cd641"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.util.js",
+          "application/javascript",
+          47702,
+          "614918e8b17abca4ebce4305267106bf8840c6afb238ed16408db2eb5e658344"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/site.js",
+          "application/javascript",
+          5360,
+          "9e05911b80af8b0e0570b4234c3586caf7c79111ec5afe5fc5ee52c04b8a7454"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.ready.js",
+          "application/javascript",
+          32751,
+          "2dd214d41335ee359b4ae19ab38dd87e5b40eb69faaa9eb91946824918312326"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery.cookie.js",
+          "application/javascript",
+          52,
+          "a6fa1c0cc9f49e2b932862146ebcc56589037d43a14ab0d460a20a54c656faa8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.cookie.js",
+          "application/javascript",
+          9831,
+          "c8304bf3ca86759ed53809723324ebe5630804bd3c39bdd1c413ca9e89a641fb"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.storage.js",
+          "application/javascript",
+          9808,
+          "5b80b01f79e3d44ec7c621fa55261a905f1bbd1e001cddf1cff0d8b68c3877b9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.VisibilityToggles.js",
+          "application/javascript",
+          67,
+          "7505550ab77a789bd7770f1e01b29efbdcd1c9c57ff0e9d43eaba62264ea2380"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.defaultVisibilityToggles.js",
+          "application/javascript",
+          74,
+          "963ccfb8487751b89befc12f23e25e6e1c4c2a88d0d64cdc43a1f6f3a23134f8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.js",
+          "application/javascript",
+          6609,
+          "4360a123a2c69d89c459de2408488c83f1b2e82aa55a6e5f3bf1cf046cd7b404"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.js",
+          "application/javascript",
+          1440,
+          "6f797307b40ede46fd4b52a812a2a134c48eec6cac345ade735b7d8c6dd8d7e2"
+        ]
+      ],
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elizabeth_II": "f5e985642d15562094b17bd741e08e6b4be0f4f256ed4f31c1cce4cb5a7805a1",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/List_of_national_parks_of_the_United_States": "051b9b0e39f05f6c43ccd78dc04efa5abf73f977168c84a55fcec7f1a25a90c7",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elvis_Presley": "c6e0175baf216d48f6c581ce5d51ffe75b2f6adbdbe4f5feaabfcd04ad2082ea",
+      "preview preview.zim/fallback.html": "42bbb3aa5fd22fd98312a5149d1aa76b81fbb1e61620cf81edfb4d76e268fc93",
+      "MHTML preview.zim/fallback.html": [
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/fallback%2Ehtml",
+          "text/html",
+          167,
+          "c693c18cf97b13a410c342a1082a6772e7a8db36822aa7f973a48bddf6716dc6"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/vector.svg",
+          "image/svg+xml",
+          41,
+          "900fbe934249ad120004bd24adf66aad8817d89586273c0cc50e187bddebb601"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/large.png",
+          "image/png",
+          262244,
+          "3e7427142df429e8eb8cd1ff9a1f4ef3917fb276bf33a9340c76be793fc0aabf"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/photo%20%2523.png",
+          "image/png",
+          100,
+          "ff748409b6a0ecf8c2ecd97f8b3f0e29243c7048584939c0d4b9e4f9512a4b78"
+        ]
+      ]
+    },
+    "normalized_mhtml_sha256": {
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "a809bf65e73d87a05ec52bd172afaf6181a179848a26246f4925c58cf0b0a1fa",
+      "MHTML preview.zim/fallback.html": "103df8bb0fd9b72bbcebdc40fc11bcb8faa081448b38b8e1280b62d4077b9348"
+    },
+    "raw_results_sha256": "4ea0851c944f078288366206c597c871405da6e69453aac1bffcd473c67d6064"
+  },
+  "packaging": {
+    "macos_local_bundle_zip_sha256": "868d2ecd72ea72028b9cb155c53f958133f2d47615eabac59a9888625dda59ab",
+    "macos_bundle_executable_sha256": "dd6e2deabbb8cd3692a76aafd34ddbaa44a808e9346f552826cc9a9f8339fc98",
+    "linux": {
+      "retained/kiwix-checked-sha-x86_64.AppImage": "063cdab9a9a82f9c5e9c4bc9773297c142ae714d21255af50856ec36b40eeeea",
+      "retained/kiwix-workbench": "676ed8d0834146d5f5d3ac785274be5a05ce36158f25153e9b299fe3356bfcf3",
+      "test-executable": "ac42ec81113ef72ce070498a0f79acdb440a907217211bdc2516e564057bc448"
+    },
+    "linux_raw_evidence_sha256": "a196feaf3fb129c7b6160ccfdf46d620c94d1750cbce8dbd9cb45b3622aab996"
+  }
+}

@@ -1555,7 +1555,10 @@ fn remove_recorded_part(path: &Path, id: &str, part: &JournalPart, purpose: Clea
         if !matches(&file.metadata().map_err(|e| e.to_string())?) { return Ok(false); }
         if let Some(digest) = &part.sha256 {
             let mut hash = Sha256::new();
-            let size = std::io::copy(&mut file.take(part.size.saturating_add(1)), &mut hash).map_err(|e| e.to_string())?;
+            let size = std::io::copy(
+                &mut file.take(part.size.saturating_add(1)),
+                &mut crate::integrity::Sha256Writer(&mut hash),
+            ).map_err(|e| e.to_string())?;
             if size != part.size || hex::encode(hash.finalize()) != *digest { return Ok(false); }
         }
         Ok(matches(&dir.symlink_metadata(captured).map_err(|e| e.to_string())?))

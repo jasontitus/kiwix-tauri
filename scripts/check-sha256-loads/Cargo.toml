@@ -1,0 +1,13 @@
+[package]
+name = "check-sha256-loads"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+checked = { package = "sha2", path = "../../src-tauri/vendor/sha2-0.11.1" }
+reference = { package = "sha2", version = "=0.10.9", features = ["compress"] }
+hex = "0.4"
+
+[target.'cfg(all(target_arch = "aarch64", not(target_os = "windows")))'.dependencies]
+reference = { package = "sha2", version = "=0.10.9", features = ["asm"] }

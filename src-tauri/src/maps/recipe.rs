@@ -219,21 +219,13 @@ impl Source {
 
 impl Recipe {
     pub(super) fn fingerprint(&self, base_url: &str, proxy: &Url) -> Result<String, String> {
-        struct HashWriter(Sha256);
-        impl io::Write for HashWriter {
-            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-                self.0.update(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> io::Result<()> { Ok(()) }
-        }
         let packs: std::collections::BTreeMap<_, _> = self.packs.iter().collect();
-        let mut hash = HashWriter(Sha256::new());
-        serde_json::to_writer(&mut hash, &(
+        let mut hash = Sha256::new();
+        serde_json::to_writer(crate::integrity::Sha256Writer(&mut hash), &(
             &self.format, &self.uuid, &self.name, &self.file_name, self.size,
             &self.md5, &self.file_md5, &self.base, packs, &self.segments, base_url, proxy.as_str(),
         )).map_err(|error| error.to_string())?;
-        Ok(hex::encode(hash.0.finalize()))
+        Ok(hex::encode(hash.finalize()))
     }
     pub(super) fn output_stem(&self) -> &str {
         self.file_name.as_deref().unwrap_or(&self.name)

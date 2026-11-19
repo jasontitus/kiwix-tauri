@@ -42,7 +42,7 @@ roxmltree = "0.21"
 uuid = { version = "1", features = ["v4", "serde"] }
 url = "2"
 sha1 = "0.11"
-sha2 = "0.10"
+sha2 = "=0.11.1"
 # Archive-derived spelling index pages use the checked Zimru SHA-256 backend.
 chksum-hash-sha2-256 = "=0.0.1"
 md5 = "0.8.1"
@@ -104,14 +104,6 @@ misaki-rs = { version = "0.9.0", default-features = false }
 regex = "1"
 rodio = { version = "0.20.1", default-features = false, features = ["wav"] }
 bzip2-turbo-rs = { version = "=0.1.0", default-features = false, features = ["std"] }
-
-# SHA-256 runs over archive payloads during acquisition and destructive ownership
-# checks. RustCrypto 0.10 requires this feature for runtime-checked ARM SHA2;
-# without it, Apple Silicon and ARM phones always use the software compressor.
-# Not on Windows ARM64: sha2-asm's AArch64 code is GNU assembly, which MSVC
-# cannot build; Windows ARM64 uses the portable compressor.
-[target.'cfg(all(target_arch = "aarch64", not(target_os = "windows")))'.dependencies]
-sha2 = { version = "0.10", features = ["asm"] }
 
 # Kokoro read-aloud runtime (see [dependencies]). Static everywhere except
 # Windows, which needs the shared build (see the Windows table below).
@@ -229,6 +221,8 @@ tendril = { path = "vendor/tendril-0.5.1" }
 string_cache = { path = "vendor/string_cache-0.9.0" }
 # Keep generated PHF tables compatible while using checked hash input loads.
 siphasher = { path = "vendor/siphasher-1.0.4" }
+# Checked SHA-256 loads for acquisition, ownership, sharing and archive imports.
+sha2 = { path = "vendor/sha2-0.11.1" }
 # Shared checked token strings across exports, PDF validation and selector consumers.
 cssparser = { path = "vendor/cssparser-0.37.0" }
 # 0.7.0 selects Linux interface binding on iOS; use Apple's indexed binding.
