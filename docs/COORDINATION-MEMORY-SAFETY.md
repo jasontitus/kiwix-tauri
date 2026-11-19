@@ -22,7 +22,7 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 | `src-tauri/src/cpu_time.rs` | documentation and lint reason only |
 | `docs/RUST-UNSAFE-REVIEW.md` | sections `## Follow-up implemented 2026-11-19` and the second batch |
 | `docs/MEMORY-SAFETY-INVENTORY.md` | subsection `### Progress since the 2026-11-17 snapshot` |
-| `CHANGELOG.md` | the bullet starting `- Remove 15 hand-written unsafe blocks` |
+| `CHANGELOG.md` | the memory-safety bullet beginning `- Remove` |
 
 ## Commits
 
@@ -48,12 +48,12 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - First batch: 239 → 226 matches, 42 → 37 files. Second batch (`84fd93e7de`, `cdfdf64478`): 226 → 223.
   The four initial findings and two follow-up findings from the first batch are fixed and independently
   verified.
-- The second batch is under independent review (statvfs parity qualification already returned; flock change
-  included in the same review round).
+- The second batch is independently reviewed. Two P3 documentation findings (batch count, reservation
+  synchronization) are fixed in the follow-up commit.
 
 ## Not reserved (safe for the other session)
 
-- `src-tauri/src/fs_ext.rs` `flock`, `src-tauri/src/instance.rs` `getpeereid`
+- `src-tauri/src/instance.rs` `getpeereid`
 - Windows rename arms (`storage::rename_into_directory_noreplace`, `MoveFileExW`)
 - A SAFETY-comment sweep across the remaining blocks
 - Inventory rows A1–A5, B1/B2/B4–B9, C1–C5, and the `unsafe impl Send/Sync` sign-offs

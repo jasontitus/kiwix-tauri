@@ -221,7 +221,8 @@ soundness proof; no Miri, sanitizer or fuzz run was added.
 
 **Kept, with reasons**
 
-- `fs_ext.rs` flock/statvfs and `instance.rs` `getpeereid`: unchanged from the 2026-11-12 rationale.
+- `fs_ext.rs` flock/statvfs and `instance.rs` `getpeereid`: unchanged in this batch; the first two were
+  replaced in the second batch below.
 - Windows rename arms (`storage::rename_into_directory_noreplace`, `MoveFileExW`): the handle-based NT
   rename is a different contract and was not part of this pass.
 - The SAFETY-comment gap remains: an audit of the pre-change tree found 201 of its 238 same-line blocks
@@ -246,7 +247,7 @@ soundness proof; no Miri, sanitizer or fuzz run was added.
 
 ## Follow-up implemented 2026-11-19 (second batch)
 
-`84fd93e7de` and `cdfdf64478` replace the four remaining Unix `unsafe` blocks in `fs_ext`:
+`84fd93e7de` and `cdfdf64478` replace the three remaining Unix `unsafe` blocks in `fs_ext`:
 
 - **Volume space (`84fd93e7de`).** `volume_space` calls `rustix::fs::statvfs`. Apple and Android still reach
   the libc call; on Linux rustix derives `statvfs` from `statfs` with the same `f_frsize`→`f_bsize` fallback
