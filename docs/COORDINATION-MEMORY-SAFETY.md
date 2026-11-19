@@ -17,6 +17,9 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 | `src-tauri/src/library_files.rs` | `move_exclusive` (Unix arm) |
 | `src-tauri/src/torrent/publication.rs` | `move_publication_entry` (Unix arm) |
 | `src-tauri/src/provider_reference.rs` | native `retain` descriptor duplication |
+| `src-tauri/src/share.rs` | macOS share bridge and its SAFETY comments |
+| `src-tauri/src/native_pdf/apple.rs`, `native_pdf/handoff.rs` | Apple PDF callbacks and handoff SAFETY comments |
+| `src-tauri/src/notifications.rs` | native wrapper and callback SAFETY comments |
 | `src-tauri/src/localswarm/storage.rs` | `rename_directory_noreplace` (Unix arm) |
 | `src-tauri/src/maps.rs` | `evaluation` module and `Control::chunk_sha256` clock reads |
 | `src-tauri/src/fs_ext.rs` | `volume_space`, `try_flock_exclusive`/`try_flock_shared` (Unix arms) and their tests |
@@ -41,6 +44,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   operations and `WouldBlock` mapping.
 - `7b50d62763` — torrent publication rename now uses `rustix::fs::renameat_with`; provider descriptor
   duplication uses `rustix::io::fcntl_dupfd_cloexec` and `rustix::fs::tell` (one documented `borrow_raw`).
+- `dd2c6738f5` — 25 missing `SAFETY:` comments added to share, PDF handoff/render/print and notifications;
+  no behavior change.
 
 ## Status
 
@@ -57,6 +62,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   synchronization) are fixed in its follow-up commit.
 - The third batch is independently reviewed; two P3 documentation findings (cumulative file count, Android
   seek-probe wording) are fixed in its follow-up commit.
+- Fourth batch (`dd2c6738f5`, comment-only) awaits independent review. An eight-line audit still finds 160
+  of 218 same-line blocks without a `SAFETY:` comment.
 
 ## Not reserved (safe for the other session)
 
