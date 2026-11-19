@@ -693,6 +693,9 @@ pub(super) async fn execute_transfer(
         if finalize_forbidden(inner) {
             return stop_file(inner, id, &mut file, downloaded, Signal::Interrupt).await;
         }
+        // Probe at most one byte past the admitted length so appends cannot extend the pass.
+        let remaining = downloaded - hashed;
+        let limit = remaining.saturating_add(1).min(buffer.len() as u64) as usize;
         let count = tokio::select! {
             biased;
             _ = signal.changed() => {
@@ -704,14 +707,17 @@ pub(super) async fn execute_transfer(
                 }
                 return stop_file(inner, id, &mut file, downloaded, action).await;
             }
-            result = file.read(&mut buffer) => result.map_err(|e| format!("Reading download checksum: {e}"))?,
+            result = file.read(&mut buffer[..limit]) => result.map_err(|e| format!("Reading download checksum: {e}"))?,
         };
         if count == 0 {
             break;
         }
-        hashed = hashed
-            .checked_add(count as u64)
-            .ok_or("Download checksum length overflow")?;
+        if count as u64 > remaining {
+            #[cfg(test)]
+            inner.checksum_offset_on_growth.store(file.stream_position().await.unwrap(), Ordering::SeqCst);
+            return Err(CHECKSUM_LENGTH_CHANGED.into());
+        }
+        hashed += count as u64;
         hasher.update(&buffer[..count]);
         #[cfg(test)]
         {
@@ -722,7 +728,7 @@ pub(super) async fn execute_transfer(
         }
     }
     if hashed != downloaded {
-        return Err("Download changed length during checksum verification".into());
+        return Err(CHECKSUM_LENGTH_CHANGED.into());
     }
     let after = tokio_file_identity(&file).await?;
     if after != identity {

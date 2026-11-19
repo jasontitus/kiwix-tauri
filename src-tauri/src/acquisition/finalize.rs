@@ -306,8 +306,9 @@ pub(super) fn finalize_durable_download(
             stored.job.error = None;
         })?;
     }
-    let mut reader =
-        std::io::BufReader::with_capacity(WRITE_BUDGET, file.try_clone().map_err(|e| e.to_string())?);
+    // Read directly from the retained file. Buffered read-ahead would bypass
+    // the checksum pass's limit on how many bytes it reads from disk.
+    let mut reader = &file;
     let mut magic = [0u8; 4];
     reader
         .read_exact(&mut magic)
@@ -356,15 +357,20 @@ pub(super) fn finalize_durable_download(
             }
             next_stop_check = hashed.saturating_add(STOP_CHECK_INTERVAL);
         }
+        let remaining = total - hashed;
+        let limit = remaining.saturating_add(1).min(buffer.len() as u64) as usize;
         let count = reader
-            .read(&mut buffer)
+            .read(&mut buffer[..limit])
             .map_err(|e| format!("Reading download checksum: {e}"))?;
         if count == 0 {
             break;
         }
-        hashed = hashed
-            .checked_add(count as u64)
-            .ok_or("Download checksum length overflow")?;
+        if count as u64 > remaining {
+            #[cfg(test)]
+            inner.checksum_offset_on_growth.store((&file).stream_position().unwrap(), Ordering::SeqCst);
+            return Err(CHECKSUM_LENGTH_CHANGED.into());
+        }
+        hashed += count as u64;
         hasher.update(&buffer[..count]);
         #[cfg(test)]
         {
@@ -375,7 +381,7 @@ pub(super) fn finalize_durable_download(
         }
     }
     if hashed != total {
-        return Err("Download changed length during checksum verification".into());
+        return Err(CHECKSUM_LENGTH_CHANGED.into());
     }
     let after = file_identity(&file)?;
     if after != identity {

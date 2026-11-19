@@ -154,6 +154,8 @@ impl DownloadManager {
             #[cfg(test)]
             hash_passes: AtomicU64::new(0),
             #[cfg(test)]
+            checksum_offset_on_growth: AtomicU64::new(0),
+            #[cfg(test)]
             hash_delay: AtomicU64::new(0),
             #[cfg(test)]
             finalize_gate: Mutex::new(None),

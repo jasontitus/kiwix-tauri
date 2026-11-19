@@ -73,6 +73,7 @@ const MAX_JOBS: usize = 2000;
 const DISK_RESERVE: u64 = 1024 * 1024;
 const SPACE_CHECK_INTERVAL: u64 = 8 * 1024 * 1024;
 const METALINK_LIMIT: usize = 4 * 1024 * 1024;
+const CHECKSUM_LENGTH_CHANGED: &str = "Download changed length during checksum verification";
 /// A live manager re-checks for fully durable rows without a worker this often.
 const RECOVERY_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
 /// A background transition may wait this long for a local finalize to finish;
@@ -640,6 +641,9 @@ struct Inner {
     /// Test observability: complete checksum passes actually executed.
     #[cfg(test)]
     hash_passes: AtomicU64,
+    /// Test observability: retained file position when verification detects growth.
+    #[cfg(test)]
+    checksum_offset_on_growth: AtomicU64,
     /// Test-only per-chunk delay so a foreground cycle can be interleaved.
     #[cfg(test)]
     hash_delay: AtomicU64,

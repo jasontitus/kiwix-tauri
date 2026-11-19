@@ -1,0 +1,274 @@
+{
+  "platform": "macOS ARM64, rustc 1.99.1",
+  "baseline": "RustCrypto sha2 0.10.9 with sha2-asm 0.6.4",
+  "method": "Each pair alternates backend order. Each subprocess reads the same archive into memory, verifies one digest before timing, then times five full digests using 256 KiB updates, hex formatting and equality checks against Python hashlib. The timer covers digest work on this host.",
+  "scope": "Prototype measurement. The app keeps its existing SHA-256 backend. Acquisition, file reads, publication, physical mobile and portable runtime selection are outside this timing.",
+  "review": "An independent reviewer rebuilt the benchmark executable byte for byte, checked all round constants, ran the clone and 4 GiB boundary tests, and verified empty input, abc, a million a bytes and both archives against Python hashlib.",
+  "candidate_source_sha256": "a7d284e7089b082061fca1df02f02581f609ff9437d4dc806c27945913b2b1cf",
+  "candidate_executable_sha256": "6c71441a951b5677a11193d8e11f5cdd3765d7ce27eab16103cd8a9005dcd2b7",
+  "raw_measurement_sha256": "23d539b776a9451ae3f8db2d739279d89a9ef7ab99eff108cb4b6c7d85f00b0f",
+  "archives": {
+    "wikipedia_en_climate_change_mini_2024-06.zim": {
+      "bytes": 8978471,
+      "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "median_digest_ms": {
+        "rustcrypto": 4.2330125,
+        "checked-aarch64": 4.3736916
+      },
+      "paired_candidate_to_baseline_ratio": 1.0322811977831963,
+      "samples": [
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21548041,
+            "checked-aarch64": 22167333
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 22597875,
+            "rustcrypto": 21136875
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21160000,
+            "checked-aarch64": 21862166
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 22141917,
+            "rustcrypto": 21331750
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21496584,
+            "checked-aarch64": 21821917
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 21782250,
+            "rustcrypto": 21173792
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21042958,
+            "checked-aarch64": 22019875
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 21759667,
+            "rustcrypto": 21177458
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21153416,
+            "checked-aarch64": 21740250
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 21878583,
+            "rustcrypto": 21089375
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 21170125,
+            "checked-aarch64": 21834417
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 21874750,
+            "rustcrypto": 21064584
+          }
+        }
+      ]
+    },
+    "wikipedia_en_100_maxi_2024-01.zim": {
+      "bytes": 36522122,
+      "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "median_digest_ms": {
+        "rustcrypto": 17.2830541,
+        "checked-aarch64": 17.8944625
+      },
+      "paired_candidate_to_baseline_ratio": 1.034964176520517,
+      "samples": [
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 86418250,
+            "checked-aarch64": 89079333
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 89501000,
+            "rustcrypto": 86345833
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 88381959,
+            "checked-aarch64": 89666584
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 90519541,
+            "rustcrypto": 87241917
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 86327208,
+            "checked-aarch64": 89167750
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 89443625,
+            "rustcrypto": 86892000
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 86300250,
+            "checked-aarch64": 89181583
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 90394375,
+            "rustcrypto": 87040292
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 86412291,
+            "checked-aarch64": 90494458
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 88805708,
+            "rustcrypto": 86261209
+          }
+        },
+        {
+          "order": [
+            "rustcrypto",
+            "checked-aarch64"
+          ],
+          "five_digests_ns": {
+            "rustcrypto": 86729541,
+            "checked-aarch64": 89901667
+          }
+        },
+        {
+          "order": [
+            "checked-aarch64",
+            "rustcrypto"
+          ],
+          "five_digests_ns": {
+            "checked-aarch64": 89352916,
+            "rustcrypto": 86006458
+          }
+        }
+      ]
+    }
+  }
+}

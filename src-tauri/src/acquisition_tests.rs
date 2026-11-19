@@ -3216,6 +3216,42 @@ async fn server_without_range_support_falls_back_to_one_stream() {
 }
 
 #[tokio::test]
+async fn live_verification_reads_at_most_one_byte_past_the_downloaded_length() {
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(
+        root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default(),
+    ).unwrap();
+    let body = zim_bytes(b'v', WRITE_BUDGET);
+    let server = test_range_server(body.clone(), "\"v1\"", Duration::ZERO).await;
+    server.state.lock().unwrap().ignore_ranges = true;
+    let (entered, entering) = tokio::sync::oneshot::channel();
+    let (release, releasing) = tokio::sync::oneshot::channel();
+    manager.inner.verify_gates.lock().unwrap()[1] = Some(AsyncGate { entered, release: releasing });
+    let job = manager.start(
+        server.archive_url.clone(), root.clone(), Some("fixture.zim".into()),
+        Some(body.len() as u64), Some(hex::encode(Sha256::digest(&body))),
+    ).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), entering).await.unwrap().unwrap();
+    let (destination, part) = paths(&job).unwrap();
+    OpenOptions::new().append(true).open(&part).unwrap().write_all(b"extra bytes").unwrap();
+    release.send(()).unwrap();
+
+    let finished = finished_job(&manager, &job.id).await;
+    assert_eq!(finished.status, "failed");
+    assert_eq!(finished.error.as_deref(), Some(CHECKSUM_LENGTH_CHANGED));
+    let stored = manager.inner.snapshot(&job.id).unwrap();
+    assert!(stored.verification.is_none());
+    assert_eq!(manager.inner.checksum_offset_on_growth.load(Ordering::SeqCst), body.len() as u64 + 1);
+    assert!(!destination.exists());
+    assert_eq!(fs::read(&part).unwrap(), [body.as_slice(), b"extra bytes"].concat());
+    server.task.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn a_cancel_persisted_at_the_end_of_transfer_is_never_overwritten_by_verifying() {
     // Cancel lands after the last byte but before the worker's `verifying`
     // checkpoint. A crash right after that checkpoint must not restart with a
@@ -4372,6 +4408,44 @@ async fn sweep_stop_joins_file_ownership_even_after_the_sweep_future_is_dropped(
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[tokio::test]
+async fn durable_verification_reads_at_most_one_byte_past_the_downloaded_length() {
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(
+        root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default(),
+    ).unwrap();
+    let body = zim_bytes(b'v', WRITE_BUDGET + 17);
+    let id = Uuid::new_v4().to_string();
+    let stored = durable_stored(&root, &id, &body, "downloading");
+    let (destination, part) = paths(&stored.job).unwrap();
+    {
+        let mut state = manager.inner.state().unwrap();
+        state.jobs.insert(id.clone(), stored);
+        manager.inner.save(&state).unwrap();
+    }
+    let (entered, entering) = tokio::sync::oneshot::channel();
+    let (release, releasing) = std::sync::mpsc::sync_channel(1);
+    *manager.inner.finalize_gate.lock().unwrap() = Some(FinalizeGate { entered, release: releasing });
+    let recovery = manager.clone();
+    let sweep = tokio::spawn(async move { recovery.recover_durable_local().await });
+    tokio::time::timeout(Duration::from_secs(10), entering).await.unwrap().unwrap();
+    OpenOptions::new().append(true).open(&part).unwrap().write_all(b"extra bytes").unwrap();
+    release.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), sweep).await.unwrap().unwrap().unwrap();
+
+    let stored = manager.inner.snapshot(&id).unwrap();
+    assert_eq!(stored.job.status, "failed");
+    assert_eq!(stored.job.error.as_deref(), Some(CHECKSUM_LENGTH_CHANGED));
+    assert!(stored.verification.is_none());
+    assert_eq!(manager.inner.checksum_offset_on_growth.load(Ordering::SeqCst), body.len() as u64 + 1);
+    assert!(!destination.exists());
+    assert_eq!(fs::read(&part).unwrap(), [body.as_slice(), b"extra bytes"].concat());
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[tokio::test]
