@@ -4,6 +4,7 @@ Every future repository change requires adversarial review before it is called c
 
 ## Scope and independence
 
+- During ongoing work, review each cohesive change with its affected callers and tests as soon as it can be exercised. For a change that spans several milestones, get independent review at each testable milestone before building further work on it. Carry findings and open questions into the next review.
 - Record the reviewed base/snapshot and changed paths, including staged, unstaged, and new files. A Git diff alone omits untracked additions.
 - Use an independent reviewer with the complete affected producer/consumer contract. Split genuinely independent subsystems when the read set is large; keep one integration owner.
 - Read the current code and relevant existing patterns. Historical findings or a green suite do not establish that a current change is safe.
