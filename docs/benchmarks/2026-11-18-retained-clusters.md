@@ -40,6 +40,17 @@ The 24 random article requests touched 11 compressed clusters on Climate and 15 
 
 The final column is a ceiling on output that could be left unmaterialized for these particular requests. It gives no timing estimate. A reader experiment would still have to validate the entire compressed stream, blob offsets, output size and history distances, handle checksummed frames, and preserve later reads from the same cluster. The measurements use the existing reader and leave the performance switch on the worklist.
 
+### Decoder workspace reuse
+
+On the Mac, we also tested whether constructing a new decoder for each cluster explains the gap. Two modes of the same binary decoded the same 26 frames with the vendored `ff8b0ab` codec. One created a fresh decoder for every frame. The other reused its decoder across the distinct clusters of one archive. Both allocated a fresh output vector for every frame and checked every byte against native Zstandard. The timer covered frame decoding and decoder setup and disposal. File I/O, checking the output, the ZIM input adapter and the app were outside that timer. Other builds shared the machine.
+
+| Archive | Fresh decoder (ms) | Reused decoder (ms) | Median paired change |
+|---|---:|---:|---:|
+| Climate, 11 frames | 39.88 | 39.53 | −0.6% |
+| Wikipedia 100, 15 frames | 77.91 | 78.17 | −1.5% |
+
+Each timing is the median of 24 fresh processes per mode and archive. The small, mixed changes in the per-mode medians leave little evidence that pooling decoder state would close the random-read gap. The production reader continues to construct a decoder for each cluster. [Individual timings, process CPU and binary identity](2026-11-18-decoder-reuse.json.gz)
+
 ## Reproduction
 
 Build the repository's native and Rust reader drivers, with the two MIT revisions checked out separately. Use Rust release settings with one code-generation unit and the package override of 16 for `zstd-rs`. Configure both readers with a 32 MiB cache and disable native eager Xapian loading. Replay the recorded first-article, random-article and media requests on the exact Climate and Wikipedia 100 archives. Discard one warm-up per reader and phase, alternate the reader order, and verify the length-framed output SHA-256 for every process. The primary comparisons used 18 measured rounds on each desktop and Android, and 12 on the iOS simulator. The native version was 9.8.2 except for the iOS simulator, which used 9.6.0. [Driver setup](../../scripts/bench-archive-readers/README.md) · [Requests and reference responses](2026-11-18-linux-archive-readers.json) · [Android collection procedure](../../scripts/bench-archive-readers/ANDROID.md)
