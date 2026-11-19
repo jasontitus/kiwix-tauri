@@ -6,13 +6,15 @@
 //! run on a dedicated thread because sherpa-onnx is CPU-bound and rodio owns a
 //! platform audio stream; neither may block the Tauri command executor.
 
+#[path = "kokoro/install.rs"]
+mod install;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File},
-    io::{BufReader, Write},
-    path::{Component, Path, PathBuf},
+    fs::File,
+    io::{BufReader, Seek, Write},
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, RecvTimeoutError, Sender},
@@ -22,20 +24,22 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tokio_util::sync::CancellationToken;
 use misaki_rs::{G2P, Language};
 use sherpa_onnx::{GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsKokoroModelConfig};
 
 /// Pinned model pack. The bytes feed a native ONNX parser, so the archive and
 /// the extracted required files are both checked before they become visible.
 const MODEL_DIR: &str = "kokoro-en-fp16-v1_0";
+#[cfg(test)]
 const MODEL_ARCHIVE: &str = "kokoro-en-fp16-v1_0.tar.bz2";
 const MODEL_URL: &str =
     "https://github.com/jasontitus/CastCircle/releases/download/kokoro-en-fp16-v1/kokoro-en-fp16-v1_0.tar.bz2";
 const MODEL_SHA256: &str = "4cafe1c49bf4b0a7f9c2fab9f2b010b05544dde2b28b66e3211e832308a1a1f9";
 const MODEL_BYTES: u64 = 181_886_349;
 const CACHE_BUDGET: u64 = 300 * 1024 * 1024;
-const PERFORMANCE_FILE: &str = "performance.json";
-const PERFORMANCE_ERROR_FILE: &str = "performance-error.json";
+const PERFORMANCE_FILE: &str = "performance-v2.json";
+const PERFORMANCE_ERROR_FILE: &str = "performance-error-v2.json";
 const BUNDLED_MARKER: &str = "bundled-model";
 const BUNDLED_INSTALLING: &str = "bundled-model-installing";
 const BUNDLED_REMOVED: &str = "bundled-model-removed";
@@ -120,20 +124,31 @@ pub(crate) struct KokoroManager {
 }
 
 struct State {
+    source: Option<install::SourceStamp>,
     downloaded: bool,
     download: Option<Download>,
+    last_job: Option<Arc<DownloadControl>>,
     engine: Option<Arc<OfflineTts>>,
     active: Option<Active>,
     error: Option<String>,
     performance: Option<Performance>,
     probing: bool,
+    probe: Option<(u64, CancellationToken, CancellationToken)>,
     performance_error: Option<String>,
     probe_generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct Performance {
     ratio: f64,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Verdict<T> {
+    source: install::SourceStamp,
+    value: T,
 }
 
 impl Performance {
@@ -144,10 +159,29 @@ fn realtime_for(ratio: f64) -> bool {
     ratio.is_finite() && ratio > 0.0 && ratio <= REALTIME_MARGIN
 }
 
+pub(crate) struct DownloadControl {
+    cancel: CancellationToken,
+    publishing: Mutex<bool>,
+    selected: Mutex<Option<install::SourceStamp>>,
+    explicit_bundled: bool,
+}
+
+impl DownloadControl {
+    fn new() -> Self { Self { cancel: CancellationToken::new(), publishing: Mutex::new(false), selected: Mutex::default(), explicit_bundled: false } }
+    fn stop(&self) -> bool {
+        let published = self.publishing.lock().unwrap_or_else(|error| error.into_inner());
+        if *published { return false; }
+        self.cancel.cancel();
+        true
+    }
+}
+
 struct Download {
     downloaded: u64,
     total: u64,
-    cancel: Arc<AtomicBool>,
+    bundled: bool,
+    cancel: Arc<DownloadControl>,
+    finished: CancellationToken,
 }
 
 struct Active {
@@ -189,12 +223,13 @@ struct Chunk {
 impl KokoroManager {
     pub(crate) fn new(data_dir: &Path) -> Self {
         let root = data_dir.join("models");
-        let downloaded = ready(&root);
-        let performance = downloaded.then(|| load_performance(&root)).flatten();
-        let performance_error = downloaded.then(|| load_performance_error(&root)).flatten();
+        let source = install::source_stamp(&root).ok();
+        let downloaded = source.is_some();
+        let performance = source.as_ref().and_then(|s| load_value(&root,PERFORMANCE_FILE,s));
+        let performance_error = source.as_ref().and_then(|s| load_value(&root,PERFORMANCE_ERROR_FILE,s));
         Self { root, state: Mutex::new(State {
-            downloaded, download: None, engine: None, active: None, error: None,
-            performance, probing: false, performance_error, probe_generation: 0,
+            source, downloaded, download: None, last_job: None, engine: None, active: None, error: None,
+            performance, probing: false, probe: None, performance_error, probe_generation: 0,
         }) }
     }
 
@@ -202,8 +237,12 @@ impl KokoroManager {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         refresh_downloaded(&self.root, &mut state);
         let download = state.download.as_ref();
+        let (legacy_model,legacy_audio) = install::preserved_legacy(&self.root);
         json!({
             "available": state.downloaded,
+            "legacyRetained": legacy_model, "legacyAudioRetained": legacy_audio,
+            "repairAvailable": repair_available(&state),
+            "removalPending": install::removal_pending(&self.root),
             "downloading": download.is_some(),
             "downloaded": download.map(|download| download.downloaded).unwrap_or(if state.downloaded { MODEL_BYTES } else { 0 }),
             "total": download.map(|download| download.total).unwrap_or(MODEL_BYTES),
@@ -217,7 +256,7 @@ impl KokoroManager {
             "probing": state.probing,
             "performanceRatio": state.performance.map(|performance| performance.ratio),
             "performanceError": state.performance_error,
-            "bundled": self.root.join(BUNDLED_MARKER).is_file() ||
+            "bundled": download.is_some_and(|active| active.bundled) || install::bundled_record(&self.root) || self.root.join(BUNDLED_MARKER).is_file() ||
                 self.root.join(BUNDLED_INSTALLING).is_file(),
         })
     }
@@ -241,44 +280,49 @@ impl KokoroManager {
     /// off the command executor and deliberately bypasses the WAV cache so a
     /// previous cached synthesis cannot masquerade as real-time hardware.
     pub(crate) fn ensure_performance_probe(self: &Arc<Self>) {
-        let generation = {
+        let (generation, cancel, finished) = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
             refresh_downloaded(&self.root, &mut state);
             if !state.downloaded || state.performance.is_some() || state.probing ||
                 state.performance_error.is_some() { return; }
             state.probing = true;
             state.probe_generation = state.probe_generation.wrapping_add(1);
-            state.probe_generation
+            let cancel = CancellationToken::new();
+            let finished = CancellationToken::new();
+            state.probe = Some((state.probe_generation, cancel.clone(), finished.clone()));
+            (state.probe_generation, cancel, finished)
         };
         let manager = self.clone();
+        let finished = finished.drop_guard();
         if let Err(error) = thread::Builder::new().name("kokoro-performance".into()).spawn(move || {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| manager.measure_performance()))
+            let _finished = finished;
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| manager.measure_performance(&cancel)))
                 .unwrap_or_else(|_| Err("The natural voice performance check failed unexpectedly".into()));
             {
                 let mut state = manager.state.lock().unwrap_or_else(|error| error.into_inner());
-                if state.probe_generation != generation || !state.downloaded { return; }
-                state.probing = false;
+                refresh_downloaded(&manager.root, &mut state);
+                if !complete_probe(&mut state, generation) { return; }
                 match result {
                     Ok(performance) => {
                         if !performance.realtime() { state.engine = None; }
                         state.performance = Some(performance);
                         state.performance_error = None;
-                        let _ = fs::remove_file(manager.root.join(PERFORMANCE_ERROR_FILE));
+                        let _ = install::clear_state(&manager.root, PERFORMANCE_ERROR_FILE);
                         // Keep the publish under the state lock so a concurrent
                         // delete cannot remove the model and then have this
                         // thread recreate a stale performance file.
-                        let _ = save_performance(&manager.root, performance);
+                        if let Some(source)=&state.source { let _ = save_value(&manager.root, PERFORMANCE_FILE,source,performance); }
                     }
                     Err(error) => {
                         state.engine = None;
                         state.performance_error = Some(error.clone());
-                        let _ = save_performance_error(&manager.root, &error);
+                        if let Some(source)=&state.source { let _ = save_value(&manager.root,PERFORMANCE_ERROR_FILE,source,error); }
                     }
                 }
             }
         }) {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            state.probing = false;
+            if !complete_probe(&mut state, generation) { return; }
             state.performance_error = Some(format!("Starting the natural voice performance check failed: {error}"));
         }
     }
@@ -294,13 +338,14 @@ impl KokoroManager {
             state.probing = false;
             state.probe_generation = state.probe_generation.wrapping_add(1);
         }
-        let _ = fs::remove_file(self.root.join(PERFORMANCE_FILE));
-        let _ = fs::remove_file(self.root.join(PERFORMANCE_ERROR_FILE));
+        let _ = install::clear_state(&self.root, PERFORMANCE_FILE);
+        let _ = install::clear_state(&self.root, PERFORMANCE_ERROR_FILE);
         self.ensure_performance_probe();
     }
 
-    fn measure_performance(&self) -> Result<Performance, String> {
-        let engine = self.engine()?;
+    fn measure_performance(&self, cancel: &CancellationToken) -> Result<Performance, String> {
+        let engine = self.engine(Some(cancel))?;
+        if cancel.is_cancelled() { return Err("The natural voice performance check was cancelled".into()); }
         let started = Instant::now();
         let g2p = G2P::new(Language::EnglishUS);
         let (phonemes, _) = g2p.g2p(PROBE_TEXT)
@@ -313,7 +358,8 @@ impl KokoroManager {
             phoneme_codepoints: Some(vec![phonemes]),
             ..Default::default()
         };
-        let audio = engine.generate_with_config(PROBE_TEXT, &config, None::<fn(&[f32], f32) -> bool>)
+        let cancel = cancel.clone();
+        let audio = engine.generate_with_config(PROBE_TEXT, &config, Some(move |_: &[f32], _: f32| !cancel.is_cancelled()))
             .ok_or("The natural voice performance check produced no audio")?;
         let elapsed = started.elapsed().as_secs_f64();
         let audio_seconds = audio.samples().len() as f64 / audio.sample_rate() as f64;
@@ -323,17 +369,41 @@ impl KokoroManager {
         Ok(Performance { ratio: elapsed / audio_seconds })
     }
 
-    pub(crate) fn begin_download(&self) -> Result<Arc<AtomicBool>, String> {
+    pub(crate) fn begin_download(&self) -> Result<Arc<DownloadControl>, String> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         if state.download.is_some() { return Err("The voice model is already downloading".into()); }
-        if state.downloaded { return Err("The voice model is already installed".into()); }
-        if self.root.join(BUNDLED_MARKER).is_file() || self.root.join(BUNDLED_INSTALLING).is_file() {
-            return Err("This build includes the natural voice model; no download is needed".into());
+        refresh_downloaded(&self.root, &mut state);
+        if state.downloaded && !repair_available(&state) { return Err("The voice model is already installed".into()); }
+        Ok(Self::new_download(&mut state, false, false))
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn begin_bundled(&self) -> Result<Option<Arc<DownloadControl>>, String> {
+        self.begin_bundled_mode(false)
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn begin_bundled_explicit(&self) -> Result<Option<Arc<DownloadControl>>, String> {
+        self.begin_bundled_mode(true)
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    fn begin_bundled_mode(&self, explicit: bool) -> Result<Option<Arc<DownloadControl>>, String> {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        refresh_downloaded(&self.root, &mut state);
+        if state.download.is_some() || (state.downloaded && (!explicit || !repair_available(&state)))
+            || (!explicit && self.root.join(BUNDLED_REMOVED).try_exists().map_err(|e| e.to_string())?) {
+            return Ok(None);
         }
-        let cancel = Arc::new(AtomicBool::new(false));
+        Ok(Some(Self::new_download(&mut state, true, explicit)))
+    }
+
+    fn new_download(state: &mut State, bundled: bool, explicit_bundled: bool) -> Arc<DownloadControl> {
+        let cancel = Arc::new(DownloadControl { explicit_bundled, ..DownloadControl::new() });
         state.error = None;
-        state.download = Some(Download { downloaded: 0, total: MODEL_BYTES, cancel: cancel.clone() });
-        Ok(cancel)
+        state.last_job = Some(cancel.clone());
+        state.download = Some(Download { downloaded: 0, total: MODEL_BYTES, bundled, cancel: cancel.clone(), finished: CancellationToken::new() });
+        cancel
     }
 
     pub(crate) fn download_progress(&self, downloaded: u64, total: u64) {
@@ -346,17 +416,26 @@ impl KokoroManager {
 
     pub(crate) fn finish_download(&self, result: Result<(), String>) -> Result<(), String> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        state.download = None;
+        let download = state.download.take().ok_or("The natural voice installation is no longer active")?;
+        let _finished = download.finished.drop_guard();
+        let result = result.and_then(|()| {
+            let actual = install::source_stamp(&self.root).map_err(|e| format!("Reopening the installed natural voice model failed: {e}"))?;
+            if download.cancel.selected.lock().unwrap_or_else(|e| e.into_inner()).as_ref() != Some(&actual) {
+                return Err("The selected natural voice model changed. Check Settings and retry.".into());
+            }
+            state.source = Some(actual);
+            state.downloaded = true;
+            Ok(())
+        });
         match result {
             Ok(()) => {
-                state.downloaded = true;
                 state.error = None;
                 state.performance = None;
                 state.performance_error = None;
                 state.probing = false;
                 state.probe_generation = state.probe_generation.wrapping_add(1);
-                let _ = fs::remove_file(self.root.join(PERFORMANCE_FILE));
-                let _ = fs::remove_file(self.root.join(PERFORMANCE_ERROR_FILE));
+                let _ = install::clear_state(&self.root, PERFORMANCE_FILE);
+                let _ = install::clear_state(&self.root, PERFORMANCE_ERROR_FILE);
                 Ok(())
             }
             Err(error) => {
@@ -366,50 +445,70 @@ impl KokoroManager {
         }
     }
 
-    pub(crate) fn cancel_download(&self) {
+    pub(crate) fn report_job(&self, job: &Arc<DownloadControl>, success: bool, emit: impl FnOnce()) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        refresh_downloaded(&self.root, &mut state);
+        if !state.last_job.as_ref().is_some_and(|last| Arc::ptr_eq(last,job)) ||
+            (success && (!state.downloaded || state.source.as_ref() != job.selected.lock().unwrap_or_else(|e| e.into_inner()).as_ref())) { return false; }
+        emit();
+        true
+    }
+
+    pub(crate) fn cancel_download(&self) -> bool {
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        if let Some(download) = state.download.as_ref() { download.cancel.store(true, Ordering::SeqCst); }
+        state.download.as_ref().is_some_and(|download| download.cancel.stop())
+    }
+
+    /// Call under the service's exclusive mode-change guard so a new download
+    /// cannot start while its predecessor is discarding its staging files.
+    pub(crate) async fn drain_download(&self) {
+        let (download, probe) = {
+            let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            state.last_job = None;
+            state.probe_generation = state.probe_generation.wrapping_add(1);
+            if let Some(active) = state.active.as_ref() {
+                active.stopped.store(true, Ordering::SeqCst);
+                let _ = active.commands.send(Command::Stop);
+            }
+            let probe = state.probe.take().map(|(_, cancel, finished)| {
+                cancel.cancel();
+                finished
+            });
+            let download = state.download.as_ref().map(|download| {
+                download.cancel.stop();
+                download.finished.clone()
+            });
+            (download, probe)
+        };
+        if let Some(finished) = download { finished.cancelled().await; }
+        if let Some(finished) = probe { finished.cancelled().await; }
+        self.state.lock().unwrap_or_else(|error| error.into_inner()).probing = false;
     }
 
     pub(crate) fn delete(&self) -> Result<(), String> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         if state.download.is_some() { return Err("Wait for the voice model download to finish or cancel it first".into()); }
+        state.last_job = None;
         if let Some(active) = state.active.take() { active.stopped.store(true, Ordering::SeqCst); let _ = active.commands.send(Command::Stop); }
         state.engine = None;
-        let dir = self.root.join(MODEL_DIR);
-        let cache = self.root.join("cache");
-        let bundled = self.root.join(BUNDLED_MARKER).is_file() || self.root.join(BUNDLED_INSTALLING).is_file();
-        let model_failure = if dir.exists() {
-            fs::remove_dir_all(&dir).err().map(|error| format!("Removing the voice model failed: {error}"))
-        } else { None };
-        let cache_failure = if cache.exists() {
-            fs::remove_dir_all(&cache).err().map(|error| format!("Removing the voice cache failed: {error}"))
-        } else { None };
+        let cache = self.root.join("voice-audio-v2");
+        // Owned generations carry an installation receipt. Older model trees are preserved.
+        install::delete_model(&self.root).map_err(|e| format!("Removing the natural voice model failed. Its remaining files were preserved: {e}"))?;
+        let cache_failure = install::clean_cache(&cache, true).err().map(|e| format!("Removing cached natural voice audio failed: {e}"));
         // Clear the verdict even when file removal partially fails: the model
         // is no longer advertised, and a later reinstall must not inherit it.
         // Reflect the filesystem if removal failed part-way; otherwise a
         // partially removed model would reappear on the next launch.
-        state.downloaded = ready(&self.root);
+        state.source = install::source_stamp(&self.root).ok();
+        state.downloaded = state.source.is_some();
         state.error = None;
         state.performance = None;
         state.performance_error = None;
         state.probing = false;
         state.probe_generation = state.probe_generation.wrapping_add(1);
-        let _ = fs::remove_file(self.root.join(PERFORMANCE_FILE));
-        let _ = fs::remove_file(self.root.join(PERFORMANCE_ERROR_FILE));
-        let _ = fs::remove_file(self.root.join(BUNDLED_MARKER));
-        let _ = fs::remove_file(self.root.join(BUNDLED_INSTALLING));
-        let _ = fs::remove_file(self.root.join(MODEL_ARCHIVE));
-        let _ = fs::remove_file(self.root.join(format!("{MODEL_ARCHIVE}.part")));
-        if let Ok(entries) = fs::read_dir(&self.root) {
-            for entry in entries.flatten() {
-                if entry.file_name().to_string_lossy().starts_with(".extract-") {
-                    let _ = fs::remove_dir_all(entry.path());
-                }
-            }
-        }
-        if bundled { let _ = fs::write(self.root.join(BUNDLED_REMOVED), b""); }
-        if let Some(error) = model_failure.or(cache_failure) { return Err(error); }
+        let _ = install::clear_state(&self.root, PERFORMANCE_FILE);
+        let _ = install::clear_state(&self.root, PERFORMANCE_ERROR_FILE);
+        if let Some(error) = cache_failure { return Err(error); }
         Ok(())
     }
 
@@ -484,13 +583,14 @@ impl KokoroManager {
             .map(|active| active.offset.load(Ordering::SeqCst))
     }
 
-    fn engine(&self) -> Result<Arc<OfflineTts>, String> {
-        {
+    fn engine(&self, cancel: Option<&CancellationToken>) -> Result<Arc<OfflineTts>, String> {
+        let generation = {
             let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
             if let Some(engine) = state.engine.as_ref() { return Ok(engine.clone()); }
-        }
-        let dir = self.root.join(MODEL_DIR);
-        if !ready(&self.root) { return Err("The natural voice model is not installed".into()); }
+            state.probe_generation
+        };
+        let model = install::engine_files(&self.root, cancel).map_err(|e| format!("Verifying the natural voice model failed: {e}"))?;
+        let dir = &model.dir;
         let config = OfflineTtsConfig {
             model: sherpa_onnx::OfflineTtsModelConfig {
                 kokoro: OfflineTtsKokoroModelConfig {
@@ -507,19 +607,33 @@ impl KokoroManager {
             ..Default::default()
         };
         let engine = OfflineTts::create(&config).ok_or("The natural voice engine could not start")?;
+        model.unchanged().map_err(|e| format!("The natural voice model changed while loading: {e}"))?;
         let engine = Arc::new(engine);
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.probe_generation != generation || !state.downloaded { return Err("The natural voice model changed before it could be loaded".into()); }
         state.engine = Some(engine.clone());
         Ok(engine)
     }
 
-    fn synthesize(&self, engine: &OfflineTts, g2p: &G2P, text: &str, sid: i32, rate: f64) -> Result<PathBuf, String> {
-        let cache = self.root.join("cache");
-        fs::create_dir_all(&cache).map_err(|error| format!("Preparing the voice cache failed: {error}"))?;
+    // Stop, replacement, privacy and deletion take the same lock. A worker that
+    // was running native synthesis cannot perform later cache I/O after retirement.
+    fn with_playback<T>(&self, stopped: &Arc<AtomicBool>, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if stopped.load(Ordering::SeqCst) || state.active.as_ref().is_none_or(|active| !Arc::ptr_eq(&active.stopped, stopped)) {
+            return Err("The natural voice session ended".into());
+        }
+        f()
+    }
+
+    fn synthesize(&self, engine: &OfflineTts, g2p: &G2P, text: &str, sid: i32, rate: f64, stopped: &Arc<AtomicBool>) -> Result<File, String> {
+        let cache = self.root.join("voice-audio-v2");
         let key = format!("misaki-v1\u{0}{text}\u{0}{sid}\u{0}{rate:.3}");
-        let digest = hex::encode(Sha256::digest(key.as_bytes()));
+        let digest = chksum_hash_sha2_256::hash(key.as_bytes()).to_hex_lowercase();
         let output = cache.join(format!("{digest}.wav"));
-        if output.is_file() { return Ok(output); }
+        let name = output.file_name().ok_or("Invalid voice cache file name")?;
+        if let Some(file) = self.with_playback(stopped, || install::cached_audio(&cache, name).map_err(|e| format!("Reading cached natural voice audio failed: {e}")))? {
+            return Ok(file);
+        }
         let spoken = normalize_currency(text);
         let (phonemes, _) = g2p.g2p(&spoken).map_err(|error| format!("Preparing pronunciation failed: {error}"))?;
         let phonemes: Vec<i32> = phonemes.chars().filter(|character| *character != '❓')
@@ -530,15 +644,15 @@ impl KokoroManager {
             phoneme_codepoints: Some(vec![phonemes]),
             ..Default::default()
         };
-        let audio = engine.generate_with_config(text, &config, None::<fn(&[f32], f32) -> bool>)
+        let running = stopped.clone();
+        let audio = engine.generate_with_config(text, &config, Some(move |_: &[f32], _: f32| !running.load(Ordering::SeqCst)))
             .ok_or("The natural voice produced no audio")?;
-        let temporary = cache.join(format!("{digest}.{}.wav.part", uuid::Uuid::new_v4()));
-        let _ = fs::remove_file(&temporary);
         let wav = wav_bytes(audio.samples(), audio.sample_rate());
-        fs::write(&temporary, wav).map_err(|error| format!("Writing synthesized audio failed: {error}"))?;
-        fs::rename(&temporary, &output).map_err(|error| format!("Publishing synthesized audio failed: {error}"))?;
-        prune_cache(&cache);
-        Ok(output)
+        self.with_playback(stopped, || {
+            let file = install::publish_audio(&cache, Path::new(name), &wav).map_err(|e| format!("Saving cached natural voice audio failed: {e}"))?;
+            let _ = install::clean_cache(&cache, false);
+            Ok(file)
+        })
     }
 }
 
@@ -566,17 +680,17 @@ fn sentence_starts(text: &str) -> Vec<usize> {
     starts
 }
 
-fn wav_seconds(path: &Path) -> Option<f64> {
-    let bytes = fs::metadata(path).ok()?.len().checked_sub(44)?;
+fn wav_seconds(file: &File) -> Option<f64> {
+    let bytes = file.metadata().ok()?.len().checked_sub(44)?;
     Some(bytes as f64 / (2.0 * 24_000.0))
 }
 
 fn spawn_prefetch(
     manager: Arc<KokoroManager>, engine: Arc<OfflineTts>, g2p: Arc<G2P>,
-    text: String, sid: i32, rate: f64,
-) -> Option<thread::JoinHandle<Result<PathBuf, String>>> {
+    text: String, sid: i32, rate: f64, stopped: Arc<AtomicBool>,
+) -> Option<thread::JoinHandle<Result<File, String>>> {
     thread::Builder::new().name("kokoro-synth-prefetch".into()).spawn(move || {
-        manager.synthesize(&engine, &g2p, &text, sid, rate)
+        manager.synthesize(&engine, &g2p, &text, sid, rate, &stopped)
     }).ok()
 }
 
@@ -592,7 +706,8 @@ fn run(
     events: &tokio::sync::mpsc::UnboundedSender<Value>,
 ) -> Result<(), String> {
     use rodio::{Decoder, OutputStream, Sink};
-    let engine = manager.engine()?;
+    if stopped.load(Ordering::SeqCst) { return Ok(()); }
+    let engine = manager.engine(None)?;
     let g2p = Arc::new(G2P::new(if request.voice.starts_with("kokoro:b") { Language::EnglishGB } else { Language::EnglishUS }));
     let total_utf16 = request.text.encode_utf16().count() as u64;
     let activity = |speaking: bool, paused: bool, offset: usize| json!({
@@ -603,7 +718,7 @@ fn run(
     let (_stream, stream) = OutputStream::try_default()
         .map_err(|error| format!("Opening the audio output failed: {error}"))?;
     let mut sink: Option<Sink> = None;
-    let mut prefetched: Option<(usize, thread::JoinHandle<Result<PathBuf, String>>)> = None;
+    let mut prefetched: Option<(usize, thread::JoinHandle<Result<File, String>>)> = None;
     let mut index = 0usize;
     let mut paused = false;
     loop {
@@ -628,30 +743,29 @@ fn run(
             }
             continue;
         }
-        let path = if let Some((prefetched_index, handle)) = prefetched.take() {
+        let file = if let Some((prefetched_index, handle)) = prefetched.take() {
             if prefetched_index == index {
                 handle.join().map_err(|_| "The natural voice prefetch worker panicked")??
             } else {
-                manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate)?
+                manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped)?
             }
         } else {
-            manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate)?
+            manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped)?
         };
         // A superseded or stopped session must not play, or synthesize and
         // cache, even one more chunk.
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
         if index + 1 < chunks.len() && prefetched.is_none() {
             prefetched = spawn_prefetch(manager.clone(), engine.clone(), g2p.clone(),
-                chunks[index + 1].text.clone(), sid, request.rate).map(|handle| (index + 1, handle));
+                chunks[index + 1].text.clone(), sid, request.rate, stopped.clone()).map(|handle| (index + 1, handle));
         }
         let _ = events.send(activity(true, false, chunk.start_utf16));
-        let file = File::open(&path).map_err(|error| format!("Opening synthesized audio failed: {error}"))?;
+        let duration = wav_seconds(&file).unwrap_or(0.0);
         let source = Decoder::new(BufReader::new(file)).map_err(|error| format!("Decoding synthesized audio failed: {error}"))?;
         let next = Sink::try_new(&stream)
             .map_err(|error| format!("Starting the audio output failed: {error}"))?;
-        next.append(source);
+        manager.with_playback(&stopped, || { next.append(source); Ok(()) })?;
         sink = Some(next);
-        let duration = wav_seconds(&path).unwrap_or(0.0);
         let starts = sentence_starts(&chunk.text);
         let chunk_utf16 = chunk.text.encode_utf16().count().max(1);
         let mut next_sentence = 1usize;
@@ -770,73 +884,109 @@ fn wav_bytes(samples: &[f32], sample_rate: i32) -> Vec<u8> {
     out
 }
 
-fn prune_cache(cache: &Path) {
-    let Ok(entries) = fs::read_dir(cache) else { return; };
-    let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries.filter_map(|entry| {
-        let entry = entry.ok()?;
-        let metadata = entry.metadata().ok()?;
-        if !metadata.is_file() { return None; }
-        Some((metadata.modified().ok()?, metadata.len(), entry.path()))
-    }).collect();
-    let mut total: u64 = files.iter().map(|(_, size, _)| *size).sum();
-    if total <= CACHE_BUDGET { return; }
-    files.sort_by_key(|(modified, ..)| *modified);
-    for (_, size, path) in files {
-        if total <= CACHE_BUDGET / 2 { break; }
-        if fs::remove_file(&path).is_ok() { total = total.saturating_sub(size); }
-    }
+fn repair_available(state: &State) -> bool {
+    state.performance_error.as_deref().is_some_and(|e| e.starts_with("Verifying the natural voice model failed"))
+}
+
+fn complete_probe(state: &mut State, generation: u64) -> bool {
+    if !state.probe.as_ref().is_some_and(|(job,_,_)| *job == generation) { return false; }
+    state.probing = false;
+    state.probe = None;
+    state.probe_generation == generation && state.downloaded
 }
 
 fn refresh_downloaded(root: &Path, state: &mut State) {
-    if !state.downloaded && ready(root) { state.downloaded = true; }
+    let source = install::source_stamp(root).ok();
+    if source == state.source { return; }
+    state.downloaded = source.is_some();
+    state.source = source;
+    state.engine = None;
+    state.performance = None;
+    state.performance_error = None;
+    if let Some((_,cancel,_)) = &state.probe { cancel.cancel(); }
+    if let Some(active) = &state.active { active.stopped.store(true, Ordering::SeqCst); let _ = active.commands.send(Command::Stop); }
+    state.probe_generation = state.probe_generation.wrapping_add(1);
 }
 
-fn load_performance(root: &Path) -> Option<Performance> {
-    let performance: Performance = serde_json::from_str(&fs::read_to_string(root.join(PERFORMANCE_FILE)).ok()?).ok()?;
-    (performance.ratio.is_finite() && performance.ratio > 0.0).then_some(performance)
+fn load_value<T: serde::de::DeserializeOwned>(root: &Path, name: &str, source: &install::SourceStamp) -> Option<T> {
+    let record: Verdict<T> = serde_json::from_slice(&install::read_state(root,name).ok()?).ok()?;
+    (record.source == *source).then_some(record.value)
 }
 
-fn load_performance_error(root: &Path) -> Option<String> {
-    let error: String = serde_json::from_str(&fs::read_to_string(root.join(PERFORMANCE_ERROR_FILE)).ok()?).ok()?;
-    (!error.trim().is_empty()).then_some(error)
-}
-
-fn save_performance_error(root: &Path, error: &str) -> Result<(), String> {
-    let temporary = root.join(format!(".performance-error-{}.json", uuid::Uuid::new_v4()));
-    fs::write(&temporary, serde_json::to_vec(error).map_err(|failure| format!("Saving the natural voice performance failure failed: {failure}"))?)
-        .map_err(|failure| format!("Saving the natural voice performance failure failed: {failure}"))?;
-    fs::rename(&temporary, root.join(PERFORMANCE_ERROR_FILE))
-        .map_err(|failure| format!("Publishing the natural voice performance failure failed: {failure}"))
-}
-
-fn save_performance(root: &Path, performance: Performance) -> Result<(), String> {
-    let temporary = root.join(format!(".performance-{}.json", uuid::Uuid::new_v4()));
-    fs::write(&temporary, serde_json::to_vec(&performance).map_err(|error| format!("Saving the natural voice performance result failed: {error}"))?)
-        .map_err(|error| format!("Saving the natural voice performance result failed: {error}"))?;
-    fs::rename(&temporary, root.join(PERFORMANCE_FILE))
-        .map_err(|error| format!("Publishing the natural voice performance result failed: {error}"))
+fn save_value<T: Serialize>(root: &Path, name: &str, source: &install::SourceStamp, value: T) -> Result<(), String> {
+    let bytes=serde_json::to_vec(&Verdict {source:source.clone(),value}).map_err(|e|e.to_string())?;
+    install::save_state(root,name,&bytes).map_err(|e|format!("Saving the natural voice performance result failed: {e}"))
 }
 
 fn path_string(path: &Path) -> String { path.to_string_lossy().into_owned() }
 
-fn ready(root: &Path) -> bool {
-    let dir = root.join(MODEL_DIR);
-    dir.join("model.fp16.onnx").is_file()
-        && dir.join("voices.bin").is_file()
-        && dir.join("tokens.txt").is_file()
-        && dir.join("lexicon-us-en.txt").is_file()
-        && dir.join("lexicon-gb-en.txt").is_file()
-        && dir.join("espeak-ng-data").is_dir()
+#[cfg(test)]
+fn ready(root: &Path) -> bool { install::location(root).is_ok() }
+
+/// Keep the bytes being authenticated on a private file handle through extraction.
+struct PackDownload {
+    file: File,
+    hash: chksum_hash_sha2_256::Update,
+    bytes: u64,
+}
+
+impl PackDownload {
+    fn new(file: File) -> Self { Self { file, hash: chksum_hash_sha2_256::new(), bytes: 0 } }
+
+    fn append(&mut self, chunk: &[u8]) -> Result<(), String> {
+        if chunk.len() as u64 > MODEL_BYTES - self.bytes {
+            return Err("The voice model download exceeded its pinned size".into());
+        }
+        self.file.write_all(chunk).map_err(|error| format!("Writing the voice model download failed: {error}"))?;
+        self.hash.update(chunk);
+        self.bytes += chunk.len() as u64;
+        Ok(())
+    }
+
+    fn verified_file(mut self, size: u64, sha256: &str) -> Result<File, String> {
+        if self.bytes != size || self.hash.digest().to_hex_lowercase() != sha256 {
+            return Err("The voice model download failed verification and was discarded".into());
+        }
+        self.file.rewind().map_err(|error| format!("Reading the verified voice model failed: {error}"))?;
+        Ok(self.file)
+    }
 }
 
 /// Download, verify and install the model. Runs on the async runtime; archive
 /// extraction is moved to a blocking worker because it is large and CPU-bound.
-pub(crate) async fn download(root: &Path, cancel: Arc<AtomicBool>, progress: impl Fn(u64, u64) + Send + Sync + 'static) -> Result<(), String> {
+pub(crate) async fn download(root: &Path, control: Arc<DownloadControl>, progress: impl Fn(u64, u64) + Send + Sync + 'static) -> Result<(), String> {
     let root = root.join("models");
-    fs::create_dir_all(&root).map_err(|error| format!("Preparing the voice model directory failed: {error}"))?;
-    let archive = root.join(MODEL_ARCHIVE);
-    let partial = root.join(format!("{MODEL_ARCHIVE}.part"));
-    let _ = fs::remove_file(&partial);
+    let cancel = control.cancel.clone();
+    let lease = tokio::task::spawn_blocking(move || {
+        let lease = install::Lease::for_install(&root, true, &cancel)?;
+        lease.space_for(true)?;
+        Ok::<_, std::io::Error>(lease)
+    }).await.map_err(|e| format!("Preparing the natural voice download failed: {e}"))?
+        .map_err(|e| format!("Preparing the natural voice download failed: {e}"))?;
+    let internet = crate::transfer_policy::internet_revision()?;
+    crate::transfer_policy::require_internet_since(internet)?;
+    let verified = tokio::select! {
+        biased;
+        _ = control.cancel.cancelled() => return Err("The voice model download was cancelled".into()),
+        _ = crate::transfer_policy::internet_denied_since(internet) => return Err("The network policy changed during the voice model download".into()),
+        result = receive_pack(&lease, internet, progress) => result?,
+    };
+    tokio::task::spawn_blocking(move || install::extract(lease, verified, &control).map_err(|e| format!("Installing the natural voice model failed: {e}"))).await
+        .map_err(|error| format!("Extracting the voice model failed: {error}"))?
+}
+
+#[cfg(any(target_os = "android", test))]
+pub(crate) async fn install_bundled(data_dir: &Path, reader: impl std::io::Read + Send + 'static, control: Arc<DownloadControl>) -> Result<(), String> {
+    let root = data_dir.join("models");
+    tokio::task::spawn_blocking(move || {
+        let lease = install::Lease::for_install(&root,control.explicit_bundled,&control.cancel)?;
+        lease.space_for(false)?;
+        install::bundled(lease, reader, &control)
+    }).await.map_err(|e| format!("Preparing the bundled natural voice model failed: {e}"))?
+        .map_err(|e| format!("Installing the bundled natural voice model failed: {e}"))
+}
+
+async fn receive_pack(lease: &install::Lease, internet: u64, progress: impl Fn(u64, u64)) -> Result<File, String> {
     let client = reqwest::Client::builder()
         .user_agent("kiwix-workbench")
         .https_only(true)
@@ -848,78 +998,255 @@ pub(crate) async fn download(root: &Path, cancel: Arc<AtomicBool>, progress: imp
     let mut response = client.get(MODEL_URL).send().await
         .map_err(|error| format!("Downloading the voice model failed: {error}"))?;
     if !response.status().is_success() { return Err(format!("Downloading the voice model failed (HTTP {})", response.status())); }
-    let total = response.content_length().unwrap_or(MODEL_BYTES).max(1);
-    let mut file = File::create(&partial).map_err(|error| format!("Creating the voice model download failed: {error}"))?;
-    let mut hasher = Sha256::new();
-    let mut downloaded = 0u64;
+    let total = MODEL_BYTES;
+    let mut pack = PackDownload::new(lease.scratch().map_err(|e| format!("Creating the voice download scratch file failed: {e}"))?);
+    let mut next_policy_check = 0;
     let mut last_report = 0u64;
     while let Some(chunk) = response.chunk().await.map_err(|error| format!("Downloading the voice model failed: {error}"))? {
-        if cancel.load(Ordering::SeqCst) {
-            drop(file); let _ = fs::remove_file(&partial); return Err("The voice model download was cancelled".into());
+        if pack.bytes >= next_policy_check {
+            crate::transfer_policy::require_internet_since(internet)?;
+            next_policy_check = pack.bytes + 4 * 1024 * 1024;
         }
-        if downloaded.saturating_add(chunk.len() as u64) > MODEL_BYTES {
-            drop(file); let _ = fs::remove_file(&partial);
-            return Err("The voice model download exceeded its pinned size".into());
-        }
-        if downloaded.is_multiple_of(4 * 1024 * 1024) {
-            crate::transfer_policy::require_internet()
-                .inspect_err(|_| { let _ = fs::remove_file(&partial); })?;
-        }
-        file.write_all(&chunk).map_err(|error| format!("Writing the voice model download failed: {error}"))?;
-        hasher.update(&chunk);
-        downloaded = downloaded.saturating_add(chunk.len() as u64);
+        pack.append(&chunk)?;
+        let downloaded = pack.bytes;
         if downloaded.saturating_sub(last_report) >= 512 * 1024 || downloaded == total {
             progress(downloaded, total);
             last_report = downloaded;
         }
     }
-    file.sync_all().map_err(|error| format!("Saving the voice model download failed: {error}"))?;
-    drop(file);
-    let digest = hex::encode(hasher.finalize());
-    if digest != MODEL_SHA256 {
-        let _ = fs::remove_file(&partial);
-        return Err("The voice model download failed verification and was discarded".into());
-    }
-    let _ = fs::remove_file(&archive);
-    fs::rename(&partial, &archive).map_err(|error| format!("Publishing the voice model download failed: {error}"))?;
+    crate::transfer_policy::require_internet_since(internet)?;
+    let downloaded = pack.bytes;
+    let verified = pack.verified_file(MODEL_BYTES, MODEL_SHA256)?;
     progress(downloaded, total);
-    tokio::task::spawn_blocking(move || extract(&root, &archive)).await
-        .map_err(|error| format!("Extracting the voice model failed: {error}"))?
-}
-
-fn extract(root: &Path, archive: &Path) -> Result<(), String> {
-    let temporary = root.join(format!(".extract-{}", uuid::Uuid::new_v4()));
-    fs::create_dir_all(&temporary).map_err(|error| format!("Preparing voice model extraction failed: {error}"))?;
-    let result = (|| {
-        let file = File::open(archive).map_err(|error| format!("Opening the voice model archive failed: {error}"))?;
-        let decoder = bzip2::read::BzDecoder::new(file);
-        let mut tar = tar::Archive::new(decoder);
-        for entry in tar.entries().map_err(|error| format!("Reading the voice model archive failed: {error}"))? {
-            let mut entry = entry.map_err(|error| format!("Reading the voice model archive failed: {error}"))?;
-            let path = entry.path().map_err(|error| format!("Reading a voice model path failed: {error}"))?;
-            if path.is_absolute() || path.components().any(|component| !matches!(component, Component::Normal(_) | Component::CurDir)) {
-                return Err("The voice model archive contains an unsafe path".into());
-            }
-            if entry.header().entry_type().is_symlink() || entry.header().entry_type().is_hard_link() {
-                return Err("The voice model archive contains an unsupported link".into());
-            }
-            entry.unpack_in(&temporary).map_err(|error| format!("Extracting the voice model failed: {error}"))?;
-        }
-        let source = temporary.join(MODEL_DIR);
-        if !ready(&temporary) || !source.is_dir() { return Err("The voice model archive is incomplete".into()); }
-        let destination = root.join(MODEL_DIR);
-        if destination.exists() { fs::remove_dir_all(&destination).map_err(|error| format!("Replacing the voice model failed: {error}"))?; }
-        fs::rename(&source, &destination).map_err(|error| format!("Installing the voice model failed: {error}"))?;
-        Ok(())
-    })();
-    let _ = fs::remove_dir_all(&temporary);
-    let _ = fs::remove_file(archive);
-    result
+    Ok(verified)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    #[test]
+    fn voice_pack_verification_retains_the_received_file() {
+        use std::io::Read;
+        let directory = tempfile::tempdir().unwrap();
+        let mut pack = PackDownload::new(tempfile::tempfile_in(directory.path()).unwrap());
+        pack.append(b"a").unwrap();
+        pack.append(b"bc").unwrap();
+        let named_archive = directory.path().join(MODEL_ARCHIVE);
+        fs::write(&named_archive, b"other file").unwrap();
+        let sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let mut verified = pack.verified_file(3, sha).unwrap();
+        let mut contents = Vec::new();
+        verified.read_to_end(&mut contents).unwrap();
+        assert_eq!(contents, b"abc");
+        assert_eq!(fs::read(named_archive).unwrap(), b"other file");
+        for (size, digest) in [(2, sha), (3, "incorrect")] {
+            let mut pack = PackDownload::new(tempfile::tempfile_in(directory.path()).unwrap());
+            pack.append(b"abc").unwrap();
+            assert!(pack.verified_file(size, digest).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn cutover_waits_for_download_cleanup_before_admitting_a_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = Arc::new(KokoroManager::new(dir.path()));
+        let token = manager.begin_download().unwrap();
+        let draining = {
+            let manager = manager.clone();
+            tokio::spawn(async move { manager.drain_download().await })
+        };
+        token.cancel.cancelled().await;
+        assert!(!draining.is_finished());
+        assert!(manager.begin_download().is_err());
+        manager.finish_download(Err("cancelled".into())).unwrap_err();
+        draining.await.unwrap();
+        assert!(!manager.begin_download().unwrap().cancel.is_cancelled());
+    }
+
+    /// Exercise the pinned distributor artifact from an explicitly supplied fixture.
+    #[test]
+    #[ignore = "requires KIWIX_TEST_KOKORO_PACK containing the pinned voice pack"]
+    fn pinned_voice_pack_verifies_and_extracts_without_speech() {
+        use std::io::Read;
+        let mut source = File::open(std::env::var_os("KIWIX_TEST_KOKORO_PACK").unwrap()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let mut pack = PackDownload::new(tempfile::tempfile_in(directory.path()).unwrap());
+        let mut chunk = vec![0; 128 * 1024];
+        loop {
+            let read = source.read(&mut chunk).unwrap();
+            if read == 0 { break; }
+            pack.append(&chunk[..read]).unwrap();
+        }
+        let verified = pack.verified_file(MODEL_BYTES, MODEL_SHA256).unwrap();
+        // A replacement at the historical archive name must never reach the extractor.
+        let decoy = directory.path().join(MODEL_ARCHIVE);
+        fs::write(&decoy, b"unrelated").unwrap();
+        let root = directory.path().canonicalize().unwrap().join("models");
+        let partial=install::partial_fixture(&root,b"; 1\n: 2");
+        let lease = install::Lease::admit(&root).unwrap();
+        install::extract(lease, verified, &DownloadControl::new()).unwrap();
+        assert!(!partial.exists());
+        assert!(ready(&root));
+        let checked = install::engine_files(&root, None).unwrap();
+        checked.unchanged().unwrap();
+        let tokens = checked.dir.join("tokens.txt");
+        let original = fs::read(&tokens).unwrap();
+        drop(checked);
+        let mut altered = original.clone();
+        altered[0] ^= 1;
+        fs::write(&tokens, altered).unwrap();
+        assert!(install::engine_files(&root, None).is_err());
+        fs::write(&tokens, original).unwrap();
+        let manager = KokoroManager::new(&directory.path().canonicalize().unwrap());
+        assert_eq!(manager.status()["available"], true);
+        install::delete_model(&root).unwrap();
+        assert_eq!(manager.status()["available"], false);
+        assert!(manager.begin_download().is_ok());
+        assert!(!ready(&root));
+        assert_eq!(fs::read(decoy).unwrap(), b"unrelated");
+    }
+
+    #[tokio::test]
+    async fn explicit_bundled_retry_keeps_removal_choice_until_a_complete_install() {
+        let profile = tempfile::tempdir().unwrap();
+        let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
+        let root = profile.path().canonicalize().unwrap().join("models");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(BUNDLED_REMOVED), b"").unwrap();
+        assert!(manager.begin_bundled().unwrap().is_none());
+        let control = manager.begin_bundled_explicit().unwrap().unwrap();
+        let result = install_bundled(&profile.path().canonicalize().unwrap(), std::io::empty(), control).await;
+        assert!(manager.finish_download(result).is_err());
+        assert!(root.join(BUNDLED_REMOVED).exists());
+        assert!(manager.begin_bundled().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn retired_synthesis_cannot_create_or_publish_article_audio() {
+        let profile = tempfile::tempdir().unwrap();
+        let manager = Arc::new(KokoroManager::new(&profile.path().canonicalize().unwrap()));
+        let stopped = Arc::new(AtomicBool::new(false));
+        let (command, _receiver) = mpsc::channel();
+        manager.state.lock().unwrap().active = Some(Active {
+            id: "session".into(), token: "owner".into(), stopped: stopped.clone(),
+            commands: command, offset: Arc::default(),
+        });
+        let (ready, started) = tokio::sync::oneshot::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let file = profile.path().join("article-audio");
+        let worker = {
+            let manager = manager.clone();
+            let file = file.clone();
+            thread::spawn(move || {
+                ready.send(()).unwrap();
+                wait.recv().unwrap();
+                manager.with_playback(&stopped, || fs::write(file, b"sample").map_err(|e| e.to_string()))
+            })
+        };
+        started.await.unwrap();
+        manager.drain_download().await;
+        release.send(()).unwrap();
+        assert!(worker.join().unwrap().is_err());
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn failed_reopen_and_superseded_jobs_do_not_report_a_live_install() {
+        let profile = tempfile::tempdir().unwrap();
+        let manager=KokoroManager::new(&profile.path().canonicalize().unwrap());
+        let old=manager.begin_download().unwrap();
+        assert!(manager.finish_download(Ok(())).unwrap_err().contains("Reopening"));
+        assert!(!manager.report_job(&old,true,|| panic!("unavailable")));
+        assert!(manager.report_job(&old,false,|| {}));
+        let _new=manager.begin_download().unwrap();
+        assert!(!manager.report_job(&old,false,|| panic!("superseded")));
+    }
+
+    #[test]
+    fn source_change_retires_only_its_probe_and_persisted_verdict() {
+        let profile=tempfile::tempdir().unwrap();
+        let base=profile.path().canonicalize().unwrap();
+        let root=base.join("models");
+        let model=root.join(MODEL_DIR);
+        let make=|| {
+            fs::create_dir_all(model.join("espeak-ng-data")).unwrap();
+            for name in ["model.fp16.onnx","tokens.txt","voices.bin","lexicon-us-en.txt","lexicon-gb-en.txt"] { fs::write(model.join(name),b"fixture").unwrap(); }
+        };
+        make();
+        let manager=KokoroManager::new(&base);
+        let old=install::source_stamp(&root).unwrap();
+        save_value(&root,PERFORMANCE_FILE,&old,Performance{ratio:0.42}).unwrap();
+        let cancel=CancellationToken::new();
+        {
+            let mut state=manager.state.lock().unwrap();
+            state.probe_generation=7;
+            state.probe=Some((7,cancel.clone(),CancellationToken::new()));
+            state.probing=true;
+        }
+        fs::rename(&model,root.join("retained-old")).unwrap();
+        make();
+        assert_eq!(manager.status()["available"],true);
+        assert!(cancel.is_cancelled());
+        let mut state=manager.state.lock().unwrap();
+        assert!(!complete_probe(&mut state,7));
+        assert!(!state.probing);
+        state.probe=Some((9,CancellationToken::new(),CancellationToken::new()));
+        state.probing=true;
+        assert!(!complete_probe(&mut state,7));
+        assert!(state.probing);
+        drop(state);
+        let restored=KokoroManager::new(&base);
+        assert!(restored.state.lock().unwrap().performance.is_none());
+    }
+
+    #[test]
+    fn publication_and_cancel_have_one_winner() {
+        let control = DownloadControl::new();
+        assert!(control.stop());
+        assert!(control.cancel.is_cancelled());
+        let control = DownloadControl::new();
+        *control.publishing.lock().unwrap() = true;
+        assert!(!control.stop());
+        assert!(!control.cancel.is_cancelled());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires KIWIX_TEST_KOKORO_BUNDLED containing the verified factory asset"]
+    async fn bundled_install_reopen_remove_and_explicitly_reinstall_without_speech() {
+        let path = std::env::var_os("KIWIX_TEST_KOKORO_BUNDLED").unwrap();
+        let profile = tempfile::tempdir().unwrap();
+        let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
+        let control = manager.begin_bundled().unwrap().unwrap();
+        let result = install_bundled(&profile.path().canonicalize().unwrap(), File::open(&path).unwrap(), control).await;
+        manager.finish_download(result).unwrap();
+        let reopened = KokoroManager::new(&profile.path().canonicalize().unwrap());
+        assert_eq!(reopened.status()["bundled"], true);
+        let root = profile.path().canonicalize().unwrap().join("models");
+        assert!(install::engine_files(&root, None).is_ok());
+        let old=install::location(&root).unwrap();
+        let retry=install::Lease::for_install(&root,true,&CancellationToken::new()).unwrap();
+        assert!(install::bundled(retry,std::io::empty(),&DownloadControl::new()).is_err());
+        assert_eq!(install::location(&root).unwrap(),old);
+        assert!(!fs::read_dir(&root).unwrap().any(|entry| entry.unwrap().file_name().to_string_lossy().starts_with(".voice-pending-")));
+        reopened.delete().unwrap();
+        assert!(reopened.begin_bundled().unwrap().is_none());
+        let control = reopened.begin_bundled_explicit().unwrap().unwrap();
+        let result = install_bundled(&profile.path().canonicalize().unwrap(), File::open(path).unwrap(), control).await;
+        reopened.finish_download(result).unwrap();
+        // An explicit repair may have been admitted after a transient read
+        // failure. A fully authenticated old generation can be reclaimed.
+        let previous=install::location(&root).unwrap();
+        let lease=install::Lease::for_install(&root,true,&CancellationToken::new()).unwrap();
+        let input=File::open(std::env::var_os("KIWIX_TEST_KOKORO_BUNDLED").unwrap()).unwrap();
+        let control=DownloadControl { explicit_bundled:true,..DownloadControl::new() };
+        install::bundled(lease,input,&control).unwrap();
+        assert!(!previous.exists());
+        assert!(root.join(BUNDLED_REMOVED).exists());
+        assert_eq!(reopened.status()["available"],true);
+        assert!(install::engine_files(&root, None).is_ok());
+    }
 
     #[test]
     fn realtime_requires_synthesis_within_playback_time() {

@@ -2478,15 +2478,22 @@ impl Service {
             Some(LocalSwarmRetirement { service: self.as_ref(), retired: retire_localswarm })
         } else { None };
         if retire_localswarm { self.nearby_retire().await?; }
-        let _mode_writer = if matches!(command, "save_settings" | "localswarm_stop") {
+        let _mode_writer = if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete") {
             Some(self.privacy_gate.write().await)
         } else {
             None
         };
+        // Evaluate the voice cutover under the writer. Two overlapping settings
+        // saves can change the effective policy after the preliminary check.
+        if command == "save_settings" && args.get("settings").is_some_and(|settings|
+            settings.get("privateMode") == Some(&Value::Bool(true)) ||
+            settings.get("readOnly") == Some(&Value::Bool(true))) {
+            self.kokoro.drain_download().await;
+        }
         if retire_private_work {
             self.integrity.cancel_and_wait(true).await?;
         }
-        let _mode_guard = if matches!(command, "save_settings" | "localswarm_stop" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
+        let _mode_guard = if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
             None
         } else {
             Some(self.privacy_gate.read().await)
@@ -2988,14 +2995,16 @@ impl Service {
     async fn kokoro_download(self: &Arc<Self>) -> Result<Value, String> {
         self.normal_writable()?;
         crate::transfer_policy::require_internet()?;
-        let cancel = self.kokoro.begin_download()?;
+        let generation = self.launch_generation();
+        let service = self.clone();
         let manager = self.kokoro.clone();
         let root = self.store.data_dir().to_path_buf();
         let app = self.app.lock().map_err(|_| "Application handle unavailable")?.clone();
+        let cancel = self.kokoro.begin_download()?;
         tauri::async_runtime::spawn(async move {
             let progress_manager = manager.clone();
             let progress_app = app.clone();
-            let result = kokoro::download(&root, cancel, move |downloaded, total| {
+            let result = kokoro::download(&root, cancel.clone(), move |downloaded, total| {
                 progress_manager.download_progress(downloaded, total);
                 if let Some(app) = progress_app.as_ref() {
                     use tauri::Emitter;
@@ -3004,31 +3013,43 @@ impl Service {
                     }));
                 }
             }).await;
-            let failed = result.as_ref().err().cloned();
-            let result = manager.finish_download(result);
-            if result.is_ok() { manager.ensure_performance_probe(); }
-            if let Some(app) = app.as_ref() {
-                use tauri::Emitter;
-                let _ = app.emit("kiwix-speech-model", json!({
-                    "state": if result.is_ok() { "installed" } else { "error" },
-                    "error": failed,
-                    "voices": if result.is_ok() { kokoro::voice_entries() } else { Vec::<Value>::new() },
-                }));
-            }
+            service.finish_voice_job(&manager, cancel, generation, result).await;
         });
         Ok(json!({"state":"downloading"}))
     }
 
+    // Release the worker's completion signal before taking the mode guard.
+    // A simultaneous privacy transition may be holding it while waiting for us.
+    async fn finish_voice_job(self: &Arc<Self>, manager: &Arc<kokoro::KokoroManager>, control: Arc<kokoro::DownloadControl>, generation: u64, result: Result<(),String>) {
+        let result = manager.finish_download(result);
+        let _mode = self.privacy_gate.read().await;
+        if self.launch_generation() != generation || self.ensure_running().is_err() || self.normal_writable().is_err() { return; }
+        let app = self.app.lock().ok().and_then(|app| app.clone());
+        let success = result.is_ok();
+        let current = manager.report_job(&control, success, || {
+            if let Some(app) = app {
+                use tauri::Emitter;
+                let _ = app.emit("kiwix-speech-model", json!({
+                    "state": if success { "installed" } else { "error" },
+                    "error": result.err(),
+                    "voices": if success { kokoro::voice_entries() } else { Vec::<Value>::new() },
+                }));
+            }
+        });
+        if current && success { manager.ensure_performance_probe(); }
+    }
+
     async fn kokoro_cancel(&self) -> Result<Value, String> {
-        self.kokoro.cancel_download();
-        Ok(json!({"state":"cancelling"}))
+        Ok(if self.kokoro.cancel_download() { json!({"state":"cancelling"}) } else { self.kokoro.status() })
     }
 
     async fn kokoro_delete(self: &Arc<Self>) -> Result<Value, String> {
         self.normal_writable()?;
-        self.mobile_speech_model_deleted();
+        self.kokoro.drain_download().await;
         self.kokoro.delete()?;
-        Ok(json!({"state":"deleted"}))
+        self.mobile_speech_model_deleted();
+        let status=self.kokoro.status();
+        Ok(json!({"state":"deleted", "legacyRetained":status["legacyRetained"], "legacyAudioRetained":status["legacyAudioRetained"]}))
     }
 
     async fn download_jobs(self: &Arc<Self>) -> Result<Value, String> {
@@ -3247,6 +3268,7 @@ impl Service {
         let _mobile_transfer = self.mobile.transfer_gate.lock().await;
         self.retire_localswarm();
         let _mode_guard = self.privacy_gate.write().await;
+        self.kokoro.drain_download().await;
         if let Err(error) = self.integrity.cancel_and_wait(true).await {
             errors.push(format!("Stopping archive verification: {error}"));
         }
