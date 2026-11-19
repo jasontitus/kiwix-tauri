@@ -2,6 +2,7 @@
 // Exercise the real bridge while the stack retains content beyond its callback.
 #import <Foundation/Foundation.h>
 #import <Network/Network.h>
+#include <dns_sd.h>
 #include <algorithm>
 #include <cstdio>
 #include <vector>
@@ -22,12 +23,48 @@ static void capture_receive(nw_connection_t, uint32_t, uint32_t, nw_connection_r
     pending_receive = callback;
 }
 
+// Reuse the same synthetic SDK reference for successive lookups. The
+// callback cookie, not a reference address, must distinguish their lifetimes.
+static char queryStorage;
+static DNSServiceRef test_ref() { return reinterpret_cast<DNSServiceRef>(&queryStorage); }
+static bool failQueueAssignment;
+static unsigned releasedQueries;
+static void *addressCookie;
+static DNSServiceErrorType assign_queue(DNSServiceRef ref, dispatch_queue_t target) {
+    if (ref != test_ref()) return DNSServiceSetDispatchQueue(ref, target);
+    return failQueueAssignment ? kDNSServiceErr_BadState : kDNSServiceErr_NoError;
+}
+static void release_ref(DNSServiceRef ref) {
+    if (ref == test_ref()) ++releasedQueries;
+    else DNSServiceRefDeallocate(ref);
+}
+static DNSServiceErrorType lookup_address(DNSServiceRef *out, DNSServiceFlags flags, uint32_t index,
+                                           DNSServiceProtocol protocol, const char *host,
+                                           DNSServiceGetAddrInfoReply reply, void *cookie) {
+    if (strcmp(host, "route-test.local.") != 0)
+        return DNSServiceGetAddrInfo(out, flags, index, protocol, host, reply, cookie);
+    addressCookie = cookie;
+    *out = test_ref();
+    return kDNSServiceErr_NoError;
+}
+static uint32_t test_interface_index(nw_interface_t interface) {
+    return interface ? nw_interface_get_index(interface) : 7;
+}
+
+#define DNSServiceSetDispatchQueue assign_queue
+#define DNSServiceRefDeallocate release_ref
+#define DNSServiceGetAddrInfo lookup_address
+#define nw_interface_get_index test_interface_index
 #define nw_connection_receive capture_receive
 #define nw_connection_send capture_send
 #ifndef LOCALSWARM_BRIDGE_SOURCE
 #define LOCALSWARM_BRIDGE_SOURCE "localswarm.mm"
 #endif
 #include LOCALSWARM_BRIDGE_SOURCE
+#undef DNSServiceSetDispatchQueue
+#undef DNSServiceRefDeallocate
+#undef DNSServiceGetAddrInfo
+#undef nw_interface_get_index
 #undef nw_connection_send
 #undef nw_connection_receive
 
@@ -230,6 +267,62 @@ static bool resolved_addresses_preserve_endpoint() {
     return true;
 }
 
+static bool route_queries_reject_retired_callbacks() {
+    auto handle = std::make_shared<Connection>(nil);
+    auto create = [](DNSServiceRef *out, void *) {
+        *out = test_ref();
+        return kDNSServiceErr_NoError;
+    };
+    auto failed = [](DNSServiceRef *, void *) { return kDNSServiceErr_BadState; };
+    const auto ref = test_ref();
+    const auto port = htons(49170);
+    if (start_query(handle, handle->resolve, failed) || releasedQueries || !queryOwners.empty()) return false;
+    failQueueAssignment = true;
+    bool started = start_query(handle, handle->resolve, create);
+    failQueueAssignment = false;
+    if (started || releasedQueries != 1 || handle->resolve.id || !queryOwners.empty()) return false;
+    if (!start_query(handle, handle->resolve, create)) return false;
+    void *first = reinterpret_cast<void *>(handle->resolve.id);
+    clear_resolution(handle);
+    if (!start_query(handle, handle->resolve, create)) return false;
+    void *current = reinterpret_cast<void *>(handle->resolve.id);
+    // Stale failure, wrong phase and wrong successful SDK ref must leave
+    // the replacement untouched, even when the SDK reuses the old ref.
+    resolved_service(ref, 0, 0, kDNSServiceErr_BadState, nullptr, nullptr, 0, 0, nullptr, first);
+    resolved_service(nullptr, 0, 7, 0, nullptr, nullptr, 0, 0, nullptr, current);
+    resolved_address(ref, 0, 0, kDNSServiceErr_BadState, nullptr, nullptr, 0, current);
+    if (first == current || handle->stopping || !handle->resolve.id || releasedQueries != 2) return false;
+    auto epoch = handle->resolutionEpoch;
+    resolved_service(ref, 0, 7, 0, nullptr, "route-test.local.", port, 0, nullptr, current);
+    if (handle->port != port || handle->resolve.id || !addressCookie ||
+        handle->addresses.id != reinterpret_cast<uintptr_t>(addressCookie) || releasedQueries != 3 ||
+        handle->resolutionEpoch != epoch || queryOwners.size() != 1) return false;
+    resolved_service(ref, 0, 0, kDNSServiceErr_BadState, nullptr, nullptr, 0, 0, nullptr, current);
+    resolved_service(ref, 0, 0, kDNSServiceErr_BadState, nullptr, nullptr, 0, 0, nullptr, addressCookie);
+    if (handle->stopping || releasedQueries != 3) return false;
+    cancel_connection(handle);
+    if (releasedQueries != 4 || !queryOwners.empty()) return false;
+    std::weak_ptr<Connection> weak = handle;
+    handle.reset();
+    resolved_address(ref, 0, 0, kDNSServiceErr_BadState, nullptr, nullptr, 0, addressCookie);
+    return weak.expired() && releasedQueries == 4;
+}
+
+static bool route_query_exhaustion_stops_creation() {
+    // Last test in this fixture process. Leave the allocator exhausted.
+    nextQueryId = UINTPTR_MAX;
+    auto handle = std::make_shared<Connection>(nil);
+    unsigned creations = 0;
+    auto create = [&](DNSServiceRef *out, void *) {
+        ++creations;
+        *out = test_ref();
+        return kDNSServiceErr_NoError;
+    };
+    if (!start_query(handle, handle->resolve, create) || handle->resolve.id != UINTPTR_MAX) return false;
+    retire_query(handle->resolve);
+    return !start_query(handle, handle->resolve, create) && creations == 1 && queryOwners.empty();
+}
+
 int main() {
     @autoreleasepool {
         bool passed = true;
@@ -247,6 +340,11 @@ int main() {
         std::printf("{\"typedHandleLifetimes\":%s}\n", ids_ok ? "true" : "false");
         const bool addresses_ok = resolved_addresses_preserve_endpoint();
         std::printf("{\"resolvedAddressBounds\":%s}\n", addresses_ok ? "true" : "false");
-        return passed && read_ok && ids_ok && addresses_ok ? 0 : 1;
+        __block bool queries_ok = false;
+        dispatch_sync(queue(), ^{
+            queries_ok = route_queries_reject_retired_callbacks() && route_query_exhaustion_stops_creation();
+        });
+        std::printf("{\"routeQueryOwnership\":%s}\n", queries_ok ? "true" : "false");
+        return passed && read_ok && ids_ok && addresses_ok && queries_ok ? 0 : 1;
     }
 }

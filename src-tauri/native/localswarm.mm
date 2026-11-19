@@ -284,7 +284,12 @@ static std::string route_text(nw_connection_t value) {
 }
 
 
-struct Connection : std::enable_shared_from_this<Connection> {
+struct RouteQuery {
+    uintptr_t id = 0;
+    DNSServiceRef ref = nullptr;
+};
+
+struct Connection {
     nw_connection_t value;
     nw_browser_t browser;
     nw_interface_t interface;
@@ -292,7 +297,7 @@ struct Connection : std::enable_shared_from_this<Connection> {
     size_t routeCount = 0, nextRoute = 0;
     uint64_t resolutionEpoch = 0;
     uint32_t requiredIndex = 0;
-    DNSServiceRef resolve = nullptr, addresses = nullptr;
+    RouteQuery resolve, addresses;
     std::string instance;
     bool peerToPeer = false, stopping = false, connectionStopped = false, browserStopped = true;
     bool isolatedTransport = false;
@@ -312,11 +317,50 @@ struct Connection : std::enable_shared_from_this<Connection> {
 using SwarmConnectionHandle = std::shared_ptr<Connection>;
 [[clang::no_destroy]] static HandleTable<Connection> connections(1);
 
+// All operations on this registry, including SDK delivery and deallocation,
+// run on the transport's serial queue. DNS-SD echoes the integer unchanged.
+static uintptr_t nextQueryId = 1;
+[[clang::no_destroy]] static std::unordered_map<uintptr_t, std::weak_ptr<Connection>> queryOwners;
+
+static void retire_query(RouteQuery &query) {
+    if (!query.id) return;
+    DNSServiceRef ref = query.ref;
+    queryOwners.erase(query.id);
+    query = {};
+    DNSServiceRefDeallocate(ref);
+}
+
+template<class Start>
+static bool start_query(const SwarmConnectionHandle &handle, RouteQuery &query, Start start) {
+    if (query.id || !nextQueryId) return false;
+    const uintptr_t id = nextQueryId++;
+    DNSServiceRef ref = nullptr;
+    // The output ref is defined only on success. Callbacks are delivered
+    // after queue assignment, never by polling these references.
+    if (start(&ref, reinterpret_cast<void *>(id)) || !ref) return false;
+    query = {id, ref};
+    queryOwners.emplace(id, handle);
+    if (!DNSServiceSetDispatchQueue(ref, queue())) return true;
+    retire_query(query);
+    return false;
+}
+
+static SwarmConnectionHandle query_owner(void *context, RouteQuery Connection::*slot,
+                                         DNSServiceRef ref, DNSServiceErrorType error) {
+    const auto id = reinterpret_cast<uintptr_t>(context);
+    auto it = queryOwners.find(id);
+    if (it == queryOwners.end()) return nullptr;
+    auto owner = it->second.lock();
+    if (!owner) return nullptr;
+    const auto &active = (*owner).*slot;
+    if (active.id != id || (!error && active.ref != ref)) return nullptr;
+    return owner;
+}
+
 static void clear_resolution(const SwarmConnectionHandle &handle) {
     ++handle->resolutionEpoch;
-    // DNS-SD requires deallocation on its configured serial callback queue.
-    if (handle->resolve) { DNSServiceRefDeallocate(handle->resolve); handle->resolve = nullptr; }
-    if (handle->addresses) { DNSServiceRefDeallocate(handle->addresses); handle->addresses = nullptr; }
+    retire_query(handle->resolve);
+    retire_query(handle->addresses);
 }
 static void finished_connection(const SwarmConnectionHandle &handle) {
     if (!handle->stopping || !handle->connectionStopped || !handle->browserStopped) return;
@@ -406,10 +450,10 @@ static bool copy_resolved_address(const sockaddr *address, uint16_t port, uint32
     }
     return false;
 }
-static void resolved_address(DNSServiceRef, DNSServiceFlags flags, uint32_t index, DNSServiceErrorType error,
+static void resolved_address(DNSServiceRef ref, DNSServiceFlags flags, uint32_t index, DNSServiceErrorType error,
                              const char *, const sockaddr *address, uint32_t ttl, void *context) {
-    auto handle = static_cast<Connection *>(context)->shared_from_this();
-    if (handle->stopping || handle->value) return;
+    auto handle = query_owner(context, &Connection::addresses, ref, error);
+    if (!handle || handle->stopping || handle->value) return;
     if (error) { schedule_next(handle, 300 * NSEC_PER_MSEC); return; }
     sockaddr_storage target {};
     if (!(flags & kDNSServiceFlagsAdd) || !ttl || index != nw_interface_get_index(handle->interface) ||
@@ -441,10 +485,10 @@ static void resolved_address(DNSServiceRef, DNSServiceFlags flags, uint32_t inde
     start_connection(handle);
     nw_browser_cancel(handle->browser);
 }
-static void resolved_service(DNSServiceRef, DNSServiceFlags, uint32_t index, DNSServiceErrorType error,
+static void resolved_service(DNSServiceRef ref, DNSServiceFlags, uint32_t index, DNSServiceErrorType error,
                              const char *, const char *host, uint16_t port, uint16_t, const unsigned char *, void *context) {
-    auto handle = static_cast<Connection *>(context)->shared_from_this();
-    if (handle->stopping || handle->value || handle->addresses) return;
+    auto handle = query_owner(context, &Connection::resolve, ref, error);
+    if (!handle || handle->stopping || handle->value) return;
     if (error || !host || !port || index != nw_interface_get_index(handle->interface)) {
         cancel_connection(handle); return;
     }
@@ -456,25 +500,24 @@ static void resolved_service(DNSServiceRef, DNSServiceFlags, uint32_t index, DNS
     // this one before admitting exactly one address operation; copy its borrowed
     // hostname before deallocation invalidates the callback payload.
     std::string resolvedHost(host, length);
-    if (handle->resolve) { DNSServiceRefDeallocate(handle->resolve); handle->resolve = nullptr; }
+    retire_query(handle->resolve);
     handle->port = port; // DNS-SD supplies network byte order.
-    auto result = DNSServiceGetAddrInfo(&handle->addresses,
-        kDNSServiceFlagsIncludeP2P | kDNSServiceFlagsIncludeAWDL, index,
-        kDNSServiceProtocol_IPv4 | kDNSServiceProtocol_IPv6, resolvedHost.c_str(), resolved_address, handle.get());
-    if (!result) result = DNSServiceSetDispatchQueue(handle->addresses, queue());
-    if (result) cancel_connection(handle);
+    if (!start_query(handle, handle->addresses, [&](DNSServiceRef *out, void *cookie) {
+        return DNSServiceGetAddrInfo(out, kDNSServiceFlagsIncludeP2P | kDNSServiceFlagsIncludeAWDL,
+            index, kDNSServiceProtocol_IPv4 | kDNSServiceProtocol_IPv6, resolvedHost.c_str(),
+            resolved_address, cookie);
+    })) cancel_connection(handle);
 }
 static void resolve_next(SwarmConnectionHandle handle) {
     clear_resolution(handle);
     if (handle->stopping || handle->value) return;
     if (handle->nextRoute >= handle->routeCount) { cancel_connection(handle); return; }
     handle->interface = handle->routes[handle->nextRoute++];
-    auto error = DNSServiceResolve(&handle->resolve,
-        kDNSServiceFlagsIncludeP2P | kDNSServiceFlagsIncludeAWDL,
-        nw_interface_get_index(handle->interface), handle->instance.c_str(),
-        "_localswarm._tcp", "local.", resolved_service, handle.get());
-    if (!error) error = DNSServiceSetDispatchQueue(handle->resolve, queue());
-    if (error) { clear_resolution(handle); schedule_next(handle, 0); }
+    if (!start_query(handle, handle->resolve, [&](DNSServiceRef *out, void *cookie) {
+        return DNSServiceResolve(out, kDNSServiceFlagsIncludeP2P | kDNSServiceFlagsIncludeAWDL,
+            nw_interface_get_index(handle->interface), handle->instance.c_str(),
+            "_localswarm._tcp", "local.", resolved_service, cookie);
+    })) { clear_resolution(handle); schedule_next(handle, 0); }
     else schedule_next(handle, NSEC_PER_SEC);
 }
 static uint64_t make_connection(const char *instance, bool peerToPeer, uint32_t requiredIndex, bool isolatedTransport) {
