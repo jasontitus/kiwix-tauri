@@ -2,6 +2,15 @@
 
 Snapshot taken 2026-11-05, before and after the reductions under "Done", from `src-tauri/Cargo.lock` and `package-lock.json`. Re-run the commands below to refresh it. Vendored forks and native patches are covered in [FORKS.md](FORKS.md).
 
+## Voice pack decoder, 2026-11-18
+
+The optional Kokoro installer uses `bzip2-turbo-rs` 0.1.0 with only its
+`std` feature and the existing checked Rust SHA-256 implementation. The
+decoder crate forbids unsafe code. Its 0BSD license is distributed with the
+app. The installer obtains member names and lengths from the pinned release
+layout. Native speech inference and audio output remain separate dependencies.
+[Decoder measurements and installation boundaries](audit/2026-11-18-voice-pack-decoder.md)
+
 ## Spelling index update, 2026-11-18
 
 The app builds and queries a checked Rust word index from archive titles. The

@@ -12,11 +12,9 @@ that cannot keep up, the reader continues with system voices.
 - Pack: `kokoro-en-fp16-v1_0.tar.bz2` (181,886,349 bytes), pinned release tag
   `kokoro-en-fp16-v1` on the CastCircle repository.
 - SHA-256: `4cafe1c49bf4b0a7f9c2fab9f2b010b05544dde2b28b66e3211e832308a1a1f9`.
-- The app verifies the archive before extraction, rejects absolute/traversal
-  paths and links, extracts into a temporary directory, checks the required
-  files, and only then publishes `models/kokoro-en-fp16-v1_0`.
-- The model is not bundled. It is a one-time network download and can be
-  removed from the same Settings panel. The APK contains the sherpa-onnx and
+- The app checks the download length and SHA-256 in a private file and passes the same open file to the Rust decoder. The installer uses the fixed release layout and authenticates the expanded TAR through its final checksum. It publishes a new model directory with an installation record after verifying the complete model.
+- The standard edition offers the model as a one-time network download. It can be
+  removed from the same Settings panel. The standard APK contains the sherpa-onnx and
   ONNX Runtime libraries needed to run it, not the 181.9 MB model pack.
 - The app (mobile and desktop) offers the download when online and the model is absent:
   a dismissible Library prompt after launch, and a prompt in the Read aloud
@@ -24,7 +22,7 @@ that cannot keep up, the reader continues with system voices.
   surface; playback continues with system voices. There is no automatic
   download.
 
-The archive is a user-owned release asset, not an unpinned upstream branch.
+The archive is a SHA-256-pinned distributor release asset.
 Changing the bytes requires a new tag and a corresponding code update.
 
 ## Runtime
@@ -38,7 +36,7 @@ Changing the bytes requires a new tag and a corresponding code update.
   iOS claims the existing playback `AVAudioSession` for the duration.
 - Synthesis and playback run on one named worker thread. Each sentence-sized
   chunk is cached by text, speaker and rate, so repeated playback is immediate.
-  The cache is bounded to roughly 300 MB and removed with the model.
+  The cache trims verified audio when its recorded size exceeds 300 MiB. Removing the model clears audio backed by matching receipts. Earlier audio, interrupted writes and changed files can remain on disk. Settings reports retained audio after removal.
 - The existing native speech ownership/capability path remains authoritative:
   private/read-only transitions, reader retirement and explicit stop retire
   Kokoro exactly like a platform voice.

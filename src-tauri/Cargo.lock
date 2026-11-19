@@ -689,6 +689,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bzip2-turbo-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae130bec94733820e7012793c98e029fbe606373c564704518a984f093b9c4f3"
+
+[[package]]
 name = "cairo-rs"
 version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3106,7 +3112,7 @@ dependencies = [
  "base64 0.22.1",
  "block2",
  "bytes",
- "bzip2 0.6.1",
+ "bzip2-turbo-rs",
  "cap-fs-ext",
  "cap-std",
  "cc",
@@ -3161,13 +3167,13 @@ dependencies = [
  "socket2",
  "subtle",
  "sys-locale",
- "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-kiwix-mobile",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
  "time",
  "tokio",
  "tokio-util",
