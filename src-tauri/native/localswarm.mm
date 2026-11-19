@@ -11,6 +11,7 @@
 #include <dns_sd.h>
 #include <string>
 #include <array>
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -184,6 +185,48 @@ static bool sharing_interface(nw_interface_t interface) {
     auto type = nw_interface_get_type(interface);
     return direct_interface(interface) || type == nw_interface_type_wifi || type == nw_interface_type_wired;
 }
+// Darwin routing netmasks may omit trailing zero bytes. Read only the
+// advertised part of the mask; omitted bytes do not constrain the subnet.
+static bool on_link_address(const sockaddr *remote, const sockaddr *local, const sockaddr *mask) {
+    constexpr size_t header = offsetof(sockaddr, sa_data);
+    if (!remote || !local || !mask || remote->sa_len < header ||
+        local->sa_len < header || mask->sa_len < header) return false;
+    const int family = remote->sa_family;
+    if (local->sa_family != family || (mask->sa_family != family && mask->sa_family != AF_UNSPEC))
+        return false;
+    size_t offset, width;
+    if (family == AF_INET) {
+        offset = offsetof(sockaddr_in, sin_addr);
+        width = sizeof(in_addr);
+    } else if (family == AF_INET6) {
+        offset = offsetof(sockaddr_in6, sin6_addr);
+        width = sizeof(in6_addr);
+    } else {
+        return false;
+    }
+    if (remote->sa_len < offset + width || local->sa_len < offset + width || mask->sa_len <= offset)
+        return false;
+    const auto peer = reinterpret_cast<const uint8_t *>(remote) + offset;
+    const auto own = reinterpret_cast<const uint8_t *>(local) + offset;
+    const auto bits = reinterpret_cast<const uint8_t *>(mask) + offset;
+    const auto count = std::min(width, size_t(mask->sa_len) - offset);
+    bool nonzero = false;
+    for (size_t i = 0; i < count; ++i) {
+        if ((peer[i] & bits[i]) != (own[i] & bits[i])) return false;
+        nonzero |= bits[i] != 0;
+    }
+    if (!nonzero) return false;
+    if (family == AF_INET) {
+        in_addr address;
+        memcpy(&address, peer, sizeof(address));
+        const auto host = ntohl(address.s_addr);
+        return host && (host >> 24) != 127 && (host >> 28) != 14 && host != 0xffffffff;
+    }
+    in6_addr address;
+    memcpy(&address, peer, sizeof(address));
+    return !IN6_IS_ADDR_UNSPECIFIED(&address) && !IN6_IS_ADDR_LOOPBACK(&address) &&
+        !IN6_IS_ADDR_MULTICAST(&address) && !IN6_IS_ADDR_V4MAPPED(&address);
+}
 static bool local_address(const sockaddr *remote, nw_interface_t interface) {
     if (!remote || !interface || !sharing_interface(interface)) return false;
     const char *name = nw_interface_get_name(interface);
@@ -192,27 +235,8 @@ static bool local_address(const sockaddr *remote, nw_interface_t interface) {
     if (getifaddrs(&addresses) != 0) return false;
     bool allowed = false;
     for (auto entry = addresses; entry; entry = entry->ifa_next) {
-        if (!entry->ifa_addr || !entry->ifa_netmask || strcmp(entry->ifa_name, name) ||
-            !(entry->ifa_flags & IFF_UP) || entry->ifa_addr->sa_family != remote->sa_family) continue;
-        if (remote->sa_family == AF_INET) {
-            auto ip = ((const sockaddr_in *)remote)->sin_addr.s_addr;
-            auto local = ((const sockaddr_in *)entry->ifa_addr)->sin_addr.s_addr;
-            auto mask = ((const sockaddr_in *)entry->ifa_netmask)->sin_addr.s_addr;
-            auto host = ntohl(ip);
-            allowed = mask && host && (host >> 24) != 127 && (host >> 28) != 14 &&
-                host != 0xffffffff && (ip & mask) == (local & mask);
-        } else if (remote->sa_family == AF_INET6) {
-            auto ip = &((const sockaddr_in6 *)remote)->sin6_addr;
-            auto local = &((const sockaddr_in6 *)entry->ifa_addr)->sin6_addr;
-            auto mask = &((const sockaddr_in6 *)entry->ifa_netmask)->sin6_addr;
-            bool matches = true, nonzero = false;
-            for (size_t i = 0; i < 16; ++i) {
-                nonzero |= mask->s6_addr[i] != 0;
-                matches &= (ip->s6_addr[i] & mask->s6_addr[i]) == (local->s6_addr[i] & mask->s6_addr[i]);
-            }
-            allowed = nonzero && matches && !IN6_IS_ADDR_UNSPECIFIED(ip) &&
-                !IN6_IS_ADDR_LOOPBACK(ip) && !IN6_IS_ADDR_MULTICAST(ip) && !IN6_IS_ADDR_V4MAPPED(ip);
-        }
+        if (!entry->ifa_name || strcmp(entry->ifa_name, name) || !(entry->ifa_flags & IFF_UP)) continue;
+        allowed = on_link_address(remote, entry->ifa_addr, entry->ifa_netmask);
         if (allowed) break;
     }
     freeifaddrs(addresses);

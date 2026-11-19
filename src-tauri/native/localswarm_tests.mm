@@ -225,6 +225,58 @@ static bool concurrent_leases_and_exhaustion() {
     return ok;
 }
 
+static bool compact_route_masks() {
+    sockaddr_in local4 {}, peer4 {};
+    local4.sin_len = peer4.sin_len = sizeof(local4);
+    local4.sin_family = peer4.sin_family = AF_INET;
+    local4.sin_addr.s_addr = htonl(0xc0000201);
+    peer4.sin_addr.s_addr = htonl(0xc00002fe);
+    // A /24 occupies seven bytes in the Darwin routing ABI.
+    std::array<uint8_t, offsetof(sockaddr_in, sin_addr) + 3> mask4 {};
+    mask4[0] = mask4.size();
+    mask4[1] = AF_INET;
+    std::fill(mask4.end() - 3, mask4.end(), 0xff);
+    auto check4 = [&] {
+        return on_link_address((const sockaddr *)&peer4, (const sockaddr *)&local4,
+            (const sockaddr *)mask4.data());
+    };
+    if (!check4()) return false;
+    peer4.sin_addr.s_addr = htonl(0xc0000301);
+    if (check4()) return false;
+    mask4[0] -= 1;  // /16 now. The byte past the declared length stays 0xff.
+    if (!check4()) return false;
+    mask4[1] = AF_UNSPEC;
+    if (!check4()) return false;
+    mask4[1] = AF_INET6;
+    if (check4()) return false;
+    mask4[1] = AF_INET;
+    mask4[0] = offsetof(sockaddr_in, sin_addr);
+    if (check4()) return false;
+    mask4[0] = mask4.size();
+    std::fill(mask4.end() - 3, mask4.end(), 0);
+    if (check4()) return false;
+
+    sockaddr_in6 local6 {}, peer6 {};
+    local6.sin6_len = peer6.sin6_len = sizeof(local6);
+    local6.sin6_family = peer6.sin6_family = AF_INET6;
+    if (inet_pton(AF_INET6, "2001:db8:42:3::1", &local6.sin6_addr) != 1 ||
+        inet_pton(AF_INET6, "2001:db8:42:3::2", &peer6.sin6_addr) != 1) return false;
+    std::array<uint8_t, offsetof(sockaddr_in6, sin6_addr) + 8> mask6 {};
+    mask6[0] = mask6.size();
+    mask6[1] = AF_INET6;
+    std::fill(mask6.end() - 8, mask6.end(), 0xff);
+    auto check6 = [&] {
+        return on_link_address((const sockaddr *)&peer6, (const sockaddr *)&local6,
+            (const sockaddr *)mask6.data());
+    };
+    if (!check6()) return false;
+    peer6.sin6_len = offsetof(sockaddr_in6, sin6_addr) + sizeof(in6_addr) - 1;
+    if (check6()) return false;
+    peer6.sin6_len = sizeof(peer6);
+    peer6.sin6_addr.s6_addr[7] ^= 1;
+    return !check6();
+}
+
 static bool resolved_addresses_preserve_endpoint() {
     const auto port = htons(54321);
     const uint32_t index = 7;
@@ -345,6 +397,8 @@ int main() {
             queries_ok = route_queries_reject_retired_callbacks() && route_query_exhaustion_stops_creation();
         });
         std::printf("{\"routeQueryOwnership\":%s}\n", queries_ok ? "true" : "false");
-        return passed && read_ok && ids_ok && addresses_ok && queries_ok ? 0 : 1;
+        const bool masks_ok = compact_route_masks();
+        std::printf("{\"compactRouteMasks\":%s}\n", masks_ok ? "true" : "false");
+        return passed && read_ok && ids_ok && addresses_ok && queries_ok && masks_ok ? 0 : 1;
     }
 }
