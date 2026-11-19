@@ -49,6 +49,8 @@ Before the checked Unicode engine was adopted, a standalone macOS ARM64 release 
 
 The same probe with GPL `380d84d` emitted 974 diagnostics across 15 package versions. The ICU normalization stack disappeared from the query engine's release graph. This probe covers the two standalone crates. The app also processes untrusted data in other Rust and native libraries. [Updated compiler counts](audit/2026-11-18-checked-unicode-dependencies.json)
 
+The app now opts out of Zimru's `cli` and `parallel` features. The application's normal dependency graphs drop Rayon, Rayon Core, Crossbeam Deque and Crossbeam Epoch on all nine checked targets, and drop the SIGPIPE helper on the eight Unix targets. Other app paths still use Crossbeam Utils. The standalone Mac reader produced matching bytes against libzim and took 27.03 ms and 41.18 ms for the two 24-article workloads. [Dependency changes, workload scope and review](audit/2026-11-19-zimru-reader-graph.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.

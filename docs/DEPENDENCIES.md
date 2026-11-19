@@ -152,11 +152,11 @@ Platform WebViews (WebKitGTK, WebView2, WKWebView and Android System WebView) re
 
 ## Rust archive search
 
-The GPL Workbench app links two independent Rust libraries. Each Cargo dependency pins a separate history in the same private Git repository. Development of the MIT reader stays in the MIT checkout. Search, ranking and index building stay in the GPL checkout. The app only consumes the engine subcrate and the reader library. The MIT reader has its default writer feature disabled. Its optional C ABI and legacy file mapping are also disabled. The dependency lockfile records both full commit IDs. Bundle resources include the MIT reader license, its vendored Zstandard license texts, the Apache-2.0 license for the LZMA reader, and the GPL engine license, the Unicode data notice and the stopword license texts.
+The GPL Workbench app links two independent Rust libraries. Each Cargo dependency pins a separate history in the same private Git repository. Development of the MIT reader stays in the MIT checkout. Search, ranking and index building stay in the GPL checkout. The app consumes the engine subcrate and the MIT reader with default features disabled. The reader's writer, command-line tools, Rayon APIs, C ABI and legacy file mapping are outside that selection. Workbench manages its own bounded parallel archive verification on desktop. The dependency lockfile records both full commit IDs. Bundle resources include the MIT reader license, its vendored Zstandard license texts, the Apache-2.0 license for the LZMA reader, and the GPL engine license, the Unicode data notice and the stopword license texts.
 
 | Library | Source history | License and build |
 |---|---|---|
-| Zimru | [Positioned archive reader](https://github.com/jasontitus/zimru-xapian/tree/ff8b0ab5e561b0019151d6d614131f59920ff2ee) | MIT. Split input uses bounded reads from retained files. |
+| Zimru | [Positioned archive reader](https://github.com/jasontitus/zimru-xapian/tree/3861631f0e8302d765956f6acac73ed00c1b30b1) | MIT. Split input uses bounded reads from retained files. |
 | zimfile-xapian | [Glass engine](https://github.com/jasontitus/zimru-xapian/tree/380d84d7bb4ba9f30144462fd6bb18e932493fc0/engine) | GPL-3.0-or-later. The app reads indexes. The companion workspace separately provides its index builder. |
 | Zstandard | Zimru's own `vendor/zstd-rs`, based on Avarok 0.1.0 at `bac4c37d86e5307537c145823a106f7ed8f386d7` | MIT OR Apache-2.0. The fork supplies bounded streaming decode and a single-frame writer. Use the vendored revision for comparisons. |
 

@@ -68,7 +68,7 @@ cssparser = "0.37.0"
 # SHA wrapper through the upstream sha1-ring feature. Recheck both on upgrade.
 librqbit = { version = "=9.1.0", default-features = false, features = ["rust-tls"] }
 zimfile-xapian = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "380d84d7bb4ba9f30144462fd6bb18e932493fc0" }
-zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "ff8b0ab5e561b0019151d6d614131f59920ff2ee", default-features = false }
+zimru = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "3861631f0e8302d765956f6acac73ed00c1b30b1", default-features = false }
 cap-std = "4"
 same-file = "1"
 cap-fs-ext = "4"
