@@ -1,0 +1,101 @@
+{
+  "combined_build_tree": "77a2c2fc6133828f8abb324a72d0a0c45235dfba",
+  "build_tree_scope": "Final launcher, wrapper, application and packaged files. A later edit strengthened cleanup in a test helper.",
+  "architecture": "Ubuntu 24.04 x86-64",
+  "entry": "npm run tauri -- build --bundles appimage",
+  "appimage_sha256": "b330e3ef823ab58d12c5205f3fafd96ade8895c0bf10761fa87cd6d6bb378a8f",
+  "application_before_bundle_marker_sha256": "a954a956c178d6f04a9cc91029390001d33336b55e5ed1555323789fa2f0fd5a",
+  "bootstrap_sha256": "93fe0ddf30ba5b2f788f56f64e8b8c9ed8a52f3cf1784d58751fcd95b7ba567e",
+  "resource_files_in_licenses": 67,
+  "checked_storage_licenses_sha256": {
+    "SOURCE.txt": "474ff4f7065b3907e4fb4783ef950b73b5a7f0f1ee4da3e87b7c8acb8e3a16df",
+    "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "LICENSE-MIT": "60a7062291b01ba068f300612cdbdc20382ac1d4934f07bcdd7167c15299f309"
+  },
+  "normal_fuse_launch": {
+    "nativeShellUidWasUnprivileged": true,
+    "ordinaryFuseMountType": "fuse.3",
+    "directMountedRelayFile": true,
+    "version": "Kiwix Rust 0.1.0",
+    "headlessOpenedSampleArchive": true,
+    "ownedMountsAfterTermination": 0,
+    "package_sha256": "b330e3ef823ab58d12c5205f3fafd96ade8895c0bf10761fa87cd6d6bb378a8f",
+    "owned_fixture_removed": true
+  },
+  "headless_archive_checks": {
+    "matches_reference_sha256_canonical_json": "6f50320c4c8810295522bb0f1951a5f477bc1259484fc212ef742e55dc5a6a4b",
+    "cases": [
+      "single",
+      "reopen",
+      "split",
+      "image"
+    ],
+    "article": {
+      "articleBytes": 7669,
+      "originalSha256": "f5309503c148af7dc688cf9a50e53d2136a5823bd54c30488f291136e725815c",
+      "attachedResources": 24
+    },
+    "range": {
+      "bytes": 12414,
+      "sha256": "c11e2ccd984681167b7ea8e333882ca3c801cdb9fa302d402b9a46c266723811",
+      "mime": "image/webp",
+      "rangeStatus": 206,
+      "contentRange": "bytes 137-1111/12414"
+    }
+  },
+  "gui": {
+    "media-normal": {
+      "trusted_click": true,
+      "ended": true,
+      "maximum_played_seconds": 2,
+      "errors": [
+        0
+      ],
+      "same_web_processes_after": true,
+      "mapped_appdir_images": [
+        "kiwix-workbench"
+      ],
+      "mapped_system_renderer": [
+        "libgstreamer-1.0.so.0.2402.0",
+        "libgstvpx.so",
+        "libjavascriptcoregtk-4.1.so.0.10.14",
+        "libvpx.so.9.0.0",
+        "libwebkit2gtk-4.1.so.0.21.10",
+        "libwebkit2gtkinjectedbundle.so"
+      ]
+    },
+    "media-missing": {
+      "trusted_click": true,
+      "ended": false,
+      "maximum_played_seconds": 0,
+      "errors": [
+        0,
+        4
+      ],
+      "same_web_processes_after": true,
+      "mapped_appdir_images": [
+        "kiwix-workbench"
+      ],
+      "mapped_system_renderer": [
+        "libgstreamer-1.0.so.0.2402.0",
+        "libjavascriptcoregtk-4.1.so.0.10.14",
+        "libwebkit2gtk-4.1.so.0.21.10",
+        "libwebkit2gtkinjectedbundle.so"
+      ]
+    }
+  },
+  "native_print": {
+    "pdf_sha256": "23c7f84e64da2f864e40e068f7b26f91d416192064ba3ec8fb8bf0e3655578c6",
+    "bytes": 2089116,
+    "extracted_text_sha256": "202c2289f180650925c9f46848c508f9733561ee1cac2cb6a332f73505b31374",
+    "pages": 1,
+    "paper": "A4"
+  },
+  "raw_gui_artifact_sha256": "b602cabec12613d9925ca4e33789db6ebc372d8e3a234fa602c0708e2692fd91",
+  "limits": [
+    "One Ubuntu installation and virtual desktop; operating systems outside the stated support target remain untested.",
+    "The native package bootstrap and its statically linked dependencies remain in the application inventory. A package signature authenticates bytes without establishing memory safety.",
+    "The signed update test uses two private research builds with the same launcher and disposable keys. No public distribution or production update was performed."
+  ],
+  "bootstrap_and_signed_update_verification": "2026-11-19-linux-system-runtime.md"
+}
