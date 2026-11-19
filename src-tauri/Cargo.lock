@@ -154,8 +154,6 @@ dependencies = [
 [[package]]
 name = "async-compression"
 version = "0.4.52"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ad47a740fb906fffdd891e8b6d5fde2511600f7bfaebd68939fa08a14999459"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -997,8 +995,6 @@ dependencies = [
 [[package]]
 name = "compression-codecs"
 version = "0.4.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84f840cff84d10085260e460023934d0af699e71212b09b2a41452e8bd9cda43"
 dependencies = [
  "compression-core",
  "flate2",
@@ -1008,8 +1004,6 @@ dependencies = [
 [[package]]
 name = "compression-core"
 version = "0.4.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ebdda89edc534bf8d5dd2857562633b6495557e5846552ade994b99ed13c36a"
 
 [[package]]
 name = "concurrent-queue"

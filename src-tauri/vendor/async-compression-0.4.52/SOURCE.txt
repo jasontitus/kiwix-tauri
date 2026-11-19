@@ -1,0 +1,9 @@
+async-compression-0.4.52 from crates.io, MIT OR Apache-2.0.
+Upstream source commit e6376649679145e3ed26af0a7678cc885b3038f8.
+Published archive SHA-256 6ad47a740fb906fffdd891e8b6d5fde2511600f7bfaebd68939fa08a14999459.
+
+The Tokio adapter initializes up to 64 KiB of caller storage with ReadBuf
+and advances it by the codec-reported byte count. Buffered reads that produce
+bytes before an input error return the bytes first, then deliver the exact
+error on the next nonempty read. The fork links its sibling codec and buffer
+crates.

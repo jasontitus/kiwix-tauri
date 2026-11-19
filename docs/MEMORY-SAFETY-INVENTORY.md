@@ -57,6 +57,8 @@ The DEFLATE wrapper now uses initialized output buffers and forbids unsafe Rust 
 
 PNG's remaining Rust Adler-32 paths now use the checked `adler2` implementation through a compatible local wrapper. Both packages forbid unsafe Rust. The Mac and Linux PNG tests matched pixels and rejected bad Adler-32 checksums with verification enabled. The asynchronous DEFLATE adapter and host-side zlib-rs are tracked separately. [PNG dependency coverage and timings](audit/2026-11-19-checked-png-adler.md)
 
+The selected asynchronous gzip path uses initialized slices in the Tokio adapter, codec and buffer crates. The same release configuration reports zero unsafe-code diagnostics in those three crates, down from 17. The app leaves this torrent engine's IP-list URLs unset. Tokio's implementation and optional codecs still require separate coverage. The adapter tests verified short reads before transport errors and retries without losing bytes. [Async gzip review, platform checks and measurements](audit/2026-11-19-checked-async-gzip.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.

@@ -1,0 +1,6 @@
+compression-codecs-0.4.47 from crates.io, MIT OR Apache-2.0.
+Upstream source commit e6376649679145e3ed26af0a7678cc885b3038f8.
+Published archive SHA-256 84f840cff84d10085260e460023934d0af699e71212b09b2a41452e8bd9cda43.
+
+Flate uses the initialized input/output APIs. Other optional backends can
+request the original buffer representation through legacy-output.
