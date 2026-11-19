@@ -14,6 +14,7 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
+#include <cerrno>
 
 using Completion = void (*)(void *, int, const uint8_t *, size_t);
 using Accepted = void (*)(void *, void *);
@@ -272,6 +273,7 @@ struct Connection : std::enable_shared_from_this<Connection> {
     std::condition_variable stopped;
     bool cancelled = false;
     bool ready = false; // All fields except cancelled are confined to queue().
+    bool readEnded = false;
     Completion completion = nullptr;
     void *context = nullptr;
     explicit Connection(nw_connection_t value): value(value) {}
@@ -548,9 +550,28 @@ extern "C" void kiwix_swarm_read(void *raw, size_t maximum, uint64_t request, Re
     auto handle = *(SwarmConnectionHandle *)raw;
     dispatch_async(queue(), ^{
         if (!handle->ready) { completion(request, -1, nil); return; }
-        nw_connection_receive(handle->value, 1, (uint32_t)maximum, ^(dispatch_data_t data, nw_content_context_t, bool complete, nw_error_t error) {
+        if (handle->readEnded) { completion(request, 0, nil); return; }
+        nw_connection_receive(handle->value, 1, (uint32_t)maximum, ^(dispatch_data_t data, nw_content_context_t context, bool complete, nw_error_t error) {
+            if (!handle->ready) { completion(request, -1, nil); return; }
             const bool empty = !data || dispatch_data_get_size(data) == 0;
-            completion(request, error || (empty && !complete) ? -1 : 0, data);
+            if (error) {
+                // A receive queued before the final callback can still reach the OS.
+                const bool exhausted = empty && handle->readEnded &&
+                    nw_error_get_error_domain(error) == nw_error_domain_posix && nw_error_get_error_code(error) == ENODATA;
+                completion(request, exhausted ? 0 : -1, nil);
+                return;
+            }
+            if (complete && context && nw_content_context_get_is_final(context)) {
+                // The final payload and FIN can arrive together. Deliver the bytes
+                // now and retain EOF for the next read on this same stream.
+                handle->readEnded = true;
+            } else if (empty && complete && context) {
+                // Let the live Rust reader request the next message. A cancelled
+                // reader must never re-arm its operation from this native queue.
+                completion(request, 1, nil);
+                return;
+            }
+            completion(request, empty && !handle->readEnded ? -1 : 0, data);
         });
     });
 }
