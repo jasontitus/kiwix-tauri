@@ -35,15 +35,16 @@ Each row covers both sides of an interface. Moving raw operations behind a safe 
 
 ### Progress since the 2026-11-17 snapshot
 
-`942c36306b` and `84fd93e7de` (2026-11-19) removed 15 `unsafe` matches from seven files, five of which became
-unsafe-free (`239` → `224` matches; `42` → `37` files):
+`942c36306b`, `84fd93e7de` and `cdfdf64478` (2026-11-19) removed 16 `unsafe` matches from seven files, five
+of which became unsafe-free (`239` → `223` matches; `42` → `37` files):
 
-- **B3, exclusive-rename and volume-space subset.** `publication::platform_publish{,_in}`,
+- **B3, exclusive-rename, volume-space and lock subset.** `publication::platform_publish{,_in}`,
   `maps::partials::capture_partial`, `library_files::move_exclusive` and
   `localswarm::storage::rename_directory_noreplace` now use `rustix::fs::renameat_with(…, NOREPLACE)`,
-  matching `library_root::publish_exclusive`; `fs_ext::volume_space` uses `rustix::fs::statvfs`. No-replace is
-  still filesystem-enforced, the Linux old-kernel `link(2)` fallback is preserved, and the volume arithmetic
-  and NUL diagnostic are unchanged. The Windows arms, `flock`, file identity and the rest of B3 remain open.
+  matching `library_root::publish_exclusive`; `fs_ext::volume_space` uses `rustix::fs::statvfs` and
+  `try_flock_*` uses `rustix::fs::flock`. No-replace is still filesystem-enforced, the Linux old-kernel
+  `link(2)` fallback is preserved, the volume arithmetic and NUL diagnostic are unchanged, and
+  `EWOULDBLOCK` still maps to `WouldBlock`. The Windows arms, file identity and the rest of B3 remain open.
 - **B10, diagnostic clocks.** `maps::Control::chunk_sha256` and the ignored throughput benchmark now read
   `cpu_time`'s helpers; no `getrusage` or raw `CLOCK_THREAD_CPUTIME_ID` call remains in `src/`. Test-only
   FIFO/interface/ACL calls, the probes and the JNI entry points remain open.

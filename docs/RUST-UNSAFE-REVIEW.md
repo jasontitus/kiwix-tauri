@@ -246,22 +246,28 @@ soundness proof; no Miri, sanitizer or fuzz run was added.
 
 ## Follow-up implemented 2026-11-19 (second batch)
 
-`84fd93e7de` replaces the two `libc::statvfs` blocks in `fs_ext::volume_space` with the safe
-`rustix::fs::statvfs` wrapper. The query is unchanged: the same `statvfs(3)` on Apple, Android and other
-libc targets, and on Linux rustix derives `statvfs` from `statfs` with the same `f_frsize`→`f_bsize`
-fallback. rustix widens every field to `u64`, so the previous platform-width casts are gone; the arithmetic
-stays `f_frsize × f_bavail` and `f_frsize × f_blocks` with saturating multiplication. An interior NUL is
-still rejected with the original `InvalidInput` message before the call.
+`84fd93e7de` and `cdfdf64478` replace the four remaining Unix `unsafe` blocks in `fs_ext`:
+
+- **Volume space (`84fd93e7de`).** `volume_space` calls `rustix::fs::statvfs`. Apple and Android still reach
+  the libc call; on Linux rustix derives `statvfs` from `statfs` with the same `f_frsize`→`f_bsize` fallback
+  glibc uses. rustix widens every field to `u64`, so the platform-width casts are gone; the arithmetic stays
+  `f_frsize × f_bavail` and `f_frsize × f_blocks` with saturating multiplication. An interior NUL is still
+  rejected with the original `InvalidInput` message before the call. One narrow exception is source-traced,
+  not reproduced: on 32-bit glibc with narrow block counters, the old `statvfs` could return `EOVERFLOW`
+  where rustix's `statfs64` path reports the capacity. Neither packaged Linux architecture is affected.
+- **Advisory locks (`cdfdf64478`).** `try_flock_exclusive`/`try_flock_shared` call
+  `rustix::fs::flock` with the non-blocking operations, the same `flock(2)` request as before. `EWOULDBLOCK`
+  still becomes `io::ErrorKind::WouldBlock`, which `is_lock_contention` relies on.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches | 226 | **224** |
+| `unsafe { … }` matches | 226 | **223** |
 | Files containing them | 37 | **37** |
 | `unsafe extern` / `unsafe fn` / `unsafe impl` lines | 58 | **58** |
 
-`fs_ext` keeps its `flock(2)` block: the 2026-11-12 rationale (advisory lock semantics and the
-`EWOULDBLOCK`/`ERROR_LOCK_VIOLATION` mapping) has not been re-verified on every target. The Windows volume
-queries also stay.
+The Windows `LockFileEx` and volume queries remain; `fs_ext` now has three blocks, all Windows-only. The
+volume-space test proves `total > 0` and `available <= total`, so a zero fragment or block count fails, but
+it does not independently prove the byte scale of `f_frsize`.
 
 **Verification exercised:** `cargo check --lib`, `cargo clippy --lib -- -D warnings`, `fs_ext::` (2 tests,
 including the volume-space and NUL assertions) and `library_root::` (35 tests) on macOS; the Android lib

@@ -17,7 +17,7 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 | `src-tauri/src/library_files.rs` | `move_exclusive` (Unix arm) |
 | `src-tauri/src/localswarm/storage.rs` | `rename_directory_noreplace` (Unix arm) |
 | `src-tauri/src/maps.rs` | `evaluation` module and `Control::chunk_sha256` clock reads |
-| `src-tauri/src/fs_ext.rs` | `volume_space` (Unix arm) and its volume-space test |
+| `src-tauri/src/fs_ext.rs` | `volume_space`, `try_flock_exclusive`/`try_flock_shared` (Unix arms) and their tests |
 | `src-tauri/src/acquisition_tests.rs` | `cpu_seconds`, `bench_loopback_throughput` |
 | `src-tauri/src/cpu_time.rs` | documentation and lint reason only |
 | `docs/RUST-UNSAFE-REVIEW.md` | sections `## Follow-up implemented 2026-11-19` and the second batch |
@@ -35,6 +35,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   the regression-test insertion displaced, and scopes the doc section's revision claim.
 - `84fd93e7de` — replaces the Unix `libc::statvfs` blocks with `rustix::fs::statvfs`; same fields, arithmetic
   and NUL diagnostic.
+- `cdfdf64478` — replaces the Unix `libc::flock` helper with `rustix::fs::flock`; same non-blocking
+  operations and `WouldBlock` mapping.
 
 ## Status
 
@@ -43,9 +45,11 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - Verified for Android: `cargo check --lib --target aarch64-linux-android --features android-evaluation`
   with NDK 28 under Rust 1.99.1.
 - Not run: iOS/Linux cross-target checks, device tests, sanitizer/Miri.
-- First batch: 239 → 226 matches, 42 → 37 files; second batch (`84fd93e7de`): 226 → 224. The four initial
-  findings and two follow-up findings from the first batch are fixed and independently verified.
-- The second batch (`84fd93e7de`) awaits independent review.
+- First batch: 239 → 226 matches, 42 → 37 files. Second batch (`84fd93e7de`, `cdfdf64478`): 226 → 223.
+  The four initial findings and two follow-up findings from the first batch are fixed and independently
+  verified.
+- The second batch is under independent review (statvfs parity qualification already returned; flock change
+  included in the same review round).
 
 ## Not reserved (safe for the other session)
 
