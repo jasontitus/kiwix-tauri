@@ -25,12 +25,14 @@ fn sha1_first_add(e: u32, w0: [u32; 4]) -> [u32; 4] {
     [e.wrapping_add(a), b, c, d]
 }
 
+#[inline(always)]
 fn sha1msg1(a: [u32; 4], b: [u32; 4]) -> [u32; 4] {
     let [_, _, w2, w3] = a;
     let [w4, w5, _, _] = b;
     [a[0] ^ w2, a[1] ^ w3, a[2] ^ w4, a[3] ^ w5]
 }
 
+#[inline(always)]
 fn sha1msg2(a: [u32; 4], b: [u32; 4]) -> [u32; 4] {
     let [x0, x1, x2, x3] = a;
     let [_, w13, w14, w15] = b;
@@ -48,6 +50,7 @@ fn sha1_first_half(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     sha1_first_add(abcd[0].rotate_left(30), msg)
 }
 
+#[inline(always)]
 fn sha1_digest_round_x4(abcd: [u32; 4], work: [u32; 4], i: i8) -> [u32; 4] {
     match i {
         0 => sha1rnds4c(abcd, add(work, [K[0]; 4])),
@@ -58,6 +61,7 @@ fn sha1_digest_round_x4(abcd: [u32; 4], work: [u32; 4], i: i8) -> [u32; 4] {
     }
 }
 
+#[inline(always)]
 fn sha1rnds4c(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     let [mut a, mut b, mut c, mut d] = abcd;
     let [t, u, v, w] = msg;
@@ -96,6 +100,7 @@ fn sha1rnds4c(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     [b, c, d, e]
 }
 
+#[inline(always)]
 fn sha1rnds4p(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     let [mut a, mut b, mut c, mut d] = abcd;
     let [t, u, v, w] = msg;
@@ -134,6 +139,7 @@ fn sha1rnds4p(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     [b, c, d, e]
 }
 
+#[inline(always)]
 fn sha1rnds4m(abcd: [u32; 4], msg: [u32; 4]) -> [u32; 4] {
     let [mut a, mut b, mut c, mut d] = abcd;
     let [t, u, v, w] = msg;
