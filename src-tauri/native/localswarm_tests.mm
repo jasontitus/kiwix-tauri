@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <vector>
+#include <thread>
+#include <atomic>
 
 static dispatch_data_t retained_send;
 static void capture_send(nw_connection_t, dispatch_data_t content, nw_content_context_t,
@@ -41,10 +43,11 @@ static bool retained_content_is_owned(size_t length, bool release_before_callbac
     const auto expected = input;
     auto handle = std::make_shared<Connection>(nil);
     handle->ready = true;
+    const auto id = connections.insert(handle);
     auto result = std::make_shared<WriteResult>();
     @autoreleasepool {
         auto data = dispatch_data_create(input.data(), length, nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
-        kiwix_swarm_write(&handle, data, ^(int status, size_t bytes) {
+        kiwix_swarm_write(id, data, ^(int status, size_t bytes) {
             result->status = status;
             result->length = bytes;
             ++result->callbacks;
@@ -63,6 +66,7 @@ static bool retained_content_is_owned(size_t length, bool release_before_callbac
         matches = size == expected.size() && std::equal(expected.begin(), expected.end(), (const uint8_t *)bytes);
         retained_send = nil;
     });
+    kiwix_swarm_release(id);
     return matches && result->status == 0 && result->length == length && result->callbacks == 1;
 }
 
@@ -84,10 +88,11 @@ static void read_completed(uint64_t id, int status, dispatch_data_t data) {
 static bool finish_and_revoke() {
     auto handle = std::make_shared<Connection>(nil);
     handle->ready = true;
+    auto stream = connections.insert(handle);
     auto nonfinal = nw_content_context_create("part");
     auto data = dispatch_data_create("end", 3, nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
     auto deliver = [&](uint64_t id, dispatch_data_t bytes, nw_content_context_t context, bool complete, bool revoke) {
-        kiwix_swarm_read(&handle, 16, id, read_completed);
+        kiwix_swarm_read(stream, 16, id, read_completed);
         dispatch_sync(queue(), ^{
             if (revoke) handle->ready = false;
             auto callback = pending_receive;
@@ -98,14 +103,89 @@ static bool finish_and_revoke() {
     deliver(1, nil, nonfinal, true, false);
     deliver(2, data, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, false, false);
     deliver(3, data, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, false);
-    kiwix_swarm_read(&handle, 16, 4, read_completed);
+    kiwix_swarm_read(stream, 16, 4, read_completed);
     dispatch_sync(queue(), ^{});
     auto second = std::make_shared<Connection>(nil);
     second->ready = true;
+    kiwix_swarm_release(stream);
     handle = second;
+    stream = connections.insert(second);
     deliver(5, data, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, true);
     const std::vector<Observation> expected{{1, 1, 0}, {2, 0, 3}, {3, 0, 3}, {4, 0, 0}, {5, -1, 0}};
+    kiwix_swarm_release(stream);
     return received == expected && receive_calls == 4 && !pending_receive && !second->readEnded;
+}
+
+// A queued operation owns the selected connection even when its ID is retired.
+// Replayed and wrong-kind IDs must fail without acting on a replacement.
+static bool retired_ids_do_not_alias() {
+    auto first = std::make_shared<Connection>(nil);
+    first->connectionStopped = true;
+    first->ready = true;
+    const auto id = connections.insert(first);
+    auto listener = std::make_shared<Listener>(nil, nil, nil, false);
+    listener->listenerStopped = true;
+    const auto listener_id = listeners.insert(listener);
+    auto data = dispatch_data_create("x", 1, nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+    __block int before = -1;
+    kiwix_swarm_write(id, data, ^(int status, size_t) { before = status; });
+    std::thread joiner([=] { kiwix_swarm_join(id); });
+    kiwix_swarm_release(id);
+    kiwix_swarm_release(id);
+    joiner.join();
+    dispatch_sync(queue(), ^{});
+    if (before != 0 || !first->cancelled || connections.get(id)) return false;
+    auto next = std::make_shared<Connection>(nil);
+    next->connectionStopped = true;
+    const auto next_id = connections.insert(next);
+    kiwix_swarm_release(listener_id);
+    kiwix_swarm_listener_release(next_id);
+    kiwix_swarm_listener_join(next_id);
+    kiwix_swarm_join(listener_id);
+    bool ok = next_id != id && listeners.get(listener_id) == listener && connections.get(next_id) == next;
+    for (auto invalid : {uint64_t(0), id, listener_id}) {
+        __block unsigned errors = 0;
+        kiwix_swarm_start(invalid, ^(int status, size_t) { if (status < 0) ++errors; });
+        kiwix_swarm_write(invalid, data, ^(int status, size_t) { if (status < 0) ++errors; });
+        kiwix_swarm_read(invalid, 1, invalid, read_completed);
+        dispatch_sync(queue(), ^{});
+        ok &= errors == 2 && received.back() == Observation{invalid, -1, 0} &&
+              kiwix_swarm_interface_index(invalid) == 0;
+    }
+    __block unsigned refused = 0;
+    kiwix_swarm_cancel(next_id);
+    kiwix_swarm_start(next_id, ^(int status, size_t) { if (status < 0) ++refused; });
+    dispatch_sync(queue(), ^{});
+    ok &= refused == 1 && !next->browser;
+    kiwix_swarm_listener_release(listener_id);
+    kiwix_swarm_release(next_id);
+    dispatch_sync(queue(), ^{ retained_send = nil; });
+    return ok && next->cancelled && listener->cancelled;
+}
+
+static bool concurrent_leases_and_exhaustion() {
+    HandleTable<unsigned> table(1);
+    std::atomic<bool> ok(true);
+    std::vector<std::thread> workers;
+    for (unsigned worker = 0; worker < 8; ++worker) {
+        workers.emplace_back([&, worker] {
+            for (unsigned i = 0; i < 256; ++i) {
+                auto value = std::make_shared<unsigned>(i + worker);
+                const auto id = table.insert(value);
+                auto pinned = table.get(id);
+                if (!id || pinned != value || table.take(id) != value || table.get(id) ||
+                    table.take(id) || *pinned != i + worker) ok = false;
+            }
+        });
+    }
+    for (auto& worker : workers) worker.join();
+    for (auto last : {UINT64_MAX, UINT64_MAX - 1}) {
+        HandleTable<unsigned> end(last - 2);
+        auto value = std::make_shared<unsigned>(1);
+        if (end.insert(value) != last - 2 || end.insert(value) != last ||
+            end.take(last) != value || end.insert(value) || end.get(last)) return false;
+    }
+    return ok;
 }
 
 int main() {
@@ -121,6 +201,8 @@ int main() {
         }
         const bool read_ok = finish_and_revoke();
         std::printf("{\"finalPayloadAndRevocation\":%s}\n", read_ok ? "true" : "false");
-        return passed && read_ok ? 0 : 1;
+        const bool ids_ok = retired_ids_do_not_alias() && concurrent_leases_and_exhaustion();
+        std::printf("{\"typedHandleLifetimes\":%s}\n", ids_ok ? "true" : "false");
+        return passed && read_ok && ids_ok ? 0 : 1;
     }
 }

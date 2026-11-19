@@ -13,11 +13,43 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
+#include <limits>
 #include <condition_variable>
 #include <cerrno>
 
 using Completion = void (^)(int, size_t);
-using Accepted = void (^)(void *);
+using Accepted = void (^)(uint64_t);
+// Only process-local IDs cross the Rust boundary. Odd/even domains distinguish
+// connections and listeners. Retired and exhausted IDs are never recycled.
+template<class T>
+class HandleTable {
+    std::mutex mutex;
+    uint64_t next;
+    std::unordered_map<uint64_t, std::shared_ptr<T>> entries;
+public:
+    explicit HandleTable(uint64_t first): next(first) {}
+
+    uint64_t insert(const std::shared_ptr<T>& value) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!next) return 0;
+        const auto id = next;
+        entries.emplace(id, value);
+        next = id > std::numeric_limits<uint64_t>::max() - 2 ? 0 : id + 2;
+        return id;
+    }
+    std::shared_ptr<T> get(uint64_t id) {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto it = entries.find(id);
+        return it == entries.end() ? nullptr : it->second;
+    }
+    std::shared_ptr<T> take(uint64_t id) {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto entry = entries.extract(id);
+        return entry.empty() ? nullptr : std::move(entry.mapped());
+    }
+};
+
 static dispatch_queue_t queue() {
     static dispatch_queue_t value = dispatch_queue_create("org.kiwix.localswarm.quic", DISPATCH_QUEUE_SERIAL);
     return value;
@@ -277,6 +309,7 @@ struct Connection : std::enable_shared_from_this<Connection> {
     explicit Connection(nw_connection_t value): value(value) {}
 };
 using SwarmConnectionHandle = std::shared_ptr<Connection>;
+[[clang::no_destroy]] static HandleTable<Connection> connections(1);
 
 static void clear_resolution(const SwarmConnectionHandle &handle) {
     ++handle->resolutionEpoch;
@@ -426,23 +459,24 @@ static void resolve_next(SwarmConnectionHandle handle) {
     if (error) { clear_resolution(handle); schedule_next(handle, 0); }
     else schedule_next(handle, NSEC_PER_SEC);
 }
-static void *make_connection(const char *instance, bool peerToPeer, uint32_t requiredIndex, bool isolatedTransport) {
-    if (!identity || !instance || !*instance || strnlen(instance, 64) > 63) return nullptr;
+static uint64_t make_connection(const char *instance, bool peerToPeer, uint32_t requiredIndex, bool isolatedTransport) {
+    if (!identity || !instance || !*instance || strnlen(instance, 64) > 63) return 0;
     auto handle = std::make_shared<Connection>(nil);
     handle->connectionStopped = true;
     handle->instance = instance; handle->peerToPeer = peerToPeer;
     handle->requiredIndex = requiredIndex;
     handle->isolatedTransport = isolatedTransport;
-    return new SwarmConnectionHandle(std::move(handle));
+    return connections.insert(handle);
 }
-extern "C" void *kiwix_swarm_connect_on_interface(const char *instance, bool peerToPeer, uint32_t requiredIndex) {
+extern "C" uint64_t kiwix_swarm_connect_on_interface(const char *instance, bool peerToPeer, uint32_t requiredIndex) {
     return make_connection(instance, peerToPeer, requiredIndex, true);
 }
-extern "C" void *kiwix_swarm_connect(const char *instance, bool peerToPeer) {
+extern "C" uint64_t kiwix_swarm_connect(const char *instance, bool peerToPeer) {
     return make_connection(instance, peerToPeer, 0, false);
 }
-extern "C" uint32_t kiwix_swarm_interface_index(void *raw) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+extern "C" uint32_t kiwix_swarm_interface_index(uint64_t id) {
+    auto handle = connections.get(id);
+    if (!handle) return 0;
     __block uint32_t index = 0;
     dispatch_sync(queue(), ^{
         if (!handle->ready || handle->stopping || !handle->interface) return;
@@ -452,9 +486,10 @@ extern "C" uint32_t kiwix_swarm_interface_index(void *raw) {
     });
     return index;
 }
-extern "C" size_t kiwix_swarm_local_address(void *raw, uint8_t *buffer, size_t capacity) {
+extern "C" size_t kiwix_swarm_local_address(uint64_t id, uint8_t *buffer, size_t capacity) {
     if (!buffer || capacity < 16) return 0;
-    auto handle = *(SwarmConnectionHandle *)raw;
+    auto handle = connections.get(id);
+    if (!handle) return 0;
     __block size_t length = 0;
     dispatch_sync(queue(), ^{
         if (!handle->ready || handle->stopping || !handle->value) return;
@@ -498,9 +533,11 @@ extern "C" bool kiwix_swarm_interface_has_address(uint32_t index, const uint8_t 
     freeifaddrs(addresses);
     return found;
 }
-extern "C" void kiwix_swarm_start(void *raw, Completion completion) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+extern "C" void kiwix_swarm_start(uint64_t id, Completion completion) {
+    auto handle = connections.get(id);
+    if (!handle) { completion(-1, 0); return; }
     dispatch_async(queue(), ^{
+        if (handle->stopping) { completion(-1, 0); return; }
         handle->completion = completion;
         if (handle->value) { start_connection(handle); return; }
         auto params = nw_parameters_create();
@@ -544,8 +581,9 @@ extern "C" void kiwix_swarm_start(void *raw, Completion completion) {
 }
 // Network.framework lends its immutable dispatch data for the callback.
 using ReadCompletion = void (*)(uint64_t, int, dispatch_data_t);
-extern "C" void kiwix_swarm_read(void *raw, size_t maximum, uint64_t request, ReadCompletion completion) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+extern "C" void kiwix_swarm_read(uint64_t id, size_t maximum, uint64_t request, ReadCompletion completion) {
+    auto handle = connections.get(id);
+    if (!handle) { completion(request, -1, nil); return; }
     dispatch_async(queue(), ^{
         if (!handle->ready) { completion(request, -1, nil); return; }
         if (handle->readEnded) { completion(request, 0, nil); return; }
@@ -573,8 +611,9 @@ extern "C" void kiwix_swarm_read(void *raw, size_t maximum, uint64_t request, Re
         });
     });
 }
-extern "C" void kiwix_swarm_write(void *raw, dispatch_data_t data, Completion completion) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+extern "C" void kiwix_swarm_write(uint64_t id, dispatch_data_t data, Completion completion) {
+    auto handle = connections.get(id);
+    if (!handle) { completion(-1, 0); return; }
     const size_t length = dispatch_data_get_size(data);
     // ARC retains the immutable bytes and the completion across queue handoffs.
     dispatch_async(queue(), ^{
@@ -584,8 +623,7 @@ extern "C" void kiwix_swarm_write(void *raw, dispatch_data_t data, Completion co
         });
     });
 }
-extern "C" void kiwix_swarm_cancel(void *raw) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+static void queue_cancel_connection(SwarmConnectionHandle handle) {
     dispatch_async(queue(), ^{
         auto retire = handle->retireTransport;
         handle->retireTransport = nil;
@@ -593,15 +631,22 @@ extern "C" void kiwix_swarm_cancel(void *raw) {
         cancel_connection(handle);
     });
 }
-extern "C" void kiwix_swarm_join(void *raw) {
-    auto handle = *(SwarmConnectionHandle *)raw;
-    kiwix_swarm_cancel(raw);
+extern "C" void kiwix_swarm_cancel(uint64_t id) {
+    if (auto handle = connections.get(id)) queue_cancel_connection(handle);
+}
+extern "C" void kiwix_swarm_join(uint64_t id) {
+    auto handle = connections.get(id);
+    if (!handle) return;
+    queue_cancel_connection(handle);
     std::unique_lock<std::mutex> lock(handle->mutex);
     handle->stopped.wait(lock, [&] { return handle->cancelled; });
 }
-extern "C" void kiwix_swarm_release(void *raw) { delete (SwarmConnectionHandle *)raw; }
-extern "C" long kiwix_swarm_route(void *raw, char *buffer, size_t capacity) {
-    auto handle = *(SwarmConnectionHandle *)raw;
+extern "C" void kiwix_swarm_release(uint64_t id) {
+    if (auto handle = connections.take(id)) queue_cancel_connection(handle);
+}
+extern "C" long kiwix_swarm_route(uint64_t id, char *buffer, size_t capacity) {
+    auto handle = connections.get(id);
+    if (!handle) return -1;
     __block std::string text;
     dispatch_sync(queue(), ^{
         if (!handle->ready || !handle->value || handle->stopping) return;
@@ -648,6 +693,7 @@ struct Listener {
         value(value), oneRequest(oneRequest), ready(ready), accept(accept) {}
 };
 using ListenerHandle = std::shared_ptr<Listener>;
+[[clang::no_destroy]] static HandleTable<Listener> listeners(2);
 static void finished_listener(const ListenerHandle &listener) {
     if (!listener->listenerStopped || listener->groupCount) return;
     { std::lock_guard<std::mutex> lock(listener->mutex); listener->cancelled = true; }
@@ -661,11 +707,13 @@ static void cancel_listener(const ListenerHandle &listener) {
     if (listener->value && !listener->listenerStopped) nw_listener_cancel(listener->value);
     finished_listener(listener);
 }
-extern "C" void *kiwix_swarm_listen(Accepted accept, Completion ready, bool oneRequest) {
+extern "C" uint64_t kiwix_swarm_listen(Accepted accept, Completion ready, bool oneRequest) {
     auto params = parameters();
     auto value = params ? nw_listener_create(params) : nil;
-    if (!value) { ready(-1, 0); return nullptr; }
+    if (!value) { ready(-1, 0); return 0; }
     auto listener = std::make_shared<Listener>(value, accept, ready, oneRequest);
+    const auto id = listeners.insert(listener);
+    if (!id) { ready(-1, 0); return 0; }
     nw_listener_set_queue(value, queue());
     // A multiplex listener owns QUIC transports separately from their incoming
     // application streams. Bound and retain the transports here; Rust receives
@@ -696,8 +744,15 @@ extern "C" void *kiwix_swarm_listen(Accepted accept, Completion ready, bool oneR
                 (listener->oneRequest && listener->groupPhases[slot] != Listener::GroupPhase::AwaitingStream)) {
                 nw_connection_cancel(incoming); return;
             }
-            listener->groupPhases[slot] = Listener::GroupPhase::Active;
             auto request = std::make_shared<Connection>(incoming);
+            const auto id = connections.insert(request);
+            if (!id) {
+                nw_connection_cancel(incoming);
+                listener->groupPhases[slot] = Listener::GroupPhase::Retiring;
+                nw_connection_group_cancel(listener->groups[slot]);
+                return;
+            }
+            listener->groupPhases[slot] = Listener::GroupPhase::Active;
             if (listener->oneRequest) {
                 listener->requests[slot] = request;
                 request->transportStopped = false;
@@ -714,7 +769,7 @@ extern "C" void *kiwix_swarm_listen(Accepted accept, Completion ready, bool oneR
                     nw_connection_group_cancel(owner->groups[slot]);
                 };
             }
-            listener->accept(new SwarmConnectionHandle(std::move(request)));
+            listener->accept(id);
         });
         nw_connection_group_set_state_changed_handler(group,
             ^(nw_connection_group_state_t state, __unused nw_error_t error) {
@@ -771,16 +826,20 @@ extern "C" void *kiwix_swarm_listen(Accepted accept, Completion ready, bool oneR
         }
     });
     nw_listener_start(value);
-    return new ListenerHandle(listener);
+    return id;
 }
-extern "C" void kiwix_swarm_listener_cancel(void *raw) {
-    auto listener = *(ListenerHandle *)raw;
+extern "C" void kiwix_swarm_listener_cancel(uint64_t id) {
+    auto listener = listeners.get(id);
+    if (!listener) return;
     dispatch_async(queue(), ^{ cancel_listener(listener); });
 }
-extern "C" void kiwix_swarm_listener_join(void *raw) {
-    auto handle = *(ListenerHandle *)raw;
-    kiwix_swarm_listener_cancel(raw);
+extern "C" void kiwix_swarm_listener_join(uint64_t id) {
+    auto handle = listeners.get(id);
+    if (!handle) return;
+    dispatch_async(queue(), ^{ cancel_listener(handle); });
     std::unique_lock<std::mutex> lock(handle->mutex);
     handle->stopped.wait(lock, [&] { return handle->cancelled; });
 }
-extern "C" void kiwix_swarm_listener_release(void *raw) { delete (ListenerHandle *)raw; }
+extern "C" void kiwix_swarm_listener_release(uint64_t id) {
+    if (auto handle = listeners.take(id)) dispatch_async(queue(), ^{ cancel_listener(handle); });
+}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Narrow byte-stream bridge. Native code owns QUIC/AWDL; Rust owns the protocol.
-use std::{ffi::{c_char, c_void, CString}, ptr::NonNull, sync::{Arc, LazyLock}, time::Duration};
+use std::{ffi::{c_char, CString}, num::NonZeroU64, sync::{Arc, LazyLock}, time::Duration};
 use block2::{Block, RcBlock};
 use dispatch2::DispatchData;
 use tokio::sync::{mpsc, oneshot};
@@ -11,22 +11,22 @@ mod read_request;
 type Completion = Block<dyn Fn(i32, usize)>;
 unsafe extern "C" {
     fn kiwix_swarm_identity(p12: *const u8, length: usize, der: *const u8, der_length: usize) -> bool;
-    fn kiwix_swarm_connect(instance: *const c_char, peer_to_peer: bool) -> *mut c_void;
-    fn kiwix_swarm_connect_on_interface(instance: *const c_char, peer_to_peer: bool, required_index: u32) -> *mut c_void;
-    fn kiwix_swarm_interface_index(raw: *mut c_void) -> u32;
-    fn kiwix_swarm_local_address(raw: *mut c_void, buffer: *mut u8, capacity: usize) -> usize;
+    fn kiwix_swarm_connect(instance: *const c_char, peer_to_peer: bool) -> u64;
+    fn kiwix_swarm_connect_on_interface(instance: *const c_char, peer_to_peer: bool, required_index: u32) -> u64;
+    safe fn kiwix_swarm_interface_index(id: u64) -> u32;
+    fn kiwix_swarm_local_address(id: u64, buffer: *mut u8, capacity: usize) -> usize;
     fn kiwix_swarm_interface_has_address(index: u32, bytes: *const u8, length: usize) -> bool;
-    fn kiwix_swarm_start(raw: *mut c_void, callback: &Completion);
-    fn kiwix_swarm_read(raw: *mut c_void, maximum: usize, request: u64, callback: extern "C" fn(u64, i32, Option<&dispatch2::DispatchData>));
-    fn kiwix_swarm_write(raw: *mut c_void, data: &DispatchData, callback: &Completion);
-    fn kiwix_swarm_cancel(raw: *mut c_void);
-    fn kiwix_swarm_join(raw: *mut c_void);
-    fn kiwix_swarm_release(raw: *mut c_void);
-    fn kiwix_swarm_route(raw: *mut c_void, buffer: *mut c_char, capacity: usize) -> isize;
-    fn kiwix_swarm_listen(accept: &Block<dyn Fn(*mut c_void)>, ready: &Completion, one_request: bool) -> *mut c_void;
-    fn kiwix_swarm_listener_cancel(raw: *mut c_void);
-    fn kiwix_swarm_listener_join(raw: *mut c_void);
-    fn kiwix_swarm_listener_release(raw: *mut c_void);
+    fn kiwix_swarm_start(id: u64, callback: &Completion);
+    fn kiwix_swarm_read(id: u64, maximum: usize, request: u64, callback: extern "C" fn(u64, i32, Option<&dispatch2::DispatchData>));
+    fn kiwix_swarm_write(id: u64, data: &DispatchData, callback: &Completion);
+    safe fn kiwix_swarm_cancel(id: u64);
+    safe fn kiwix_swarm_join(id: u64);
+    safe fn kiwix_swarm_release(id: u64);
+    fn kiwix_swarm_route(id: u64, buffer: *mut c_char, capacity: usize) -> isize;
+    fn kiwix_swarm_listen(accept: &Block<dyn Fn(u64)>, ready: &Completion, one_request: bool) -> u64;
+    safe fn kiwix_swarm_listener_cancel(id: u64);
+    safe fn kiwix_swarm_listener_join(id: u64);
+    safe fn kiwix_swarm_listener_release(id: u64);
 }
 
 fn identity() -> Result<(), String> {
@@ -106,26 +106,18 @@ fn completion(operation: Operation) ->
     (block, received)
 }
 
-struct RawConnection(NonNull<c_void>);
-// SAFETY: `RawConnection` owns the only reference to its native connection and
-// no Rust code dereferences or mutates the pointee. The native bridge accepts
-// these calls from any thread and serializes them on its own Network.framework
-// queue, so neither `Send` nor `Sync` can produce concurrent native access.
-// Enforced by the field being private to this module (only the `Connection`
-// methods below call the bridge) and by `Drop` releasing the handle exactly
-// once, after the last `Arc` clone is gone.
-unsafe impl Send for RawConnection {}
-unsafe impl Sync for RawConnection {}
-impl Drop for RawConnection {
-    fn drop(&mut self) { unsafe { kiwix_swarm_cancel(self.0.as_ptr()); kiwix_swarm_release(self.0.as_ptr()); } }
+// The table owns the native state. Only the last Rust owner retires this ID.
+struct ConnectionLease { id: NonZeroU64 }
+impl Drop for ConnectionLease {
+    fn drop(&mut self) { kiwix_swarm_release(self.id.get()); }
 }
 #[derive(Clone)]
-pub struct Connection(Arc<RawConnection>);
+pub struct Connection(Arc<ConnectionLease>);
 impl Connection {
-    fn start(raw: NonNull<c_void>) -> (Self, oneshot::Receiver<Result<usize, String>>) {
-        let connection = Self(Arc::new(RawConnection(raw)));
+    fn start(raw: NonZeroU64) -> (Self, oneshot::Receiver<Result<usize, String>>) {
+        let connection = Self(Arc::new(ConnectionLease { id: raw }));
         let (callback, ready) = completion(Operation::Ready);
-        unsafe { kiwix_swarm_start(raw.as_ptr(), &callback); }
+        unsafe { kiwix_swarm_start(raw.get(), &callback); }
         (connection, ready)
     }
     /// Longest infrastructure attempt. An idle local network answers in
@@ -157,7 +149,7 @@ impl Connection {
         let mut last_error = "No local peer route is available".to_string();
         for &(peer_to_peer, bound) in routes {
             if cancel.is_cancelled() { return Err("LocalSwarm operation cancelled".into()); }
-            let raw = NonNull::new(unsafe {
+            let raw = NonZeroU64::new(unsafe {
                 if owns_transport {
                     kiwix_swarm_connect_on_interface(instance.as_ptr(), peer_to_peer, required_index.unwrap_or(0))
                 } else {
@@ -195,13 +187,13 @@ impl Connection {
         Err(last_error)
     }
     pub(super) fn interface_index(&self) -> Result<u32, String> {
-        let index = unsafe { kiwix_swarm_interface_index(self.0.0.as_ptr()) };
+        let index = kiwix_swarm_interface_index(self.0.id.get());
         if index == 0 { return Err("Native QUIC has no live required interface".into()); }
         Ok(index)
     }
     pub(super) fn local_address(&self) -> Result<std::net::IpAddr, String> {
         let mut bytes = [0; 16];
-        match unsafe { kiwix_swarm_local_address(self.0.0.as_ptr(), bytes.as_mut_ptr(), bytes.len()) } {
+        match unsafe { kiwix_swarm_local_address(self.0.id.get(), bytes.as_mut_ptr(), bytes.len()) } {
             4 => Ok(std::net::Ipv4Addr::new(bytes[0], bytes[1], bytes[2], bytes[3]).into()),
             16 => {
                 let address = std::net::Ipv6Addr::from(bytes);
@@ -215,17 +207,17 @@ impl Connection {
     /// address and the resolved peer address, e.g. `awdl0 192.168.1.5 -> ...`.
     pub fn route(&self) -> Option<String> {
         let mut buffer = [0u8; 256];
-        let length = unsafe { kiwix_swarm_route(self.0.0.as_ptr(), buffer.as_mut_ptr().cast(), buffer.len()) };
+        let length = unsafe { kiwix_swarm_route(self.0.id.get(), buffer.as_mut_ptr().cast(), buffer.len()) };
         let bytes = buffer.get(..usize::try_from(length).ok()?)?;
         let text = std::str::from_utf8(bytes).ok()?.trim();
         (!text.is_empty() && text.len() <= 240 && !text.chars().any(char::is_control)).then(|| text.to_string())
     }
-    pub fn close(&self) { unsafe { kiwix_swarm_cancel(self.0.0.as_ptr()); } }
+    pub fn close(&self) { kiwix_swarm_cancel(self.0.id.get()); }
     pub async fn shutdown(&self) {
         self.close();
         let connection = self.clone();
         // The join owns its handle even if this future is dropped.
-        let _ = tokio::task::spawn_blocking(move || unsafe { kiwix_swarm_join(connection.0.0.as_ptr()); }).await;
+        let _ = tokio::task::spawn_blocking(move || kiwix_swarm_join(connection.0.id.get())).await;
     }
     pub async fn read(&self, output: &mut [u8]) -> Result<Option<usize>, String> {
         if output.is_empty() { return Ok(Some(0)); }
@@ -233,7 +225,7 @@ impl Connection {
         let bytes = loop {
             let (ticket, received) = read_request::register(maximum)?;
             // The native operation retains the connection and only echoes the ID.
-            unsafe { kiwix_swarm_read(self.0.0.as_ptr(), maximum, ticket.id(), read_request::complete); }
+            unsafe { kiwix_swarm_read(self.0.id.get(), maximum, ticket.id(), read_request::complete); }
             match received.await.map_err(|_| "Apple QUIC receive callback lost")?? {
                 read_request::Received::Bytes(bytes) => break bytes,
                 read_request::Received::NextContext => continue,
@@ -257,7 +249,7 @@ impl Connection {
             let length = input.len().min(super::network::UNLIMITED_PIECE);
             let data = DispatchData::from_bytes(&input[..length]);
             let (callback, sent) = completion(Operation::Write { bytes: length, stats: stats.clone() });
-            unsafe { kiwix_swarm_write(self.0.0.as_ptr(), &data, &callback); }
+            unsafe { kiwix_swarm_write(self.0.id.get(), &data, &callback); }
             completions.push(sent);
             input = &input[length..];
         }
@@ -272,19 +264,11 @@ impl Connection {
 }
 
 type Incoming = (Connection, oneshot::Receiver<Result<usize, String>>);
-struct RawListener(NonNull<c_void>);
-// SAFETY: as for `RawConnection`, the listener handle is owned here and Rust
-// never dereferences it. The native bridge serializes accept, cancel and
-// release on its own Network.framework queue, so sharing or moving the handle
-// cannot create concurrent native access. Enforced by the private field (only
-// this module calls the listener bridge) and by `Drop` releasing it exactly
-// once, after the last `Arc` clone held by `Listener` is gone.
-unsafe impl Send for RawListener {}
-unsafe impl Sync for RawListener {}
-impl Drop for RawListener {
-    fn drop(&mut self) { unsafe { kiwix_swarm_listener_cancel(self.0.as_ptr()); kiwix_swarm_listener_release(self.0.as_ptr()); } }
+struct ListenerLease { id: NonZeroU64 }
+impl Drop for ListenerLease {
+    fn drop(&mut self) { kiwix_swarm_listener_release(self.id.get()); }
 }
-pub struct Listener { raw: Arc<RawListener>, incoming: mpsc::Receiver<Incoming>, pub port: u16 }
+pub struct Listener { raw: Arc<ListenerLease>, incoming: mpsc::Receiver<Incoming>, pub port: u16 }
 impl Listener {
     pub async fn new(cancel: &CancellationToken) -> Result<Self, String> {
         Self::new_inner(cancel, false).await
@@ -298,8 +282,8 @@ impl Listener {
         identity()?;
         let (sender, incoming) = mpsc::channel(16);
         let (raw, ready) = {
-            let accept = RcBlock::new(queue_callback(move |raw: *mut c_void| {
-                if let Some(raw) = NonNull::new(raw) {
+            let accept = RcBlock::new(queue_callback(move |raw: u64| {
+                if let Some(raw) = NonZeroU64::new(raw) {
                     // A full or closed channel drops the incoming connection and cancels it.
                     let _ = sender.try_send(Connection::start(raw));
                 }
@@ -307,8 +291,8 @@ impl Listener {
             let (callback, ready) = completion(Operation::Ready);
             (unsafe { kiwix_swarm_listen(&accept, &callback, one_request) }, ready)
         };
-        let raw = NonNull::new(raw).ok_or("Cannot create Apple QUIC listener")?;
-        let mut listener = Self { raw: Arc::new(RawListener(raw)), incoming, port: 0 };
+        let raw = NonZeroU64::new(raw).ok_or("Cannot create Apple QUIC listener")?;
+        let mut listener = Self { raw: Arc::new(ListenerLease { id: raw }), incoming, port: 0 };
         let result = super::network::guarded(cancel, async { ready.await.map_err(|_| "Apple QUIC listener callback lost".to_string())? }).await;
         match result.and_then(|port| u16::try_from(port).ok().filter(|port| *port != 0).ok_or("Invalid Apple QUIC listener port".into())) {
             Ok(port) => { listener.port = port; Ok(listener) }
@@ -316,11 +300,11 @@ impl Listener {
         }
     }
     pub async fn accept(&mut self) -> Option<Incoming> { self.incoming.recv().await }
-    pub fn close(&self) { unsafe { kiwix_swarm_listener_cancel(self.raw.0.as_ptr()); } }
+    pub fn close(&self) { kiwix_swarm_listener_cancel(self.raw.id.get()); }
     pub async fn shutdown(&mut self) {
         self.close();
         let raw = self.raw.clone();
-        let _ = tokio::task::spawn_blocking(move || unsafe { kiwix_swarm_listener_join(raw.0.as_ptr()); }).await;
+        let _ = tokio::task::spawn_blocking(move || kiwix_swarm_listener_join(raw.id.get())).await;
         self.incoming.close();
         while let Some((connection, _)) = self.incoming.recv().await { connection.shutdown().await; }
     }
