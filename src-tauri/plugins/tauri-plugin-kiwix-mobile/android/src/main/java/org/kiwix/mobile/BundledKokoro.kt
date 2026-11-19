@@ -12,8 +12,13 @@ import app.tauri.plugin.JSObject
 internal object BundledKokoro {
     private const val ASSET = "kiwix-kokoro-v1.voicepack"
 
+    fun containsPack(listing: Array<String>?): Boolean {
+        val names = checkNotNull(listing) { "Cannot read the installed package's voice asset list" }
+        return ASSET in names
+    }
+
     fun location(context: Context): JSObject {
-        if (ASSET !in context.assets.list("").orEmpty()) return JSObject().put("available", false)
+        if (!containsPack(context.assets.list(""))) return JSObject().put("available", false)
         context.assets.openFd(ASSET).use { asset ->
             val stat = Os.fstat(asset.fileDescriptor)
             val info = context.applicationInfo
