@@ -1022,6 +1022,33 @@ async fn receive_pack(lease: &install::Lease, internet: u64, progress: impl Fn(u
 }
 
 #[cfg(test)]
+mod fixtures {
+    use std::{fs, io, path::Path};
+
+    pub(super) fn profile() -> io::Result<tempfile::TempDir> {
+        let mut builder = tempfile::Builder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(fs::Permissions::from_mode(0o700));
+        }
+        builder.tempdir()
+    }
+
+    pub(super) fn write_private(path: impl AsRef<Path>, bytes: &[u8]) -> io::Result<()> {
+        use io::Write;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options.open(path)?.write_all(bytes)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
@@ -1050,7 +1077,7 @@ mod tests {
 
     #[tokio::test]
     async fn cutover_waits_for_download_cleanup_before_admitting_a_retry() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = fixtures::profile().unwrap();
         let manager = Arc::new(KokoroManager::new(dir.path()));
         let token = manager.begin_download().unwrap();
         let draining = {
@@ -1071,7 +1098,7 @@ mod tests {
     fn pinned_voice_pack_verifies_and_extracts_without_speech() {
         use std::io::Read;
         let mut source = File::open(std::env::var_os("KIWIX_TEST_KOKORO_PACK").unwrap()).unwrap();
-        let directory = tempfile::tempdir().unwrap();
+        let directory = fixtures::profile().unwrap();
         let mut pack = PackDownload::new(tempfile::tempfile_in(directory.path()).unwrap());
         let mut chunk = vec![0; 128 * 1024];
         loop {
@@ -1110,11 +1137,11 @@ mod tests {
 
     #[tokio::test]
     async fn explicit_bundled_retry_keeps_removal_choice_until_a_complete_install() {
-        let profile = tempfile::tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
         let root = profile.path().canonicalize().unwrap().join("models");
-        fs::create_dir(&root).unwrap();
-        fs::write(root.join(BUNDLED_REMOVED), b"").unwrap();
+        crate::fs_ext::create_private_dir_all(&root).unwrap();
+        fixtures::write_private(root.join(BUNDLED_REMOVED), b"").unwrap();
         assert!(manager.begin_bundled().unwrap().is_none());
         let control = manager.begin_bundled_explicit().unwrap().unwrap();
         let result = install_bundled(&profile.path().canonicalize().unwrap(), std::io::empty(), control).await;
@@ -1125,7 +1152,7 @@ mod tests {
 
     #[tokio::test]
     async fn retired_synthesis_cannot_create_or_publish_article_audio() {
-        let profile = tempfile::tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let manager = Arc::new(KokoroManager::new(&profile.path().canonicalize().unwrap()));
         let stopped = Arc::new(AtomicBool::new(false));
         let (command, _receiver) = mpsc::channel();
@@ -1154,7 +1181,7 @@ mod tests {
 
     #[test]
     fn failed_reopen_and_superseded_jobs_do_not_report_a_live_install() {
-        let profile = tempfile::tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let manager=KokoroManager::new(&profile.path().canonicalize().unwrap());
         let old=manager.begin_download().unwrap();
         assert!(manager.finish_download(Ok(())).unwrap_err().contains("Reopening"));
@@ -1166,13 +1193,13 @@ mod tests {
 
     #[test]
     fn source_change_retires_only_its_probe_and_persisted_verdict() {
-        let profile=tempfile::tempdir().unwrap();
+        let profile=fixtures::profile().unwrap();
         let base=profile.path().canonicalize().unwrap();
         let root=base.join("models");
         let model=root.join(MODEL_DIR);
         let make=|| {
-            fs::create_dir_all(model.join("espeak-ng-data")).unwrap();
-            for name in ["model.fp16.onnx","tokens.txt","voices.bin","lexicon-us-en.txt","lexicon-gb-en.txt"] { fs::write(model.join(name),b"fixture").unwrap(); }
+            crate::fs_ext::create_private_dir_all(model.join("espeak-ng-data")).unwrap();
+            for name in ["model.fp16.onnx","tokens.txt","voices.bin","lexicon-us-en.txt","lexicon-gb-en.txt"] { fixtures::write_private(model.join(name), b"fixture").unwrap(); }
         };
         make();
         let manager=KokoroManager::new(&base);
@@ -1216,7 +1243,7 @@ mod tests {
     #[ignore = "requires KIWIX_TEST_KOKORO_BUNDLED containing the verified factory asset"]
     async fn bundled_install_reopen_remove_and_explicitly_reinstall_without_speech() {
         let path = std::env::var_os("KIWIX_TEST_KOKORO_BUNDLED").unwrap();
-        let profile = tempfile::tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
         let control = manager.begin_bundled().unwrap().unwrap();
         let result = install_bundled(&profile.path().canonicalize().unwrap(), File::open(&path).unwrap(), control).await;
