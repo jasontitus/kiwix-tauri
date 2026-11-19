@@ -1,0 +1,899 @@
+{
+  "integration_base": "f7fc9b815459d5c931a95e06024c2a77dedd712d",
+  "storage_source": "4c884281d8333f87d6d9e676da90f947bee9495a",
+  "inputs": {
+    "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+    "preview.zim": "64c381c2d63bff5f30ac3223292b613e6f6bbec9ef2b9e2d6818c7d9a4a578d8"
+  },
+  "method": "ARM64 macOS, unbundled headless release applications. Published and prototype Tendril use the same checked scanner, checked queue and default app features with custom-protocol. For each archive, nine alternating pairs of fresh processes open their own profile. Within each process we first warm and verify each workload, then time five repetitions. Times are the median of the five elapsed times per process. Ratios use eight within-pair measurements after discarding the first pair. Each preview batch includes all listed articles. MHTML time includes publication to a new file on the same volume. Imported archives, validation, file removal and process startup lie outside the timer.",
+  "binaries": {
+    "published": "3d97b0b61f36dac49999743fe1e5e59e04bc507f7712b49da980b008304b93f9",
+    "prototype": "bd80323bdf3554641c904783b67b8fd579d6206077debcdcf315f4f1f980dfb0"
+  },
+  "paths": {
+    "wikipedia_en_climate_change_mini_2024-06.zim": [
+      "Land_cover",
+      "Nationally_determined_contribution",
+      "Greenhouse_gas_emissions_by_Russia"
+    ],
+    "wikipedia_en_100_maxi_2024-01.zim": [
+      "A/Elizabeth_II",
+      "A/List_of_national_parks_of_the_United_States",
+      "A/Elvis_Presley"
+    ],
+    "preview.zim": [
+      "fallback.html"
+    ]
+  },
+  "comparisons": [
+    {
+      "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "per_process_ns": [
+        {
+          "published": {
+            "preview": [
+              2299959,
+              2444292,
+              2290125,
+              2343750,
+              2415334
+            ],
+            "mhtml": [
+              18460417,
+              17583292,
+              17656458,
+              16778916,
+              15773584
+            ]
+          },
+          "prototype": {
+            "preview": [
+              2148000,
+              2208292,
+              2432584,
+              2310500,
+              1775833
+            ],
+            "mhtml": [
+              15374000,
+              14330209,
+              16346875,
+              16185542,
+              16140750
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              1894292,
+              1973958,
+              2198625,
+              2359875,
+              2317959
+            ],
+            "mhtml": [
+              14704334,
+              16472209,
+              24900500,
+              21385375,
+              15836583
+            ]
+          },
+          "published": {
+            "preview": [
+              2453292,
+              2169834,
+              2002208,
+              2331417,
+              2210250
+            ],
+            "mhtml": [
+              16204708,
+              16210584,
+              20192083,
+              19471542,
+              14701458
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              2360417,
+              2027333,
+              2283333,
+              2607459,
+              2534958
+            ],
+            "mhtml": [
+              16730667,
+              14374375,
+              16868708,
+              26010042,
+              22534750
+            ]
+          },
+          "prototype": {
+            "preview": [
+              2553667,
+              2271084,
+              1928917,
+              1901416,
+              2199209
+            ],
+            "mhtml": [
+              19289834,
+              16608750,
+              14767959,
+              15570166,
+              16442458
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              2261541,
+              1853167,
+              2324959,
+              2175584,
+              2429083
+            ],
+            "mhtml": [
+              16015875,
+              15865334,
+              16504208,
+              26183958,
+              21681958
+            ]
+          },
+          "published": {
+            "preview": [
+              2390667,
+              2126125,
+              2143750,
+              2168917,
+              2157125
+            ],
+            "mhtml": [
+              21366708,
+              16072167,
+              18066750,
+              15716333,
+              16344167
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              2785792,
+              2143833,
+              2145875,
+              2212000,
+              1960917
+            ],
+            "mhtml": [
+              15915917,
+              15765166,
+              16884917,
+              17785667,
+              23214625
+            ]
+          },
+          "prototype": {
+            "preview": [
+              2436667,
+              2391042,
+              2161417,
+              2260583,
+              2093458
+            ],
+            "mhtml": [
+              17314541,
+              28972750,
+              27122375,
+              19402875,
+              16960959
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              2474167,
+              2317875,
+              1994500,
+              2444041,
+              2569333
+            ],
+            "mhtml": [
+              19785083,
+              16379667,
+              14338584,
+              15988708,
+              17682875
+            ]
+          },
+          "published": {
+            "preview": [
+              2398416,
+              2120000,
+              1757250,
+              2323750,
+              2205958
+            ],
+            "mhtml": [
+              16682084,
+              18086834,
+              27287500,
+              21281583,
+              26798875
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              2426583,
+              2289542,
+              1745500,
+              1959625,
+              1856667
+            ],
+            "mhtml": [
+              16643667,
+              14770625,
+              16742167,
+              15983209,
+              13677000
+            ]
+          },
+          "prototype": {
+            "preview": [
+              2137916,
+              2125209,
+              2187166,
+              2248208,
+              1829375
+            ],
+            "mhtml": [
+              16651750,
+              14443000,
+              20858792,
+              16401958,
+              15508875
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              2501583,
+              2295291,
+              2713542,
+              2384084,
+              1973458
+            ],
+            "mhtml": [
+              22250291,
+              17641125,
+              19654875,
+              16428917,
+              20321459
+            ]
+          },
+          "published": {
+            "preview": [
+              2178250,
+              2505791,
+              2345750,
+              2166792,
+              2236375
+            ],
+            "mhtml": [
+              16727500,
+              23852708,
+              17607042,
+              15574833,
+              19492583
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              2244916,
+              2278875,
+              2619125,
+              1967417,
+              2342000
+            ],
+            "mhtml": [
+              14632500,
+              27637750,
+              17043125,
+              16286166,
+              21243583
+            ]
+          },
+          "prototype": {
+            "preview": [
+              2131417,
+              2681125,
+              2040583,
+              2620667,
+              1852334
+            ],
+            "mhtml": [
+              21480833,
+              18131167,
+              22920333,
+              16910042,
+              27977583
+            ]
+          }
+        }
+      ],
+      "paired_ratio": {
+        "preview": {
+          "median": 1.0509301431466613,
+          "range": [
+            0.9317035930515667,
+            1.1079272588145377
+          ]
+        },
+        "mhtml": {
+          "median": 1.02116922707526,
+          "range": [
+            0.7696639390030338,
+            1.2603811214199274
+          ]
+        }
+      }
+    },
+    {
+      "archive": "wikipedia_en_100_maxi_2024-01.zim",
+      "per_process_ns": [
+        {
+          "published": {
+            "preview": [
+              15897583,
+              15536459,
+              16751292,
+              15474958,
+              15986750
+            ]
+          },
+          "prototype": {
+            "preview": [
+              18991291,
+              18380292,
+              17897834,
+              18459250,
+              18088375
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              18504542,
+              19037375,
+              18608750,
+              18654417,
+              18571000
+            ]
+          },
+          "published": {
+            "preview": [
+              15298875,
+              16059791,
+              16091542,
+              15491500,
+              15283083
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              16160125,
+              15657375,
+              15910750,
+              15939750,
+              16027916
+            ]
+          },
+          "prototype": {
+            "preview": [
+              18034458,
+              17887917,
+              17907834,
+              18297417,
+              18426000
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              18152958,
+              18491292,
+              17192042,
+              17614833,
+              18331334
+            ]
+          },
+          "published": {
+            "preview": [
+              15658958,
+              15759000,
+              15868542,
+              15760042,
+              15665125
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              16115208,
+              15789084,
+              16243541,
+              16562166,
+              16766292
+            ]
+          },
+          "prototype": {
+            "preview": [
+              19379000,
+              18263083,
+              18398958,
+              18635916,
+              18941417
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              20111834,
+              18722667,
+              19644209,
+              19356625,
+              18517000
+            ]
+          },
+          "published": {
+            "preview": [
+              15678750,
+              16920709,
+              15904708,
+              15921917,
+              15991250
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              16097916,
+              15755875,
+              15568584,
+              15472292,
+              16093000
+            ]
+          },
+          "prototype": {
+            "preview": [
+              19384875,
+              18820834,
+              18683958,
+              18486084,
+              19352583
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              20696208,
+              20973666,
+              20945750,
+              21041458,
+              20601208
+            ]
+          },
+          "published": {
+            "preview": [
+              18024167,
+              18124208,
+              17983833,
+              18015916,
+              18452792
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              16442916,
+              17818417,
+              18043541,
+              16961708,
+              17214375
+            ]
+          },
+          "prototype": {
+            "preview": [
+              19730083,
+              19619750,
+              19501042,
+              19264750,
+              18960791
+            ]
+          }
+        }
+      ],
+      "paired_ratio": {
+        "preview": {
+          "median": 1.1570015333699666,
+          "range": [
+            1.1314141062438243,
+            1.2157220138755904
+          ]
+        }
+      }
+    },
+    {
+      "archive": "preview.zim",
+      "per_process_ns": [
+        {
+          "published": {
+            "preview": [
+              796792,
+              856916,
+              846042,
+              833708,
+              789792
+            ],
+            "mhtml": [
+              20829125,
+              22878042,
+              17139208,
+              17924625,
+              29967917
+            ]
+          },
+          "prototype": {
+            "preview": [
+              664666,
+              863125,
+              625416,
+              620917,
+              646083
+            ],
+            "mhtml": [
+              31850458,
+              41614833,
+              54626459,
+              36332833,
+              26769708
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              826125,
+              800417,
+              746459,
+              848917,
+              994375
+            ],
+            "mhtml": [
+              19480458,
+              21653792,
+              24776125,
+              27849208,
+              25840167
+            ]
+          },
+          "published": {
+            "preview": [
+              885208,
+              816000,
+              815042,
+              799167,
+              962875
+            ],
+            "mhtml": [
+              19320375,
+              22374291,
+              24851417,
+              29274459,
+              27162792
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              810042,
+              810625,
+              1039833,
+              836750,
+              865125
+            ],
+            "mhtml": [
+              23277750,
+              28235333,
+              25903375,
+              26332458,
+              26253291
+            ]
+          },
+          "prototype": {
+            "preview": [
+              965042,
+              821083,
+              731250,
+              830083,
+              827292
+            ],
+            "mhtml": [
+              18328292,
+              20995250,
+              21469750,
+              19723791,
+              21966083
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              923375,
+              859167,
+              825292,
+              838750,
+              950125
+            ],
+            "mhtml": [
+              26059042,
+              33685458,
+              27137834,
+              18797542,
+              36810833
+            ]
+          },
+          "published": {
+            "preview": [
+              764500,
+              636750,
+              793625,
+              828250,
+              801417
+            ],
+            "mhtml": [
+              14601958,
+              15410084,
+              19539584,
+              22799625,
+              23524375
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              827000,
+              826166,
+              939791,
+              759791,
+              706250
+            ],
+            "mhtml": [
+              21839458,
+              23120083,
+              26143500,
+              26843375,
+              26532833
+            ]
+          },
+          "prototype": {
+            "preview": [
+              781250,
+              780292,
+              981917,
+              857291,
+              844500
+            ],
+            "mhtml": [
+              12758875,
+              14085541,
+              15995833,
+              15823000,
+              13912583
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              956125,
+              907458,
+              803208,
+              840250,
+              898041
+            ],
+            "mhtml": [
+              13785541,
+              12793916,
+              13818791,
+              15143542,
+              13123459
+            ]
+          },
+          "published": {
+            "preview": [
+              894250,
+              991542,
+              822209,
+              900709,
+              877917
+            ],
+            "mhtml": [
+              14412042,
+              12577416,
+              15097583,
+              15317917,
+              15764917
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              716083,
+              828875,
+              806917,
+              852541,
+              847625
+            ],
+            "mhtml": [
+              14078708,
+              15020375,
+              12656666,
+              13417208,
+              14348000
+            ]
+          },
+          "prototype": {
+            "preview": [
+              760833,
+              781375,
+              782417,
+              785750,
+              788833
+            ],
+            "mhtml": [
+              12167500,
+              21507000,
+              15047500,
+              15540416,
+              14174542
+            ]
+          }
+        },
+        {
+          "prototype": {
+            "preview": [
+              872709,
+              797958,
+              715458,
+              808167,
+              762750
+            ],
+            "mhtml": [
+              12469292,
+              13012584,
+              14041959,
+              13736541,
+              12706875
+            ]
+          },
+          "published": {
+            "preview": [
+              868208,
+              901167,
+              841042,
+              991083,
+              1052875
+            ],
+            "mhtml": [
+              13517542,
+              12319125,
+              13229333,
+              17086959,
+              15171708
+            ]
+          }
+        },
+        {
+          "published": {
+            "preview": [
+              865416,
+              833083,
+              768125,
+              818625,
+              766125
+            ],
+            "mhtml": [
+              16360584,
+              16640500,
+              13710542,
+              14275125,
+              17342167
+            ]
+          },
+          "prototype": {
+            "preview": [
+              811042,
+              833500,
+              812791,
+              758166,
+              917375
+            ],
+            "mhtml": [
+              12701333,
+              13992708,
+              14959167,
+              15079458,
+              12813041
+            ]
+          }
+        }
+      ],
+      "paired_ratio": {
+        "preview": {
+          "median": 0.9985563612351234,
+          "range": [
+            0.8854718381831559,
+            1.082585604032131
+          ]
+        },
+        "mhtml": {
+          "median": 0.9378700674807525,
+          "range": [
+            0.5387779371545508,
+            1.3888644712190392
+          ]
+        }
+      }
+    }
+  ],
+  "macos": "27.2.1",
+  "cargo": "cargo 1.99.1 (5f94df478 2026-08-27) (Homebrew)",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)",
+  "storage_crate_source_sha256": {
+    "src/lib.rs": "4c50331f78780f441d0f7afaeac765b9d874b75ea2844763f9e11f39da0c2110",
+    "src/stream.rs": "27f6c89997d1a995d4b6eda5f95d319f44ed120355a3978a0082760c7dbf8cd4",
+    "Cargo.toml": "9390f537829d9ed4e2b9f2518e6b6964cc728b5c59b2ba33fda44ea746164fa1",
+    "Cargo.lock": "33698af6d09fa111676050e33b05d374ea6decfa77139550103c6667ce30c7ec",
+    "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "LICENSE-MIT": "60a7062291b01ba068f300612cdbdc20382ac1d4934f07bcdd7167c15299f309"
+  },
+  "output_reference": "2026-11-18-checked-html-app-workflows.json",
+  "verified_comparison_sha256": "a22646a2aaaac8daf0bb6ce4b5531ffafca794487f77affa7a975a730d735cb9",
+  "counts": {
+    "processes": 54,
+    "verified_preview_json_including_warmups": 756,
+    "verified_normalized_mhtml_including_warmups": 216,
+    "timed_observations_after_discarding_first_pair_per_workload": 400
+  },
+  "scope": "The full Mac app library type-checked and the normal headless binary linked against the prototype. Cargo and dependency files identified the local storage for both host and target consumers. Each test executable was frozen and hash-checked before and after measurement. The control machine-code section matched the tested signed parser app. App bundling, device execution, allocator behavior and peak memory were outside this comparison."
+}
