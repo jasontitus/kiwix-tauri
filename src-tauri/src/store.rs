@@ -1358,6 +1358,10 @@ struct Inner {
     persisted: Option<State>,
     /// Never included in an update candidate or any persisted State.
     provider_books: Vec<Book>,
+    /// Shell retirements ordered with native capture and session persistence.
+    /// This avoids acquiring the service's window-operation lock from AppKit.
+    #[cfg(desktop)]
+    retired_window_captures: HashSet<String>,
     runtime_private: bool,
     runtime_read_only: bool,
     durability_error: Option<String>,
@@ -2044,6 +2048,8 @@ impl Store {
                 state: visible,
                 persisted,
                 provider_books: Vec::new(),
+                #[cfg(desktop)]
+                retired_window_captures: HashSet::new(),
                 runtime_private: false,
                 runtime_read_only: read_only,
                 durability_error: None,
@@ -2371,6 +2377,12 @@ impl Store {
         Ok(())
     }
 
+    #[cfg(target_os = "macos")]
+    pub(crate) fn retire_window_capture(&self, label: &str) -> Result<(), String> {
+        self.lock()?.retired_window_captures.insert(label.to_owned());
+        Ok(())
+    }
+
     /// Persist the last session for the explicit restore command. `open` limits
     /// the snapshot to windows that were actually open, so an entry left behind
     /// by an earlier run cannot reappear. Private and read-only profiles write
@@ -2386,13 +2398,13 @@ impl Store {
             return Ok(false);
         }
         let mut windows = HashMap::new();
-        for label in open {
+        for label in open.difference(&inner.retired_window_captures) {
             windows.insert(
                 label.clone(),
                 inner.state.windows.get(label).cloned().unwrap_or_default(),
             );
         }
-        let main_open = open.contains("main");
+        let main_open = windows.contains_key("main");
         let main = windows.entry("main".into()).or_default();
         // Keep an empty `main` entry because validation requires one, but a
         // closed main window must not inherit the live tab list: otherwise the
@@ -2742,7 +2754,15 @@ impl Store {
         &self,
         change: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, String> {
-        self.update_inner(true, change)
+        self.update_inner(true, |_, state| change(state))
+    }
+
+    #[cfg(desktop)]
+    pub(crate) fn update_window_capture(
+        &self,
+        change: impl FnOnce(&HashSet<String>, &mut State) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.update_inner(true, |inner, state| change(&inner.retired_window_captures, state))
     }
 
     /// Remote apply and explicit native resolution retain their own causal
@@ -2751,13 +2771,13 @@ impl Store {
         &self,
         change: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, String> {
-        self.update_inner(false, change)
+        self.update_inner(false, |_, state| change(state))
     }
 
     fn update_inner<T>(
         &self,
         capture_local: bool,
-        change: impl FnOnce(&mut State) -> Result<T, String>,
+        change: impl FnOnce(&Inner, &mut State) -> Result<T, String>,
     ) -> Result<T, String> {
         let mut inner = self.lock()?;
         if !capture_local && (inner.runtime_private || inner.runtime_read_only
@@ -2771,7 +2791,7 @@ impl Store {
             return Err(error.clone());
         }
         let mut candidate = inner.state.clone();
-        let result = change(&mut candidate)?;
+        let result = change(&inner, &mut candidate)?;
         candidate.settings.portable_mode = false;
         self.validate_portable_settings(&candidate.settings)?;
         if inner.state.settings.read_only && candidate.settings.read_only {

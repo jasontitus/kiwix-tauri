@@ -5338,7 +5338,7 @@ fn restore_fills_open_but_empty_windows_and_never_replaces_live_tabs() {
         .collect();
     let empty: HashMap<String, usize> =
         open.iter().map(|label| (label.clone(), 0)).collect();
-    let plan = plan_session_restore(&saved, &empty, 0, &open, "main");
+    let plan = plan_session_restore(&saved, &empty, 0, &open, "main", &HashSet::new(), &mut HashMap::new());
     let labels: Vec<&str> = plan.plans.iter().map(|(label, _)| label.as_str()).collect();
     assert!(labels.contains(&"window-1"), "{labels:?}");
     assert!(labels.contains(&"window-2"), "{labels:?}");
@@ -5348,15 +5348,75 @@ fn restore_fills_open_but_empty_windows_and_never_replaces_live_tabs() {
     let live: HashMap<String, usize> = [("main".to_owned(), 0), ("window-1".to_owned(), 1), ("window-2".to_owned(), 0)]
         .into_iter()
         .collect();
-    let plan = plan_session_restore(&saved, &live, 0, &open, "main");
+    let plan = plan_session_restore(&saved, &live, 0, &open, "main", &HashSet::new(), &mut HashMap::new());
     let labels: Vec<&str> = plan.plans.iter().map(|(label, _)| label.as_str()).collect();
     assert!(labels.contains(&"window-2"), "{labels:?}");
     assert!(!labels.contains(&"window-1"), "{labels:?}");
     assert_eq!(plan.skipped, vec!["window-1".to_string()]);
 
     // An empty invoking window adopts its own saved session, not a duplicate.
-    let plan = plan_session_restore(&saved, &empty, 0, &open, "window-2");
+    let plan = plan_session_restore(&saved, &empty, 0, &open, "window-2", &HashSet::new(), &mut HashMap::new());
     assert!(plan.plans.iter().any(|(label, session)| label == "window-2" && session.tabs.len() == 1));
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn explicit_restore_replaces_a_retired_label_without_reopening_it_twice() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let old = "window-retired";
+    let tab = crate::store::NativeWindowTab {
+        group: "saved-group".into(), index: 1, selected: true, focused: false,
+    };
+    let reader_tab = Tab {
+        id: "saved-tab".into(), book_id: None, path: String::new(), title: String::new(),
+        scroll: 0.0, restricted: false, back: Vec::new(), forward: Vec::new(),
+    };
+    service.store.update(|state| {
+        let saved = state.windows.entry(old.into()).or_default();
+        saved.native_tab = Some(tab.clone());
+        saved.tabs.push(reader_tab.clone());
+        Ok(())
+    }).unwrap();
+    assert!(service.store.save_session_snapshot(&[old.to_owned()].into_iter().collect()).unwrap());
+    let saved = service.store.saved_session().unwrap().unwrap();
+    service.clone().dispatch("close_window", json!({"__windowLabel":old})).await.unwrap();
+
+    let mut replacements = HashMap::new();
+    let mut live_tabs = HashMap::from([("main".into(), 1)]);
+    let mut open = HashSet::from(["main".into()]);
+    let retired = service.closed_windows.lock().unwrap().clone();
+    let mut limited = plan_session_restore(&saved, &live_tabs, 1, &open, "main", &retired, &mut replacements);
+    // A retired native window can still occupy the last slot until AppKit
+    // destroys it. No new session may be admitted while all slots are occupied.
+    limited.limit_creations(&open, 16);
+    assert!(limited.plans.is_empty());
+    let first = plan_session_restore(&saved, &live_tabs, 1, &open, "main", &retired, &mut replacements);
+    assert_eq!(first.plans.len(), 1);
+    let (replacement, restored) = first.plans.into_iter().next().unwrap();
+    assert_ne!(replacement, old);
+    assert!(crate::quit::shell_label(&replacement));
+    assert_eq!(restored.native_tab.as_ref().unwrap().group, tab.group);
+    service.store.update(|state| {
+        state.windows.insert(replacement.clone(), restored);
+        Ok(())
+    }).unwrap();
+    open.insert(replacement.clone());
+    live_tabs.insert(replacement.clone(), 1);
+
+    let repeated = plan_session_restore(&saved, &live_tabs, 1, &open, "main", &retired, &mut replacements);
+    assert!(repeated.plans.is_empty());
+    assert_eq!(replacements[old], replacement);
+    let save = |label: &str| json!({"__windowLabel":label, "tabs":[reader_tab.clone()],
+                                   "privacyGeneration":service.launch_generation()});
+    assert!(service.clone().dispatch("save_session", save(old)).await.is_err());
+    service.clone().dispatch("save_session", save(&replacement)).await.unwrap();
+    open.insert(old.into()); // The native window list may still contain the closing object.
+    assert!(service.store.save_session_snapshot(&open).unwrap());
+    let quit = service.store.saved_session().unwrap().unwrap();
+    assert!(!quit.windows.contains_key(old));
+    assert_eq!(quit.windows[&replacement].native_tab.as_ref().unwrap().group, tab.group);
+    service.shutdown().await.unwrap();
 }
 
 

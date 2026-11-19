@@ -2,8 +2,6 @@
 // Cmd+T / Ctrl+Tab remain reader actions; Cmd+Shift+[ / ] switch windows.
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
-#include <cstdlib>
-#include <cstring>
 
 static NSString *const KiwixTabbingIdentifier = @"org.kiwix.workbench.reader";
 static const NSInteger KiwixWindowMenuTag = 0x4B57;
@@ -33,21 +31,18 @@ extern "C" void kiwix_tabbing_install_early(void) {
   onMain(^{ [NSWindow setAllowsAutomaticWindowTabbing:YES]; });
 }
 
-extern "C" void kiwix_tabbing_prepare_window(void *raw, const char *label) {
-  if (!raw || !label) return;
-  NSWindow *window = (__bridge NSWindow *)raw;
-  NSString *name = [NSString stringWithUTF8String:label];
-  if (!name || !([name isEqualToString:@"main"] || [name hasPrefix:@"window-"])) return;
-  onMain(^{
-    objc_setAssociatedObject(window, &KiwixWindowLabelKey, name, OBJC_ASSOCIATION_COPY_NONATOMIC);
-    prepareWindow(window);
-  });
+extern "C" void kiwix_tabbing_prepare_window(NSWindow *window, NSString *label) {
+  // The Rust caller borrows the retained window in Wry's main-thread callback.
+  if (![NSThread isMainThread] || !window ||
+      !([label isEqualToString:@"main"] || [label hasPrefix:@"window-"])) return;
+  objc_setAssociatedObject(window, &KiwixWindowLabelKey, label, OBJC_ASSOCIATION_COPY_NONATOMIC);
+  prepareWindow(window);
 }
 
 // Capture all groups in one main-thread observation, including singleton windows
 // and library-only shells. AppKit's tab order is unrelated to NSApp.windows order.
-extern "C" char *kiwix_tabbing_snapshot(void) {
-  __block char *snapshot = nullptr;
+extern "C" NSData *kiwix_tabbing_snapshot(void) NS_RETURNS_RETAINED {
+  __block NSData *snapshot = nil;
   onMain(^{
     NSMutableArray *members = [NSMutableArray array];
     NSMutableSet<NSWindow *> *seen = [NSMutableSet set];
@@ -67,23 +62,13 @@ extern "C" char *kiwix_tabbing_snapshot(void) {
                              @"selected":@(tab == selected), @"focused":@(focused)}];
       }
     }
-    NSData *data = [NSJSONSerialization dataWithJSONObject:members options:0 error:nil];
-    if (data) {
-      snapshot = static_cast<char *>(malloc(data.length + 1));
-      if (snapshot) {
-        memcpy(snapshot, data.bytes, data.length);
-        snapshot[data.length] = '\0';
-      }
-    }
+    snapshot = [[NSJSONSerialization dataWithJSONObject:members options:0 error:nil] copy];
   });
   return snapshot;
 }
 
-extern "C" void kiwix_tabbing_free_snapshot(char *snapshot) { free(snapshot); }
-
-extern "C" bool kiwix_tabbing_restore(const char *json) {
-  if (!json) return false;
-  NSData *data = [[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
+extern "C" bool kiwix_tabbing_restore(NSData *data) {
+  if (!data) return false;
   NSArray *groups = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
   if (![groups isKindOfClass:[NSArray class]]) return false;
   __block BOOL success = YES;
@@ -96,12 +81,24 @@ extern "C" bool kiwix_tabbing_restore(const char *json) {
     // Validate before changing anything; the Rust plan has already discarded
     // failed creations and excluded every unrelated live window.
     NSMutableSet *restored = [NSMutableSet set];
-    for (NSDictionary *group in groups) {
+    BOOL hasFocus = NO;
+    for (id group in groups) {
+      if (![group isKindOfClass:[NSDictionary class]]) { success = NO; return; }
       NSArray *labels = group[@"windows"];
+      NSString *selection = group[@"selected"];
+      NSNumber *focus = group[@"focused"];
       if (![labels isKindOfClass:[NSArray class]] || labels.count == 0 ||
-          ![labels containsObject:group[@"selected"]]) { success = NO; return; }
-      for (NSString *label in labels) {
-        if (!windows[label] || [restored containsObject:label]) { success = NO; return; }
+          ![selection isKindOfClass:[NSString class]] ||
+          ![focus isKindOfClass:[NSNumber class]] ||
+          CFGetTypeID((__bridge CFTypeRef)focus) != CFBooleanGetTypeID() ||
+          ![labels containsObject:selection]) { success = NO; return; }
+      if (focus.boolValue) {
+        if (hasFocus) { success = NO; return; }
+        hasFocus = YES;
+      }
+      for (id label in labels) {
+        if (![label isKindOfClass:[NSString class]] ||
+            !windows[label] || [restored containsObject:label]) { success = NO; return; }
         [restored addObject:label];
       }
     }
@@ -185,11 +182,13 @@ extern "C" void kiwix_tabbing_install_menu(void) {
   });
 }
 
-extern "C" void kiwix_tabbing_update_menu(const char *json) {
-  if (!json) return;
-  NSData *data = [[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
+extern "C" bool kiwix_tabbing_update_menu(NSData *data) {
+  if (!data) return false;
   NSDictionary *labels = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-  if (![labels isKindOfClass:[NSDictionary class]]) return;
+  if (![labels isKindOfClass:[NSDictionary class]]) return false;
+  for (NSString *label in labels) {
+    if (![labels[label] isKindOfClass:[NSString class]]) return false;
+  }
   onMain(^{
     windowLabels = [labels copy];
     for (NSMenuItem *item in NSApp.mainMenu.itemArray) {
@@ -203,4 +202,5 @@ extern "C" void kiwix_tabbing_update_menu(const char *json) {
       }
     }
   });
+  return true;
 }

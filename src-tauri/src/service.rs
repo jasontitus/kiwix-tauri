@@ -212,6 +212,10 @@ pub struct Service {
     /// hydrated. Their empty first session save must not erase the restored tabs.
     #[cfg(desktop)]
     restored_windows: Mutex<HashSet<String>>,
+    /// Serialize explicit restore from the saved/native snapshots through the
+    /// queued creation. A retired source retains its live replacement label.
+    #[cfg(desktop)]
+    restore_replacements: Arc<tokio::sync::Mutex<HashMap<String, String>>>,
     /// Native window labels whose shell has committed a usable first snapshot.
     /// The startup watchdog reads this to decide whether to paint diagnostics.
     ready_frontends: Mutex<HashSet<String>>,
@@ -374,6 +378,24 @@ struct RestorePlan {
     skipped: Vec<String>,
 }
 
+#[cfg(any(desktop, test))]
+impl RestorePlan {
+    fn limit_creations(&mut self, open: &HashSet<String>, native_open_count: usize) {
+        let mut capacity = 16usize.saturating_sub(native_open_count);
+        self.plans.retain(|(target, _)| {
+            if open.contains(target) {
+                return true;
+            }
+            if capacity == 0 {
+                self.skipped.push(target.clone());
+                return false;
+            }
+            capacity -= 1;
+            true
+        });
+    }
+}
+
 /// Decide which saved windows the explicit restore fills.
 ///
 /// An invoking window with no tabs adopts its own saved session, else the saved
@@ -387,6 +409,8 @@ fn plan_session_restore(
     live_main_tabs: usize,
     open: &HashSet<String>,
     label: &str,
+    retired: &HashSet<String>,
+    replacements: &mut HashMap<String, String>,
 ) -> RestorePlan {
     let caller_tabs = live_tabs
         .get(label)
@@ -397,7 +421,11 @@ fn plan_session_restore(
     let mut skipped: Vec<String> = Vec::new();
     let mut main_planned = false;
     if caller_tabs == 0 {
-        if let Some(own) = saved.windows.get(label).filter(|window| !window.tabs.is_empty() || window.native_tab.is_some()) {
+        let own = saved.windows.get(label).or_else(|| {
+            replacements.iter().find(|(_, target)| target.as_str() == label)
+                .and_then(|(source, _)| saved.windows.get(source))
+        });
+        if let Some(own) = own.filter(|window| !window.tabs.is_empty() || window.native_tab.is_some()) {
             plans.push((label.to_owned(), own.clone()));
         } else if let Some(main) = saved.windows.get("main").filter(|window| !window.tabs.is_empty() || window.native_tab.is_some()) {
             plans.push((label.to_owned(), main.clone()));
@@ -410,18 +438,33 @@ fn plan_session_restore(
         }
         if session.tabs.is_empty() && session.native_tab.is_none() {
             skipped.push(window_label.clone());
-        } else if !open.contains(window_label) {
-            plans.push((window_label.clone(), session.clone()));
-        } else if window_label == "main" && main_tabs == 0 {
+            continue;
+        }
+        let target = if retired.contains(window_label) {
+            let replacement = replacements.entry(window_label.clone())
+                .or_insert_with(|| format!("window-{}", Uuid::new_v4()));
+            if retired.contains(replacement) {
+                *replacement = format!("window-{}", Uuid::new_v4());
+            }
+            if replacement.as_str() == label || saved.windows.contains_key(replacement.as_str()) {
+                continue;
+            }
+            replacement
+        } else {
+            window_label
+        };
+        if !open.contains(target) {
+            plans.push((target.clone(), session.clone()));
+        } else if target == "main" && main_tabs == 0 {
             plans.push(("main".into(), session.clone()));
-        } else if window_label == "main" {
+        } else if target == "main" {
             // Never replace live reader tabs: reopen the saved main session in
             // its own native window.
             plans.push((format!("window-{}", Uuid::new_v4()), session.clone()));
-        } else if live_tabs.get(window_label).copied().unwrap_or(0) == 0 {
+        } else if live_tabs.get(target).copied().unwrap_or(0) == 0 {
             // Open but empty: the saved tabs are pushed into it instead of the
             // restore silently doing nothing for that window.
-            plans.push((window_label.clone(), session.clone()));
+            plans.push((target.clone(), session.clone()));
         } else {
             skipped.push(window_label.clone());
         }
@@ -710,6 +753,8 @@ impl Service {
             session_snapshot_at: Mutex::new(None),
             #[cfg(desktop)]
             restored_windows: Mutex::new(HashSet::new()),
+            #[cfg(desktop)]
+            restore_replacements: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             ready_frontends: Mutex::new(HashSet::new()),
             #[cfg(mobile)]
             mobile: crate::mobile::MobileState::default(),
@@ -2372,10 +2417,16 @@ impl Service {
         }
         let _speech_retirement = self.mobile_speech_lifecycle(command, &args, label)?;
         if command == "close_window" {
-            self.closed_windows
-                .lock()
-                .map_err(|_| "Window state unavailable")?
-                .insert(label.into());
+            {
+                let mut closed = self.closed_windows.lock().map_err(|_| "Window state unavailable")?;
+                #[cfg(target_os = "macos")]
+                if crate::quit::shell_label(label) {
+                    if let Err(error) = self.store.retire_window_capture(label) {
+                        eprintln!("Retiring window capture: {error}");
+                    }
+                }
+                closed.insert(label.into());
+            }
             self.cancel_pdf_jobs(Some(label));
             self.retire_searches(Some(label));
             self.searches.lock().map_err(|_| "Search ownership unavailable")?.remove(label);

@@ -25,32 +25,48 @@ pub const TABBING_IDENTIFIER: &str = "org.kiwix.workbench.reader";
 
 #[cfg(target_os = "macos")]
 mod tabbing {
-    extern "C" {
-        pub fn kiwix_tabbing_install_early();
-        pub fn kiwix_tabbing_prepare_window(
-            window: *mut std::ffi::c_void,
-            label: *const std::ffi::c_char,
-        );
-        pub fn kiwix_tabbing_install_menu();
-        pub fn kiwix_tabbing_update_menu(labels: *const std::ffi::c_char);
-        pub fn kiwix_tabbing_snapshot() -> *mut std::ffi::c_char;
-        pub fn kiwix_tabbing_free_snapshot(snapshot: *mut std::ffi::c_char);
-        pub fn kiwix_tabbing_restore(groups: *const std::ffi::c_char) -> bool;
+    use objc2::rc::Retained;
+    use objc2_app_kit::NSWindow;
+    use objc2_foundation::{NSData, NSString};
+
+    #[deny(improper_ctypes)]
+    unsafe extern "C" {
+        pub safe fn kiwix_tabbing_install_early();
+        // The window is live for this main-thread call. Native copies the
+        // label and associates it with the window itself.
+        pub safe fn kiwix_tabbing_prepare_window(window: &NSWindow, label: &NSString);
+        pub safe fn kiwix_tabbing_install_menu();
+        // Native decodes these immutable bytes synchronously.
+        pub safe fn kiwix_tabbing_update_menu(labels: &NSData) -> bool;
+        pub safe fn kiwix_tabbing_restore(groups: &NSData) -> bool;
+        // NS_RETURNS_RETAINED transfers one owned Foundation reference.
+        pub safe fn kiwix_tabbing_snapshot() -> Option<Retained<NSData>>;
     }
 }
 
 /// AppKit tabbing must be allowed before the first window exists.
 #[cfg(target_os = "macos")]
 pub fn install_native_tabbing() {
-    unsafe { tabbing::kiwix_tabbing_install_early() }
+    tabbing::kiwix_tabbing_install_early();
 }
 
 /// Register a shell for native tabbing and session capture. Safe to repeat.
 #[cfg(target_os = "macos")]
 pub fn adopt_native_tabbing(window: &WebviewWindow) {
-    if let (Ok(handle), Ok(label)) = (window.ns_window(), std::ffi::CString::new(window.label())) {
-        unsafe { tabbing::kiwix_tabbing_prepare_window(handle, label.as_ptr()) }
+    use objc2_app_kit::NSWindow;
+    use objc2_foundation::NSString;
+
+    if !native_tabs::shell_label(window.label()) {
+        return;
     }
+    let label = window.label().to_owned();
+    let _ = window.with_webview(move |webview| {
+        // SAFETY: the pinned Wry dispatcher retains the NSWindow while this
+        // main-thread callback runs. Neither this borrow nor the pointer escapes.
+        if let Some(window) = unsafe { webview.ns_window().cast::<NSWindow>().as_ref() } {
+            tabbing::kiwix_tabbing_prepare_window(window, &NSString::from_str(&label));
+        }
+    });
 }
 
 /// Window > Show Previous/Next Tab, Merge All Windows and Show Tab Bar are
@@ -58,7 +74,7 @@ pub fn adopt_native_tabbing(window: &WebviewWindow) {
 /// through muda.
 #[cfg(target_os = "macos")]
 pub fn install_tabbing_menu() {
-    unsafe { tabbing::kiwix_tabbing_install_menu() }
+    tabbing::kiwix_tabbing_install_menu();
 }
 
 /// Refresh on the same locale-update path as the application menu, without
@@ -73,9 +89,10 @@ pub fn update_tabbing_menu(locale: &str) -> Result<(), String> {
     ];
     let labels: HashMap<_, _> = sources.into_iter()
         .map(|source| (source, strings.text(source, &[]))).collect();
-    let json = std::ffi::CString::new(serde_json::to_string(&labels).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
-    unsafe { tabbing::kiwix_tabbing_update_menu(json.as_ptr()) };
+    let json = serde_json::to_vec(&labels).map_err(|e| e.to_string())?;
+    if !tabbing::kiwix_tabbing_update_menu(&objc2_foundation::NSData::with_bytes(&json)) {
+        return Err("Native window menu labels could not be updated".into());
+    }
     Ok(())
 }
 
@@ -92,9 +109,8 @@ pub fn restore_native_tabs(
         if groups.is_empty() {
             return Ok(());
         }
-        let json = std::ffi::CString::new(serde_json::to_string(&groups).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        if !unsafe { tabbing::kiwix_tabbing_restore(json.as_ptr()) } {
+        let json = serde_json::to_vec(&groups).map_err(|e| e.to_string())?;
+        if !tabbing::kiwix_tabbing_restore(&objc2_foundation::NSData::with_bytes(&json)) {
             return Err("Native window tab groups could not be restored".into());
         }
     }
@@ -105,14 +121,10 @@ pub fn restore_native_tabs(
 
 #[cfg(target_os = "macos")]
 fn capture_native_tabs() -> Result<Vec<native_tabs::Member>, String> {
-    let raw = unsafe { tabbing::kiwix_tabbing_snapshot() };
-    if raw.is_null() {
-        return Err("Native window tab groups could not be captured".into());
-    }
-    let members = serde_json::from_slice(unsafe { std::ffi::CStr::from_ptr(raw).to_bytes() })
-        .map_err(|e| format!("Kiwix could not read the current window groups: {e}"));
-    unsafe { tabbing::kiwix_tabbing_free_snapshot(raw) };
-    members
+    let data = tabbing::kiwix_tabbing_snapshot()
+        .ok_or("Native window tab groups could not be captured")?;
+    serde_json::from_slice(&data.to_vec())
+        .map_err(|e| format!("Kiwix could not read the current window groups: {e}"))
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -481,11 +493,27 @@ pub fn capture(app: &AppHandle, store: &Store) -> Result<(), String> {
         };
         geometry.push((label,json!({"x":position.x as f64/scale,"y":position.y as f64/scale,"width":size.width as f64/scale,"height":size.height as f64/scale,"maximized":window.is_maximized().unwrap_or(false),"fullscreen":window.is_fullscreen().unwrap_or(false)})));
     }
-    store.update(|state| {
+    persist_capture(
+        store,
+        geometry,
+        #[cfg(target_os = "macos")]
+        native_tabs,
+    )
+}
+
+fn persist_capture(
+    store: &Store,
+    geometry: Vec<(String, Value)>,
+    #[cfg(target_os = "macos")] native_tabs: Vec<native_tabs::Member>,
+) -> Result<(), String> {
+    store.update_window_capture(|retired, state| {
         if state.settings.private_mode || state.settings.read_only {
             return Ok(());
         }
         for (label, geometry) in geometry {
+            if retired.contains(&label) {
+                continue;
+            }
             if label == "main" {
                 state.windows.entry(label).or_default().geometry = Some(geometry);
             } else if let Some(session) = state.windows.get_mut(&label) {
@@ -494,7 +522,7 @@ pub fn capture(app: &AppHandle, store: &Store) -> Result<(), String> {
         }
         #[cfg(target_os = "macos")]
         for member in native_tabs {
-            if native_tabs::shell_label(&member.label) {
+            if native_tabs::shell_label(&member.label) && !retired.contains(&member.label) {
                 let session = state.windows.entry(member.label).or_default();
                 session.native_tab = Some(crate::store::NativeWindowTab {
                     group: member.group,
@@ -511,6 +539,45 @@ pub fn capture(app: &AppHandle, store: &Store) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn window_retirement_excludes_a_late_capture_and_quit_snapshot() {
+        let profile = tempfile::tempdir().unwrap();
+        let service = crate::service::Service::new(profile.path().to_owned(), false, false).unwrap();
+        let row = |label: &str| native_tabs::Member {
+            label: label.into(),
+            group: label.into(),
+            index: 0,
+            selected: true,
+            focused: false,
+        };
+        let captured = vec![row("window-closed"), row("window-live")];
+        service.clone().dispatch("close_window", json!({"__windowLabel":"window-closed"}))
+            .await.unwrap();
+
+        persist_capture(&service.store, Vec::new(), captured).unwrap();
+        let state = service.store.read().unwrap();
+        assert!(!state.windows.contains_key("window-closed"));
+        assert!(state.windows["window-live"].tabs.is_empty());
+        assert!(state.windows["window-live"].native_tab.is_some());
+
+        // Explicit snapshots require at least one reader tab somewhere.
+        service.store.update(|state| {
+            state.tabs.push(crate::store::Tab {
+                id: "main-tab".into(), book_id: None, path: String::new(), title: String::new(),
+                scroll: 0.0, restricted: false, back: Vec::new(), forward: Vec::new(),
+            });
+            Ok(())
+        }).unwrap();
+        let previously_open = ["main".into(), "window-closed".into(), "window-live".into()]
+            .into_iter().collect();
+        assert!(service.store.save_session_snapshot(&previously_open).unwrap());
+        let snapshot = service.store.saved_session().unwrap().unwrap();
+        assert!(!snapshot.windows.contains_key("window-closed"));
+        assert!(snapshot.windows.contains_key("window-live"));
+        service.shutdown().await.unwrap();
+    }
 
     #[test]
     fn shell_paper_follows_the_saved_theme_and_the_webview_appearance() {

@@ -206,9 +206,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"
-# NSWorkspace opening hands sandboxed receivers a file extension. Already in
-# the graph through Tauri; this only enables the NSWorkspace binding.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
+# Use AppKit's typed window borrow and workspace opening APIs.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSWindow", "NSWorkspace"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

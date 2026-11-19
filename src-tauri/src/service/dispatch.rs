@@ -2947,6 +2947,7 @@ impl Service {
                         "Restore previous session is unavailable in a read-only profile".into(),
                     );
                 }
+                let mut replacements = self.restore_replacements.clone().lock_owned().await;
                 let Some(saved) = self.store.saved_session()? else {
                     return Err("No saved session is available to restore".into());
                 };
@@ -2959,58 +2960,63 @@ impl Service {
                     .map_err(|_| "Application handle unavailable")?
                     .clone()
                     .ok_or("Native windows require the desktop application")?;
-                let live = self.store.read()?;
-                let open: HashSet<String> = app.webview_windows().into_keys().collect();
-                let live_tabs: HashMap<String, usize> = live
-                    .windows
-                    .iter()
-                    .map(|(window, session)| (window.clone(), session.tabs.len()))
-                    .collect();
-                let main_tabs = live
-                    .windows
-                    .get("main")
-                    .map(|window| window.tabs.len())
-                    .unwrap_or(live.tabs.len());
-                let RestorePlan { mut plans, mut skipped } =
-                    plan_session_restore(&saved, &live_tabs, main_tabs, &open, &label);
-                // Only labels that need a new native window consume capacity.
-                let mut capacity = 16usize.saturating_sub(open.len());
-                plans.retain(|(window_label, _)| {
-                    if open.contains(window_label) {
-                        return true;
+                let mut open: HashSet<String> = app.webview_windows().into_keys().collect();
+                let native_open_count = open.len();
+                let (plans, skipped, reference_revision) = {
+                    // Hold liveness only through planning and the Store commit. The
+                    // main-thread creation and AppKit restore below can reenter the app.
+                    let retired = self.active_window_guard(&label)?;
+                    open.retain(|window| !retired.contains(window));
+                    let live = self.store.read()?;
+                    let live_tabs: HashMap<String, usize> = live
+                        .windows
+                        .iter()
+                        .map(|(window, session)| (window.clone(), session.tabs.len()))
+                        .collect();
+                    let main_tabs = live
+                        .windows
+                        .get("main")
+                        .map(|window| window.tabs.len())
+                        .unwrap_or(live.tabs.len());
+                    let mut plan = plan_session_restore(
+                        &saved, &live_tabs, main_tabs, &open, &label, &retired, &mut replacements,
+                    );
+                    plan.limit_creations(&open, native_open_count);
+                    let RestorePlan { mut plans, skipped } = plan;
+                    if plans.is_empty() {
+                        return Err("The saved session is already open".into());
                     }
-                    if capacity == 0 {
-                        skipped.push(window_label.clone());
-                        return false;
-                    }
-                    capacity -= 1;
-                    true
-                });
-                if plans.is_empty() {
-                    return Err("The saved session is already open".into());
-                }
-                #[cfg(desktop)]
-                if let Ok(mut pending) = self.restored_windows.lock() {
-                    for (window_label, _) in &plans {
-                        // New windows hydrate from their snapshot; open windows
-                        // receive the push below. Both must ignore an empty
-                        // save that races ahead of adoption.
-                        if window_label != &label {
-                            pending.insert(window_label.clone());
+                    #[cfg(desktop)]
+                    if let Ok(mut pending) = self.restored_windows.lock() {
+                        for (window_label, _) in &plans {
+                            // New windows hydrate from their snapshot; open windows
+                            // receive the push below. Both must ignore an empty
+                            // save that races ahead of adoption.
+                            if window_label != &label {
+                                pending.insert(window_label.clone());
+                            }
                         }
                     }
-                }
-                let reference_revision = self.store.update(|state| {
-                    for (window_label, session) in &mut plans {
-                        state.translate_reference_tabs(&mut session.tabs, saved.reference_revision)?;
-                        state.windows.insert(window_label.clone(), session.clone());
-                        if window_label.as_str() == "main" {
-                            state.tabs.clone_from(&session.tabs);
-                            state.active_tab.clone_from(&session.active_tab);
+                    let reference_revision = self.store.update(|state| {
+                        for (source, replacement) in replacements.iter() {
+                            if source != "main" && retired.contains(source)
+                                && plans.iter().any(|(target, _)| target == replacement)
+                            {
+                                state.windows.remove(source);
+                            }
                         }
-                    }
-                    Ok(state.reference_revision)
-                })?;
+                        for (window_label, session) in &mut plans {
+                            state.translate_reference_tabs(&mut session.tabs, saved.reference_revision)?;
+                            state.windows.insert(window_label.clone(), session.clone());
+                            if window_label.as_str() == "main" {
+                                state.tabs.clone_from(&session.tabs);
+                                state.active_tab.clone_from(&session.active_tab);
+                            }
+                        }
+                        Ok(state.reference_revision)
+                    })?;
+                    (plans, skipped, reference_revision)
+                };
                 let creations: Vec<(String, Option<Value>)> = plans
                     .iter()
                     .filter(|(window_label, _)| !open.contains(window_label))
@@ -3053,12 +3059,16 @@ impl Service {
                             }
                             Ok(failures)
                         });
-                        let _ = sender.send(result);
+                        // The queued operation keeps the restore gate even if
+                        // its IPC waiter is dropped before the main thread runs.
+                        let _ = sender.send((result, replacements));
                     })
                     .map_err(|e| e.to_string())?;
-                    failures = receiver
+                    let (result, lease) = receiver
                         .await
-                        .map_err(|_| "Window creation was interrupted")??;
+                        .map_err(|_| "Window creation was interrupted")?;
+                    replacements = lease;
+                    failures = result?;
                 }
                 let native_sessions: HashMap<_, _> = plans.iter().cloned().collect();
                 crate::windows::restore_native_tabs(&app, &native_sessions)?;
@@ -3098,6 +3108,7 @@ impl Service {
                     .iter()
                     .filter_map(|failure| failure.get("window").and_then(Value::as_str))
                     .collect();
+                drop(replacements);
                 Ok(json!({
                     "window": window,
                     "restored": plans.iter()
