@@ -1,0 +1,238 @@
+{
+  "source": "3e9e9767b0153c5f8abf268e913b0479d01c9f0e",
+  "review_base": "d3cf4a0000687758b59aa77d74246e29ed9a31a4",
+  "reviewed_files_sha256": {
+    "src-tauri/native/localswarm.mm": "c351155fb864bd1047d5ff9035569c55162ea3702704ec7a7658bb1367b12613",
+    "src-tauri/native/localswarm_tests.mm": "7506d8e48b132086057d577ffb8ab782d32b539cbcaae317b3fa64f756f75339",
+    "src-tauri/src/localswarm/apple_transport.rs": "1e9561b8d095eadd9ed25b0b25fa620823ee864bd4e310163ce6ac41f24f3440"
+  },
+  "mac_release_test_sha256": "c78f9223482c61bb9e72249ef715f9186e490ea3dd34624d1fccef2d70c7f13d",
+  "ios_native_fixture_sha256": "414c318edea875d90e7fcdbdfb4bf497414424c7a9a0bcb91c27a6e60e341e31",
+  "ios_environment": "iOS 26.5 ARM64, simulated iPhone 17, Xcode SDK 27.2",
+  "ios_scope": "Standalone Apple native bridge regression executable built from the exact two committed source files, production path logic with synthetic test controls. No full app package, physical device or real network session in this simulator run.",
+  "mac_live_tests": [
+    "native_library_request_completion_preserves_other_requests",
+    "native_listener_retires_a_peer_that_never_opens_a_request_stream",
+    "native_route_detail_owns_the_enumerated_interface_name",
+    "quinn_native_library_completion_retires_only_its_owned_transport"
+  ],
+  "mac_release_suite": {
+    "passed": 1257,
+    "ignored": 25
+  },
+  "ios_native_results": [
+    {
+      "length": 81,
+      "releaseBeforeCallback": false,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 81,
+      "releaseBeforeCallback": true,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 16384,
+      "releaseBeforeCallback": false,
+      "ownedContentPreserved": true
+    },
+    {
+      "length": 16384,
+      "releaseBeforeCallback": true,
+      "ownedContentPreserved": true
+    },
+    {
+      "finalPayloadAndRevocation": true
+    },
+    {
+      "typedHandleLifetimes": true
+    },
+    {
+      "effectiveEndpointReceipt": true
+    },
+    {
+      "ownedEndpointAddresses": true
+    },
+    {
+      "resolvedAddressBounds": true
+    },
+    {
+      "routeQueryOwnership": true
+    },
+    {
+      "boundRouteSubnet": true
+    },
+    {
+      "compactRouteMasks": true
+    }
+  ],
+  "timing": {
+    "source": "3e9e9767b0153c5f8abf268e913b0479d01c9f0e",
+    "baseline": "d7e2124b2cf01808c486a43fa3233b8ee494d565",
+    "base_binary_sha256": "4da80ed4b0280e8bf1e5caa7cee0bb62d9e526a9b7fd6aa2d6f73cafb7287719",
+    "candidate_binary_sha256": "c78f9223482c61bb9e72249ef715f9186e490ea3dd34624d1fccef2d70c7f13d",
+    "same_test_source": {
+      "native_library_regression": "5c551d208e9822c2fca9e867182942b59cd7006aa84f04e5533f4198a63865cc",
+      "native_route_detail_owns_the_enumerated_interface_name": "270d49071ec8f4b88f3a347c1db88eba4f0b34b645adfdfa73702fc898893ff4"
+    },
+    "case": "localswarm::apple_transport::native_route_detail_owns_the_enumerated_interface_name",
+    "method": "Host macOS ARM64. Timing around complete sequential test subprocess per sample. Real Bonjour advertisement and withdrawal, DNS, authenticated local QUIC inventory, 64 route receipts, cleanup and startup are included. Six alternating fresh-process pairs after one discarded warmup pair. One active benchmark process at a time; ordinary other system activity may vary. Process CPU excludes the operating system daemons. Times do not isolate the subnet helper or measure physical network throughput or archive reader speed.",
+    "raw_sha256": "6cc7fb8d94414558246c62860a67d43b9e5faa8ff850ac4b4372c80d68341426",
+    "wall_ns": {
+      "base": 1147346750.0,
+      "candidate": 1174404770.5,
+      "per_pair_ratios": [
+        0.8881919121200961,
+        1.1884005386131837,
+        0.9868881391769668,
+        0.9493733104164025,
+        0.9903258233274949,
+        1.1124215499054204
+      ],
+      "median_paired_ratio": 0.9886069812522309,
+      "candidate_faster_pairs": 4
+    },
+    "child_cpu_s": {
+      "base": 0.05066350000000003,
+      "candidate": 0.05294349999999998,
+      "per_pair_ratios": [
+        1.1082958989109009,
+        1.0506578834508429,
+        1.0319313736880813,
+        1.0373058314234793,
+        1.0249572305524832,
+        1.1028958460022227
+      ],
+      "median_paired_ratio": 1.043981857437161,
+      "candidate_faster_pairs": 0
+    }
+  },
+  "samples": [
+    {
+      "round": 0,
+      "warmup": true,
+      "lane": "base",
+      "wall_ns": 1193001084,
+      "process_cpu_s": 0.07169400000000001,
+      "rust_harness_elapsed_s": 1.15,
+      "output_sha256": "299a016f2675777b7963c5fffc89eb071d334f08ca386361873ee5503eab89f7"
+    },
+    {
+      "round": 0,
+      "warmup": true,
+      "lane": "candidate",
+      "wall_ns": 1087544750,
+      "process_cpu_s": 0.06847499999999998,
+      "rust_harness_elapsed_s": 1.07,
+      "output_sha256": "323cd72bb5ee29cecac65d440f441a2bc1b2dded006c647673352c4c82e6850c"
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1204578750,
+      "process_cpu_s": 0.06858800000000001,
+      "rust_harness_elapsed_s": 1.19,
+      "output_sha256": "fbefa0527e65e8c98a6831dc69bb6a9a9f703fd06e0d39ca61ee99110c7bcc5c"
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1356214500,
+      "process_cpu_s": 0.061886,
+      "rust_harness_elapsed_s": 1.34,
+      "output_sha256": "7ebdd8045a0c60f4c9d58726e8072dd4a67f3ac8e8e2160b6c725110b9caafcc"
+    },
+    {
+      "round": 2,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1142145084,
+      "process_cpu_s": 0.058292999999999984,
+      "rust_harness_elapsed_s": 1.12,
+      "output_sha256": "b8c2640268ca6bc4ffac1c2547e08435a2697303d78984c1fd88b122a7243823"
+    },
+    {
+      "round": 2,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1357325833,
+      "process_cpu_s": 0.06124599999999997,
+      "rust_harness_elapsed_s": 1.34,
+      "output_sha256": "7ebdd8045a0c60f4c9d58726e8072dd4a67f3ac8e8e2160b6c725110b9caafcc"
+    },
+    {
+      "round": 3,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1121036667,
+      "process_cpu_s": 0.05329099999999998,
+      "rust_harness_elapsed_s": 1.1,
+      "output_sha256": "b31b823d61dc384250bb65de4c7c61ec7a7e1ff06b9fab241d2eaa93744a43c3"
+    },
+    {
+      "round": 3,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1135930834,
+      "process_cpu_s": 0.05164200000000008,
+      "rust_harness_elapsed_s": 1.12,
+      "output_sha256": "b8c2640268ca6bc4ffac1c2547e08435a2697303d78984c1fd88b122a7243823"
+    },
+    {
+      "round": 4,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1209367875,
+      "process_cpu_s": 0.047123999999999944,
+      "rust_harness_elapsed_s": 1.19,
+      "output_sha256": "fbefa0527e65e8c98a6831dc69bb6a9a9f703fd06e0d39ca61ee99110c7bcc5c"
+    },
+    {
+      "round": 4,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1148141583,
+      "process_cpu_s": 0.04888199999999998,
+      "rust_harness_elapsed_s": 1.13,
+      "output_sha256": "b18d453c405ca1a694639748f74397c4e8b2fb6db83c9a49836f63344366aabc"
+    },
+    {
+      "round": 5,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1141398459,
+      "process_cpu_s": 0.05092500000000011,
+      "rust_harness_elapsed_s": 1.13,
+      "output_sha256": "b18d453c405ca1a694639748f74397c4e8b2fb6db83c9a49836f63344366aabc"
+    },
+    {
+      "round": 5,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1152548416,
+      "process_cpu_s": 0.04968499999999998,
+      "rust_harness_elapsed_s": 1.14,
+      "output_sha256": "3e36e6292c9cab97a6e22bcdfe0b437177a0b88961bf6593ca5ae1efaab9bf24"
+    },
+    {
+      "round": 6,
+      "warmup": false,
+      "lane": "base",
+      "wall_ns": 1079328208,
+      "process_cpu_s": 0.04768899999999998,
+      "rust_harness_elapsed_s": 1.06,
+      "output_sha256": "a61483f9bcf91c5ec73104e5897c046a0468a53ffa408f00a5c7cf97fb2e6f72"
+    },
+    {
+      "round": 6,
+      "warmup": false,
+      "lane": "candidate",
+      "wall_ns": 1200667958,
+      "process_cpu_s": 0.052595999999999976,
+      "rust_harness_elapsed_s": 1.18,
+      "output_sha256": "00d33156a77e9328d8061056991c5815999bdba57e1b72b339263d050486ce0a"
+    }
+  ]
+}
