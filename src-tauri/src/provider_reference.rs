@@ -96,7 +96,7 @@ mod native {
     use super::*;
     use crate::archive::Archive;
     use serde_json::{json, Value};
-    use std::{fs::File, os::fd::{FromRawFd, RawFd}, path::Path, sync::Arc};
+    use std::{fs::File, os::fd::RawFd, path::Path, sync::Arc};
     use tauri_plugin_kiwix_mobile::MobileExt;
 
     pub(crate) struct ProviderLease { app: tauri::AppHandle, token: String }
@@ -180,12 +180,14 @@ mod native {
         let mut files = Vec::with_capacity(descriptors.len());
         for descriptor in descriptors {
             if descriptor.fd < 0 { return Err("Native provider descriptor invalid".into()); }
-            // SAFETY: F_DUPFD_CLOEXEC does not take ownership of the native FD;
-            // on success it returns a fresh descriptor owned only by this File.
-            let duplicate = unsafe { libc::fcntl(descriptor.fd, libc::F_DUPFD_CLOEXEC, 0) };
-            if duplicate < 0 { return Err(std::io::Error::last_os_error().to_string()); }
-            let file = unsafe { File::from_raw_fd(duplicate) };
-            if !file.metadata().map_err(|e| e.to_string())?.is_file() || unsafe { libc::lseek(duplicate, 0, libc::SEEK_CUR) } < 0 {
+            // SAFETY: the native lease owns `descriptor.fd` for the duration of
+            // this call; F_DUPFD_CLOEXEC does not take ownership, and the new
+            // descriptor is owned only by the `File` built from it.
+            let borrowed = unsafe { std::os::fd::BorrowedFd::borrow_raw(descriptor.fd) };
+            let duplicate = rustix::io::fcntl_dupfd_cloexec(borrowed, 0)
+                .map_err(|error| std::io::Error::from(error).to_string())?;
+            let file = File::from(duplicate);
+            if !file.metadata().map_err(|e| e.to_string())?.is_file() || rustix::fs::tell(&file).is_err() {
                 return Err("This provider does not offer a seekable regular file. Choose Import archives to make a managed copy.".into());
             }
             files.push((descriptor.name, file));

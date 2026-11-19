@@ -513,35 +513,8 @@ pub(super) fn move_publication_entry(
     destination: &Dir,
     to: &str,
 ) -> Result<(), String> {
-    use std::os::fd::AsRawFd;
-    let from = std::ffi::CString::new(from).map_err(display)?;
-    let to = std::ffi::CString::new(to).map_err(display)?;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let result = unsafe {
-        libc::renameatx_np(
-            source.as_raw_fd(),
-            from.as_ptr(),
-            destination.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            source.as_raw_fd(),
-            from.as_ptr(),
-            destination.as_raw_fd(),
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(display(std::io::Error::last_os_error()))
-    }
+    rustix::fs::renameat_with(source, from, destination, to, rustix::fs::RenameFlags::NOREPLACE)
+        .map_err(|error| display(std::io::Error::from(error)))
 }
 
 #[cfg(windows)]
