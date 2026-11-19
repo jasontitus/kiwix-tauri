@@ -31,6 +31,7 @@ The first two attempts to package the `541725a` iOS simulator app stopped at the
 
 | Artifact | SHA-256 |
 |---|---|
+| macOS ARM64 app executable, `3e9e976` | `0b0fb86f0c7073d3be3ad006bfd468ae4c7247a710cb4ab17e20bc878b874a5b` |
 | macOS ARM64 app executable, `e46993d` | `03deba76acd59dc85d5139e9b049de530d70e4c7d932e1c4a3718b70b8062364` |
 | ZIP of signed iOS ARM64 simulator app, `e46993d` | `72acd7f1bdc6eb076fe697dc8181f1313e2495e35ba7c5a0c475dfca9fa205dc` |
 | Android two-ABI APK with factory voices, `7c5abf7` | `d02aaddf267cead15bc110e2d4ab1b8369108b0906f7c5d50fbba6d21c1f788d` |
@@ -39,7 +40,7 @@ The first two attempts to package the `541725a` iOS simulator app stopped at the
 
 ## Performance and open work
 
-Ten alternating Mac comparisons per archive covered 24 full articles per fresh process. The signed `e46993d` Mac app served Climate in 49.21 ms versus 46.76 ms for the libzim app. Wikipedia 100 took 70.49 ms versus 72.11 ms. All 960 responses preserved the original article bytes. On Linux the same full-article workloads took 95.30 ms versus 89.51 ms on Wikipedia 100 and 60.19 ms versus 54.46 ms on Climate. The earlier direct-library comparison still favored libzim on the random-article workload on all four platforms. [Complete-article measurements](../benchmarks/2026-11-18-served-articles.md) · [Direct reader timings](../benchmarks/2026-11-18-retained-clusters.md)
+Ten alternating Mac comparisons per archive covered 24 full articles per fresh process. The signed `3e9e976` Mac app served Climate in 36.16 ms versus 35.99 ms for the libzim app. Wikipedia 100 took 63.91 ms versus 61.40 ms. All 960 responses preserved the original article bytes. On Linux the same full-article workloads took 95.30 ms versus 89.51 ms on Wikipedia 100 and 60.19 ms versus 54.46 ms on Climate. The earlier direct-library comparison still favored libzim on the random-article workload on all four platforms. [Complete-article measurements](../benchmarks/2026-11-18-served-articles.md) · [Direct reader timings](../benchmarks/2026-11-18-retained-clusters.md)
 
 The next Nearby work covers SDK-owned hostnames in the connection resolver and borrowed strings and TXT records in the Rust discovery adapter. The optional reader setting awaits real-device measurements. Reusing the decoder workspace across real clusters produced mixed Mac medians, so the production reader still constructs a decoder per cluster. The Mac handle benchmarks found a 10.5% increase for fragmented 256 KiB reads and a 0.40 µs decrease per piece for eight outstanding 256 KiB sends. On the iOS simulator an 81-byte QUIC round trip showed a 15.7% paired slowdown in the first run and a 0.3% paired improvement in the repeat. Physical transport throughput remains open. [Handle timing and lifetime checks](../benchmarks/2026-11-18-apple-nearby-handles.md)
 

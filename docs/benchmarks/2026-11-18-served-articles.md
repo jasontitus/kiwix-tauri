@@ -1,6 +1,6 @@
 # Opening and serving complete articles on macOS and Linux
 
-The signed Mac app at `e46993d` served 24 complete Climate articles in a median 49.21 ms, against 46.76 ms for the historical libzim app (5.2% slower). Wikipedia 100 took 70.49 ms against 72.11 ms (2.2% faster). All 960 responses passed the archived-byte check. The table gives milliseconds per 24 requests. Each cell is the median of ten fresh-process sums.
+The signed Mac app at `3e9e976` served 24 complete Climate articles in a median 36.16 ms, against 35.99 ms for the historical libzim app. Wikipedia 100 took 63.91 ms against 61.40 ms. All 960 responses passed the archived-byte check. Across the ten pairs, the Rust app was faster in four Climate pairs and in none of the Wikipedia 100 pairs. The table gives milliseconds per 24 requests. Each cell is the median of ten fresh-process sums.
 
 | Mac app build and evidence | Climate with libzim | Climate with Rust | Wikipedia 100 with libzim | Wikipedia 100 with Rust |
 |---|---:|---:|---:|---:|
@@ -11,6 +11,7 @@ The signed Mac app at `e46993d` served 24 complete Climate articles in a median 
 | [`d0c967c`, address checks during builds](2026-11-18-served-articles-address-checks.json.gz) | 212.38 | 200.83 | 235.56 | 236.14 |
 | [`d0c967c`, same binaries after builds](2026-11-18-served-articles-address-checks-postbuild.json.gz) | 37.71 | 38.04 | 65.00 | 66.65 |
 | [`e46993d`, resolver operation numbers](2026-11-18-served-articles-route-queries.json.gz) | 46.76 | 49.21 | 72.11 | 70.49 |
+| [`3e9e976`, interface-bound route checks](2026-11-18-served-articles-bound-routes.json.gz) | 35.99 | 36.16 | 61.40 | 63.91 |
 
 The two builds alternated first position on the same Mac. Each opened its own empty profile and imported the archive before timing started. For each of the 24 distinct paths, the client timed the normal headless `open_article` command and the complete HTTP response to the returned URL. The timer included both local connections and all response bytes. Startup, import, integrity verification and screen rendering were outside the interval. The OS file cache stayed warm and other work shared the host. The two `d0c967c` runs illustrate how much both apps’ absolute times varied with build activity.
 
