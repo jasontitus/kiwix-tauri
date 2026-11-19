@@ -1,0 +1,13 @@
+RustCrypto block-buffer is offered under the MIT License or Apache License,
+Version 2.0. Both license texts accompany this notice.
+
+Published source version: 0.12.1
+Upstream source revision: cbd0963c685df025c42bed31f78c50d1bada3805
+https://github.com/RustCrypto/utils
+Published archive SHA-256:
+d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa
+Archive in this source distribution:
+upstream/rustcrypto-block-buffer/block-buffer-0.12.1.crate
+
+The local copy at src-tauri/vendor/block-buffer-0.12.1 keeps initialized
+buffer storage and uses checked slices for cursor, data, and padding access.

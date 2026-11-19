@@ -1,0 +1,1791 @@
+{
+  "source_base": "9a944382ead837aa78e41aed8bd61c49c4c543a4",
+  "application_artifact_sha256": {
+    "signed_macos_arm64_zip": "0d9ddc334f4e6598732d5e13a3d697d16349c606877a81b5b0791a1463ec6a86",
+    "linux_x86_64_appimage": "a97881ea4eb443b5c19cdc023be7b76f6d5dc69645a7e8ee25b5e364d92437a2"
+  },
+  "in_memory_sha256_macos_arm64": {
+    "executables": {
+      "previous": "86be6e0c04988ff191d71ec6d17402ff42086bf7d4c2356b3ae7ed3f904dd25f",
+      "checked": "493ed94502b50fdd29b8c5503d7cefc5454861d08103c814832423956ddb30d2"
+    },
+    "workloads": [
+      {
+        "name": "111-bytes.bin",
+        "bytes": 111,
+        "sha256": "60780e9451bdc43cf4530ffc95cbb0c4eb24dae2c39f55f334d679e076c08065",
+        "chunk_bytes": 7,
+        "digests_per_sample": 200000,
+        "sample_pairs": [
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 49020875,
+              "checked": 49220166
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 48865209,
+              "previous": 49139417
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 48739750,
+              "checked": 48802334
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 49201792,
+              "previous": 49341417
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 49344209,
+              "checked": 49315125
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 49617000,
+              "previous": 49297041
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 49111333,
+              "checked": 49013500
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 48874041,
+              "previous": 48970500
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 48732625,
+              "checked": 49166000
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 48372708,
+              "previous": 42512583
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 42420875,
+              "checked": 42440458
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 42728625,
+              "previous": 42879250
+            }
+          }
+        ],
+        "median_ns_per_digest": {
+          "previous": 244.9784375,
+          "checked": 244.7188525
+        },
+        "paired_ratio": 0.999936112662343
+      },
+      {
+        "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "bytes": 8978471,
+        "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+        "chunk_bytes": 262144,
+        "digests_per_sample": 5,
+        "sample_pairs": [
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37754708,
+              "checked": 37405125
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 37539708,
+              "previous": 37629000
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37564916,
+              "checked": 37633375
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 37635000,
+              "previous": 37746583
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37598208,
+              "checked": 37461500
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 37568000,
+              "previous": 37716292
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37728250,
+              "checked": 38650625
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 38995792,
+              "previous": 37465209
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37966583,
+              "checked": 37467875
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 38707625,
+              "previous": 37718625
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 37598083,
+              "checked": 37596708
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 37495875,
+              "previous": 37785292
+            }
+          }
+        ],
+        "median_ns_per_digest": {
+          "previous": 7543491.7,
+          "checked": 7516470.8
+        },
+        "paired_ratio": 0.9973354671678997
+      },
+      {
+        "name": "wikipedia_en_100_maxi_2024-01.zim",
+        "bytes": 36522122,
+        "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+        "chunk_bytes": 262144,
+        "digests_per_sample": 5,
+        "sample_pairs": [
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 153652167,
+              "checked": 152583167
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 152416667,
+              "previous": 153580583
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 156731125,
+              "checked": 152547333
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 172931458,
+              "previous": 175930959
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 176059333,
+              "checked": 174911417
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 175149792,
+              "previous": 175895042
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 171226458,
+              "checked": 152892834
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 152653834,
+              "previous": 153277583
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 165974958,
+              "checked": 174060250
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 155860791,
+              "previous": 153347791
+            }
+          },
+          {
+            "order": [
+              "previous",
+              "checked"
+            ],
+            "full_sample_ns": {
+              "previous": 153009666,
+              "checked": 152337250
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "previous"
+            ],
+            "full_sample_ns": {
+              "checked": 152980416,
+              "previous": 152953084
+            }
+          }
+        ],
+        "median_ns_per_digest": {
+          "previous": 31038329.2,
+          "checked": 30587325.0
+        },
+        "paired_ratio": 0.9945426749268411
+      }
+    ],
+    "method": "Twelve alternating pairs on Apple Silicon. Compare the published and checked block buffers with the same checked SHA-256 revision. Every result matched independent Python hashlib. The 111-byte workload uses 7-byte updates. The archive workloads use 256 KiB updates over preloaded files."
+  },
+  "loopback_mac": {
+    "bytes": 268435456,
+    "accepted_size_compared_by_test": true,
+    "executables": {
+      "before": "1c7f0ad35771bc16805ba4b830944c06f04ac96022d06ab8aae7ff85f224ecea",
+      "checked": "8fb6c50bf513f3440498067988d7a0d99a94c1f856d47daf4f6408235f349bb0"
+    },
+    "measurements": [
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 203.1,
+            "elapsed_s": 1.26,
+            "cpu_s": 0.7,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 224.2,
+            "elapsed_s": 1.14,
+            "cpu_s": 0.65,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 163.7,
+            "elapsed_s": 1.56,
+            "cpu_s": 0.73,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 193.3,
+            "elapsed_s": 1.32,
+            "cpu_s": 0.7,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 176.5,
+            "elapsed_s": 1.45,
+            "cpu_s": 0.74,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 201.7,
+            "elapsed_s": 1.27,
+            "cpu_s": 0.69,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 203.5,
+            "elapsed_s": 1.26,
+            "cpu_s": 0.68,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 199.9,
+            "elapsed_s": 1.28,
+            "cpu_s": 0.68,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 179.7,
+            "elapsed_s": 1.42,
+            "cpu_s": 0.75,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 188.8,
+            "elapsed_s": 1.36,
+            "cpu_s": 0.75,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 201.2,
+            "elapsed_s": 1.27,
+            "cpu_s": 0.69,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 196.1,
+            "elapsed_s": 1.31,
+            "cpu_s": 0.75,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 191.9,
+            "elapsed_s": 1.33,
+            "cpu_s": 0.76,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 158.2,
+            "elapsed_s": 1.62,
+            "cpu_s": 0.87,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 183.1,
+            "elapsed_s": 1.4,
+            "cpu_s": 0.78,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 210.9,
+            "elapsed_s": 1.21,
+            "cpu_s": 0.71,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 184.9,
+            "elapsed_s": 1.38,
+            "cpu_s": 0.49,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 182.1,
+            "elapsed_s": 1.41,
+            "cpu_s": 0.74,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 181.0,
+            "elapsed_s": 1.41,
+            "cpu_s": 0.81,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 174.1,
+            "elapsed_s": 1.47,
+            "cpu_s": 0.77,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 170.9,
+            "elapsed_s": 1.5,
+            "cpu_s": 0.78,
+            "range_requests": 4
+          },
+          "checked": {
+            "rate_mib_s": 174.6,
+            "elapsed_s": 1.47,
+            "cpu_s": 0.73,
+            "range_requests": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 191.3,
+            "elapsed_s": 1.34,
+            "cpu_s": 0.79,
+            "range_requests": 4
+          },
+          "before": {
+            "rate_mib_s": 183.7,
+            "elapsed_s": 1.39,
+            "cpu_s": 0.82,
+            "range_requests": 4
+          }
+        }
+      }
+    ],
+    "summary": {
+      "rate_mib_s": {
+        "before": 188.4,
+        "checked": 185.95
+      },
+      "elapsed_s": {
+        "before": 1.355,
+        "checked": 1.38
+      },
+      "cpu_s": {
+        "before": 0.745,
+        "checked": 0.735
+      }
+    }
+  },
+  "loopback_linux": {
+    "bytes": 268435456,
+    "executables": {
+      "before": "ac42ec81113ef72ce070498a0f79acdb440a907217211bdc2516e564057bc448",
+      "checked": "1cac60c19749abafe57db0d8a6532c8fa530f2ac0c85f9f2e948d1da8444134b"
+    },
+    "measurements": [
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 151.0,
+            "elapsed_s": 1.7,
+            "cpu_s": 1.66,
+            "ranges": 4
+          },
+          "checked": {
+            "rate_mib_s": 149.7,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.69,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 151.8,
+            "elapsed_s": 1.69,
+            "cpu_s": 1.65,
+            "ranges": 4
+          },
+          "before": {
+            "rate_mib_s": 152.3,
+            "elapsed_s": 1.68,
+            "cpu_s": 1.64,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 150.9,
+            "elapsed_s": 1.7,
+            "cpu_s": 1.68,
+            "ranges": 4
+          },
+          "checked": {
+            "rate_mib_s": 149.8,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.66,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 150.0,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.66,
+            "ranges": 4
+          },
+          "before": {
+            "rate_mib_s": 150.4,
+            "elapsed_s": 1.7,
+            "cpu_s": 1.68,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 150.1,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.68,
+            "ranges": 4
+          },
+          "checked": {
+            "rate_mib_s": 150.2,
+            "elapsed_s": 1.7,
+            "cpu_s": 1.71,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 148.9,
+            "elapsed_s": 1.72,
+            "cpu_s": 1.67,
+            "ranges": 4
+          },
+          "before": {
+            "rate_mib_s": 152.5,
+            "elapsed_s": 1.68,
+            "cpu_s": 1.69,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "before",
+          "checked"
+        ],
+        "samples": {
+          "before": {
+            "rate_mib_s": 149.8,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.66,
+            "ranges": 4
+          },
+          "checked": {
+            "rate_mib_s": 149.5,
+            "elapsed_s": 1.71,
+            "cpu_s": 1.66,
+            "ranges": 4
+          }
+        }
+      },
+      {
+        "order": [
+          "checked",
+          "before"
+        ],
+        "samples": {
+          "checked": {
+            "rate_mib_s": 151.4,
+            "elapsed_s": 1.69,
+            "cpu_s": 1.66,
+            "ranges": 4
+          },
+          "before": {
+            "rate_mib_s": 148.9,
+            "elapsed_s": 1.72,
+            "cpu_s": 1.67,
+            "ranges": 4
+          }
+        }
+      }
+    ],
+    "summary": {
+      "rate_mib_s": {
+        "before": 150.65,
+        "checked": 149.9
+      },
+      "elapsed_s": {
+        "before": 1.7,
+        "checked": 1.71
+      },
+      "cpu_s": {
+        "before": 1.6749999999999998,
+        "checked": 1.66
+      }
+    }
+  },
+  "signed_mac_archives": {
+    "binaries": {
+      "before": "dd6e2deabbb8cd3692a76aafd34ddbaa44a808e9346f552826cc9a9f8339fc98",
+      "checked": "591b633e956c14a528750fd7243286ba99a6f09ba8a55625c63d44ff34152c1d"
+    },
+    "files": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": {
+        "bytes": 8978471,
+        "sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+        "samples": [
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 259419333,
+              "checked": 237779541
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 267062375,
+              "before": 218901333
+            }
+          },
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 230921208,
+              "checked": 232110333
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 224345750,
+              "before": 219939417
+            }
+          },
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 222805708,
+              "checked": 237386083
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 224628500,
+              "before": 222390875
+            }
+          }
+        ],
+        "median_ms": {
+          "before": 222.5982915,
+          "checked": 234.748208
+        }
+      },
+      "wikipedia_en_100_maxi_2024-01.zim": {
+        "bytes": 36522122,
+        "sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+        "samples": [
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 392235792,
+              "checked": 316575167
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 306491084,
+              "before": 292995750
+            }
+          },
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 327531209,
+              "checked": 309015542
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 322895042,
+              "before": 316391791
+            }
+          },
+          {
+            "order": [
+              "before",
+              "checked"
+            ],
+            "elapsed_ns": {
+              "before": 300435375,
+              "checked": 316476416
+            }
+          },
+          {
+            "order": [
+              "checked",
+              "before"
+            ],
+            "elapsed_ns": {
+              "checked": 371747959,
+              "before": 306394667
+            }
+          }
+        ],
+        "median_ms": {
+          "before": 311.393229,
+          "checked": 316.5257915
+        }
+      }
+    },
+    "cross_reopen": [
+      "wikipedia_en_climate_change_mini_2024-06.zim",
+      "wikipedia_en_100_maxi_2024-01.zim"
+    ],
+    "method": "Six alternating pairs per archive using actual signed macOS apps and a local Metalink fixture publisher. Compare verified completion with the preceding app, including process and filesystem time."
+  },
+  "signed_mac_reader": {
+    "clock": "elapsed nanoseconds per local command, including JSON, IPC and filesystem output for MHTML",
+    "binaries": {
+      "native": "6c81ca55459e438e7416d280118cb0fd4b95772d429db01eaf8cc40e93604d4f",
+      "published": "dd6e2deabbb8cd3692a76aafd34ddbaa44a808e9346f552826cc9a9f8339fc98",
+      "checked": "591b633e956c14a528750fd7243286ba99a6f09ba8a55625c63d44ff34152c1d"
+    },
+    "inputs": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "wikipedia_en_100_maxi_2024-01.zim": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "preview.zim": "64c381c2d63bff5f30ac3223292b613e6f6bbec9ef2b9e2d6818c7d9a4a578d8"
+    },
+    "samples": [
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          5711041,
+          2087166,
+          1646375
+        ],
+        "mhtml_ns": 30726709
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          5633792,
+          2202042,
+          2090667
+        ],
+        "mhtml_ns": 56778042
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          5642833,
+          2282125,
+          2192291
+        ],
+        "mhtml_ns": 25810542
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          5301667,
+          2528166,
+          1669750
+        ],
+        "mhtml_ns": 33060458
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          5304916,
+          2333375,
+          2454458
+        ],
+        "mhtml_ns": 36375875
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          4896584,
+          2232625,
+          2267625
+        ],
+        "mhtml_ns": 30301375
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          4894125,
+          2174292,
+          2082583
+        ],
+        "mhtml_ns": 24412125
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          5051708,
+          1997542,
+          1479667
+        ],
+        "mhtml_ns": 32298542
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          4726333,
+          2079458,
+          2325250
+        ],
+        "mhtml_ns": 30538208
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          4909667,
+          2149542,
+          2086083
+        ],
+        "mhtml_ns": 28412041
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          4750208,
+          2046250,
+          2293292
+        ],
+        "mhtml_ns": 29445667
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          4946750,
+          1867833,
+          1433875
+        ],
+        "mhtml_ns": 34870417
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          4810750,
+          2253875,
+          2186583
+        ],
+        "mhtml_ns": 27846083
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          4997709,
+          1892417,
+          1615375
+        ],
+        "mhtml_ns": 34632292
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          4601708,
+          2224041,
+          2135125
+        ],
+        "mhtml_ns": 25848166
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          4924792,
+          2091375,
+          2032792
+        ],
+        "mhtml_ns": 29530125
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          4661625,
+          2203292,
+          2157875
+        ],
+        "mhtml_ns": 24243125
+      },
+      {
+        "archive": "wikipedia_en_climate_change_mini_2024-06.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          4866333,
+          1887292,
+          1379458
+        ],
+        "mhtml_ns": 35336167
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          10339083,
+          6959375,
+          6088417
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          11520416,
+          7858750,
+          6930292
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          11269584,
+          7851417,
+          6588667
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          10324166,
+          6980625,
+          6181625
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          11223375,
+          7837167,
+          6673542
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          11194083,
+          7863250,
+          6690917
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          11443917,
+          8153750,
+          6993416
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          11339708,
+          7125875,
+          6255416
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          11484875,
+          7796666,
+          6856667
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          11269958,
+          7858375,
+          6787250
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          11652542,
+          7785542,
+          6874917
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          10425292,
+          7134042,
+          6122000
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          11402958,
+          7723875,
+          6766041
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          10458375,
+          6855334,
+          6128750
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          11799916,
+          7905542,
+          6625250
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          11639125,
+          7896750,
+          6864792
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          11339417,
+          8082875,
+          6677791
+        ]
+      },
+      {
+        "archive": "wikipedia_en_100_maxi_2024-01.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          10418667,
+          6845792,
+          6472166
+        ]
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "native",
+        "preview_ns": [
+          1761875
+        ],
+        "mhtml_ns": 26198042
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "published",
+        "preview_ns": [
+          1344583
+        ],
+        "mhtml_ns": 23274750
+      },
+      {
+        "archive": "preview.zim",
+        "round": 0,
+        "build": "checked",
+        "preview_ns": [
+          1171625
+        ],
+        "mhtml_ns": 26306833
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "native",
+        "preview_ns": [
+          1769208
+        ],
+        "mhtml_ns": 28190542
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "checked",
+        "preview_ns": [
+          1724083
+        ],
+        "mhtml_ns": 23778583
+      },
+      {
+        "archive": "preview.zim",
+        "round": 1,
+        "build": "published",
+        "preview_ns": [
+          1280375
+        ],
+        "mhtml_ns": 19672250
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "published",
+        "preview_ns": [
+          1361084
+        ],
+        "mhtml_ns": 35989250
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "native",
+        "preview_ns": [
+          1675125
+        ],
+        "mhtml_ns": 27098792
+      },
+      {
+        "archive": "preview.zim",
+        "round": 2,
+        "build": "checked",
+        "preview_ns": [
+          1313958
+        ],
+        "mhtml_ns": 23638916
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "published",
+        "preview_ns": [
+          1193334
+        ],
+        "mhtml_ns": 26222292
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "checked",
+        "preview_ns": [
+          1242500
+        ],
+        "mhtml_ns": 18694791
+      },
+      {
+        "archive": "preview.zim",
+        "round": 3,
+        "build": "native",
+        "preview_ns": [
+          1652458
+        ],
+        "mhtml_ns": 25374500
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "checked",
+        "preview_ns": [
+          1263792
+        ],
+        "mhtml_ns": 23070334
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "native",
+        "preview_ns": [
+          1784708
+        ],
+        "mhtml_ns": 36493916
+      },
+      {
+        "archive": "preview.zim",
+        "round": 4,
+        "build": "published",
+        "preview_ns": [
+          1129417
+        ],
+        "mhtml_ns": 23487458
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "checked",
+        "preview_ns": [
+          1111000
+        ],
+        "mhtml_ns": 26772542
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "published",
+        "preview_ns": [
+          1221708
+        ],
+        "mhtml_ns": 24441125
+      },
+      {
+        "archive": "preview.zim",
+        "round": 5,
+        "build": "native",
+        "preview_ns": [
+          1611583
+        ],
+        "mhtml_ns": 32323709
+      }
+    ],
+    "outputs": {
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "2d9dc4c1b47e896098503d5c9c70f50be4388ef666511008d301081b142aee90",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Nationally_determined_contribution": "aef45fe2c638c151fdea713635e63b03b9a45a34c4759733504ea0de9d96a608",
+      "preview wikipedia_en_climate_change_mini_2024-06.zim/Greenhouse_gas_emissions_by_Russia": "67790c1864ce4be33c4a254ed43044e826e8a08ea3f5237c0e07720478d91adb",
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": [
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/Land%5Fcover",
+          "text/html",
+          4720,
+          "087b8e53dce024959e7ec995658c3f5bc33e30f1c7af97f3da9d6c1adfc70748"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.css",
+          "text/css",
+          878,
+          "732cab0693bce7583f0413e9eea5f3562ec2c48a2cc87809ffb8c2eaf590167e"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.css",
+          "text/css",
+          0,
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.styles.css",
+          "text/css",
+          3147,
+          "e77e47ceba89ba5599b3056cf105c7ee42492f2127539d5c7af8408bfc35899f"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/skins.minerva.base.reset|skins.minerva.content.styles|ext.cite.style|site.styles|mobile.app.pagestyles.android|mediawiki.page.gallery.styles|mediawiki.skinning.content.parsoid.css",
+          "text/css",
+          33750,
+          "602b591b6d2acd76fb67cfeec50816a1a247accaf90744f3f75922ca40a79d2a"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/style.css",
+          "text/css",
+          2050,
+          "564289803262093733e99d72f6dee8eafff6e9ab92461b5e4c9191afe812a819"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/content.parsoid.css",
+          "text/css",
+          5375,
+          "f7dc0ccb4820fed986c31d6180d7c8bc66cb360e4607c1b17e1f399802355169"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/inserted_style.css",
+          "text/css",
+          111686,
+          "695296296b92ec5d8157ea781e67ff29b84f160778e11f01279104a913730c0d"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/script.js",
+          "application/javascript",
+          1900,
+          "3500dda3d51b31bf3f4999148c8fab1759b89b595c4e7ca9eb0bd31c1ee69462"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/masonry.min.js",
+          "application/javascript",
+          24103,
+          "367d6afdfc741fb48d2d9310e47c3924b693459a74c882c0fc545ec5ed7d55d2"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/article_list_home.js",
+          "application/javascript",
+          714,
+          "ce1953c7f98ca0bce16d0efb9acfb379b884df46aa673d48f7617599dfd6c9e5"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/images_loaded.min.js",
+          "application/javascript",
+          6398,
+          "3998be5e1fd8869eefddbc2a16cfcc9bc75165f208f6f5100dd8394879c027a9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/node_module/details-element-polyfill/dist/details-element-polyfill.js",
+          "application/javascript",
+          6953,
+          "caeb7871c711b90e300cca886bc958a1fd0551e15223db9dd03fee447a539e5b"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jsConfigVars.js",
+          "application/javascript",
+          2654,
+          "3d20f0a12949ccca3037a2232afed85f176960c7a6068c1c705944e03f4748be"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/startup.js",
+          "application/javascript",
+          175478,
+          "e4e7782237cb0073d2e02f398d12c23fb6e96a4e929afe32273fe99504a1b330"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery,mediawiki.js",
+          "application/javascript",
+          285385,
+          "0815440e4f8e22410773d2d45f34bc04b817de6bcbe5422e46aa8da39ca19a79"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.base.js",
+          "application/javascript",
+          55803,
+          "cf7a785e48226eb022a288069652a909d963b4becf7eb2ead8cb9a32281cd641"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.util.js",
+          "application/javascript",
+          47702,
+          "614918e8b17abca4ebce4305267106bf8840c6afb238ed16408db2eb5e658344"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/site.js",
+          "application/javascript",
+          5360,
+          "9e05911b80af8b0e0570b4234c3586caf7c79111ec5afe5fc5ee52c04b8a7454"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.ready.js",
+          "application/javascript",
+          32751,
+          "2dd214d41335ee359b4ae19ab38dd87e5b40eb69faaa9eb91946824918312326"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/jquery.cookie.js",
+          "application/javascript",
+          52,
+          "a6fa1c0cc9f49e2b932862146ebcc56589037d43a14ab0d460a20a54c656faa8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.cookie.js",
+          "application/javascript",
+          9831,
+          "c8304bf3ca86759ed53809723324ebe5630804bd3c39bdd1c413ca9e89a641fb"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.storage.js",
+          "application/javascript",
+          9808,
+          "5b80b01f79e3d44ec7c621fa55261a905f1bbd1e001cddf1cff0d8b68c3877b9"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.VisibilityToggles.js",
+          "application/javascript",
+          67,
+          "7505550ab77a789bd7770f1e01b29efbdcd1c9c57ff0e9d43eaba62264ea2380"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.gadget.defaultVisibilityToggles.js",
+          "application/javascript",
+          74,
+          "963ccfb8487751b89befc12f23e25e6e1c4c2a88d0d64cdc43a1f6f3a23134f8"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/ext.cite.ux-enhancements.js",
+          "application/javascript",
+          6609,
+          "4360a123a2c69d89c459de2408488c83f1b2e82aa55a6e5f3bf1cf046cd7b404"
+        ],
+        [
+          "http://53293c1b-ced3-5244-564a-b40e435e2f0a.localhost/mw/mediawiki.page.media.js",
+          "application/javascript",
+          1440,
+          "6f797307b40ede46fd4b52a812a2a134c48eec6cac345ade735b7d8c6dd8d7e2"
+        ]
+      ],
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elizabeth_II": "f5e985642d15562094b17bd741e08e6b4be0f4f256ed4f31c1cce4cb5a7805a1",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/List_of_national_parks_of_the_United_States": "051b9b0e39f05f6c43ccd78dc04efa5abf73f977168c84a55fcec7f1a25a90c7",
+      "preview wikipedia_en_100_maxi_2024-01.zim/A/Elvis_Presley": "c6e0175baf216d48f6c581ce5d51ffe75b2f6adbdbe4f5feaabfcd04ad2082ea",
+      "preview preview.zim/fallback.html": "42bbb3aa5fd22fd98312a5149d1aa76b81fbb1e61620cf81edfb4d76e268fc93",
+      "MHTML preview.zim/fallback.html": [
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/fallback%2Ehtml",
+          "text/html",
+          167,
+          "c693c18cf97b13a410c342a1082a6772e7a8db36822aa7f973a48bddf6716dc6"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/vector.svg",
+          "image/svg+xml",
+          41,
+          "900fbe934249ad120004bd24adf66aad8817d89586273c0cc50e187bddebb601"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/large.png",
+          "image/png",
+          262244,
+          "3e7427142df429e8eb8cd1ff9a1f4ef3917fb276bf33a9340c76be793fc0aabf"
+        ],
+        [
+          "http://066871ed-6825-bc1e-4321-71db74da1d08.localhost/I/photo%20%2523.png",
+          "image/png",
+          100,
+          "ff748409b6a0ecf8c2ecd97f8b3f0e29243c7048584939c0d4b9e4f9512a4b78"
+        ]
+      ]
+    },
+    "mhtml_with_fixed_boundary_sha256": {
+      "MHTML wikipedia_en_climate_change_mini_2024-06.zim/Land_cover": "a809bf65e73d87a05ec52bd172afaf6181a179848a26246f4925c58cf0b0a1fa",
+      "MHTML preview.zim/fallback.html": "103df8bb0fd9b72bbcebdc40fc11bcb8faa081448b38b8e1280b62d4077b9348"
+    },
+    "method": "Paired local commands from ad-hoc signed macOS packages. Per build: 42 article previews on three ZIMs, and 12 MHTML exports on two ZIMs. Preview JSON and normalized MHTML output were compared across builds. Published is the preceding checked SHA-256 app. Native is the historical libzim app.",
+    "medians_ms": {
+      "native": {
+        "preview": 5.0247085,
+        "mhtml": 32.3111255
+      },
+      "published": {
+        "preview": 4.8953545,
+        "mhtml": 25.1446455
+      },
+      "checked": {
+        "preview": 4.867770999999999,
+        "mhtml": 26.5396875
+      }
+    }
+  }
+}

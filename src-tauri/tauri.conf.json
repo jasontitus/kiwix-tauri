@@ -57,6 +57,7 @@
       "licenses/string-cache": "licenses/string-cache",
       "licenses/siphasher": "licenses/siphasher",
       "licenses/sha2": "licenses/sha2",
+      "licenses/block-buffer": "licenses/block-buffer",
       "licenses/voice/bzip2-turbo-rs-0BSD": "licenses/voice/bzip2-turbo-rs-0BSD",
       "licenses/zimru/LICENSE": "licenses/zimru/LICENSE",
       "licenses/zimru/zstd-rs-MIT": "licenses/zimru/zstd-rs-MIT",
