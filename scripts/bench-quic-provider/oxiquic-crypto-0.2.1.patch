@@ -1,0 +1,117 @@
+--- a/vendor/oxiquic-crypto-0.2.1/Cargo.toml
++++ b/vendor/oxiquic-crypto-0.2.1/Cargo.toml
+@@ -57,6 +57,11 @@
+ features = ["aes"]
+ default-features = false
+
++[dependencies.chacha20]
++version = "=0.10.2"
++features = ["cipher"]
++default-features = false
++
+ [dependencies.chacha20poly1305]
+ version = "0.11.0"
+ default-features = false
+@@ -65,12 +70,9 @@
+ version = "0.13.0"
+ default-features = false
+
+-[dependencies.oxicrypto]
+-version = "0.3.0"
+-features = [
+-    "pure",
+-    "std",
+-]
++[dependencies.oxicrypto-cipher]
++version = "=0.3.0"
++features = ["std"]
+ default-features = false
+
+ [dependencies.oxitls]
+@@ -90,8 +92,8 @@
+ ]
+ default-features = false
+
+-[dependencies.rustls-rustcrypto]
+-version = "0.0.2-alpha"
++[dependencies.rustls-pure]
++version = "=0.15.4"
+
+ [dependencies.sha2]
+ version = "0.11.0"
+--- a/vendor/oxiquic-crypto-0.2.1/src/lib.rs
++++ b/vendor/oxiquic-crypto-0.2.1/src/lib.rs
+@@ -24,7 +24,7 @@
+ //!
+ //! * [`quic_crypto_provider`] — a [`CryptoProvider`]
+ //!   with the three QUIC-enabled suites, reusing
+-//!   [`rustls_rustcrypto::provider`]'s key exchange, signature verification,
++//!   [`rustls_pure::provider`]'s key exchange, signature verification,
+ //!   secure random and key provider.
+ //! * [`suites`] — the three `&'static SupportedCipherSuite` constants and the
+ //!   inner `Tls13CipherSuite` needed for [`rustls::quic::Keys::initial`].
+@@ -69,7 +69,7 @@
+
+ /// Build a [`CryptoProvider`] whose TLS 1.3 cipher suites are QUIC-enabled.
+ ///
+-/// The returned provider keeps `rustls_rustcrypto::provider()`'s key-exchange
++/// The returned provider keeps `rustls_pure::provider()`'s key-exchange
+ /// groups, signature-verification algorithms, secure random source and key
+ /// provider, but replaces the cipher suites with the three QUIC-capable suites
+ /// from [`suites`] (`quic: Some(..)`), so a `rustls::quic::ClientConnection` /
+@@ -83,7 +83,7 @@
+ /// ```
+ #[must_use]
+ pub fn quic_crypto_provider() -> CryptoProvider {
+-    let base = rustls_rustcrypto::provider();
++    let base = rustls_pure::provider();
+     CryptoProvider {
+         cipher_suites: suites::ALL_QUIC_SUITES.to_vec(),
+         kx_groups: base.kx_groups,
+@@ -103,7 +103,7 @@
+ /// Returns the Pure-Rust [`CryptoProvider`] from the oxitls facade.
+ ///
+ /// This is the provider returned by [`oxitls::quic_preview::pure_quic_provider()`]
+-/// — essentially `rustls_rustcrypto::provider()` wrapped in an `Arc`.
++/// — this optional function delegates to the OxiTLS facade.
+ ///
+ /// # Limitation
+ ///
+--- a/vendor/oxiquic-crypto-0.2.1/src/quic.rs
++++ b/vendor/oxiquic-crypto-0.2.1/src/quic.rs
+@@ -14,7 +14,13 @@
+ use alloc::boxed::Box;
+
+ use aead::AeadInOut;
+-use oxicrypto::cipher::{aes128_encrypt_block, aes256_encrypt_block, chacha20_keystream_block};
++use chacha20::{
++    ChaChaCore, Key, KeyIvInit, Nonce as ChaChaNonce, R20,
++    cipher::{Block, StreamCipherCore},
++    variants::Ietf,
++};
++use zeroize::Zeroize;
++use oxicrypto_cipher::{aes128_encrypt_block, aes256_encrypt_block};
+ use rustls::crypto::cipher::{AeadKey, Iv, Nonce};
+ use rustls::quic::{Algorithm, HeaderProtectionKey, PacketKey, Tag};
+ use rustls::Error;
+@@ -82,8 +88,18 @@
+                 // nonce = remaining 12 sample bytes.
+                 let counter = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                 let nonce = &sample[4..SAMPLE_LEN];
+-                chacha20_keystream_block(self.key.as_ref(), counter, nonce, &mut mask)
+-                    .map_err(|_| Error::General("header protection mask failed".into()))?;
++                let key = Key::try_from(self.key.as_ref())
++                    .map_err(|_| Error::General("invalid header protection key".into()))?;
++                let nonce = ChaChaNonce::try_from(nonce)
++                    .map_err(|_| Error::General("invalid header protection nonce".into()))?;
++                let mut cipher = ChaChaCore::<R20, Ietf>::new(&key, &nonce);
++                cipher.set_block_pos(counter);
++                // RFC 9001 uses one block at the given 32-bit counter. A
++                // fresh core is dropped immediately, before any counter reuse.
++                let mut block = Block::<ChaChaCore<R20, Ietf>>::default();
++                cipher.write_keystream_block(&mut block);
++                mask.copy_from_slice(&block[..5]);
++                block.zeroize();
+             }
+         }
+         Ok(mask)

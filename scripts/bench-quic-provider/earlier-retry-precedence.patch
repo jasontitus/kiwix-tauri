@@ -1,0 +1,53 @@
+--- a/vendor/quinn-proto-0.11.19/src/crypto/rustls.rs
++++ b/vendor/quinn-proto-0.11.19/src/crypto/rustls.rs
+@@ -1,11 +1,11 @@
+ use std::{any::Any, io, str, sync::Arc};
+
+-#[cfg(all(feature = "aws-lc-rs", not(feature = "ring")))]
++#[cfg(all(feature = "aws-lc-rs", not(any(feature = "ring", feature = "rustls-no-provider"))))]
+ use aws_lc_rs::aead;
+ use bytes::BytesMut;
+-#[cfg(feature = "ring")]
++#[cfg(all(feature = "ring", not(feature = "rustls-no-provider")))]
+ use ring::aead;
+-#[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++#[cfg(feature = "rustls-no-provider")]
+ use aes_gcm::{Aes128Gcm, aead::{self as rustcrypto, AeadInOut, KeyInit}};
+ pub use rustls::Error;
+ #[cfg(feature = "__rustls-post-quantum-test")]
+@@ -195,7 +195,7 @@
+         };
+
+         let (aad, tag) = pseudo_packet.split_at_mut(tag_start);
+-        #[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++        #[cfg(feature = "rustls-no-provider")]
+         {
+             let nonce = rustcrypto::Nonce::<Aes128Gcm>::from(nonce);
+             let Ok(tag) = rustcrypto::Tag::<Aes128Gcm>::try_from(&*tag) else { return false };
+@@ -203,7 +203,7 @@
+                 .decrypt_inout_detached(&nonce, aad, (&mut [][..]).into(), &tag)
+                 .is_ok()
+         }
+-        #[cfg(any(feature = "ring", feature = "aws-lc-rs"))]
++        #[cfg(not(feature = "rustls-no-provider"))]
+         {
+             let nonce = aead::Nonce::assume_unique_for_key(nonce);
+             let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());
+@@ -569,7 +569,7 @@
+         pseudo_packet.extend_from_slice(orig_dst_cid);
+         pseudo_packet.extend_from_slice(packet);
+
+-        #[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++        #[cfg(feature = "rustls-no-provider")]
+         {
+             let nonce = rustcrypto::Nonce::<Aes128Gcm>::from(nonce);
+             Aes128Gcm::new(&key.into())
+@@ -577,7 +577,7 @@
+                 .expect("Retry input fits in a QUIC packet")
+                 .into()
+         }
+-        #[cfg(any(feature = "ring", feature = "aws-lc-rs"))]
++        #[cfg(not(feature = "rustls-no-provider"))]
+         {
+             let nonce = aead::Nonce::assume_unique_for_key(nonce);
+             let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());

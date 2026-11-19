@@ -1,0 +1,169 @@
+--- a/vendor/quinn-proto-0.11.19/Cargo.toml
++++ b/vendor/quinn-proto-0.11.19/Cargo.toml
+@@ -71,6 +71,7 @@
+     "aws-lc-rs-fips",
+ ]
+ rustls-log = ["rustls?/logging"]
++rustls-no-provider = ["dep:rustls", "dep:aes-gcm"]
+ rustls-ring = [
+     "dep:rustls",
+     "rustls?/ring",
+@@ -80,6 +81,12 @@
+ [lib]
+ name = "quinn_proto"
+ path = "src/lib.rs"
++
++[dependencies.aes-gcm]
++version = "0.11"
++features = ["aes"]
++default-features = false
++optional = true
+
+ [dependencies.arbitrary]
+ version = "1.0.1"
+--- a/vendor/quinn-proto-0.11.19/src/crypto.rs
++++ b/vendor/quinn-proto-0.11.19/src/crypto.rs
+@@ -21,7 +21,7 @@
+ #[cfg(any(feature = "aws-lc-rs", feature = "ring"))]
+ pub(crate) mod ring_like;
+ /// TLS interface based on rustls
+-#[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
++#[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring", feature = "rustls-no-provider"))]
+ pub mod rustls;
+
+ /// A cryptographic session (commonly TLS)
+--- a/vendor/quinn-proto-0.11.19/src/crypto/rustls.rs
++++ b/vendor/quinn-proto-0.11.19/src/crypto/rustls.rs
+@@ -5,16 +5,19 @@
+ use bytes::BytesMut;
+ #[cfg(feature = "ring")]
+ use ring::aead;
++#[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++use aes_gcm::{Aes128Gcm, aead::{self as rustcrypto, AeadInOut, KeyInit}};
+ pub use rustls::Error;
+ #[cfg(feature = "__rustls-post-quantum-test")]
+ use rustls::NamedGroup;
+ use rustls::{
+     self, CipherSuite,
+-    client::danger::ServerCertVerifier,
+-    pki_types::{CertificateDer, PrivateKeyDer, ServerName},
++    pki_types::{CertificateDer, ServerName},
+     quic::{Connection, HeaderProtectionKey, KeyChange, PacketKey, Secrets, Suite, Version},
+ };
+-#[cfg(feature = "platform-verifier")]
++#[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
++use rustls::{client::danger::ServerCertVerifier, pki_types::PrivateKeyDer};
++#[cfg(all(feature = "platform-verifier", any(feature = "rustls-aws-lc-rs", feature = "rustls-ring")))]
+ use rustls_platform_verifier::BuilderVerifierExt;
+
+ use crate::{
+@@ -191,11 +194,21 @@
+             _ => unreachable!(),
+         };
+
+-        let nonce = aead::Nonce::assume_unique_for_key(nonce);
+-        let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());
+-
+         let (aad, tag) = pseudo_packet.split_at_mut(tag_start);
+-        key.open_in_place(nonce, aead::Aad::from(aad), tag).is_ok()
++        #[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++        {
++            let nonce = rustcrypto::Nonce::<Aes128Gcm>::from(nonce);
++            let Ok(tag) = rustcrypto::Tag::<Aes128Gcm>::try_from(&*tag) else { return false };
++            Aes128Gcm::new(&key.into())
++                .decrypt_inout_detached(&nonce, aad, (&mut [][..]).into(), &tag)
++                .is_ok()
++        }
++        #[cfg(any(feature = "ring", feature = "aws-lc-rs"))]
++        {
++            let nonce = aead::Nonce::assume_unique_for_key(nonce);
++            let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());
++            key.open_in_place(nonce, aead::Aad::from(aad), tag).is_ok()
++        }
+     }
+
+     fn export_keying_material(
+@@ -294,7 +307,7 @@
+ }
+
+ impl QuicClientConfig {
+-    #[cfg(feature = "platform-verifier")]
++    #[cfg(all(feature = "platform-verifier", any(feature = "rustls-aws-lc-rs", feature = "rustls-ring")))]
+     pub(crate) fn with_platform_verifier() -> Result<Self, Error> {
+         // Keep in sync with `inner()` below
+         let mut inner = rustls::ClientConfig::builder_with_provider(configured_provider())
+@@ -316,6 +329,7 @@
+     ///
+     /// QUIC requires that TLS 1.3 be enabled. Advanced users can use any [`rustls::ClientConfig`] that
+     /// satisfies this requirement.
++    #[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
+     pub(crate) fn new(verifier: Arc<dyn ServerCertVerifier>) -> Self {
+         let inner = Self::inner(verifier);
+         Self {
+@@ -339,6 +353,7 @@
+         }
+     }
+
++    #[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
+     pub(crate) fn inner(verifier: Arc<dyn ServerCertVerifier>) -> rustls::ClientConfig {
+         // Keep in sync with `with_platform_verifier()` above
+         let mut config = rustls::ClientConfig::builder_with_provider(configured_provider())
+@@ -443,6 +458,7 @@
+ }
+
+ impl QuicServerConfig {
++    #[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
+     pub(crate) fn new(
+         cert_chain: Vec<CertificateDer<'static>>,
+         key: PrivateKeyDer<'static>,
+@@ -474,6 +490,7 @@
+     /// QUIC requires that TLS 1.3 be enabled, and that the maximum early data size is either 0 or
+     /// `u32::MAX`. Advanced users can use any [`rustls::ServerConfig`] that satisfies these
+     /// requirements.
++    #[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
+     pub(crate) fn inner(
+         cert_chain: Vec<CertificateDer<'static>>,
+         key: PrivateKeyDer<'static>,
+@@ -552,15 +569,25 @@
+         pseudo_packet.extend_from_slice(orig_dst_cid);
+         pseudo_packet.extend_from_slice(packet);
+
+-        let nonce = aead::Nonce::assume_unique_for_key(nonce);
+-        let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());
+-
+-        let tag = key
+-            .seal_in_place_separate_tag(nonce, aead::Aad::from(pseudo_packet), &mut [])
+-            .unwrap();
+-        let mut result = [0; 16];
+-        result.copy_from_slice(tag.as_ref());
+-        result
++        #[cfg(not(any(feature = "ring", feature = "aws-lc-rs")))]
++        {
++            let nonce = rustcrypto::Nonce::<Aes128Gcm>::from(nonce);
++            Aes128Gcm::new(&key.into())
++                .encrypt_inout_detached(&nonce, &pseudo_packet, (&mut [][..]).into())
++                .expect("Retry input fits in a QUIC packet")
++                .into()
++        }
++        #[cfg(any(feature = "ring", feature = "aws-lc-rs"))]
++        {
++            let nonce = aead::Nonce::assume_unique_for_key(nonce);
++            let key = aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_128_GCM, &key).unwrap());
++            let tag = key
++                .seal_in_place_separate_tag(nonce, aead::Aad::from(pseudo_packet), &mut [])
++                .unwrap();
++            let mut result = [0; 16];
++            result.copy_from_slice(tag.as_ref());
++            result
++        }
+     }
+ }
+
+@@ -579,6 +606,7 @@
+         .flatten()
+ }
+
++#[cfg(any(feature = "rustls-aws-lc-rs", feature = "rustls-ring"))]
+ pub(crate) fn configured_provider() -> Arc<rustls::crypto::CryptoProvider> {
+     #[cfg(all(feature = "rustls-aws-lc-rs", not(feature = "rustls-ring")))]
+     let provider = rustls::crypto::aws_lc_rs::default_provider();
