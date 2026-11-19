@@ -30,8 +30,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   `cpu_time` helpers.
 - `cf24679f21` — restores the pre-rename interior-NUL rejection (`check_path`, safe byte scan) after review
   found the Linux fallback could misread rustix's `EINVAL`; adds a regression test; corrects the docs.
-- Follow-up pending: restore the `dangling_symlink_is_an_existing_destination` tail (assertion + cleanup)
-  that the regression-test insertion displaced, and scope the doc section's revision claim.
+- `28a8d06b37` — restores the `dangling_symlink_is_an_existing_destination` tail (assertion + cleanup) that
+  the regression-test insertion displaced, and scopes the doc section's revision claim.
 
 ## Status
 
@@ -40,7 +40,8 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 - Verified for Android: `cargo check --lib --target aarch64-linux-android --features android-evaluation`
   with NDK 28 under Rust 1.99.1.
 - Not run: iOS/Linux cross-target checks, device tests, sanitizer/Miri.
-- Independent review completed; two follow-up findings are being fixed in the next commit.
+- Independent review completed; all four findings are fixed in `cf24679f21` and `28a8d06b37`. Final
+  reviewer verification of those two fixes is in progress.
 
 ## Not reserved (safe for the other session)
 
