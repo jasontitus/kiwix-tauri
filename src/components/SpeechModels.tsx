@@ -1,103 +1,24 @@
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useVoiceModelStatus, type RetainedVoiceFiles } from "./useVoiceModelStatus";
 import { Download, RefreshCw, Trash2 } from "lucide-react";
 import { api, isNative } from "../api";
 import { formatBytes, t } from "../i18n";
-
-interface KokoroStatus {
-  available: boolean;
-  downloading: boolean;
-  downloaded: number;
-  total: number;
-  voices: unknown[];
-  error?: string | null;
-  performance?: "unknown" | "realtime" | "slow";
-  probing?: boolean;
-  performanceRatio?: number | null;
-  performanceError?: string | null;
-  bundled?: boolean;
-  bundleCheckFailed?: boolean;
-  removalPending?: boolean;
-  repairAvailable?: boolean;
-  legacyRetained?: boolean;
-  legacyAudioRetained?: boolean;
-}
-
-interface ModelEvent {
-  state: "downloading" | "installed" | "error";
-  downloaded?: number;
-  total?: number;
-  error?: string | null;
-}
 
 /**
  * The standard edition downloads the pinned model on request. An offline
  * Android edition can install the same files from its signed package.
  */
 export default function SpeechModels() {
-  const [status, setStatus] = useState<KokoroStatus | null>(null);
+  const { status, readError, refresh } = useVoiceModelStatus(isNative);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function refresh(preserved?: Pick<KokoroStatus, "legacyRetained" | "legacyAudioRetained">) {
-    try {
-      const next = await api<KokoroStatus>("kokoro_status");
-      setStatus({
-        ...next,
-        legacyRetained: next.legacyRetained || preserved?.legacyRetained,
-        legacyAudioRetained: next.legacyAudioRetained || preserved?.legacyAudioRetained,
-      });
-      setError(next.error || "");
-    } catch (value) {
-      setError(value instanceof Error ? value.message : String(value));
-    }
-  }
-
   useEffect(() => {
-    // The headless browser preview has no Tauri event bridge or model store.
-    if (!isNative) return;
-    void refresh();
-    let disposed = false;
-    const unlisteners: (() => void)[] = [];
-    void listen<ModelEvent>("kiwix-speech-model", (event) => {
-      if (disposed) return;
-      const payload = event.payload;
-      setStatus((previous) => ({
-        available: payload.state === "installed" ? true : previous?.available ?? false,
-        downloading: payload.state === "downloading",
-        downloaded: payload.downloaded ?? previous?.downloaded ?? 0,
-        total: payload.total ?? previous?.total ?? 0,
-        voices: previous?.voices ?? [],
-        error: payload.error ?? null,
-        performance: previous?.performance ?? "unknown",
-        probing: previous?.probing ?? false,
-        performanceRatio: previous?.performanceRatio ?? null,
-        performanceError: previous?.performanceError ?? null,
-        bundled: previous?.bundled ?? false,
-        bundleCheckFailed: previous?.bundleCheckFailed ?? false,
-        removalPending: previous?.removalPending ?? false,
-        repairAvailable: previous?.repairAvailable ?? false,
-        legacyRetained: previous?.legacyRetained,
-        legacyAudioRetained: previous?.legacyAudioRetained,
-      }));
-      if (payload.state === "error") setError(payload.error || t("The voice model download failed."));
-      if (payload.state === "installed") setError("");
-    }).then((unlisten) => {
-      if (disposed) unlisten();
-      else unlisteners.push(unlisten);
-    });
-    return () => {
-      disposed = true;
-      for (const unlisten of unlisteners) unlisten();
-    };
-  }, []);
-
-  useEffect(() => {
-    const preparingBundled = status?.bundled === true && status.downloading;
-    if ((!status?.available || status.performance !== "unknown" || status.performanceError) && !preparingBundled) return;
+    const preparing = status?.downloading;
+    if ((!status?.available || status.performance !== "unknown" || status.performanceError) && !preparing) return;
     const timer = window.setInterval(() => { void refresh(); }, 1500);
     return () => window.clearInterval(timer);
-  }, [status?.available, status?.bundled, status?.downloading, status?.performance, status?.performanceError]);
+  }, [refresh, status?.available, status?.downloading, status?.performance, status?.performanceError]);
 
   async function download() {
     if (busy) return;
@@ -118,6 +39,7 @@ export default function SpeechModels() {
     setBusy(true);
     try {
       await api("kokoro_cancel");
+      await refresh();
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
@@ -144,7 +66,7 @@ export default function SpeechModels() {
     setBusy(true);
     setError("");
     try {
-      const preserved = await api<Pick<KokoroStatus, "legacyRetained" | "legacyAudioRetained">>("kokoro_delete");
+      const preserved = await api<RetainedVoiceFiles>("kokoro_delete");
       await refresh(preserved);
     } catch (value) {
       await refresh();
@@ -155,6 +77,17 @@ export default function SpeechModels() {
   }
 
   if (!isNative) return null;
+  if (!status) return (
+    <div className="speech-models">
+      {readError ? (
+        <>
+          <p className="inline-error" role="alert">{readError}</p>
+          <button type="button" className="secondary" onClick={() => void refresh()}>{t("Try again")}</button>
+        </>
+      ) : <p className="muted" role="status">{t("Checking natural voices…")}</p>}
+    </div>
+  );
+  const message = error || readError || status?.error;
   const percent = status?.total ? Math.min(100, Math.round((status.downloaded / status.total) * 100)) : 0;
   return (
     <div className="speech-models">
@@ -235,7 +168,7 @@ export default function SpeechModels() {
       )}
       {status?.legacyRetained && <p className="muted" role="status">{t("Files from an earlier voice model remain in app storage.")}</p>}
       {status?.legacyAudioRetained && <p className="muted" role="status">{t("Some cached voice audio remains in app storage because its ownership could not be verified.")}</p>}
-      {error && <p className="inline-error" role="alert">{error}</p>}
+      {message && <p className="inline-error" role="alert">{message}</p>}
     </div>
   );
 }

@@ -9,8 +9,6 @@ use std::path::PathBuf;
 #[cfg(target_os = "android")]
 use std::sync::Arc;
 #[cfg(target_os = "android")]
-use tauri::Emitter;
-#[cfg(target_os = "android")]
 use tauri_plugin_kiwix_mobile::MobileExt;
 
 #[derive(Default)]
@@ -152,28 +150,8 @@ impl Service {
         let generation = self.launch_generation();
         let service = self.clone();
         tauri::async_runtime::spawn(async move {
-            let result = kokoro::install_bundled(&root, reader, control).await;
-            let result = manager.finish_download(result);
-            if result.is_ok() {
-                let _mode = service.privacy_gate.read().await;
-                if service.launch_generation() == generation
-                    && service.ensure_running().is_ok()
-                    && service.normal_writable().is_ok()
-                {
-                    manager.ensure_performance_probe();
-                }
-            }
-            if let Ok(handle) = service.app.lock() {
-                if let Some(app) = handle.as_ref() {
-                    let _ = app.emit(
-                        "kiwix-speech-model",
-                        json!({
-                            "state": if result.is_ok() { "installed" } else { "error" },
-                            "error": result.err(),
-                        }),
-                    );
-                }
-            };
+            let result = kokoro::install_bundled(&root, reader, control.clone()).await;
+            service.finish_voice_job(&manager, control, generation, result).await;
         });
         Ok(Some(json!({"state": "downloading"})))
     }
