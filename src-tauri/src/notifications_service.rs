@@ -46,7 +46,7 @@ impl Service {
         if label != "main" { return Err("Completion notification permission requires the trusted root window".into()); }
         #[cfg(mobile)]
         let root_generation;
-        let (generation, policy_generation) = {
+        let (generation, policy_generation, permission) = {
             let _mode = self.privacy_gate.read().await;
             self.ensure_running()?;
             #[cfg(mobile)]
@@ -58,11 +58,13 @@ impl Service {
             if !capability.available { return Err(capability.reason.unwrap_or_else(|| "Native completion notifications are unavailable".into())); }
             #[cfg(mobile)]
             { root_generation = self.mobile.state.lock().map_err(|_| "Mobile lifecycle unavailable")?.generation; }
-            (generation, self.privacy_policy_generation.load(Ordering::SeqCst))
+            let policy_generation = self.privacy_policy_generation.load(Ordering::SeqCst);
+            let permission = self.notifications.request_permission()?;
+            (generation, policy_generation, permission)
         };
         // UIKit's authorization sheet deactivates the root. Neither this wait nor
         // its native callback owns the privacy lease or proves resumed authority.
-        let (granted, revision) = self.notifications.request_permission().await?;
+        let (granted, revision) = permission.wait().await?;
         #[cfg(mobile)]
         let (_mode, foreground) = {
             // UIKit's sheet may leave the root inactive; the loop below waits for

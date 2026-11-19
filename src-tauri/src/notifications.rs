@@ -5,24 +5,30 @@
 //! configuration/permission are deliberately separate, explicit operations.
 use crate::store::{Book, Store};
 use cap_fs_ext::MetadataExt;
+use objc2::rc::Retained;
+use objc2_foundation::NSData;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    ffi::{c_char, c_int, c_void, CStr, CString},
+    collections::HashMap,
     os::fd::AsRawFd,
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, LazyLock, Mutex, Weak},
 };
 use tokio::sync::oneshot;
 
+#[deny(improper_ctypes)]
 unsafe extern "C" {
-    fn kiwix_notifications_install_early();
-    fn kiwix_notifications_set_waker(wake: unsafe extern "C" fn());
-    fn kiwix_notifications_call(request: *const c_char) -> *mut c_char;
-    fn kiwix_notifications_free(value: *mut c_char);
-    fn kiwix_notifications_request_permission(
-        context: *mut c_void,
-        callback: unsafe extern "C" fn(*mut c_void, c_int, *const c_char),
+    safe fn kiwix_notifications_install_early() -> bool;
+    safe fn kiwix_notifications_set_waker(wake: extern "C" fn());
+    // Synchronous borrow of a Foundation object, with a +1 ARC return value.
+    safe fn kiwix_notifications_call(request: &NSData) -> Option<Retained<NSData>>;
+    // No Rust references escape. Native borrows an immutable diagnostic only
+    // for the duration of the completion call.
+    safe fn kiwix_notifications_request_permission(
+        id: u64,
+        is_live: extern "C" fn(u64) -> bool,
+        callback: extern "C" fn(u64, i32, Option<&NSData>),
     );
 }
 
@@ -30,7 +36,9 @@ unsafe extern "C" {
 /// Tauri's event loop. In particular, Builder::setup is too late for scene-based
 /// iOS cold notification responses. Installation never asks for authorization.
 pub(crate) fn install_early() {
-    unsafe { kiwix_notifications_install_early() }
+    if !kiwix_notifications_install_early() {
+        eprintln!("Native notification installation requires the main thread");
+    }
 }
 
 static SERVICE_WAKER: Mutex<Weak<crate::service::Service>> = Mutex::new(Weak::new());
@@ -38,25 +46,20 @@ static SERVICE_WAKER: Mutex<Weak<crate::service::Service>> = Mutex::new(Weak::ne
 pub(crate) fn install_waker(service: &Arc<crate::service::Service>) -> Result<(), String> {
     *SERVICE_WAKER.lock()
         .map_err(|_| "Notification wakeup is unavailable")? = Arc::downgrade(service);
-    unsafe { kiwix_notifications_set_waker(wake_root) };
+    kiwix_notifications_set_waker(wake_root);
     Ok(())
 }
 
-unsafe extern "C" fn wake_root() {
+extern "C" fn wake_root() {
     let service = SERVICE_WAKER.lock().ok().and_then(|weak| weak.upgrade());
     if let Some(service) = service { service.notify_library_changed(); }
 }
 
 fn native(request: Value) -> Result<Value, String> {
-    let encoded = CString::new(serde_json::to_vec(&request).map_err(|error| error.to_string())?)
-        .map_err(|_| "Invalid native notification request")?;
-    let reply = unsafe { kiwix_notifications_call(encoded.as_ptr()) };
-    if reply.is_null() {
-        return Err("Allocating native notification reply".into());
-    }
-    // The native allocation is freed even when decoding fails.
-    let decoded = unsafe { serde_json::from_slice::<Value>(CStr::from_ptr(reply).to_bytes()) };
-    unsafe { kiwix_notifications_free(reply) };
+    let encoded = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+    let reply = kiwix_notifications_call(&NSData::with_bytes(&encoded))
+        .ok_or("Allocating native notification reply")?;
+    let decoded = serde_json::from_slice::<Value>(&reply.to_vec());
     let decoded = decoded.map_err(|error| format!("Invalid native notification reply: {error}"))?;
     if let Some(error) = decoded.get("error").and_then(Value::as_str) {
         return Err(error.to_string());
@@ -151,21 +154,16 @@ impl NotificationManager {
 
     /// Invoke ONLY from an active, trusted root user action (never startup,
     /// restore, polling, import completion or a reader-webview command).
-    /// Returns the OS grant and policy revision for foreground revalidation.
-    /// Denial is an ordinary false grant, not an acquisition/settings failure.
-    pub(crate) async fn request_permission(&self) -> Result<(bool, u64), String> {
-        let revision = {
-            let policy = self.policy.lock().map_err(|_| "Notification policy is unavailable")?;
-            if policy.protected || self.store.private_mode()? || self.store.read_only()? {
-                return Err("Leave private or read-only mode before enabling notifications".into());
-            }
-            policy.revision
-        };
-        let (sender, receiver) = oneshot::channel::<Result<bool, String>>();
-        let context = Box::into_raw(Box::new(sender)).cast::<c_void>();
-        unsafe { kiwix_notifications_request_permission(context, permission_result) };
-        let granted = receiver.await.map_err(|_| "Native notification permission response was lost")??;
-        Ok((granted, revision))
+    /// Submit while the Service still holds its privacy lease, then release
+    /// the lease before waiting for the authorization sheet to finish.
+    pub(crate) fn request_permission(&self) -> Result<PermissionRequest, String> {
+        let policy = self.policy.lock().map_err(|_| "Notification policy is unavailable")?;
+        if policy.protected || self.store.private_mode()? || self.store.read_only()? {
+            return Err("Leave private or read-only mode before enabling notifications".into());
+        }
+        let (ticket, receiver) = register_permission()?;
+        kiwix_notifications_request_permission(ticket.0, permission_is_live, permission_result);
+        Ok(PermissionRequest { _ticket: ticket, receiver, revision: policy.revision })
     }
 
     /// Revalidate only after Service has regained the same root's foreground
@@ -269,18 +267,144 @@ fn notice_id(profile_id: &str, receipt: &str, installation_id: &str) -> String {
     format!("org.kiwix.acquisition.{profile_id}.{}", hex::encode(digest.finalize()))
 }
 
-unsafe extern "C" fn permission_result(context: *mut c_void, result: c_int, error: *const c_char) {
-    // Native calls this exactly once, including immediate policy/busy failures.
-    let sender = unsafe { Box::from_raw(context.cast::<oneshot::Sender<Result<bool, String>>>()) };
-    let value = if result < 0 {
-        Err(if error.is_null() { "Native notification authorization failed".into() }
-            else { unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned() })
-    } else { Ok(result == 1) };
+type PermissionResult = Result<bool, String>;
+
+#[derive(Default)]
+struct PermissionRequests {
+    last_id: u64,
+    pending: HashMap<u64, oneshot::Sender<PermissionResult>>,
+}
+
+static PERMISSION_REQUESTS: LazyLock<Mutex<PermissionRequests>> = LazyLock::new(Mutex::default);
+
+struct PermissionTicket(u64);
+
+impl Drop for PermissionTicket {
+    fn drop(&mut self) {
+        PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
+            .pending.remove(&self.0);
+    }
+}
+
+impl PermissionRequests {
+    fn register(&mut self) -> Result<(u64, oneshot::Receiver<PermissionResult>), String> {
+        let id = self.last_id.checked_add(1).ok_or("Native notification request IDs exhausted")?;
+        let (sender, receiver) = oneshot::channel();
+        self.last_id = id;
+        self.pending.insert(id, sender);
+        Ok((id, receiver))
+    }
+}
+
+fn register_permission() -> Result<(PermissionTicket, oneshot::Receiver<PermissionResult>), String> {
+    let (id, receiver) = PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
+        .register()?;
+    Ok((PermissionTicket(id), receiver))
+}
+
+pub(crate) struct PermissionRequest {
+    _ticket: PermissionTicket,
+    receiver: oneshot::Receiver<PermissionResult>,
+    revision: u64,
+}
+
+impl PermissionRequest {
+    pub(crate) async fn wait(self) -> Result<(bool, u64), String> {
+        let Self { _ticket, receiver, revision } = self;
+        let granted = receiver.await.map_err(|_| "Native notification permission response was lost")??;
+        Ok((granted, revision))
+    }
+}
+
+extern "C" fn permission_is_live(id: u64) -> bool {
+    PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
+        .pending.get(&id).is_some_and(|sender| !sender.is_closed())
+}
+
+extern "C" fn permission_result(id: u64, result: i32, error: Option<&NSData>) {
+    let sender = PERMISSION_REQUESTS.lock().unwrap_or_else(|error| error.into_inner())
+        .pending.remove(&id);
+    let Some(sender) = sender else { return; };
+    if sender.is_closed() {
+        return;
+    }
+    let value = match result {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(error.map(|bytes| String::from_utf8_lossy(&bytes.to_vec()).into_owned())
+            .unwrap_or_else(|| "Native notification authorization failed".into())),
+    };
     let _ = sender.send(value);
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn native_json_bridge_preserves_headless_and_request_limit_errors() {
+        let request = br#"{"command":"capability"}"#;
+        let mut padded = request.to_vec();
+        padded.resize(16384, b' ');
+        let reply = kiwix_notifications_call(&NSData::with_bytes(&padded)).unwrap();
+        let reply: Value = serde_json::from_slice(&reply.to_vec()).unwrap();
+        assert_eq!(reply["value"]["available"], false);
+
+        padded.push(b' ');
+        for bytes in [&padded[..], b"[42]", b"{\"command\":\"capability\"}\0junk"] {
+            let reply = kiwix_notifications_call(&NSData::with_bytes(bytes)).unwrap();
+            let reply: Value = serde_json::from_slice(&reply.to_vec()).unwrap();
+            assert_eq!(reply["error"], "Invalid notification request");
+        }
+        assert_eq!(
+            native(json!({"command":"peek"})).unwrap_err(),
+            "Notification delegate was not installed before launch",
+        );
+    }
+
+    #[test]
+    fn permission_results_preserve_grants_denials_and_diagnostics() {
+        let reason = NSData::with_bytes("Authorization failed: オフライン".as_bytes());
+        for (status, error, expected) in [
+            (1, None, Ok(true)),
+            (0, None, Ok(false)),
+            (-1, Some(&*reason), Err("Authorization failed: オフライン")),
+            (-1, None, Err("Native notification authorization failed")),
+        ] {
+            let (ticket, receiver) = register_permission().unwrap();
+            permission_result(ticket.0, status, error);
+            assert_eq!(receiver.blocking_recv().unwrap().as_ref().copied().map_err(String::as_str), expected);
+        }
+    }
+
+    #[test]
+    fn cancelled_and_duplicate_permission_replies_cannot_complete_another_waiter() {
+        let (ticket, cancelled) = register_permission().unwrap();
+        let cancelled_id = ticket.0;
+        assert!(permission_is_live(cancelled_id));
+        drop(ticket);
+        assert!(!permission_is_live(cancelled_id));
+        assert!(cancelled.blocking_recv().is_err());
+
+        let (ticket, mut current) = register_permission().unwrap();
+        assert!(ticket.0 > cancelled_id);
+        permission_result(cancelled_id, 1, None);
+        assert!(matches!(current.try_recv(), Err(oneshot::error::TryRecvError::Empty)));
+        permission_result(ticket.0, 0, None);
+        assert!(!permission_is_live(ticket.0));
+        permission_result(ticket.0, 1, None);
+        assert!(!current.blocking_recv().unwrap().unwrap());
+    }
+
+    #[test]
+    fn exhausted_permission_ids_are_never_reused() {
+        let mut requests = PermissionRequests { last_id: u64::MAX - 1, ..PermissionRequests::default() };
+        let (last, _receiver) = requests.register().unwrap();
+        assert_eq!(last, u64::MAX);
+        assert!(requests.register().is_err());
+        assert_eq!(requests.pending.len(), 1);
+    }
+
     struct Profile(std::path::PathBuf);
     impl Drop for Profile {
         fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }

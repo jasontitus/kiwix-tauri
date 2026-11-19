@@ -12,8 +12,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include <cstdlib>
-#include <cstring>
 #include <climits>
 #include <atomic>
 
@@ -22,7 +20,8 @@ static const NSUInteger NoticeLimit = 2048;
 static const NSUInteger TapLimit = 32;
 static NSString *const NoticePrefix = @"org.kiwix.acquisition.";
 static NSString *const StateName = @"state.json";
-typedef void (*KiwixNotificationPermissionCallback)(void *, int, const char *);
+typedef bool (*KiwixNotificationPermissionIsLive)(uint64_t);
+typedef void (*KiwixNotificationPermissionCallback)(uint64_t, int32_t, NSData *);
 typedef void (*KiwixNotificationWaker)(void);
 static std::atomic<KiwixNotificationWaker> notificationWaker{nullptr};
 extern "C" void kiwix_notifications_set_waker(KiwixNotificationWaker wake) {
@@ -71,7 +70,7 @@ static BOOL writeAll(int fd, NSData *data) {
 @property(nonatomic) BOOL configured;
 @property(nonatomic) BOOL writeAllowed;
 @property(nonatomic) BOOL dirty;
-@property(nonatomic) BOOL permissionInFlight;
+@property(nonatomic) uint64_t permissionRequestID;
 @property(nonatomic) uint64_t epoch;
 @property(nonatomic) int directory;
 @property(nonatomic) int profile;
@@ -444,32 +443,47 @@ static BOOL writeAll(int fd, NSData *data) {
 @end
 
 static KiwixNotifications *nativeNotifications;
-extern "C" void kiwix_notifications_install_early(void) {
+static std::atomic<bool> notificationsInstalled{false};
+
+static KiwixNotifications *installedNotifications(void) {
+    // Readers can also run in headless mode, with no installation at all.
+    if (!notificationsInstalled.load(std::memory_order_acquire)) return nil;
+    return nativeNotifications;
+}
+
+extern "C" bool kiwix_notifications_install_early(void) {
     // Called synchronously by Rust's entry point before UIApplicationMain on iOS.
     // No permission request or asynchronous setup is hidden in installation.
+    if (!NSThread.isMainThread) return false;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        nativeNotifications = [KiwixNotifications new];
+        KiwixNotifications *state = [KiwixNotifications new];
         // UNUserNotificationCenter asserts for unbundled executables. Retain the
         // unsupported-state error, but never access that API in this process.
-        if (!nativeNotifications.validBundle) return;
-        UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
-        nativeNotifications.previous = center.delegate;
-        center.delegate = nativeNotifications;
+        if (state.validBundle) {
+            UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+            state.previous = center.delegate;
+            center.delegate = state;
+        }
+        nativeNotifications = state;
+        notificationsInstalled.store(true, std::memory_order_release);
     });
+    return true;
 }
-extern "C" char *kiwix_notifications_call(const char *input) {
+extern "C" NSData *kiwix_notifications_call(NSData *input) NS_RETURNS_RETAINED {
     @autoreleasepool {
         NSError *error = nil;
         NSDictionary *request = nil;
-        if (input && strlen(input) <= 16384) {
-            NSData *data = [NSData dataWithBytes:input length:strlen(input)];
-            request = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+        if (input.length <= 16384) {
+            NSData *data = [input copy];
+            if (data && data.length <= 16384) {
+                request = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+            }
         }
         NSDictionary *result = nil;
+        KiwixNotifications *state = installedNotifications();
         if (![request isKindOfClass:NSDictionary.class]) error = notificationError(@"Invalid notification request");
         else if ([request[@"command"] isEqual:@"capability"]) {
-            KiwixNotifications *state = nativeNotifications;
             if (!state) {
                 result = @{@"available":@NO, @"reason":@"Native notifications were not installed for this process"};
             } else {
@@ -483,48 +497,65 @@ extern "C" char *kiwix_notifications_call(const char *input) {
                 }
             }
         }
-        else if (!nativeNotifications) error = notificationError(@"Notification delegate was not installed before launch");
-        else result = [nativeNotifications call:request error:&error];
+        else if (!state) error = notificationError(@"Notification delegate was not installed before launch");
+        else result = [state call:request error:&error];
         NSDictionary *reply = error ? @{@"error":error.localizedDescription} : @{@"value":result ?: @{}};
-        NSData *data = [NSJSONSerialization dataWithJSONObject:reply options:0 error:nullptr];
-        NSString *encoded = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        return strdup(encoded.UTF8String ?: "{\"error\":\"Encoding native notification reply\"}");
+        NSData *encoded = [NSJSONSerialization dataWithJSONObject:reply options:0 error:nullptr];
+        return [encoded copy] ?: [@"{\"error\":\"Encoding native notification reply\"}" dataUsingEncoding:NSUTF8StringEncoding];
     }
 }
-extern "C" void kiwix_notifications_free(char *value) { free(value); }
-extern "C" void kiwix_notifications_request_permission(void *context, KiwixNotificationPermissionCallback callback) {
+static void permissionFailure(uint64_t requestID, KiwixNotificationPermissionCallback callback, NSString *reason) {
+    NSData *diagnostic = [[reason dataUsingEncoding:NSUTF8StringEncoding] copy];
+    callback(requestID, -1, diagnostic);
+}
+
+extern "C" void kiwix_notifications_request_permission(uint64_t requestID, KiwixNotificationPermissionIsLive isLive,
+                                                        KiwixNotificationPermissionCallback callback) {
+    KiwixNotifications *state = installedNotifications();
+    uint64_t submittedEpoch;
+    @synchronized (state) {
+        submittedEpoch = state.epoch;
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
-            KiwixNotifications *state = nativeNotifications;
-            if (!state) { callback(context, -1, "Notification delegate was not installed before launch"); return; }
-            // Same nonatomic property as capability: read it under the delegate lock.
-            BOOL unsupported = NO;
-            NSString *unsupportedReason = nil;
-            @synchronized (state) {
-                unsupported = !state.validBundle;
-                if (unsupported) unsupportedReason = state.failure.localizedDescription;
+            if (!state) {
+                permissionFailure(requestID, callback, @"Notification delegate was not installed before launch");
+                return;
             }
-            if (unsupported) { callback(context, -1, unsupportedReason.UTF8String); return; }
+            @synchronized (state) {
+                if (!state.validBundle) { permissionFailure(requestID, callback, state.failure.localizedDescription); return; }
+            }
 #if TARGET_OS_IPHONE
             BOOL active = UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
 #else
             BOOL active = NSApplication.sharedApplication.isActive;
 #endif
             @synchronized (state) {
-                if (!active || state.failure || !state.configured || state.protectedMode || state.permissionInFlight) {
-                    callback(context, -1, "Notification permission requires an unprotected active user action"); return;
+                // Claim a live waiter before handing off. A drop after admission
+                // retires only the Rust waiter; Apple owns the request.
+                if (!isLive(requestID)) return;
+                if (submittedEpoch != state.epoch) {
+                    permissionFailure(requestID, callback, @"Notification permission expired after a policy transition");
+                    return;
                 }
-                state.permissionInFlight = YES;
+                if (!active || state.failure || !state.configured || state.protectedMode || state.permissionRequestID) {
+                    permissionFailure(requestID, callback, @"Notification permission requires an unprotected active user action");
+                    return;
+                }
+                state.permissionRequestID = requestID;
                 uint64_t epoch = state.epoch;
                 [UNUserNotificationCenter.currentNotificationCenter requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
                     completionHandler:^(BOOL granted, NSError *error) {
                         @synchronized (state) {
-                            state.permissionInFlight = NO;
-                            if (epoch != state.epoch || state.protectedMode) { callback(context, 0, nullptr); return; }
+                            // A repeated completion must not clear a newer request.
+                            if (state.permissionRequestID != requestID) return;
+                            state.permissionRequestID = 0;
+                            if (epoch != state.epoch || state.protectedMode) { callback(requestID, 0, nil); return; }
                             // Denial is an ordinary opt-in result, never an
                             // acquisition failure or automatic settings loop.
-                            if (error && error.code != UNErrorCodeNotificationsNotAllowed) callback(context, -1, error.localizedDescription.UTF8String);
-                            else callback(context, granted ? 1 : 0, nullptr);
+                            BOOL denied = [error.domain isEqualToString:UNErrorDomain] && error.code == UNErrorCodeNotificationsNotAllowed;
+                            if (error && !denied) permissionFailure(requestID, callback, error.localizedDescription);
+                            else callback(requestID, granted ? 1 : 0, nil);
                         }
                     }];
             }
