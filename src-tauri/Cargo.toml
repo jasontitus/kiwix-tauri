@@ -194,6 +194,8 @@ windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com"
 opener = "0.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+# Poll DNS-SD's borrowed sockets while the discovery worker still owns their references.
+rustix = { version = "1", default-features = false, features = ["event", "std"] }
 block2 = "0.6"
 dispatch2 = "0.3"
 

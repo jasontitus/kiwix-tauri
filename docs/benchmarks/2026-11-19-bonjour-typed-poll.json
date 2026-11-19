@@ -1,0 +1,490 @@
+{
+  "base": "ba51efbf7eca9787488207b61cec24c6557df901",
+  "application_sources": {
+    "src-tauri/Cargo.toml": "95eb2bdcb11916b8fe3b83eae1f45a9ea700f502c27fa89e85ab97ce07bcfd37",
+    "src-tauri/src/localswarm/ios_discovery.rs": "73ea1e27bf36bab826c83d307700ec445a9af6d4be3beb58d7b1bdd8c144181f"
+  },
+  "application_lockfile_sha256": "2aafd21832237c71abc1519d9c6405d2c2a970061e4d7dff8c306ae90be8e036",
+  "rustix_version": "1.1.6",
+  "resolved_features": {
+    "aarch64-apple-darwin": {
+      "baseline_event": false,
+      "candidate_event": true
+    },
+    "aarch64-apple-ios": {
+      "baseline_event": false,
+      "candidate_event": true
+    },
+    "aarch64-apple-ios-sim": {
+      "baseline_event": false,
+      "candidate_event": true
+    },
+    "x86_64-unknown-linux-gnu": {
+      "baseline_event": true,
+      "candidate_event": true,
+      "normalized_graph_equal": true
+    },
+    "aarch64-linux-android": {
+      "baseline_event": false,
+      "candidate_event": false,
+      "normalized_graph_equal": true
+    },
+    "armv7-linux-androideabi": {
+      "baseline_event": false,
+      "candidate_event": false,
+      "normalized_graph_equal": true
+    }
+  },
+  "worker_source_manifest_sha256": "4b36cc2eada8788048096216463217765ab39cfd51b35cf0ac90652c42b2419c",
+  "worker_sources": {
+    "base/src/discovery.rs": "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8",
+    "base/src/fixture.rs": "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b",
+    "base/src/ios_discovery.rs": "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6",
+    "base/src/main.rs": "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04",
+    "base/src/publisher.rs": "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee",
+    "candidate/src/discovery.rs": "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8",
+    "candidate/src/fixture.rs": "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b",
+    "candidate/src/ios_discovery.rs": "73ea1e27bf36bab826c83d307700ec445a9af6d4be3beb58d7b1bdd8c144181f",
+    "candidate/src/main.rs": "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04",
+    "candidate/src/publisher.rs": "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee"
+  },
+  "live_runner_sha256": "2e1c3bb89e1d796f7beb9db418fb89fa03fb35eda140fe6f2cb0c4c8b0899922",
+  "simulator_controller_sha256": "b26caeb3bf4070f6cef02f2e5413174c1eee84587d51739c3cfa5ade928bc8d5",
+  "simulator_cleanup": {
+    "owned_device_deleted": true,
+    "state_before_cleanup": "Booted"
+  },
+  "worker_tests_passed": 18,
+  "host_rustc": "1.99.1",
+  "simulator_rustc": "1.95.0",
+  "simulator_runtime": "iOS 26.5 ARM64",
+  "live_trials": {
+    "mac-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2093.066,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 2438.104,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 2884.663,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 2422.738,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 2,
+        "side": "base",
+        "elapsed_ms": 2533.166,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 2,
+        "side": "candidate",
+        "elapsed_ms": 2792.395,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 3,
+        "side": "candidate",
+        "elapsed_ms": 2730.26,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 3,
+        "side": "base",
+        "elapsed_ms": 3012.763,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 4,
+        "side": "base",
+        "elapsed_ms": 2830.255,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 4,
+        "side": "candidate",
+        "elapsed_ms": 3415.625,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 5,
+        "side": "candidate",
+        "elapsed_ms": 3043.339,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 5,
+        "side": "base",
+        "elapsed_ms": 2623.072,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "median_paired_ratio": 1.1625337569690046
+      }
+    ],
+    "mac-live-repeat": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 3199.746,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 3301.37,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 2456.098,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 2359.292,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 2,
+        "side": "base",
+        "elapsed_ms": 4129.558,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 2,
+        "side": "candidate",
+        "elapsed_ms": 3381.261,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 3,
+        "side": "candidate",
+        "elapsed_ms": 2460.159,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 3,
+        "side": "base",
+        "elapsed_ms": 2380.394,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 4,
+        "side": "base",
+        "elapsed_ms": 2908.761,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 4,
+        "side": "candidate",
+        "elapsed_ms": 2371.74,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 5,
+        "side": "candidate",
+        "elapsed_ms": 2522.387,
+        "worker_cleanup": true,
+        "binary_sha256": "81511e2d7856c3991234fbe1ce9dbf8ecf492d04fadaf943e5d87c874804c17b"
+      },
+      {
+        "pair": 5,
+        "side": "base",
+        "elapsed_ms": 2417.306,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "median_paired_ratio": 1.0326345897597653
+      }
+    ],
+    "ios-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2106.445,
+        "worker_cleanup": true,
+        "binary_sha256": "904c5cd955c0766541f9dc2ac83831cc604f4e5d5b46215e116756d9fed2246d"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 2060.146,
+        "worker_cleanup": true,
+        "binary_sha256": "29dea64bc219b80e4a8beb3e155bc615f9279578a58b8fd79f7b1bfcc635c0f5"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 4132.954,
+        "worker_cleanup": true,
+        "binary_sha256": "29dea64bc219b80e4a8beb3e155bc615f9279578a58b8fd79f7b1bfcc635c0f5"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 2171.316,
+        "worker_cleanup": true,
+        "binary_sha256": "904c5cd955c0766541f9dc2ac83831cc604f4e5d5b46215e116756d9fed2246d"
+      },
+      {
+        "median_paired_ratio": 1.440726535377514
+      }
+    ]
+  },
+  "poll_microbenchmark": {
+    "build_manifest_sha256": "f9e290dcf97c897aae452baa664a32c28c3f6737f4fba9441a73067b7d3814b8",
+    "binary_sha256": "20e18b664f7210f6623c01714fa727be61af348fe18f153668b11ad5175d5b08",
+    "source_sha256": "958c574c2acb160063af2e8b3f783f7447d7e4b49752cad72c227c0ff9e6130d",
+    "calls_per_measurement": 20000,
+    "samples": [
+      {
+        "sockets": 1,
+        "pair": 0,
+        "baseline_ns": 817.367,
+        "typed_ns": 869.708
+      },
+      {
+        "sockets": 1,
+        "pair": 1,
+        "baseline_ns": 819.558,
+        "typed_ns": 871.423
+      },
+      {
+        "sockets": 1,
+        "pair": 2,
+        "baseline_ns": 819.177,
+        "typed_ns": 872.69
+      },
+      {
+        "sockets": 1,
+        "pair": 3,
+        "baseline_ns": 815.358,
+        "typed_ns": 873.244
+      },
+      {
+        "sockets": 1,
+        "pair": 4,
+        "baseline_ns": 813.521,
+        "typed_ns": 869.269
+      },
+      {
+        "sockets": 1,
+        "pair": 5,
+        "baseline_ns": 810.902,
+        "typed_ns": 874.592
+      },
+      {
+        "sockets": 1,
+        "pair": 6,
+        "baseline_ns": 834.342,
+        "typed_ns": 884.777
+      },
+      {
+        "sockets": 1,
+        "pair": 7,
+        "baseline_ns": 817.492,
+        "typed_ns": 869.452
+      },
+      {
+        "sockets": 8,
+        "pair": 0,
+        "baseline_ns": 2676.887,
+        "typed_ns": 2745.831
+      },
+      {
+        "sockets": 8,
+        "pair": 1,
+        "baseline_ns": 2665.065,
+        "typed_ns": 2753.683
+      },
+      {
+        "sockets": 8,
+        "pair": 2,
+        "baseline_ns": 2687.027,
+        "typed_ns": 2758.954
+      },
+      {
+        "sockets": 8,
+        "pair": 3,
+        "baseline_ns": 2678.188,
+        "typed_ns": 2751.767
+      },
+      {
+        "sockets": 8,
+        "pair": 4,
+        "baseline_ns": 2707.344,
+        "typed_ns": 2763.963
+      },
+      {
+        "sockets": 8,
+        "pair": 5,
+        "baseline_ns": 2678.75,
+        "typed_ns": 2757.094
+      },
+      {
+        "sockets": 8,
+        "pair": 6,
+        "baseline_ns": 2742.465,
+        "typed_ns": 3070.36
+      },
+      {
+        "sockets": 8,
+        "pair": 7,
+        "baseline_ns": 3004.296,
+        "typed_ns": 3065.248
+      },
+      {
+        "sockets": 64,
+        "pair": 0,
+        "baseline_ns": 19259.796,
+        "typed_ns": 18335.344
+      },
+      {
+        "sockets": 64,
+        "pair": 1,
+        "baseline_ns": 17920.242,
+        "typed_ns": 18377.744
+      },
+      {
+        "sockets": 64,
+        "pair": 2,
+        "baseline_ns": 17952.275,
+        "typed_ns": 18202.05
+      },
+      {
+        "sockets": 64,
+        "pair": 3,
+        "baseline_ns": 16242.875,
+        "typed_ns": 17242.515
+      },
+      {
+        "sockets": 64,
+        "pair": 4,
+        "baseline_ns": 15530.55,
+        "typed_ns": 15116.444
+      },
+      {
+        "sockets": 64,
+        "pair": 5,
+        "baseline_ns": 14505.356,
+        "typed_ns": 15066.504
+      },
+      {
+        "sockets": 64,
+        "pair": 6,
+        "baseline_ns": 13695.188,
+        "typed_ns": 13913.754
+      },
+      {
+        "sockets": 64,
+        "pair": 7,
+        "baseline_ns": 13638.729,
+        "typed_ns": 13832.229
+      }
+    ]
+  },
+  "app_tests": {
+    "mac_app_codegen_units": 16,
+    "mac_runtime": [
+      {
+        "binary_path": "kiwix_app-e256ced6ae8c5623",
+        "binary_sha256": "01be78ed096e7c624c92e3942bac96cf76830a98b6f049cb73a1042935b8f364",
+        "source_sha256": {
+          "src-tauri/Cargo.toml": "95eb2bdcb11916b8fe3b83eae1f45a9ea700f502c27fa89e85ab97ce07bcfd37",
+          "src-tauri/src/localswarm/ios_discovery.rs": "73ea1e27bf36bab826c83d307700ec445a9af6d4be3beb58d7b1bdd8c144181f"
+        }
+      },
+      {
+        "test": "discovery-tests",
+        "exit": 0,
+        "result": "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 0.07s"
+      },
+      {
+        "test": "native-revocation",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1288 filtered out; finished in 3.62s"
+      },
+      {
+        "test": "native-route",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1288 filtered out; finished in 1.12s"
+      },
+      {
+        "test": "native-concurrent",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1288 filtered out; finished in 1.29s"
+      },
+      {
+        "owned_profiles_empty": true
+      }
+    ],
+    "ios_app_compile_checks": {
+      "aarch64-apple-ios-sim": {
+        "source_sha256": {
+          "src-tauri/Cargo.toml": "95eb2bdcb11916b8fe3b83eae1f45a9ea700f502c27fa89e85ab97ce07bcfd37",
+          "src-tauri/src/localswarm/ios_discovery.rs": "73ea1e27bf36bab826c83d307700ec445a9af6d4be3beb58d7b1bdd8c144181f"
+        },
+        "rustix_event": true,
+        "artifacts": [
+          {
+            "filename": "libkiwix_app-00a5225fd79cd58f.rmeta",
+            "sha256": "c6c36b93e687583dc2ad403d9d6928cae91229b5758e1793d7fb925f7aa8d577"
+          }
+        ]
+      },
+      "aarch64-apple-ios": {
+        "source_sha256": {
+          "src-tauri/Cargo.toml": "95eb2bdcb11916b8fe3b83eae1f45a9ea700f502c27fa89e85ab97ce07bcfd37",
+          "src-tauri/src/localswarm/ios_discovery.rs": "73ea1e27bf36bab826c83d307700ec445a9af6d4be3beb58d7b1bdd8c144181f"
+        },
+        "rustix_event": true,
+        "artifacts": [
+          {
+            "filename": "libkiwix_app-1f811d1254a2f344.rmeta",
+            "sha256": "be8367b40c387540ace08535582c24d70a4e49f7702ff23e7b151e1cfdce4667"
+          }
+        ]
+      }
+    }
+  }
+}

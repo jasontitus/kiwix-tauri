@@ -7,7 +7,9 @@
 //! run inside the operation that creates or processes the native reference.
 //! One address registration can own multiple A records on the same reference.
 use super::{protocol, truncate_utf8, library_addresses, library_instance, valid_library_session_id, Manifest, Peer, MAX_ADVERTISEMENTS, MAX_PEERS, MAX_TXT, SERVICE};
+use rustix::{event::{poll, PollFd, PollFlags, Timespec}, io::Errno};
 use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, ffi::{c_char, c_void, CStr, CString},
+    os::fd::BorrowedFd,
     ptr, rc::Rc, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, Ordering}},
     thread, time::{Duration, Instant}};
 use tokio::sync::{mpsc, oneshot};
@@ -21,6 +23,7 @@ const MAX_EVENTS: usize = 1024;
 const DNS_SERVICE_NAME_CAPACITY: usize = 1009; // kDNSServiceMaxDomainName
 const BROWSE_CALLBACK_NAME_CAPACITY: usize = 256;
 const MAX_BROWSE_ID_BYTES: usize = 255;
+const POLL_INTERVAL: Timespec = Timespec { tv_sec: 0, tv_nsec: 50_000_000 };
 /// An unresolved record is expired after this long. A Watch event is the only
 /// other trigger for a resolve, so a transient timeout needs a bounded retry.
 const RESOLVE_TIMEOUT: Duration = Duration::from_secs(20);
@@ -259,6 +262,17 @@ struct Operation {
     raw: Ref,
     kind: Kind,
 }
+impl Operation {
+    fn socket(&self) -> Option<BorrowedFd<'_>> {
+        // SAFETY: self owns this initialized DNSServiceRef.
+        let fd = unsafe { DNSServiceRefSockFD(self.raw) };
+        if fd < 0 { return None; }
+        // SAFETY: DNS-SD owns the socket. The worker borrows the operation
+        // only for polling and performs no processing or deallocation during
+        // that borrow. A peer hangup doesn't close our descriptor.
+        Some(unsafe { BorrowedFd::borrow_raw(fd) })
+    }
+}
 impl Drop for Operation {
     fn drop(&mut self) {
         // Only the worker calls ProcessResult, and it has returned before any
@@ -266,6 +280,37 @@ impl Drop for Operation {
         unsafe { DNSServiceRefDeallocate(self.raw); }
     }
 }
+
+// Keep the original order, including missing sockets. Only valid descriptors
+// appear in the poll array. The output retains flags and tags without borrowing
+// the descriptors across event dispatch, which can deallocate operations.
+fn poll_operations<'a>(
+    sockets: impl ExactSizeIterator<Item = (u64, Option<BorrowedFd<'a>>)>,
+    ready: &mut Vec<(u64, Option<PollFlags>)>,
+) -> Result<(), Errno> {
+    let mut polls = Vec::with_capacity(sockets.len());
+    ready.clear();
+    for (tag, fd) in sockets {
+        let events = fd.map(|fd| {
+            polls.push(PollFd::from_borrowed_fd(fd, PollFlags::IN));
+            PollFlags::empty()
+        });
+        ready.push((tag, events));
+    }
+    match poll(&mut polls, Some(&POLL_INTERVAL)) {
+        Ok(_) => {
+            for (events, fd) in ready.iter_mut().filter_map(|(_, events)| events.as_mut()).zip(polls) {
+                *events = fd.revents();
+            }
+            Ok(())
+        }
+        // An interrupted call supplies no readiness. Missing descriptors are
+        // still handled, and the worker can process expiry or cancellation.
+        Err(Errno::INTR) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 struct Queue { events: VecDeque<(u64, Event)>, window: Instant, count: usize, overflow: bool }
 enum Event {
     Error(i32), Browse { interface: u32, add: bool, name: String, ty: String, domain: String },
@@ -427,7 +472,7 @@ impl Engine {
         }
     }
     fn run(mut self, mut commands: mpsc::Receiver<Command>, stop: Arc<AtomicBool>) {
-        let mut refs = Vec::new(); let mut polls = Vec::new();
+        let mut ready = Vec::new();
         while !stop.load(Ordering::Acquire) {
             self.retire_admissions();
             self.drain_events();
@@ -449,19 +494,16 @@ impl Engine {
             if stop.load(Ordering::Acquire) { break; }
             self.drain_events();
             if self.operations.is_empty() { continue; }
-            refs.clear(); refs.extend(self.operations.iter().map(|(tag, op)| (*tag, op.raw)));
-            polls.clear(); polls.extend(refs.iter().map(|(_, raw)| libc::pollfd {
-                fd: unsafe { DNSServiceRefSockFD(*raw) }, events: libc::POLLIN, revents: 0 }));
-            let result = unsafe { libc::poll(polls.as_mut_ptr(), polls.len() as libc::nfds_t, 50) };
-            if result < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
-                self.error(format!("Bonjour polling failed: {}", std::io::Error::last_os_error())); break;
+            let sockets = self.operations.iter().map(|(&tag, op)| (tag, op.socket()));
+            if let Err(error) = poll_operations(sockets, &mut ready) {
+                self.error(format!("Bonjour polling failed: {}", std::io::Error::from(error))); break;
             }
-            for ((tag, raw), poll) in refs.iter().copied().zip(polls.iter()) {
+            for (tag, events) in ready.iter().copied() {
                 if stop.load(Ordering::Acquire) { break; }
-                if !self.operations.contains_key(&tag) { continue; }
-                if poll.fd < 0 || poll.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
+                let Some(raw) = self.operations.get(&tag).map(|op| op.raw) else { continue; };
+                if events.is_none_or(|events| events.intersects(PollFlags::ERR | PollFlags::HUP | PollFlags::NVAL)) {
                     self.event(tag, Event::Error(-65563));
-                } else if poll.revents & libc::POLLIN != 0 {
+                } else if events.is_some_and(|events| events.contains(PollFlags::IN)) {
                     // No Rust reference into the operations map or callback queue
                     // is borrowed while native code invokes the callback.
                     let code = with_callbacks(tag, &self.queue, || unsafe { DNSServiceProcessResult(raw) });
@@ -754,6 +796,30 @@ extern "C" fn record_callback(_: Ref, _: Ref, _: u32, code: i32, context: *mut c
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn poll_keeps_socket_events_with_their_operation_tags() {
+        use std::{io::{Read, Write}, os::{fd::AsFd, unix::net::UnixStream}};
+
+        let (mut first_sender, first) = UnixStream::pair().unwrap();
+        let (mut second_sender, mut second) = UnixStream::pair().unwrap();
+        second_sender.write_all(b"x").unwrap();
+        let mut ready = Vec::new();
+        poll_operations([
+            (1, None), (2, Some(first.as_fd())), (3, None),
+            (4, Some(second.as_fd())), (5, None),
+        ].into_iter(), &mut ready).unwrap();
+        assert_eq!(ready[0], (1, None));
+        assert_eq!(ready[1], (2, Some(PollFlags::empty())));
+        assert_eq!(ready[2], (3, None));
+        assert_eq!(ready[3], (4, Some(PollFlags::IN)));
+        assert_eq!(ready[4], (5, None));
+
+        second.read_exact(&mut [0]).unwrap();
+        first_sender.write_all(b"x").unwrap();
+        poll_operations([(2, Some(first.as_fd())), (4, Some(second.as_fd()))].into_iter(), &mut ready).unwrap();
+        assert_eq!(ready, [(2, Some(PollFlags::IN)), (4, Some(PollFlags::empty()))]);
+    }
 
     #[test]
     fn browse_id_checks_termination_utf8_and_byte_limit() {
