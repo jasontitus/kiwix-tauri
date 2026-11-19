@@ -1,0 +1,16 @@
+[package]
+name = "string_cache"
+version = "0.9.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[features]
+default = ["serde_support"]
+serde_support = ["dep:serde"]
+
+[dependencies]
+malloc_size_of = { version = "0.1", default-features = false, optional = true }
+phf_shared = "0.13"
+precomputed-hash = "0.1"
+serde = { version = "1", optional = true }

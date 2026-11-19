@@ -1,0 +1,12 @@
+String cache 0.9.0 is available under the MIT License or Apache License,
+Version 2.0, at your option. The original license texts accompany this notice.
+
+Upstream: https://github.com/servo/string-cache
+Published source: https://crates.io/crates/string_cache/0.9.0
+SHA-256: a18596f8c785a729f2819c0f6a7eae6ebeebdfffbfe4214ae6b087f690e31901
+Original archive in the application source distribution:
+upstream/servo-html5ever/string_cache-0.9.0.crate
+
+The application uses a modified implementation in
+src-tauri/vendor/string_cache-0.9.0. The generated static name tables
+are retained. Dynamic names use standard-library shared ownership.
