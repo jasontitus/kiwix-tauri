@@ -1,0 +1,314 @@
+{
+  "base": "ffc2b88e16667d4cda48e7eeea507869785b1506",
+  "application_source_sha256": "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6",
+  "worker_source_manifest_sha256": "1d2eb4b1cfa3008ebdefbad675c2c76d0f98c27b8e4835085a9b5e8b5d4f923a",
+  "worker_sources": [
+    "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8  base/src/discovery.rs",
+    "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b  base/src/fixture.rs",
+    "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520  base/src/ios_discovery.rs",
+    "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04  base/src/main.rs",
+    "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee  base/src/publisher.rs",
+    "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8  candidate/src/discovery.rs",
+    "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b  candidate/src/fixture.rs",
+    "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6  candidate/src/ios_discovery.rs",
+    "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04  candidate/src/main.rs",
+    "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee  candidate/src/publisher.rs"
+  ],
+  "fixture_lockfile_sha256": "b00f0afb1e4c90494122c42c607fda5ebac0a36805291faec15bf3482ea44f89",
+  "live_runner_sha256": "2e1c3bb89e1d796f7beb9db418fb89fa03fb35eda140fe6f2cb0c4c8b0899922",
+  "simulator_controller_sha256": "b26caeb3bf4070f6cef02f2e5413174c1eee84587d51739c3cfa5ade928bc8d5",
+  "simulator_cleanup": {
+    "owned_device_deleted": true,
+    "state_before_cleanup": "Booted"
+  },
+  "host_rustc": "1.99.1",
+  "simulator_rustc": "1.95.0",
+  "simulator_runtime": "iOS 26.5 ARM64",
+  "live": {
+    "mac-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 3220.438,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 2388.218,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 2634.204,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 2697.186,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 2,
+        "side": "base",
+        "elapsed_ms": 3185.276,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 2,
+        "side": "candidate",
+        "elapsed_ms": 2462.514,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 3,
+        "side": "candidate",
+        "elapsed_ms": 2542.037,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 3,
+        "side": "base",
+        "elapsed_ms": 2946.161,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 4,
+        "side": "base",
+        "elapsed_ms": 2946.952,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 4,
+        "side": "candidate",
+        "elapsed_ms": 2685.92,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 5,
+        "side": "candidate",
+        "elapsed_ms": 2507.53,
+        "worker_cleanup": true,
+        "binary_sha256": "46584ce248bbb0d7afaee55b34725759d46a5340eadea898497a2d9c606932d4"
+      },
+      {
+        "pair": 5,
+        "side": "base",
+        "elapsed_ms": 3641.602,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "median_paired_ratio": 0.8179615626479578
+      }
+    ],
+    "ios-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2549.53,
+        "worker_cleanup": true,
+        "binary_sha256": "a015291011ecf6f726cfdefea2f70c261fa1a011f515aaa6a2f954fa0ee3a305"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 3423.403,
+        "worker_cleanup": true,
+        "binary_sha256": "904c5cd955c0766541f9dc2ac83831cc604f4e5d5b46215e116756d9fed2246d"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 2686.076,
+        "worker_cleanup": true,
+        "binary_sha256": "904c5cd955c0766541f9dc2ac83831cc604f4e5d5b46215e116756d9fed2246d"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 3041.868,
+        "worker_cleanup": true,
+        "binary_sha256": "a015291011ecf6f726cfdefea2f70c261fa1a011f515aaa6a2f954fa0ee3a305"
+      },
+      {
+        "median_paired_ratio": 1.1128967494994773
+      }
+    ]
+  },
+  "replay": {
+    "support_sources": {
+      "replay.rs": "41158d9da7042a52a7499a071afc6681c7a6ee194174bf426e704fc7333f8df7",
+      "replay.c": "82ac42b3fac10bccf45bc0e58a4de5861bb61b43bb16c37de9c0d8c6c46ce972",
+      "build-bench.py": "814ac6cef16392419aba758fbd3bbdb18f9853af306b70004cb4a8ebeb924508",
+      "run-bench.py": "0c6d34eb7a631793475bf082576d2bb7d969a64e63e091f2de976e0b5fd84227"
+    },
+    "binary_sha256": {
+      "replay-base-final": "e84c5cce648642247d7c916886743a51ae4b6ffe031658ac78304ed247d2a85c",
+      "replay-candidate-final": "5c8b193879f7e84a89159268de392f350c0695b8920dcc73b98e4b71292305be"
+    },
+    "samples": [
+      {"pair": 0, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21447084, "ns_per_event": 436.342041015625},
+      {"pair": 0, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20483666, "ns_per_event": 416.7412516276042},
+      {"pair": 1, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21900208, "ns_per_event": 445.5608723958333},
+      {"pair": 1, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20676707, "ns_per_event": 420.66868082682294},
+      {"pair": 2, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20247789, "ns_per_event": 411.94232177734375},
+      {"pair": 2, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21896208, "ns_per_event": 445.4794921875},
+      {"pair": 3, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19941250, "ns_per_event": 405.7057698567708},
+      {"pair": 3, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21104627, "ns_per_event": 429.37473551432294},
+      {"pair": 4, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20589292, "ns_per_event": 418.8902180989583},
+      {"pair": 4, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19958081, "ns_per_event": 406.04819742838544},
+      {"pair": 5, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21198833, "ns_per_event": 431.29136149088544},
+      {"pair": 5, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20950458, "ns_per_event": 426.2381591796875},
+      {"pair": 6, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20236876, "ns_per_event": 411.7202962239583},
+      {"pair": 6, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 22946044, "ns_per_event": 466.8384602864583},
+      {"pair": 7, "lane": "candidate", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20290791, "ns_per_event": 412.81719970703125},
+      {"pair": 7, "lane": "base", "len": 0, "batch": 1, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20966541, "ns_per_event": 426.56536865234375},
+      {"pair": 0, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 18995084, "ns_per_event": 386.4559733072917},
+      {"pair": 0, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19725083, "ns_per_event": 401.30784098307294},
+      {"pair": 1, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19311290, "ns_per_event": 392.8892008463542},
+      {"pair": 1, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 22178624, "ns_per_event": 451.2252604166667},
+      {"pair": 2, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19212292, "ns_per_event": 390.8750813802083},
+      {"pair": 2, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 18496876, "ns_per_event": 376.3199055989583},
+      {"pair": 3, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20322249, "ns_per_event": 413.45721435546875},
+      {"pair": 3, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19065209, "ns_per_event": 387.88267008463544},
+      {"pair": 4, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20087166, "ns_per_event": 408.6744384765625},
+      {"pair": 4, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19222875, "ns_per_event": 391.09039306640625},
+      {"pair": 5, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19599625, "ns_per_event": 398.75539143880206},
+      {"pair": 5, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19032208, "ns_per_event": 387.2112630208333},
+      {"pair": 6, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 19931377, "ns_per_event": 405.50490315755206},
+      {"pair": 6, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21548209, "ns_per_event": 438.39943440755206},
+      {"pair": 7, "lane": "candidate", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 20525375, "ns_per_event": 417.58982340494794},
+      {"pair": 7, "lane": "base", "len": 0, "batch": 32, "events": 49152, "txt_bytes": 0, "elapsed_ns": 21355749, "ns_per_event": 434.48382568359375},
+      {"pair": 0, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 24496623, "ns_per_event": 498.38507080078125},
+      {"pair": 0, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 22721876, "ns_per_event": 462.2777506510417},
+      {"pair": 1, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21449458, "ns_per_event": 436.3903401692708},
+      {"pair": 1, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23610538, "ns_per_event": 480.3576253255208},
+      {"pair": 2, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 24380793, "ns_per_event": 496.02850341796875},
+      {"pair": 2, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 31090834, "ns_per_event": 632.5446370442709},
+      {"pair": 3, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 34636374, "ns_per_event": 704.6788330078125},
+      {"pair": 3, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 24651211, "ns_per_event": 501.53017171223956},
+      {"pair": 4, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 24424083, "ns_per_event": 496.90924072265625},
+      {"pair": 4, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21930292, "ns_per_event": 446.1729329427083},
+      {"pair": 5, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 22462418, "ns_per_event": 456.9990641276042},
+      {"pair": 5, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23052376, "ns_per_event": 469.0017903645833},
+      {"pair": 6, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23381291, "ns_per_event": 475.69358317057294},
+      {"pair": 6, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23461040, "ns_per_event": 477.3160807291667},
+      {"pair": 7, "lane": "candidate", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21173125, "ns_per_event": 430.76833089192706},
+      {"pair": 7, "lane": "base", "len": 32, "batch": 1, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23144458, "ns_per_event": 470.8752034505208},
+      {"pair": 0, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 20809958, "ns_per_event": 423.3796793619792},
+      {"pair": 0, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19458876, "ns_per_event": 395.891845703125},
+      {"pair": 1, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19312462, "ns_per_event": 392.9130452473958},
+      {"pair": 1, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 22236415, "ns_per_event": 452.40102132161456},
+      {"pair": 2, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21143836, "ns_per_event": 430.1724446614583},
+      {"pair": 2, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19617584, "ns_per_event": 399.1207682291667},
+      {"pair": 3, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19036415, "ns_per_event": 387.29685465494794},
+      {"pair": 3, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23098457, "ns_per_event": 469.93931070963544},
+      {"pair": 4, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21066290, "ns_per_event": 428.5947672526042},
+      {"pair": 4, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 20451083, "ns_per_event": 416.07834879557294},
+      {"pair": 5, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 23227499, "ns_per_event": 472.56467692057294},
+      {"pair": 5, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 21380836, "ns_per_event": 434.9942220052083},
+      {"pair": 6, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 20705873, "ns_per_event": 421.26206461588544},
+      {"pair": 6, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19833252, "ns_per_event": 403.508544921875},
+      {"pair": 7, "lane": "candidate", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 19998293, "ns_per_event": 406.86631266276044},
+      {"pair": 7, "lane": "base", "len": 32, "batch": 32, "events": 49152, "txt_bytes": 1572864, "elapsed_ns": 20898208, "ns_per_event": 425.1751302083333},
+      {"pair": 0, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 39206957, "ns_per_event": 797.6675821940104},
+      {"pair": 0, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35845707, "ns_per_event": 729.2827758789062},
+      {"pair": 1, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36617959, "ns_per_event": 744.9942830403646},
+      {"pair": 1, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 38797623, "ns_per_event": 789.3396606445312},
+      {"pair": 2, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36570335, "ns_per_event": 744.0253702799479},
+      {"pair": 2, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 37437458, "ns_per_event": 761.6670328776041},
+      {"pair": 3, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36381708, "ns_per_event": 740.187744140625},
+      {"pair": 3, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 38152043, "ns_per_event": 776.2053019205729},
+      {"pair": 4, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 37820666, "ns_per_event": 769.4634195963541},
+      {"pair": 4, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35429918, "ns_per_event": 720.8235270182291},
+      {"pair": 5, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 39105709, "ns_per_event": 795.6076863606771},
+      {"pair": 5, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36901291, "ns_per_event": 750.7586873372396},
+      {"pair": 6, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 41384789, "ns_per_event": 841.9756876627604},
+      {"pair": 6, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 37024791, "ns_per_event": 753.2713012695312},
+      {"pair": 7, "lane": "candidate", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36669166, "ns_per_event": 746.0360921223959},
+      {"pair": 7, "lane": "base", "len": 2048, "batch": 1, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 41090958, "ns_per_event": 835.9976806640625},
+      {"pair": 0, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35744667, "ns_per_event": 727.2271118164062},
+      {"pair": 0, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 34680291, "ns_per_event": 705.5723266601562},
+      {"pair": 1, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 38960126, "ns_per_event": 792.6457926432291},
+      {"pair": 1, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35921461, "ns_per_event": 730.8239949544271},
+      {"pair": 2, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35982834, "ns_per_event": 732.0726318359375},
+      {"pair": 2, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 33788416, "ns_per_event": 687.4270833333334},
+      {"pair": 3, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 34487958, "ns_per_event": 701.6593017578125},
+      {"pair": 3, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35615374, "ns_per_event": 724.5966389973959},
+      {"pair": 4, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 38748209, "ns_per_event": 788.3343302408854},
+      {"pair": 4, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 38502166, "ns_per_event": 783.3285725911459},
+      {"pair": 5, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 34971458, "ns_per_event": 711.4961344401041},
+      {"pair": 5, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36536791, "ns_per_event": 743.3429158528646},
+      {"pair": 6, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 35934960, "ns_per_event": 731.0986328125},
+      {"pair": 6, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 37093209, "ns_per_event": 754.6632690429688},
+      {"pair": 7, "lane": "candidate", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 33969708, "ns_per_event": 691.115478515625},
+      {"pair": 7, "lane": "base", "len": 2048, "batch": 32, "events": 49152, "txt_bytes": 100663296, "elapsed_ns": 36211709, "ns_per_event": 736.7291056315104}
+    ]
+  },
+  "app_builds": {
+    "mac_runtime": [
+      {
+        "binary_path": "kiwix_app-c4de78e6179d0960",
+        "binary_sha256": "5407db565dff7c7701f5a9d965fce3eb5c7c7b0f5bc09065f2e680d5e3d45e91",
+        "source_sha256": "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6"
+      },
+      {
+        "test": "discovery-tests",
+        "exit": 0,
+        "result": "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 0.00s"
+      },
+      {
+        "test": "native-revocation",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1287 filtered out; finished in 2.10s"
+      },
+      {
+        "test": "native-route",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1287 filtered out; finished in 1.00s"
+      },
+      {
+        "test": "native-concurrent",
+        "exit": 0,
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1287 filtered out; finished in 1.47s"
+      },
+      {
+        "owned_profiles_empty": true
+      }
+    ],
+    "mac_release_app_codegen_units": 16,
+    "ios_app_compile_checks": {
+      "aarch64-apple-ios-sim": {
+        "source_sha256": "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6",
+        "artifacts": [
+          {
+            "file": "libkiwix_app-04c232129cef22fb.rmeta",
+            "sha256": "5357afd9cfe8f7f8b6931b462a16d36eef4b009843d494c2d04321b606700643"
+          }
+        ]
+      },
+      "aarch64-apple-ios": {
+        "source_sha256": "23e6328c151069ee35d0be256ab2650d3edeaf9744767454f1fcb7423de189f6",
+        "artifacts": [
+          {
+            "file": "libkiwix_app-a4a2e1c656d8a8de.rmeta",
+            "sha256": "37666219e25c4add09622254a4b5f9422cf8ebac996d585009a8c36e794a7ea1"
+          }
+        ]
+      }
+    }
+  }
+}

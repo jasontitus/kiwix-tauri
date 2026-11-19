@@ -19,6 +19,7 @@ const INCLUDE_PEERS: u32 = 0x20000 | 0x100000; // IncludeP2P | IncludeAWDL.
 const MAX_SOURCES: usize = MAX_PEERS * 2;
 const MAX_EVENTS: usize = 1024;
 const DNS_SERVICE_NAME_CAPACITY: usize = 1009; // kDNSServiceMaxDomainName
+const BROWSE_CALLBACK_NAME_CAPACITY: usize = 256;
 const MAX_BROWSE_ID_BYTES: usize = 255;
 /// An unresolved record is expired after this long. A Watch event is the only
 /// other trigger for a resolve, so a transient timeout needs a bounded retry.
@@ -678,17 +679,18 @@ fn native_error(code: i32) -> String {
     }
 }
 
-// All callback pointers/byte lengths are borrowed from mDNSResponder for this
-// invocation only. DNS-SD echoes the cookie without dereferencing it.
-unsafe fn bounded_string(value: *const c_char, cap: usize) -> Option<String> {
+/// A non-null value must be a NUL-terminated string borrowed for this callback.
+/// Keep only the checked, owned text after returning to DNS-SD.
+unsafe fn callback_string(value: *const c_char, capacity: usize) -> Option<String> {
     if value.is_null() { return None; }
-    for len in 0..cap {
-        if unsafe { *value.add(len) } == 0 {
-            return std::str::from_utf8(unsafe { std::slice::from_raw_parts(value.cast(), len) }).ok().map(str::to_owned);
-        }
-    }
-    None
+    // SAFETY: successful DNS-SD callbacks provide a C string valid until return.
+    let value = unsafe { CStr::from_ptr(value) };
+    if value.to_bytes_with_nul().len() > capacity { return None; }
+    value.to_str().ok().map(str::to_owned)
 }
+
+// DNS-SD echoes the cookie without dereferencing it. Decode borrowed payloads
+// only after checking the active operation and its queue limits.
 fn enqueue(cookie: *mut c_void, event: impl FnOnce() -> Event) {
     let _ = ACTIVE_CALLBACK.try_with(|active| {
         let active = active.borrow();
@@ -702,34 +704,49 @@ fn enqueue(cookie: *mut c_void, event: impl FnOnce() -> Event) {
     });
 }
 unsafe extern "C" fn browse_callback(_: Ref, flags: u32, interface: u32, code: i32, name: *const c_char, ty: *const c_char, domain: *const c_char, context: *mut c_void) {
-    unsafe { enqueue(context, || {
+    enqueue(context, || {
         if code != 0 { return Event::Error(code); }
-        match (bounded_string(name, 256), bounded_string(ty, 256), bounded_string(domain, 256)) {
+        // SAFETY: only a successful browse supplies these live C strings.
+        match unsafe {
+            (callback_string(name, BROWSE_CALLBACK_NAME_CAPACITY),
+             callback_string(ty, BROWSE_CALLBACK_NAME_CAPACITY),
+             callback_string(domain, BROWSE_CALLBACK_NAME_CAPACITY))
+        } {
             (Some(name), Some(ty), Some(domain)) => Event::Browse { interface, add: flags & ADD != 0, name, ty, domain },
             _ => Event::Invalid,
         }
-    }); }
+    });
 }
-unsafe extern "C" fn register_callback(_: Ref, flags: u32, code: i32, _: *const c_char, _: *const c_char, _: *const c_char, context: *mut c_void) {
+extern "C" fn register_callback(_: Ref, flags: u32, code: i32, _: *const c_char, _: *const c_char, _: *const c_char, context: *mut c_void) {
     enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(flags & ADD != 0) });
 }
 unsafe extern "C" fn resolve_callback(_: Ref, _: u32, interface: u32, code: i32, full: *const c_char, host: *const c_char, port: u16, len: u16, txt: *const u8, context: *mut c_void) {
-    unsafe { enqueue(context, || {
+    enqueue(context, || {
         if code != 0 { return Event::Error(code); }
-        if len as usize > MAX_TXT || (len != 0 && txt.is_null()) { return Event::Invalid; }
-        let (Some(full), Some(host)) = (bounded_string(full, 1009), bounded_string(host, 1009)) else { return Event::Invalid; };
-        let txt = if len == 0 { Vec::new() } else { std::slice::from_raw_parts(txt, len as usize).to_vec() };
+        let len = usize::from(len);
+        if len > MAX_TXT || (len != 0 && txt.is_null()) { return Event::Invalid; }
+        // SAFETY: only a successful resolve supplies these live C strings.
+        let (Some(full), Some(host)) = (unsafe {
+            (callback_string(full, DNS_SERVICE_NAME_CAPACITY), callback_string(host, DNS_SERVICE_NAME_CAPACITY))
+        }) else { return Event::Invalid; };
+        let txt = if len == 0 {
+            Vec::new()
+        } else {
+            // SAFETY: a successful resolve lends len initialized TXT bytes
+            // through this callback. The validated nonempty pointer is copied now.
+            unsafe { std::slice::from_raw_parts(txt, len) }.to_vec()
+        };
         Event::Resolved { interface, full, host, port: u16::from_be(port), txt }
-    }); }
+    });
 }
-unsafe extern "C" fn query_callback(_: Ref, flags: u32, interface: u32, code: i32, _: *const c_char, _: u16, _: u16, len: u16, _: *const c_void, ttl: u32, context: *mut c_void) {
+extern "C" fn query_callback(_: Ref, flags: u32, interface: u32, code: i32, _: *const c_char, _: u16, _: u16, len: u16, _: *const c_void, ttl: u32, context: *mut c_void) {
     enqueue(context, || {
         if code != 0 { Event::Error(code) } else if len as usize > MAX_TXT { Event::Invalid }
         else { Event::Watch { interface, add: flags & ADD != 0 && ttl != 0 } }
     });
 }
 
-unsafe extern "C" fn record_callback(_: Ref, _: Ref, _: u32, code: i32, context: *mut c_void) {
+extern "C" fn record_callback(_: Ref, _: Ref, _: u32, code: i32, context: *mut c_void) {
     enqueue(context, || if code != 0 { Event::Error(code) } else { Event::Registered(true) });
 }
 
@@ -762,6 +779,65 @@ mod tests {
         assert!(!direct_interface(u32::MAX));
         let loopback = nix::net::if_::if_nametoindex("lo0").unwrap();
         assert!(!direct_interface(loopback));
+    }
+
+    #[test]
+    fn callback_payloads_own_their_text_and_txt() {
+        let engine = engine();
+        let cookie = ptr::without_provenance_mut(17);
+        let mut full = *b"fixture._localswarm._tcp.local.\0";
+        let mut host = *b"fixture.local.\0";
+        let mut txt = [3, b'x', b'=', b'y'];
+        with_callbacks(17, &engine.queue, || {
+            // SAFETY: the strings are terminated and the TXT array is initialized.
+            unsafe {
+                resolve_callback(ptr::null_mut(), 0, 4, 0,
+                    full.as_ptr().cast(), host.as_ptr().cast(), 4242u16.to_be(),
+                    txt.len() as u16, txt.as_ptr(), cookie);
+            }
+        });
+        full.fill(0);
+        host.fill(0);
+        txt.fill(0);
+        let (tag, event) = engine.queue.borrow_mut().events.pop_front().unwrap();
+        assert_eq!(tag, 17);
+        let Event::Resolved { interface, full, host, port, txt } = event else { panic!("expected resolve"); };
+        assert_eq!((interface, port), (4, 4242));
+        assert_eq!(full, "fixture._localswarm._tcp.local.");
+        assert_eq!(host, "fixture.local.");
+        assert_eq!(txt, [3, b'x', b'=', b'y']);
+    }
+
+    #[test]
+    fn callback_boundaries_keep_limits_and_ignore_undefined_error_payloads() {
+        let engine = engine();
+        let cookie = ptr::without_provenance_mut(18);
+        let mut max_name = [b'x'; BROWSE_CALLBACK_NAME_CAPACITY];
+        *max_name.last_mut().unwrap() = 0;
+        let mut over_name = [b'x'; BROWSE_CALLBACK_NAME_CAPACITY + 1];
+        *over_name.last_mut().unwrap() = 0;
+        let ty = c"_localswarm._tcp";
+        let domain = c"local.";
+        with_callbacks(18, &engine.queue, || {
+            // SAFETY: successful string arguments are terminated. Missing TXT and
+            // undefined error arguments exercise rejection without borrowing them.
+            unsafe {
+                browse_callback(ptr::null_mut(), ADD, 4, 0, max_name.as_ptr().cast(), ty.as_ptr(), domain.as_ptr(), cookie);
+                browse_callback(ptr::null_mut(), ADD, 4, 0, over_name.as_ptr().cast(), ty.as_ptr(), domain.as_ptr(), cookie);
+                browse_callback(ptr::null_mut(), ADD, 4, 0, c"\xff".as_ptr(), ty.as_ptr(), domain.as_ptr(), cookie);
+                resolve_callback(ptr::null_mut(), 0, 4, 0, ty.as_ptr(), domain.as_ptr(), 0, 0, ptr::null(), cookie);
+                resolve_callback(ptr::null_mut(), 0, 4, 0, ty.as_ptr(), domain.as_ptr(), 0, 1, ptr::null(), cookie);
+                resolve_callback(ptr::null_mut(), 0, 4, -65570, ptr::null(), ptr::null(), 0, u16::MAX, ptr::null(), cookie);
+            }
+        });
+        let mut queue = engine.queue.borrow_mut();
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Browse { interface: 4, add: true, name, .. })) if name.len() == BROWSE_CALLBACK_NAME_CAPACITY - 1));
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Invalid))));
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Invalid))));
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Resolved { txt, .. })) if txt.is_empty()));
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Invalid))));
+        assert!(matches!(queue.events.pop_front(), Some((18, Event::Error(-65570)))));
+        assert!(queue.events.is_empty());
     }
 
     #[test]
