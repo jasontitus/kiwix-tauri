@@ -49,6 +49,8 @@ mod map_chunk_cache;
 mod maps;
 #[cfg(all(target_os = "android", native_location))]
 mod location_android;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod location_apple;
 #[cfg(all(target_os = "linux", native_location))]
 mod location_linux;
 #[cfg(target_os = "windows")]

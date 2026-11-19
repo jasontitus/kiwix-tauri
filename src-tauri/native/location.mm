@@ -1,6 +1,6 @@
 // Main-thread CoreLocation provider for WKWebView, which has no Wry
-// geolocation permission backend. Every start owns exactly one callback, even
-// when permission is denied, the request is cancelled, or its timer expires.
+// geolocation permission backend. Requests use non-reused Rust IDs. Native
+// owns CoreLocation objects and passes position fields by value.
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 #import <TargetConditionals.h>
@@ -11,7 +11,9 @@ struct KiwixPosition {
     double latitude, longitude, accuracy, altitude;
     double altitude_accuracy, heading, speed, timestamp;
 };
-using KiwixLocationCallback = void (*)(void *, int32_t, const KiwixPosition *, const char *);
+static_assert(sizeof(KiwixPosition) == 8 * sizeof(double));
+using KiwixLocationIsLive = bool (*)(uint64_t);
+using KiwixLocationCallback = void (*)(uint64_t, int32_t, KiwixPosition, NSData *);
 
 @interface KiwixLocationRequest : NSObject <CLLocationManagerDelegate>
 @property(nonatomic, strong) CLLocationManager *manager;
@@ -19,12 +21,12 @@ using KiwixLocationCallback = void (*)(void *, int32_t, const KiwixPosition *, c
 @property(nonatomic, strong) NSDate *started;
 @property(nonatomic) uint64_t token;
 @property(nonatomic) uint64_t timeoutMs;
-@property(nonatomic) void *context;
+@property(nonatomic) KiwixLocationIsLive isLive;
 @property(nonatomic) KiwixLocationCallback callback;
 @property(nonatomic) BOOL completed;
 @property(nonatomic) BOOL requesting;
 - (void)authorizeOrStart;
-- (void)finish:(int32_t)code position:(const KiwixPosition *)position message:(NSString *)message;
+- (void)finish:(int32_t)code position:(KiwixPosition)position message:(NSString *)message;
 @end
 
 static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *requests;
@@ -35,7 +37,7 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
 }
 
 @implementation KiwixLocationRequest
-- (void)finish:(int32_t)code position:(const KiwixPosition *)position message:(NSString *)message {
+- (void)finish:(int32_t)code position:(KiwixPosition)position message:(NSString *)message {
     if (self.completed) return;
     self.completed = YES;
     [self.timer invalidate];
@@ -45,28 +47,39 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
     self.manager = nil;
     KiwixLocationCallback callback = self.callback;
     self.callback = nullptr;
-    void *context = self.context;
-    self.context = nullptr;
-    [activeRequests() removeObjectForKey:@(self.token)];
-    if (callback) callback(context, code, position, message.UTF8String);
+    uint64_t token = self.token;
+    [activeRequests() removeObjectForKey:@(token)];
+    if (callback) {
+        NSData *diagnostic = [[message dataUsingEncoding:NSUTF8StringEncoding] copy];
+        callback(token, code, position, diagnostic);
+    }
+}
+
+- (BOOL)hasLiveWaiter {
+    if (self.isLive(self.token)) return YES;
+    [self finish:1 position:KiwixPosition{} message:@"Archive location request was cancelled or revoked"];
+    return NO;
 }
 
 - (void)authorizeOrStart {
-    if (self.completed || self.requesting) return;
+    if (self.completed || self.requesting || ![self hasLiveWaiter]) return;
     if (![CLLocationManager locationServicesEnabled]) {
-        [self finish:1 position:nullptr message:@"System Location Services are disabled"];
+        [self finish:1 position:KiwixPosition{} message:@"System Location Services are disabled"];
         return;
     }
     CLAuthorizationStatus status = self.manager.authorizationStatus;
+    // CoreLocation queries can run while a Rust worker retires the request.
+    // Check again before handing any new work to the OS.
+    if (![self hasLiveWaiter]) return;
     switch (status) {
         case kCLAuthorizationStatusNotDetermined:
             [self.manager requestWhenInUseAuthorization];
             break;
         case kCLAuthorizationStatusDenied:
-            [self finish:1 position:nullptr message:@"The system denied location access; change Location Services settings to allow it"];
+            [self finish:1 position:KiwixPosition{} message:@"The system denied location access; change Location Services settings to allow it"];
             break;
         case kCLAuthorizationStatusRestricted:
-            [self finish:1 position:nullptr message:@"Location access is restricted by system policy"];
+            [self finish:1 position:KiwixPosition{} message:@"Location access is restricted by system policy"];
             break;
         case kCLAuthorizationStatusAuthorizedAlways:
 #if TARGET_OS_IPHONE
@@ -76,7 +89,7 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
             // Permission waits are not part of the position-acquisition timeout.
             // A zero timeout must expire without starting GPS acquisition.
             if (self.timeoutMs == 0) {
-                [self finish:3 position:nullptr message:@"Location request timed out"];
+                [self finish:3 position:KiwixPosition{} message:@"Location request timed out"];
                 return;
             }
             self.started = [NSDate date];
@@ -85,10 +98,10 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
             self.timer = [NSTimer timerWithTimeInterval:(double)self.timeoutMs / 1000.0
                                                repeats:NO block:^(NSTimer *timer) {
                 (void)timer;
-                [weakRequest finish:3 position:nullptr message:@"Location request timed out"];
+                [weakRequest finish:3 position:KiwixPosition{} message:@"Location request timed out"];
             }];
             [[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
-            [self.manager startUpdatingLocation];
+            if ([self hasLiveWaiter]) [self.manager startUpdatingLocation];
             break;
     }
 }
@@ -98,7 +111,7 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
     // A system revocation while a fix is pending must also terminate it.
     CLAuthorizationStatus status = self.manager.authorizationStatus;
     if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) {
-        [self finish:1 position:nullptr message:@"System location permission was revoked"];
+        [self finish:1 position:KiwixPosition{} message:@"System location permission was revoked"];
     } else {
         [self authorizeOrStart];
     }
@@ -126,24 +139,27 @@ static NSMutableDictionary<NSNumber *, KiwixLocationRequest *> *activeRequests()
         location.speed,
         [location.timestamp timeIntervalSince1970] * 1000.0,
     };
-    [self finish:0 position:&position message:@""];
+    [self finish:0 position:position message:@""];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
     (void)manager;
-    if ([error.domain isEqualToString:kCLErrorDomain] && error.code == kCLErrorLocationUnknown) return;
-    [self finish:(error.code == kCLErrorDenied ? 1 : 2)
-          position:nullptr message:error.localizedDescription ?: @"Location provider failed"];
+    BOOL locationError = [error.domain isEqualToString:kCLErrorDomain];
+    if (locationError && error.code == kCLErrorLocationUnknown) return;
+    [self finish:(locationError && error.code == kCLErrorDenied ? 1 : 2)
+          position:KiwixPosition{} message:error.localizedDescription ?: @"Location provider failed"];
 }
 @end
 
 extern "C" void kiwix_location_start(uint64_t token, bool highAccuracy, uint64_t timeoutMs,
-                                     void *context, KiwixLocationCallback callback) {
+                                     KiwixLocationIsLive isLive, KiwixLocationCallback callback) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
+            // A dropped waiter cannot start a delayed OS authorization prompt.
+            if (!isLive(token) || activeRequests()[@(token)]) return;
             KiwixLocationRequest *request = [KiwixLocationRequest new];
             request.token = token;
-            request.context = context;
+            request.isLive = isLive;
             request.callback = callback;
             request.timeoutMs = MIN(timeoutMs, (uint64_t)30000);
             activeRequests()[@(token)] = request;
@@ -158,6 +174,6 @@ extern "C" void kiwix_location_start(uint64_t token, bool highAccuracy, uint64_t
 extern "C" void kiwix_location_cancel(uint64_t token) {
     dispatch_async(dispatch_get_main_queue(), ^{
         KiwixLocationRequest *request = activeRequests()[@(token)];
-        [request finish:1 position:nullptr message:@"Archive location request was cancelled or revoked"];
+        [request finish:1 position:KiwixPosition{} message:@"Archive location request was cancelled or revoked"];
     });
 }

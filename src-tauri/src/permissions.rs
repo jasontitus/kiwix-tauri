@@ -7,6 +7,7 @@
 //! No active archive or no explicit app grant always denies native requests.
 //! Revocation destroys the whole subtree and remounts a fresh nonce origin:
 //! WebKit can cache OS grants independently of this callback.
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -65,7 +66,7 @@ struct State {
 pub struct SensorManager(Arc<Mutex<State>>);
 // Native provider registries are process-global, so identifiers must not
 // collide between managers belonging to separate native shell windows.
-#[cfg(native_location)]
+#[cfg(all(native_location, not(any(target_os = "macos", target_os = "ios"))))]
 static NEXT_NATIVE_TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Clone, Debug, Serialize)]
@@ -477,7 +478,10 @@ impl SensorManager {
         #[cfg(native_location)]
         {
             let timeout_ms = timeout_ms.min(30_000);
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
             let (sender, receiver) = tokio::sync::oneshot::channel();
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            let reply;
             let token;
             {
                 let mut state = self
@@ -509,26 +513,39 @@ impl SensorManager {
                         "Too many pending location requests",
                     ));
                 }
-                let mut current = NEXT_NATIVE_TOKEN.load(std::sync::atomic::Ordering::Relaxed);
-                token = loop {
-                    let next = current.checked_add(1).ok_or_else(|| {
+                #[cfg(any(target_os = "macos", target_os = "ios"))]
+                {
+                    reply = crate::location_apple::register().ok_or_else(|| {
                         LocationError::unavailable("Location request identifiers exhausted")
                     })?;
-                    match NEXT_NATIVE_TOKEN.compare_exchange_weak(
-                        current,
-                        next,
-                        std::sync::atomic::Ordering::Relaxed,
-                        std::sync::atomic::Ordering::Relaxed,
-                    ) {
-                        Ok(_) => break next,
-                        Err(actual) => current = actual,
-                    }
-                };
+                    token = reply.id();
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+                {
+                    let mut current = NEXT_NATIVE_TOKEN.load(std::sync::atomic::Ordering::Relaxed);
+                    token = loop {
+                        let next = current.checked_add(1).ok_or_else(|| {
+                            LocationError::unavailable("Location request identifiers exhausted")
+                        })?;
+                        match NEXT_NATIVE_TOKEN.compare_exchange_weak(
+                            current,
+                            next,
+                            std::sync::atomic::Ordering::Relaxed,
+                            std::sync::atomic::Ordering::Relaxed,
+                        ) {
+                            Ok(_) => break next,
+                            Err(actual) => current = actual,
+                        }
+                    };
+                }
                 state
                     .requests
                     .insert((session_id.into(), request_id), token);
                 // Enqueue start while holding the state lock, so concurrent revoke
                 // cannot enqueue cancellation before the corresponding start.
+                #[cfg(any(target_os = "macos", target_os = "ios"))]
+                crate::location_apple::start(token, high_accuracy, timeout_ms);
+                #[cfg(not(any(target_os = "macos", target_os = "ios")))]
                 start_native(token, high_accuracy, timeout_ms, sender);
             }
             let guard = RequestGuard {
@@ -538,7 +555,11 @@ impl SensorManager {
             };
             // Native completion owns the acquisition deadline, which starts only
             // after OS authorization. An outer timeout would include the prompt.
-            let result = receiver.await.unwrap_or_else(|_| {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            let received = reply.wait().await;
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            let received = receiver.await;
+            let result = received.unwrap_or_else(|_| {
                 Err(LocationError::unavailable(
                     "Native location provider stopped",
                 ))
@@ -577,23 +598,13 @@ fn cancel_requests(state: &mut State) {
 /// Hand one request to the platform provider. It must complete `sender`
 /// exactly once (dropping it reports "provider stopped"), and `cancel_native`
 /// with the same token must end it promptly.
-#[cfg(native_location)]
+#[cfg(all(native_location, not(any(target_os = "macos", target_os = "ios"))))]
 fn start_native(
     token: u64,
     high_accuracy: bool,
     timeout_ms: u64,
     sender: tokio::sync::oneshot::Sender<Result<Position, LocationError>>,
 ) {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    unsafe {
-        kiwix_location_start(
-            token,
-            high_accuracy,
-            timeout_ms,
-            Box::into_raw(Box::new(sender)).cast(),
-            location_callback,
-        );
-    }
     #[cfg(target_os = "windows")]
     crate::location_windows::start(token, high_accuracy, timeout_ms, sender);
     #[cfg(all(target_os = "linux", native_location))]
@@ -604,9 +615,7 @@ fn start_native(
 
 fn cancel_native(token: u64) {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    unsafe {
-        kiwix_location_cancel(token);
-    }
+    crate::location_apple::cancel(token);
     #[cfg(target_os = "windows")]
     crate::location_windows::cancel(token);
     #[cfg(all(target_os = "linux", native_location))]
@@ -634,100 +643,6 @@ impl Drop for RequestGuard {
             }
         }
     }
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-#[repr(C)]
-struct NativePosition {
-    latitude: f64,
-    longitude: f64,
-    accuracy: f64,
-    altitude: f64,
-    altitude_accuracy: f64,
-    heading: f64,
-    speed: f64,
-    timestamp: f64,
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-unsafe extern "C" {
-    fn kiwix_location_start(
-        token: u64,
-        high_accuracy: bool,
-        timeout_ms: u64,
-        context: *mut std::ffi::c_void,
-        callback: unsafe extern "C" fn(
-            *mut std::ffi::c_void,
-            i32,
-            *const NativePosition,
-            *const std::ffi::c_char,
-        ),
-    );
-    fn kiwix_location_cancel(token: u64);
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-unsafe extern "C" fn location_callback(
-    context: *mut std::ffi::c_void,
-    code: i32,
-    position: *const NativePosition,
-    message: *const std::ffi::c_char,
-) {
-    let sender: Box<tokio::sync::oneshot::Sender<Result<Position, LocationError>>> =
-        unsafe { Box::from_raw(context.cast()) };
-    let result = if code == 0 && !position.is_null() {
-        let p = unsafe { &*position };
-        if !p.latitude.is_finite()
-            || !p.longitude.is_finite()
-            || !p.accuracy.is_finite()
-            || !p.timestamp.is_finite()
-            || !(-90.0..=90.0).contains(&p.latitude)
-            || !(-180.0..=180.0).contains(&p.longitude)
-            || p.accuracy < 0.0
-        {
-            Err(LocationError::unavailable(
-                "Native location provider returned an invalid position",
-            ))
-        } else {
-            let nonnegative = |v: f64| {
-                if v.is_finite() && v >= 0.0 {
-                    Some(v)
-                } else {
-                    None
-                }
-            };
-            Ok(Position {
-                timestamp: p.timestamp,
-                coords: Coordinates {
-                    latitude: p.latitude,
-                    longitude: p.longitude,
-                    accuracy: p.accuracy,
-                    altitude: p.altitude.is_finite().then_some(p.altitude),
-                    altitude_accuracy: nonnegative(p.altitude_accuracy),
-                    heading: nonnegative(p.heading),
-                    speed: nonnegative(p.speed),
-                },
-            })
-        }
-    } else {
-        let message = if message.is_null() {
-            "Location unavailable".into()
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(message) }
-                .to_string_lossy()
-                .into_owned()
-        };
-        Err(LocationError {
-            code: match code {
-                1 => 1,
-                3 => 3,
-                _ => 2,
-            },
-            message,
-            cancelled: false,
-        })
-    };
-    let _ = sender.send(result);
 }
 
 #[cfg(test)]
