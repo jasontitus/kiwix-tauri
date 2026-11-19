@@ -243,3 +243,27 @@ soundness proof; no Miri, sanitizer or fuzz run was added.
   arms, rustix's libc backend and the changed `android-evaluation`-gated hash caller.
 - Not run: iOS/Linux cross-target checks (this host's toolchains lack those std targets or C cross
   toolchains), any device or installed-app test, and sanitizer/fuzz runs.
+
+## Follow-up implemented 2026-11-19 (second batch)
+
+`84fd93e7de` replaces the two `libc::statvfs` blocks in `fs_ext::volume_space` with the safe
+`rustix::fs::statvfs` wrapper. The query is unchanged: the same `statvfs(3)` on Apple, Android and other
+libc targets, and on Linux rustix derives `statvfs` from `statfs` with the same `f_frsize`→`f_bsize`
+fallback. rustix widens every field to `u64`, so the previous platform-width casts are gone; the arithmetic
+stays `f_frsize × f_bavail` and `f_frsize × f_blocks` with saturating multiplication. An interior NUL is
+still rejected with the original `InvalidInput` message before the call.
+
+| Metric | Before | After |
+|---|---:|---:|
+| `unsafe { … }` matches | 226 | **224** |
+| Files containing them | 37 | **37** |
+| `unsafe extern` / `unsafe fn` / `unsafe impl` lines | 58 | **58** |
+
+`fs_ext` keeps its `flock(2)` block: the 2026-11-12 rationale (advisory lock semantics and the
+`EWOULDBLOCK`/`ERROR_LOCK_VIOLATION` mapping) has not been re-verified on every target. The Windows volume
+queries also stay.
+
+**Verification exercised:** `cargo check --lib`, `cargo clippy --lib -- -D warnings`, `fs_ext::` (2 tests,
+including the volume-space and NUL assertions) and `library_root::` (35 tests) on macOS; the Android lib
+check with `--features android-evaluation`. Not run: iOS/Linux cross-target checks, device tests,
+sanitizer/Miri.

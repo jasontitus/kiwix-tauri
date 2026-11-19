@@ -17,11 +17,12 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
 | `src-tauri/src/library_files.rs` | `move_exclusive` (Unix arm) |
 | `src-tauri/src/localswarm/storage.rs` | `rename_directory_noreplace` (Unix arm) |
 | `src-tauri/src/maps.rs` | `evaluation` module and `Control::chunk_sha256` clock reads |
+| `src-tauri/src/fs_ext.rs` | `volume_space` (Unix arm) and its volume-space test |
 | `src-tauri/src/acquisition_tests.rs` | `cpu_seconds`, `bench_loopback_throughput` |
 | `src-tauri/src/cpu_time.rs` | documentation and lint reason only |
-| `docs/RUST-UNSAFE-REVIEW.md` | section `## Follow-up implemented 2026-11-19` |
+| `docs/RUST-UNSAFE-REVIEW.md` | sections `## Follow-up implemented 2026-11-19` and the second batch |
 | `docs/MEMORY-SAFETY-INVENTORY.md` | subsection `### Progress since the 2026-11-17 snapshot` |
-| `CHANGELOG.md` | the bullet starting `- Remove 13 hand-written unsafe blocks` |
+| `CHANGELOG.md` | the bullet starting `- Remove 15 hand-written unsafe blocks` |
 
 ## Commits
 
@@ -32,20 +33,23 @@ Session working the Rust memory-safety worklist (`docs/MEMORY-SAFETY-INVENTORY.m
   found the Linux fallback could misread rustix's `EINVAL`; adds a regression test; corrects the docs.
 - `28a8d06b37` — restores the `dangling_symlink_is_an_existing_destination` tail (assertion + cleanup) that
   the regression-test insertion displaced, and scopes the doc section's revision claim.
+- `84fd93e7de` — replaces the Unix `libc::statvfs` blocks with `rustix::fs::statvfs`; same fields, arithmetic
+  and NUL diagnostic.
 
 ## Status
 
 - Verified on macOS: `cargo check --lib`, `cargo clippy --lib -- -D warnings`, and the publication,
-  exclusive, capture, rename, composer, `instance::` and `library_root::` test filters.
+  exclusive, capture, rename, composer, `fs_ext::`, `instance::` and `library_root::` test filters.
 - Verified for Android: `cargo check --lib --target aarch64-linux-android --features android-evaluation`
   with NDK 28 under Rust 1.99.1.
 - Not run: iOS/Linux cross-target checks, device tests, sanitizer/Miri.
-- The four initial findings and two follow-up findings are fixed and independently verified (`cf24679f21`,
-  `28a8d06b37`).
+- First batch: 239 → 226 matches, 42 → 37 files; second batch (`84fd93e7de`): 226 → 224. The four initial
+  findings and two follow-up findings from the first batch are fixed and independently verified.
+- The second batch (`84fd93e7de`) awaits independent review.
 
 ## Not reserved (safe for the other session)
 
-- `src-tauri/src/fs_ext.rs` flock/statvfs, `src-tauri/src/instance.rs` `getpeereid`
+- `src-tauri/src/fs_ext.rs` `flock`, `src-tauri/src/instance.rs` `getpeereid`
 - Windows rename arms (`storage::rename_into_directory_noreplace`, `MoveFileExW`)
 - A SAFETY-comment sweep across the remaining blocks
 - Inventory rows A1–A5, B1/B2/B4–B9, C1–C5, and the `unsafe impl Send/Sync` sign-offs
