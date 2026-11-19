@@ -1,0 +1,210 @@
+{
+  "method": "Both executables check the expected digest before timing. Each of ten alternating process pairs times eight digests per variant. All digests must match. The in-memory comparison excludes Swift chunk preparation and both input reads. The streaming comparison includes opening and reading the same cached local file for each digest in 128 KiB updates. It refuses a supplied length one byte longer or shorter than either actual archive. The Swift executables call CryptoKit directly and the Rust executables use the existing ARM SHA2 feature. The probes use independent file opens and exercise neither a Rust-to-Swift bridge nor the app\u2019s identity and cancellation logic.",
+  "in_memory_256k": {
+    "binary_sha256": {
+      "kiwix-sha2-cost": "df5d6da682c824a0aa2676b1da79adcff40671aa87e2c1ecafa6b647a7b9259f",
+      "crypto-kit-sha2": "0091fd57d6db78408f26f260700be80f67391f2ee703c6fab2113c7e6b77599c"
+    },
+    "fixtures": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": {
+        "exact_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+        "bytes": 8978471,
+        "pairs_ns_eight_hashes": [
+          {
+            "rust_arm_sha2": 109175208,
+            "apple_cryptokit": 95514459
+          },
+          {
+            "apple_cryptokit": 98351167,
+            "rust_arm_sha2": 105602042
+          },
+          {
+            "rust_arm_sha2": 103520167,
+            "apple_cryptokit": 88997667
+          },
+          {
+            "apple_cryptokit": 99849375,
+            "rust_arm_sha2": 100194708
+          },
+          {
+            "rust_arm_sha2": 101690209,
+            "apple_cryptokit": 98270250
+          },
+          {
+            "apple_cryptokit": 90352042,
+            "rust_arm_sha2": 103919917
+          },
+          {
+            "rust_arm_sha2": 104720667,
+            "apple_cryptokit": 77005833
+          },
+          {
+            "apple_cryptokit": 94837042,
+            "rust_arm_sha2": 83889208
+          },
+          {
+            "rust_arm_sha2": 100037666,
+            "apple_cryptokit": 86127417
+          },
+          {
+            "apple_cryptokit": 91161375,
+            "rust_arm_sha2": 106132000
+          }
+        ]
+      },
+      "wikipedia_en_100_maxi_2024-01.zim": {
+        "exact_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+        "bytes": 36522122,
+        "pairs_ns_eight_hashes": [
+          {
+            "rust_arm_sha2": 416403208,
+            "apple_cryptokit": 410789417
+          },
+          {
+            "apple_cryptokit": 386051708,
+            "rust_arm_sha2": 526557250
+          },
+          {
+            "rust_arm_sha2": 432569584,
+            "apple_cryptokit": 366021625
+          },
+          {
+            "apple_cryptokit": 378699709,
+            "rust_arm_sha2": 416749625
+          },
+          {
+            "rust_arm_sha2": 424421625,
+            "apple_cryptokit": 341501709
+          },
+          {
+            "apple_cryptokit": 352810292,
+            "rust_arm_sha2": 406573917
+          },
+          {
+            "rust_arm_sha2": 412592833,
+            "apple_cryptokit": 363472875
+          },
+          {
+            "apple_cryptokit": 376255625,
+            "rust_arm_sha2": 409832792
+          },
+          {
+            "rust_arm_sha2": 428057291,
+            "apple_cryptokit": 371631209
+          },
+          {
+            "apple_cryptokit": 369464000,
+            "rust_arm_sha2": 408103250
+          }
+        ]
+      }
+    }
+  },
+  "file_stream_128k": {
+    "binary_sha256": {
+      "rust_arm_sha2": "ea4d485780e423dfa475ec8d6e0b40ecf4f3e1a4d2cd499fa115d1e704462a25",
+      "apple_cryptokit": "e75375508d166c4e7589b249f575ca338aa9cf4df82f0b28a79750cd632c5f0d"
+    },
+    "fixture_results": {
+      "wikipedia_en_climate_change_mini_2024-06.zim": {
+        "digest_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+        "bytes": 8978471,
+        "eight_read_and_hash_ns": [
+          {
+            "rust_arm_sha2": 40684750,
+            "apple_cryptokit": 44638291
+          },
+          {
+            "apple_cryptokit": 44485333,
+            "rust_arm_sha2": 40710416
+          },
+          {
+            "rust_arm_sha2": 40499167,
+            "apple_cryptokit": 44577209
+          },
+          {
+            "apple_cryptokit": 44053375,
+            "rust_arm_sha2": 40578334
+          },
+          {
+            "rust_arm_sha2": 40015084,
+            "apple_cryptokit": 43905041
+          },
+          {
+            "apple_cryptokit": 43571833,
+            "rust_arm_sha2": 39783583
+          },
+          {
+            "rust_arm_sha2": 39801166,
+            "apple_cryptokit": 43530041
+          },
+          {
+            "apple_cryptokit": 44064834,
+            "rust_arm_sha2": 39710458
+          },
+          {
+            "rust_arm_sha2": 39398000,
+            "apple_cryptokit": 43481041
+          },
+          {
+            "apple_cryptokit": 43547084,
+            "rust_arm_sha2": 39774209
+          }
+        ]
+      },
+      "wikipedia_en_100_maxi_2024-01.zim": {
+        "digest_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+        "bytes": 36522122,
+        "eight_read_and_hash_ns": [
+          {
+            "rust_arm_sha2": 163527458,
+            "apple_cryptokit": 174610583
+          },
+          {
+            "apple_cryptokit": 172249750,
+            "rust_arm_sha2": 161809958
+          },
+          {
+            "rust_arm_sha2": 162625667,
+            "apple_cryptokit": 173586666
+          },
+          {
+            "apple_cryptokit": 172262750,
+            "rust_arm_sha2": 160873458
+          },
+          {
+            "rust_arm_sha2": 161348791,
+            "apple_cryptokit": 174153875
+          },
+          {
+            "apple_cryptokit": 172981708,
+            "rust_arm_sha2": 161777583
+          },
+          {
+            "rust_arm_sha2": 162101917,
+            "apple_cryptokit": 173970625
+          },
+          {
+            "apple_cryptokit": 173616041,
+            "rust_arm_sha2": 161369292
+          },
+          {
+            "rust_arm_sha2": 162003791,
+            "apple_cryptokit": 174040584
+          },
+          {
+            "apple_cryptokit": 172150708,
+            "rust_arm_sha2": 160884167
+          }
+        ]
+      }
+    },
+    "length_mismatch_rejections": 8
+  },
+  "probe_sources_sha256": {
+    "crypto-kit-probe.swift": "74e6dc37934fb8f55cdffaf06bc2a0941842776b62b5b4401d65771d7dd54959",
+    "crypto-kit-stream.swift": "4b3d292f3756eab2831b599067da62d24199dd6a02be384264b7294c5a38e024",
+    "sha-probe/src/main.rs": "41ac3031631ef1c67ea50094561d2ca5f787f583fb82769dcb0fed6f3c6a3a47",
+    "sha-probe/src/bin/stream.rs": "69740ea45b78f09a1b0972f8e727fe71fc7080bab7846d2f9edf749106c49b2e"
+  }
+}
