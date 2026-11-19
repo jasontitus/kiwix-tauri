@@ -140,6 +140,20 @@ fn header(size: u64) -> Vec<u8> {
     header
 }
 #[test]
+fn read_admission_keeps_legacy_single_files_separate_from_mutation_admission() {
+    let temp = Temp::new();
+    let mut legacy = header(120);
+    legacy[56..64].copy_from_slice(&72u64.to_le_bytes());
+    legacy[72..80].copy_from_slice(b"text/htm");
+    legacy.extend_from_slice(b"l\0\0");
+    std::fs::write(temp.0.join("book.zim"), &legacy).unwrap();
+    std::fs::write(temp.0.join("book.zimaa"), &legacy).unwrap();
+    let directory = temp.dir();
+    assert_eq!(read_part_names(&directory, "book.zim", true).unwrap(), vec!["book.zim"]);
+    assert!(part_names(&directory, "book.zim").is_err());
+    assert!(read_part_names(&directory, "book.zimaa", true).is_err());
+}
+#[test]
 fn split_set_uses_checksum_boundary_not_similarly_prefixed_files() {
     let temp = Temp::new();
     let mut first = header(120);

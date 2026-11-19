@@ -16,7 +16,7 @@ pub use presentation::Presentation;
 #[cfg(any(desktop, target_os = "ios", test))]
 pub use cleanup::retry_cleanup;
 pub use cleanup::Report;
-use cleanup::Files;
+pub(crate) use cleanup::Files;
 #[cfg(test)]
 #[path = "native_pdf/origin_tests.rs"]
 mod origin_tests;
@@ -61,7 +61,12 @@ pub enum Outcome {
 /// Where the caller intends to deliver the captured article.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Destination { Save, Share, Print }
-pub struct OwnedPdf { files: Files, path: PathBuf }
+pub struct OwnedPdf {
+    files: Files,
+    path: PathBuf,
+    #[cfg(target_os = "macos")]
+    validated: Option<(fs::File, crate::integrity::ContentIdentity)>,
+}
 #[cfg(any(desktop, target_os = "ios", test))]
 impl OwnedPdf { pub fn path(&self) -> &Path { &self.path } }
 
@@ -85,19 +90,91 @@ impl OwnedPdf {
                 return Err("iOS could not exclude PDF temporary storage from backup".into());
             }
         }
-        Ok(Self { path: directory.join("article.pdf"), files })
+        Ok(Self {
+            path: directory.join("article.pdf"), files,
+            #[cfg(target_os = "macos")]
+            validated: None,
+        })
     }
-    fn validate(&self) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    fn open_output(&self) -> Result<fs::File, String> {
+        use rustix::fs::{open, Mode, OFlags};
+        open(&self.path, OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK, Mode::empty())
+            .map(fs::File::from).map_err(|error| format!("Opening the private article PDF: {error}"))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn validated_file(&self) -> Result<&fs::File, String> {
+        self.validated.as_ref().map(|(file, _)| file).ok_or_else(|| "The article PDF was not validated".into())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn share_source_unchanged(&self) -> Result<(), String> {
+        use crate::integrity::ContentIdentity;
+        let (held, expected) = self.validated.as_ref().ok_or("The article PDF was not validated")?;
+        let named = self.open_output()?;
+        if ContentIdentity::from_handles(std::iter::once(held))? != *expected
+            || ContentIdentity::from_handles(std::iter::once(&named))? != *expected
+        {
+            return Err("The article PDF changed before sharing. Export it again".into());
+        }
+        Ok(())
+    }
+
+    fn validate(&mut self) -> Result<(), String> {
         let metadata = fs::symlink_metadata(&self.path).map_err(|e| format!("Reading native PDF: {e}"))?;
         if !metadata.is_file() || metadata.len() < 8 || metadata.len() > 64 * 1024 * 1024 {
             return Err("Native PDF is missing, invalid, or exceeds the 64 MiB output limit".into());
         }
+        #[cfg(target_os = "macos")]
+        let mut file = self.open_output()?;
+        #[cfg(not(target_os = "macos"))]
         let mut file = fs::File::open(&self.path).map_err(|e| e.to_string())?;
+        let held = file.metadata().map_err(|e| format!("Reading private PDF metadata: {e}"))?;
+        if !held.is_file() || held.len() < 8 || held.len() > 64 * 1024 * 1024 {
+            return Err("The native provider did not produce a usable PDF document".into());
+        }
+        #[cfg(target_os = "macos")]
+        let identity = {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            if held.nlink() != 1 { return Err("The article PDF has an unexpected file link".into()); }
+            file.set_permissions(fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+            let identity = crate::integrity::ContentIdentity::from_handles(std::iter::once(&file))?;
+            let size = file.metadata().map_err(|e| e.to_string())?.len();
+            if !(8..=64 * 1024 * 1024).contains(&size) {
+                return Err("The native provider did not produce a usable PDF document".into());
+            }
+            identity
+        };
         let mut header = [0; 5];
         file.read_exact(&mut header).map_err(|e| e.to_string())?;
         if &header != b"%PDF-" { return Err("The native provider did not produce a PDF document".into()); }
-        #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&self.path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?; }
+        #[cfg(all(unix, not(target_os = "macos")))] { use std::os::unix::fs::PermissionsExt; file.set_permissions(fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?; }
+        #[cfg(target_os = "macos")]
+        {
+            self.validated = Some((file, identity));
+            self.share_source_unchanged()?;
+        }
         Ok(())
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod share_identity_tests {
+    use super::*;
+
+    #[test]
+    fn validated_pdf_rejects_path_replacement_before_sharing() {
+        let root = tempfile::tempdir().unwrap();
+        let admission = Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = admission.try_acquire_owned().unwrap();
+        let mut pdf = OwnedPdf::create(root.path(), Arc::new(|error| panic!("{error}")), permit).unwrap();
+        fs::write(pdf.path(), b"%PDF-fixture").unwrap();
+        pdf.validate().unwrap();
+        pdf.share_source_unchanged().unwrap();
+        fs::rename(pdf.path(), pdf.path().with_extension("previous")).unwrap();
+        fs::write(pdf.path(), b"%PDF-fixture").unwrap();
+        assert!(pdf.share_source_unchanged().is_err());
     }
 }
 
@@ -251,7 +328,7 @@ pub async fn render(app: tauri::AppHandle, snapshot: Snapshot, scratch_root: Pat
     let read_cancel = cancel.clone();
     // Snapshot capture has already completed in the authenticated live frame.
     // No archive reload can erase interactive state between capture and export.
-    let owned = OwnedPdf::create(&scratch_root, report, permit)?;
+    let mut owned = OwnedPdf::create(&scratch_root, report, permit)?;
     let snapshot_files = owned.files.clone();
     let width = snapshot.width;
     let height = snapshot.height;

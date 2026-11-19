@@ -177,9 +177,9 @@ impl Service {
         let app = self.app.lock().map_err(|_| "Application handle unavailable")?.clone()
             .ok_or("Article PDF export requires a native application window")?;
         #[cfg(target_os = "macos")]
-        let print_window = if job.print {
+        let handoff_window = if job.print || job.share {
             Some(app.get_webview_window(&job.identity.label)
-                .ok_or("The window you started printing from has closed")?)
+                .ok_or("The window you started this from has closed")?)
         } else { None };
         let name = text(&args, "suggestedName")?.to_string();
         if name.is_empty() || name.len() > 240 || !name.to_ascii_lowercase().ends_with(".pdf")
@@ -234,7 +234,7 @@ impl Service {
             service.pdf_check_locked(&identity, phase, &cancellation, || Ok(()))
         });
         #[cfg(target_os = "macos")]
-        let print_authority = authority.clone();
+        let handoff_authority = authority.clone();
         let weak = Arc::downgrade(&self); let identity = job.identity.clone(); let cancellation = job.cancel.clone();
         let commit: Commit = Arc::new(move |action| weak.upgrade().ok_or("PDF export stopped because the app is closing")?
             .pdf_commit(&identity, Phase::BeforeHandoff, &cancellation, action));
@@ -267,8 +267,8 @@ impl Service {
                 // Other desktop providers already handed it off to system UI.
                 #[cfg(target_os = "macos")]
                 {
-                    let window = print_window.ok_or("The window you started printing from has closed")?;
-                    crate::native_pdf::print_pdf(window, &pdf, &name, print_authority, commit, job.cancel.clone()).await?;
+                    let window = handoff_window.ok_or("The window you started printing from has closed")?;
+                    crate::native_pdf::print_pdf(window, &pdf, &name, handoff_authority, commit, job.cancel.clone()).await?;
                     drop(pdf);
                     // The panel closing does not prove paper was produced: the
                     // user may have cancelled or chosen Save as PDF.
@@ -280,13 +280,8 @@ impl Service {
             Outcome::Pdf(pdf) if job.share => {
                 #[cfg(target_os = "macos")]
                 {
-                    let path = pdf.path().to_path_buf();
-                    // Recheck the accepted privacy/window identity immediately
-                    // before a system share sheet receives archive bytes.
-                    let service = self.clone(); let identity = job.identity.clone(); let cancel = job.cancel.clone();
-                    blocking(move || service.pdf_commit(&identity, Phase::BeforeHandoff, &cancel, || Ok(()))).await?;
-                    super::share::present_file(&path, job.cancel.clone()).await?;
-                    drop(pdf);
+                    let window = handoff_window.ok_or("The window you started sharing from has closed")?;
+                    super::share::present_pdf(window, pdf, commit, handoff_authority, job.cancel.clone()).await?;
                     Ok(Value::Null)
                 }
                 #[cfg(target_os = "ios")]

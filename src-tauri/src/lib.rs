@@ -4,6 +4,8 @@
 // documented at the operation it guards rather than at the function header.
 #![deny(unsafe_op_in_unsafe_fn)]
 mod acquisition;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod apple_requests;
 mod archive;
 mod archive_metadata;
 mod archive_search;

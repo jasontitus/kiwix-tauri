@@ -384,14 +384,14 @@ fn split_part_matches(primary: &str, index: usize, name: &str) -> bool {
 /// glob. A similarly prefixed .bak or a surplus .zimac can never be deleted.
 fn part_names(directory: &Directory, primary: &str) -> Result<Vec<String>, String> {
     filename(primary)?;
-    let names = read_part_names(directory, primary)?;
+    let names = read_part_names(directory, primary, false)?;
     for name in &names {
         directory.stamp(name)?;
     }
     Ok(names)
 }
 
-fn read_part_names(directory: &Directory, primary: &str) -> Result<Vec<String>, String> {
+fn read_part_names(directory: &Directory, primary: &str, allow_legacy_single: bool) -> Result<Vec<String>, String> {
     read_filename(primary)?;
     let split = archive_suffix(primary, ".zimaa");
     if !split && !archive_suffix(primary, ".zim") {
@@ -448,6 +448,14 @@ fn read_part_names(directory: &Directory, primary: &str) -> Result<Vec<String>, 
             }
             if FileStamp::read(&Metadata::from_file(&file).map_err(err)?)? != stamp || directory.read_stamp(&name)? != stamp {
                 return Err("Archive header part changed while reading".into());
+            }
+            // A legacy single file has a MIME table at byte 72 and no checksum
+            // offset. Read admission can use the exact file size. Destructive
+            // operations and split archives still require a declared boundary.
+            if header_bytes >= 72 && &header[..4] == b"ZIM\x04"
+                && u64::from_le_bytes(header[56..64].try_into().map_err(err)?) == 72 {
+                return if allow_legacy_single && !split { Ok(vec![name]) }
+                else { Err("A legacy archive has no declared checksum boundary".into()) };
             }
             if header_bytes == header.len() {
                 if &header[..4] != b"ZIM\x04" { return Err("File is not a ZIM archive".into()); }
@@ -657,7 +665,7 @@ pub(crate) struct PinnedArchive {
 
 pub(crate) fn retain_archive_files(book: &Book) -> Result<PinnedArchive, String> {
     basename(Path::new(&book.path))?;
-    let retained = retain_read_archive_files(book)?;
+    let retained = retain_files(book, false)?;
     for stamp in &retained.stamps {
         FileStamp::of(stamp)?;
     }
@@ -665,10 +673,14 @@ pub(crate) fn retain_archive_files(book: &Book) -> Result<PinnedArchive, String>
 }
 
 pub(crate) fn retain_read_archive_files(book: &Book) -> Result<PinnedArchive, String> {
+    retain_files(book, true)
+}
+
+fn retain_files(book: &Book, allow_legacy_single: bool) -> Result<PinnedArchive, String> {
     let path = Path::new(&book.path);
     let directory = Directory::open(path.parent().ok_or("Archive has no parent directory")?)?;
     let primary = path.file_name().and_then(|name| name.to_str()).ok_or("Archive filename must be valid Unicode")?;
-    let names = read_part_names(&directory, primary)?;
+    let names = read_part_names(&directory, primary, allow_legacy_single)?;
     let mut files = Vec::with_capacity(names.len());
     let mut stamps = Vec::with_capacity(names.len());
     for name in names {

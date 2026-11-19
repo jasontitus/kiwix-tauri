@@ -168,7 +168,7 @@ export default function Downloads({
     if (shareBusy || settings.readOnly) return;
     setShareBusy(book.installationId);
     try {
-      await shareArchive(book.id);
+      await shareArchive(book.id, book.installationId);
     } catch (error) {
       onError(error);
     } finally {

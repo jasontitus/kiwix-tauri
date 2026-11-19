@@ -1,25 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![forbid(unsafe_code)]
 
-use super::{Authority, Files, Phase};
-use std::{collections::HashMap, sync::{LazyLock, Mutex}};
+use crate::native_pdf::{Authority, Phase};
+use std::{collections::HashMap, sync::Mutex};
 use tokio::sync::oneshot;
 
-pub(super) type ResultReceiver = oneshot::Receiver<Result<(), String>>;
+pub(crate) type ResultReceiver = oneshot::Receiver<Result<(), String>>;
 
-pub(super) struct Pending {
+pub(crate) struct Pending<Lease> {
     authority: Option<Authority>,
-    pub(super) sender: oneshot::Sender<Result<(), String>>,
-    _files: Files,
+    sender: oneshot::Sender<Result<(), String>>,
+    _lease: Lease,
 }
 
-#[derive(Default)]
-struct State {
+impl<Lease> Pending<Lease> {
+    pub(crate) fn finish(self, result: Result<(), String>) {
+        let Self { authority, sender, _lease } = self;
+        drop(authority);
+        drop(_lease);
+        let _ = sender.send(result);
+    }
+}
+
+struct State<Lease> {
     last_id: u64,
-    pending: HashMap<u64, Pending>,
+    pending: HashMap<u64, Pending<Lease>>,
 }
 
-impl State {
+impl<Lease> State<Lease> {
     fn authority(&self, id: u64) -> Option<&Authority> {
         let pending = self.pending.get(&id)?;
         if pending.sender.is_closed() {
@@ -29,22 +37,25 @@ impl State {
     }
 }
 
-#[derive(Default)]
-pub(super) struct Registry(Mutex<State>);
+pub(crate) struct Registry<Lease>(Mutex<State<Lease>>);
 
-pub(super) static CALLBACKS: LazyLock<Registry> = LazyLock::new(Registry::default);
+impl<Lease> Default for Registry<Lease> {
+    fn default() -> Self {
+        Self(Mutex::new(State { last_id: 0, pending: HashMap::new() }))
+    }
+}
 
-impl Registry {
-    pub(super) fn register(&self, authority: Authority, files: Files) -> Result<(u64, ResultReceiver), String> {
+impl<Lease> Registry<Lease> {
+    pub(crate) fn register(&self, authority: Authority, lease: Lease) -> Result<(u64, ResultReceiver), String> {
         let (sender, receiver) = oneshot::channel();
         let mut state = self.0.lock().unwrap_or_else(|error| error.into_inner());
         let id = state.last_id.checked_add(1).ok_or("Apple PDF request IDs exhausted")?;
         state.last_id = id;
-        state.pending.insert(id, Pending { authority: Some(authority), sender, _files: files });
+        state.pending.insert(id, Pending { authority: Some(authority), sender, _lease: lease });
         Ok((id, receiver))
     }
 
-    pub(super) fn admitted(&self, id: u64) -> bool {
+    pub(crate) fn admitted(&self, id: u64) -> bool {
         let authority = self.0.lock().unwrap_or_else(|error| error.into_inner()).authority(id).cloned();
         if !authority.is_some_and(|authority| authority(Phase::BeforeHandoff).is_ok()) {
             return false;
@@ -52,15 +63,20 @@ impl Registry {
         self.0.lock().unwrap_or_else(|error| error.into_inner()).authority(id).is_some()
     }
 
-    pub(super) fn revoke(&self, id: u64) -> bool {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn is_live(&self, id: u64) -> bool {
+        self.0.lock().unwrap_or_else(|error| error.into_inner()).authority(id).is_some()
+    }
+
+    pub(crate) fn revoke(&self, id: u64) -> bool {
         // Drop the authority outside the lock. Native completion still owns
-        // the scratch lease, even if its Rust waiter has gone away.
+        // the resource lease, even if its Rust waiter has gone away.
         let retired = self.0.lock().unwrap_or_else(|error| error.into_inner()).pending
             .get_mut(&id).and_then(|pending| pending.authority.take());
         retired.is_some()
     }
 
-    pub(super) fn take(&self, id: u64) -> Option<Pending> {
+    pub(crate) fn take(&self, id: u64) -> Option<Pending<Lease>> {
         self.0.lock().unwrap_or_else(|error| error.into_inner()).pending.remove(&id)
     }
 }
@@ -68,6 +84,7 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::native_pdf::Files;
     use std::{fs, sync::Arc};
 
     fn lease() -> Files {
@@ -96,7 +113,7 @@ mod tests {
         assert!(registry.take(first).is_none());
         assert!(!registry.admitted(first));
         assert!(registry.admitted(second));
-        registry.take(second).unwrap().sender.send(Ok(())).unwrap();
+        registry.take(second).unwrap().finish(Ok(()));
         assert!(replacement.blocking_recv().unwrap().is_ok());
     }
 

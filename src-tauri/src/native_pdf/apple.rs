@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use super::{Authority, Commit, Destination, Files, Phase, Presentation};
-use std::{ffi::{c_char, CString}, path::PathBuf, sync::{Arc, atomic::AtomicBool}};
+use crate::apple_requests::Registry;
+use std::{ffi::{c_char, CString}, path::PathBuf, sync::{Arc, LazyLock, atomic::AtomicBool}};
 #[cfg(target_os = "macos")]
-use {super::OwnedPdf, std::{ffi::c_void, time::Duration}};
+use {super::OwnedPdf, crate::apple_requests::ResultReceiver, std::{ffi::c_void, time::Duration}};
 use tokio_util::sync::CancellationToken;
-#[path = "apple_callbacks.rs"]
-mod callbacks;
-use callbacks::CALLBACKS;
+static CALLBACKS: LazyLock<Registry<Files>> = LazyLock::new(Registry::default);
 type Admit = extern "C" fn(u64) -> bool;
 type Complete = extern "C" fn(u64, u8);
 unsafe extern "C" {
@@ -21,7 +20,7 @@ unsafe extern "C" {
 extern "C" fn admitted(id: u64) -> bool { CALLBACKS.admitted(id) }
 extern "C" fn complete(id: u64, status: u8) {
     let Some(callback) = CALLBACKS.take(id) else { return; };
-    let _ = callback.sender.send(render_result(status));
+    callback.finish(render_result(status));
 }
 
 // These ABI values match PdfRenderStatus in native/pdf.mm. Unknown values
@@ -89,7 +88,7 @@ pub async fn print(window: tauri::WebviewWindow, pdf: &OwnedPdf, title: &str, au
 }
 
 #[cfg(target_os = "macos")]
-async fn wait_for_print(request: PrintRequest, mut receiver: callbacks::ResultReceiver, authority: Authority, cancel: CancellationToken) -> Result<(), String> {
+async fn wait_for_print(request: PrintRequest, mut receiver: ResultReceiver, authority: Authority, cancel: CancellationToken) -> Result<(), String> {
     let mut checks = tokio::time::interval(Duration::from_millis(250));
     checks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let deadline = tokio::time::sleep(Duration::from_secs(16 * 60));
@@ -160,7 +159,7 @@ extern "C" fn print_complete(id: u64, status: u8, system_error: i32) {
         10 => Err("Close the current system print dialog before printing another article".into()),
         _ => Err("The native print panel could not be opened".into()),
     };
-    let _ = callback.sender.send(result);
+    callback.finish(result);
 }
 #[cfg(target_os = "macos")]
 struct PrintRequest(u64);

@@ -2365,6 +2365,11 @@ impl Service {
             .get("__windowLabel")
             .and_then(Value::as_str)
             .unwrap_or("main");
+        #[cfg(target_os = "macos")]
+        if command == "share_book" {
+            let label = label.to_owned();
+            return self.share_book(&label, args).await;
+        }
         let _speech_retirement = self.mobile_speech_lifecycle(command, &args, label)?;
         if command == "close_window" {
             self.closed_windows

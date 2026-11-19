@@ -1634,12 +1634,13 @@ export async function setReaderRestricted(
 }
 
 /** Share a library archive file through the native share sheet. */
-export async function shareArchive(bookId: string): Promise<void> {
+export async function shareArchive(bookId: string, installationId: string): Promise<void> {
   if (!canShareSystem) return;
   const context = capturePrivacyContext();
   if (!context) return;
   await api("share_book", {
     bookId,
+    installationId,
     privacyGeneration: context.generation,
   });
 }
