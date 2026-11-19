@@ -78,16 +78,19 @@ fn acquisition_response(reference: &ProviderReference, response: serde_json::Val
     let Some(error) = response.get("error") else { return Ok(response); };
     let code = error.get("code").and_then(serde_json::Value::as_str)
         .ok_or("Native provider returned an invalid acquisition error")?;
-    let retry = code == "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT";
-    let message = if retry {
+    let unavailable = code == "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT";
+    let busy = code == "PROVIDER_LEASE_CONFLICT";
+    let message = if unavailable {
         "This archive is temporarily unavailable. Reconnect its storage, then reopen or reload the article."
+    } else if busy {
+        "This archive is temporarily busy. Reopen or reload the article to try again."
     } else if code == "PROVIDER_REFERENCE_REVOKED" {
         "Access to this archive is no longer authorized. Choose Locate in the library to select it again."
     } else {
         "This archive could not be opened from its document provider. Choose Locate in the library, or import a copy."
     };
     Err(serde_json::json!({
-        "code": code, "message": message, "retry": retry, "sourceReference": reference.reference,
+        "code": code, "message": message, "retry": unavailable || busy, "sourceReference": reference.reference,
     }).to_string())
 }
 
@@ -96,7 +99,7 @@ mod native {
     use super::*;
     use crate::archive::Archive;
     use serde_json::{json, Value};
-    use std::{fs::File, os::fd::{FromRawFd, RawFd}, path::Path, sync::Arc};
+    use std::{fs::File, os::fd::{BorrowedFd, RawFd}, path::Path, sync::Arc};
     use tauri_plugin_kiwix_mobile::MobileExt;
 
     pub(crate) struct ProviderLease { app: tauri::AppHandle, token: String }
@@ -180,15 +183,11 @@ mod native {
         let mut files = Vec::with_capacity(descriptors.len());
         for descriptor in descriptors {
             if descriptor.fd < 0 { return Err("Native provider descriptor invalid".into()); }
-            // SAFETY: F_DUPFD_CLOEXEC does not take ownership of the native FD;
-            // on success it returns a fresh descriptor owned only by this File.
-            let duplicate = unsafe { libc::fcntl(descriptor.fd, libc::F_DUPFD_CLOEXEC, 0) };
-            if duplicate < 0 { return Err(std::io::Error::last_os_error().to_string()); }
-            let file = unsafe { File::from_raw_fd(duplicate) };
-            if !file.metadata().map_err(|e| e.to_string())?.is_file() || unsafe { libc::lseek(duplicate, 0, libc::SEEK_CUR) } < 0 {
-                return Err("This provider does not offer a seekable regular file. Choose Import archives to make a managed copy.".into());
-            }
-            files.push((descriptor.name, file));
+            // SAFETY: The trusted native reply names an open part in `lease`.
+            // Both native providers keep these descriptors open until release
+            // of this exact lease, which remains owned here during duplication.
+            let borrowed = unsafe { BorrowedFd::borrow_raw(descriptor.fd) };
+            files.push((descriptor.name, duplicate_provider_file(borrowed)?));
         }
         Ok(ProviderFiles { files, lease })
     }
@@ -197,6 +196,20 @@ mod native {
         app.kiwix_mobile().call_sync("forgetExternalArchive", json!({"reference":reference.reference})).map(|_| ())
     }
 }
+
+#[cfg(any(mobile, all(test, unix)))]
+fn duplicate_provider_file(fd: std::os::fd::BorrowedFd<'_>) -> Result<std::fs::File, String> {
+    let duplicate = rustix::io::fcntl_dupfd_cloexec(fd, 0)
+        .map_err(|error| std::io::Error::from(error).to_string())?;
+    let file = std::fs::File::from(duplicate);
+    if !file.metadata().map_err(|error| error.to_string())?.is_file()
+        || rustix::fs::seek(&file, rustix::fs::SeekFrom::Current(0)).is_err()
+    {
+        return Err("This provider does not offer a seekable regular file. Choose Import archives to make a managed copy.".into());
+    }
+    Ok(file)
+}
+
 #[cfg(mobile)]
 pub(crate) use native::{forget_registered, install, retain_registered, ProviderFiles};
 #[cfg(target_os = "android")]
@@ -205,6 +218,50 @@ pub(crate) use native::{prepare_move_registered, delete_move_registered};
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn provider_duplicate_is_owned_close_on_exec_and_preserves_the_offset() {
+        use std::{
+            io::{Seek, Write},
+            os::{fd::AsFd, unix::fs::FileExt},
+        };
+
+        let mut original = tempfile::tempfile().unwrap();
+        original.write_all(b"retained part").unwrap();
+        original.seek(std::io::SeekFrom::Start(3)).unwrap();
+
+        let mut duplicate = duplicate_provider_file(original.as_fd()).unwrap();
+        assert!(rustix::io::fcntl_getfd(&duplicate)
+            .unwrap()
+            .contains(rustix::io::FdFlags::CLOEXEC));
+        assert_eq!(original.stream_position().unwrap(), 3);
+        drop(original);
+        assert_eq!(duplicate.stream_position().unwrap(), 3);
+        let mut bytes = [0; 13];
+        duplicate.read_exact_at(&mut bytes, 0).unwrap();
+        assert_eq!(&bytes, b"retained part");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn provider_duplicate_rejects_non_files_without_closing_the_borrow() {
+        use std::{io::{Read, Write}, os::{fd::AsFd, unix::net::UnixStream}};
+
+        let root = tempfile::tempdir().unwrap();
+        let directory = std::fs::File::open(root.path()).unwrap();
+        let (mut socket, mut peer) = UnixStream::pair().unwrap();
+        for fd in [directory.as_fd(), socket.as_fd()] {
+            let error = duplicate_provider_file(fd).unwrap_err();
+            assert!(error.contains("Choose Import archives"), "{error}");
+        }
+        assert!(directory.metadata().unwrap().is_dir());
+        peer.write_all(b"x").unwrap();
+        let mut byte = [0];
+        socket.read_exact(&mut byte).unwrap();
+        assert_eq!(byte, [b'x']);
+    }
+
     fn reference() -> ProviderReference {
         ProviderReference { reference: "2d1d57d1-3762-4e59-9fe6-00e888402a2b".into(), display_name: "USB.zim".into(), persistent: true }
     }
@@ -244,7 +301,14 @@ mod tests {
         );
         #[cfg(not(windows))]
         let (directory, name) = (std::path::PathBuf::new(), "USB.zim");
-        let files = vec![(name.into(), std::fs::File::open(fixture).unwrap())];
+        let file = std::fs::File::open(fixture).unwrap();
+        #[cfg(unix)]
+        let file = {
+            use std::os::fd::AsFd;
+            let original = file;
+            duplicate_provider_file(original.as_fd()).unwrap()
+        };
+        let files = vec![(name.into(), file)];
         let restored = acquisition_response(&source, json!({"lease":uuid::Uuid::new_v4().to_string()})).unwrap();
         assert!(restored.get("lease").is_some());
         let archive = crate::archive::Archive::open_files(&directory, &files).unwrap();
@@ -252,6 +316,17 @@ mod tests {
         let title = archive.title_batch(0, 1).unwrap().titles.remove(0);
         assert!(!archive.search(&title, false, 0, 10).unwrap().hits.is_empty());
         assert_eq!(source, original);
+    }
+
+    #[test]
+    fn provider_lease_conflict_keeps_authority_and_offers_a_retry() {
+        let source = reference();
+        let error = acquisition_response(&source,
+            serde_json::json!({"error":{"code":"PROVIDER_LEASE_CONFLICT"}})).unwrap_err();
+        let error: serde_json::Value = serde_json::from_str(&error).unwrap();
+        assert_eq!(error["sourceReference"], source.reference);
+        assert_eq!(error["retry"], true);
+        assert!(error["message"].as_str().unwrap().contains("try again"));
     }
 
     #[test]

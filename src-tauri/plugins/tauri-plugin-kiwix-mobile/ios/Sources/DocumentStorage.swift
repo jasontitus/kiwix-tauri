@@ -650,9 +650,11 @@ final class ExternalDocuments {
   private var selectedURLs: [String: URL] = [:]
   private var leases: [String: Lease] = [:]
   private let defaults: UserDefaults
+  private let newLeaseID: () -> UUID
   private let resolveBookmark: (Data) throws -> (URL, Bool)
   private let key = "kiwix.external-document-references.v1"
   init(defaults: UserDefaults = .standard,
+       newLeaseID: @escaping () -> UUID = UUID.init,
        resolveBookmark: @escaping (Data) throws -> (URL, Bool) = { data in
          var stale = false
          let url = try URL(resolvingBookmarkData: data, options: [.withoutUI],
@@ -660,6 +662,7 @@ final class ExternalDocuments {
          return (url, stale)
        }) {
     self.defaults = defaults
+    self.newLeaseID = newLeaseID
     self.resolveBookmark = resolveBookmark
   }
 
@@ -1022,6 +1025,8 @@ final class ExternalDocuments {
             record.identities == nil || record.identities?.count == files.count else {
         throw MobileFailure("provider_archive_parts_changed")
       }
+      let lease = newLeaseID().uuidString
+      guard leases[lease] == nil else { throw MobileFailure("provider_lease_conflict") }
       // Only replace the persisted capability after every admitted part and the
       // archive UUID have been validated while its security scope is retained.
       let bookmark = stale ? try url.bookmarkData(options: .minimalBookmark,
@@ -1034,7 +1039,6 @@ final class ExternalDocuments {
         defaults.set(stored, forKey: key)
       }
       transient[reference] = refreshed
-      let lease = UUID().uuidString
       leases[lease] = Lease(reference: reference, url: url, scoped: scoped, files: files)
       return ExternalAcquisition(lease: lease, files: files)
     } catch {

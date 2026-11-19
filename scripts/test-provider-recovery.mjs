@@ -130,6 +130,33 @@ test("uppercase persisted iOS references retain exact source-scoped recovery aut
   assert.equal(ui.localProvider(), null);
 });
 
+test("a provider lease conflict is retryable only for its exact book, installation, and source", async () => {
+  const ui = consumer();
+  const conflict = {
+    code: "PROVIDER_LEASE_CONFLICT",
+    message: "This archive is temporarily busy. Reopen or reload the article to try again.",
+  };
+  for (const unscoped of [
+    { bookId: "other-book" }, { installationId: "replaced" }, { retry: false },
+    { sourceReference: "01234567-89ab-4cde-8fab-0123456789ac" },
+  ]) {
+    const error = parseProviderDocumentError(envelope({ ...conflict, ...unscoped }));
+    assert.ok(error);
+    assert.equal(isProviderUnavailableFor(error, ui.currentBook), false);
+  }
+
+  ui.context.invoke = async () => { throw envelope(conflict); };
+  let error;
+  try { await ui.context.dispatchOnce("open_article", { bookId: book.id }); } catch (failure) { error = failure; }
+  assert.ok(error instanceof ProviderDocumentError);
+  ui.context.report(error);
+  assert.equal(ui.localProvider(), error);
+  assert.equal(ui.localError(), "");
+  assert.deepEqual(ui.bands, []);
+  ui.context.recovered();
+  assert.equal(ui.localProvider(), null);
+});
+
 test("revoked grants and other failures stay visible and are not cleared by a successful unrelated provider read", async () => {
   for (const raw of [envelope({ code: "PROVIDER_REFERENCE_REVOKED", retry: false, message: "Access is no longer authorized. Choose Locate." }), "Deletion was refused"]) {
     const ui = consumer();

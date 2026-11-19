@@ -117,6 +117,29 @@ final class ExternalDocumentsTests: XCTestCase {
     }
   }
 
+  func testCollidingAcquisitionKeepsTheExistingLeaseOpen() throws {
+    try fixture { root, defaults in
+      let source = root.appendingPathComponent("original.zim")
+      try archive(source)
+      let id = UUID()
+      let documents = ExternalDocuments(defaults: defaults, newLeaseID: { id })
+      let selected = try documents.selectIncoming(source, persistent: false, cancellation: WorkCancellation())
+      let first = try documents.acquire(selected.reference, cancellation: WorkCancellation())
+      defer { documents.release(first.lease) }
+      let descriptor = try XCTUnwrap(first.files.first).fd
+      var original = stat()
+      XCTAssertEqual(fstat(descriptor, &original), 0)
+
+      XCTAssertThrowsError(try documents.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual(providerAcquisitionCode(error), "PROVIDER_LEASE_CONFLICT")
+      }
+      var retained = stat()
+      XCTAssertEqual(fstat(descriptor, &retained), 0)
+      XCTAssertEqual(retained.st_dev, original.st_dev)
+      XCTAssertEqual(retained.st_ino, original.st_ino)
+    }
+  }
+
   func testIncomingPlainFileURLCannotPretendToCarryPersistentProviderPermission() throws {
     try fixture { root, defaults in
       let source = root.appendingPathComponent("original.zim")

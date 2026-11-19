@@ -120,7 +120,7 @@ export function parseProviderDocumentError(message: string): ProviderDocumentErr
   }
 }
 
-/** Only temporary loss of this exact retained source is locally retryable.
+/** Only temporary unavailability of this exact retained source is locally retryable.
  * Revocation, deletion, replacement installations and unscoped failures remain
  * ordinary visible failures; matching bytes/metadata alone grant no authority.
  */
@@ -129,7 +129,7 @@ export function isProviderUnavailableFor(
   book: { id: string; installationId: string; sourceReference?: { reference: string } | null } | undefined,
 ): value is ProviderDocumentError {
   return value instanceof ProviderDocumentError &&
-    value.code === "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT" && value.retry &&
+    (value.code === "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT" || value.code === "PROVIDER_LEASE_CONFLICT") && value.retry &&
     !!book && value.bookId === book.id && value.installationId === book.installationId &&
     value.sourceReference === book.sourceReference?.reference;
 }

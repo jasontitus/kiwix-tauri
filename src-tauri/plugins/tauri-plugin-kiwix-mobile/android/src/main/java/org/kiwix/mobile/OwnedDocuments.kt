@@ -791,12 +791,14 @@ internal class ExternalDocuments(private val context: Context) {
                 }
             }
             val lease = java.util.UUID.randomUUID().toString()
-            leases[lease] = Lease(reference, record.uri, descriptors)
             val files = app.tauri.plugin.JSArray()
             descriptors.forEach { (name, fd) ->
                 files.put(app.tauri.plugin.JSObject().put("name", name).put("fd", fd.fd))
             }
-            return app.tauri.plugin.JSObject().put("lease", lease).put("files", files)
+            val response = app.tauri.plugin.JSObject().put("lease", lease).put("files", files)
+            if (lease in leases) throw NativeDocumentError("PROVIDER_LEASE_CONFLICT")
+            leases[lease] = Lease(reference, record.uri, descriptors)
+            return response
         } catch (error: Exception) {
             descriptors.forEach { runCatching { it.second.close() } }
             throw providerAcquisitionFailure(error)
