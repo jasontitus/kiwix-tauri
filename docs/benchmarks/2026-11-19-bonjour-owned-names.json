@@ -1,0 +1,370 @@
+{
+  "base": "a5c91693cd0f96dbbe9a47688f771a3828809511",
+  "application_source_sha256": "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520",
+  "manifest_sha256": "7457f5ad2c76a148595be1a7cae2609b1bc9956e7d91c6fc33725d4ba20501f4",
+  "fixture_sources": [
+    "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8  base/src/discovery.rs",
+    "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b  base/src/fixture.rs",
+    "0d8d148e64fd7f471515620e46645fd913150ccad5c92c2ec87858fa08fcc2ea  base/src/ios_discovery.rs",
+    "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04  base/src/main.rs",
+    "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee  base/src/publisher.rs",
+    "73fe4d9d92fb8aa2e1d09c40310e714280f8a632c2d9ad6b5be758bdb39067b8  candidate/src/discovery.rs",
+    "5877e3a81d23038adf4daa063414efa53ac6fc51512be8f3a83cb988af189a8b  candidate/src/fixture.rs",
+    "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520  candidate/src/ios_discovery.rs",
+    "c2364a805bce061543cfa0a6c2b2eb5a54b541e0cd57840cb304255a697ddd04  candidate/src/main.rs",
+    "adb4d9a29528c9f9f4ca0dbd8d5049335f04a04ea069b2762d81eab080bee9ee  candidate/src/publisher.rs",
+    "f46b76cef0252cead942119c5d0cf433cb9db968e8c124d311669750c906f082  base/Cargo.toml",
+    "b00f0afb1e4c90494122c42c607fda5ebac0a36805291faec15bf3482ea44f89  base/Cargo.lock",
+    "f46b76cef0252cead942119c5d0cf433cb9db968e8c124d311669750c906f082  candidate/Cargo.toml",
+    "b00f0afb1e4c90494122c42c607fda5ebac0a36805291faec15bf3482ea44f89  candidate/Cargo.lock"
+  ],
+  "fixture_runner_sha256": "2e1c3bb89e1d796f7beb9db418fb89fa03fb35eda140fe6f2cb0c4c8b0899922",
+  "simulator_controller_sha256": "b26caeb3bf4070f6cef02f2e5413174c1eee84587d51739c3cfa5ade928bc8d5",
+  "simulator_cleanup": {
+    "owned_device_deleted": true,
+    "state_before_cleanup": "Booted"
+  },
+  "platforms": {
+    "mac": {
+      "target": "aarch64-apple-darwin",
+      "rustc": "1.99.1"
+    },
+    "ios": {
+      "target": "aarch64-apple-ios-sim",
+      "runtime": "iOS 26.5",
+      "rustc": "1.95.0"
+    }
+  },
+  "live_runtime": {
+    "mac-smoke": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2153.522,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 3295.004,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "median_paired_ratio": 1.5300535587748814
+      }
+    ],
+    "mac-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2065.383,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 2765.422,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 2772.549,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 2467.84,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 2,
+        "side": "base",
+        "elapsed_ms": 3885.755,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 2,
+        "side": "candidate",
+        "elapsed_ms": 2685.189,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 3,
+        "side": "candidate",
+        "elapsed_ms": 2510.891,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 3,
+        "side": "base",
+        "elapsed_ms": 2843.77,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 4,
+        "side": "base",
+        "elapsed_ms": 2731.667,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "pair": 4,
+        "side": "candidate",
+        "elapsed_ms": 2622.216,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 5,
+        "side": "candidate",
+        "elapsed_ms": 2617.034,
+        "worker_cleanup": true,
+        "binary_sha256": "7aeb6ceac9f8484c7672b4bf1afc2fdde3df4e7e30e16298e087d30d8a6e4e2a"
+      },
+      {
+        "pair": 5,
+        "side": "base",
+        "elapsed_ms": 2670.056,
+        "worker_cleanup": true,
+        "binary_sha256": "8ea4e21651fb8e5b30de788f810fa2fb18f25280bc5c20e91a75c166920b1dd8"
+      },
+      {
+        "median_paired_ratio": 0.9700372571248643
+      }
+    ],
+    "ios-live": [
+      {
+        "pair": 0,
+        "side": "base",
+        "elapsed_ms": 2371.151,
+        "worker_cleanup": true,
+        "binary_sha256": "1338f1b14f6b6edf031af3b5589db7a0cc6f3d427cf5fdf1b51770307b68ed49"
+      },
+      {
+        "pair": 0,
+        "side": "candidate",
+        "elapsed_ms": 3411.014,
+        "worker_cleanup": true,
+        "binary_sha256": "a015291011ecf6f726cfdefea2f70c261fa1a011f515aaa6a2f954fa0ee3a305"
+      },
+      {
+        "pair": 1,
+        "side": "candidate",
+        "elapsed_ms": 3442.719,
+        "worker_cleanup": true,
+        "binary_sha256": "a015291011ecf6f726cfdefea2f70c261fa1a011f515aaa6a2f954fa0ee3a305"
+      },
+      {
+        "pair": 1,
+        "side": "base",
+        "elapsed_ms": 3300.907,
+        "worker_cleanup": true,
+        "binary_sha256": "1338f1b14f6b6edf031af3b5589db7a0cc6f3d427cf5fdf1b51770307b68ed49"
+      },
+      {
+        "median_paired_ratio": 1.2407546512155196
+      }
+    ]
+  },
+  "parser": {
+    "target": "aarch64-apple-darwin",
+    "source_sha256": "c741c21ba7b5b822f3ebb20fc0ee20f569023802570fadd4dc9f614116f0a6fd",
+    "binary_sha256": "41a711e84f41471d9991eaf1121c0238b08f396de545119aa78f53d31ab244a6",
+    "calls_per_batch": 400000,
+    "samples": {
+      "typical": [
+        {
+          "pair": 0,
+          "baseline_ns": 132.516,
+          "candidate_ns": 91.461
+        },
+        {
+          "pair": 1,
+          "baseline_ns": 133.273,
+          "candidate_ns": 92.154
+        },
+        {
+          "pair": 2,
+          "baseline_ns": 132.575,
+          "candidate_ns": 92.679
+        },
+        {
+          "pair": 3,
+          "baseline_ns": 132.187,
+          "candidate_ns": 92.933
+        },
+        {
+          "pair": 4,
+          "baseline_ns": 132.998,
+          "candidate_ns": 91.692
+        },
+        {
+          "pair": 5,
+          "baseline_ns": 133.738,
+          "candidate_ns": 92.615
+        },
+        {
+          "pair": 6,
+          "baseline_ns": 133.828,
+          "candidate_ns": 91.96
+        },
+        {
+          "pair": 7,
+          "baseline_ns": 131.62,
+          "candidate_ns": 92.89
+        }
+      ],
+      "near_limit": [
+        {
+          "pair": 0,
+          "baseline_ns": 368.338,
+          "candidate_ns": 150.579
+        },
+        {
+          "pair": 1,
+          "baseline_ns": 371.268,
+          "candidate_ns": 149.825
+        },
+        {
+          "pair": 2,
+          "baseline_ns": 370.651,
+          "candidate_ns": 150.882
+        },
+        {
+          "pair": 3,
+          "baseline_ns": 376.604,
+          "candidate_ns": 149.933
+        },
+        {
+          "pair": 4,
+          "baseline_ns": 375.664,
+          "candidate_ns": 150.011
+        },
+        {
+          "pair": 5,
+          "baseline_ns": 374.69,
+          "candidate_ns": 149.832
+        },
+        {
+          "pair": 6,
+          "baseline_ns": 373.128,
+          "candidate_ns": 156.075
+        },
+        {
+          "pair": 7,
+          "baseline_ns": 374.212,
+          "candidate_ns": 151.581
+        }
+      ],
+      "over_limit": [
+        {
+          "pair": 0,
+          "baseline_ns": 341.275,
+          "candidate_ns": 31.515
+        },
+        {
+          "pair": 1,
+          "baseline_ns": 341.838,
+          "candidate_ns": 31.224
+        },
+        {
+          "pair": 2,
+          "baseline_ns": 342.598,
+          "candidate_ns": 31.309
+        },
+        {
+          "pair": 3,
+          "baseline_ns": 341.277,
+          "candidate_ns": 31.279
+        },
+        {
+          "pair": 4,
+          "baseline_ns": 342.391,
+          "candidate_ns": 31.795
+        },
+        {
+          "pair": 5,
+          "baseline_ns": 340.576,
+          "candidate_ns": 31.646
+        },
+        {
+          "pair": 6,
+          "baseline_ns": 339.536,
+          "candidate_ns": 31.574
+        },
+        {
+          "pair": 7,
+          "baseline_ns": 341.293,
+          "candidate_ns": 31.356
+        }
+      ]
+    }
+  },
+  "application_builds": {
+    "mac_release_test_executable": {
+      "binary_path": "kiwix_app-78a834559371fefd",
+      "binary_sha256": "c89ff026a8f1f23a4af65e1eda461286b06f8192eb19ea87999ff321c95a1c7c",
+      "source_sha256": "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520"
+    },
+    "mac_discovery_tests_passed": 11,
+    "ios_locked_app_library_checks": {
+      "aarch64-apple-ios-sim": {
+        "source_sha256": "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520",
+        "rustc": "1.95.0",
+        "artifacts": [
+          {
+            "file": "libkiwix_app-04c232129cef22fb.rmeta",
+            "sha256": "cecf7aa706321001add436de20c2c6ebff0457c928a3dc3190a2212c27c6e8ac"
+          }
+        ]
+      },
+      "aarch64-apple-ios": {
+        "source_sha256": "105108408b6fed53405921231397bed73ec1fb0ffb5c9466c47a6c71a0828520",
+        "rustc": "1.95.0",
+        "artifacts": [
+          {
+            "file": "libkiwix_app-a4a2e1c656d8a8de.rmeta",
+            "sha256": "b8963012862845fc140361803ee2367d7fb26b05edb91c0ad227cb15bb740949"
+          }
+        ]
+      }
+    },
+    "mac_loopback_restricted": {
+      "passed": 130,
+      "failed": 1,
+      "ignored": 14,
+      "failed_test": "localswarm::tests::source_revocation_stops_buffered_throttled_chunks_and_retires_the_entire_offer",
+      "bonjour_status": -65563
+    },
+    "mac_native_runs": [
+      {
+        "label": "mac-app-native-revocation",
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1285 filtered out; finished in 2.05s",
+        "exit": 0
+      },
+      {
+        "label": "mac-app-live-route",
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1285 filtered out; finished in 1.07s",
+        "exit": 0
+      },
+      {
+        "label": "mac-app-live-concurrent",
+        "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1285 filtered out; finished in 1.14s",
+        "exit": 0
+      }
+    ],
+    "mac_native_temp_profiles_empty": true
+  }
+}

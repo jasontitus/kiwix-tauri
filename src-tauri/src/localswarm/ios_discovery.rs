@@ -7,7 +7,7 @@
 //! run inside the operation that creates or processes the native reference.
 //! One address registration can own multiple A records on the same reference.
 use super::{protocol, truncate_utf8, library_addresses, library_instance, valid_library_session_id, Manifest, Peer, MAX_ADVERTISEMENTS, MAX_PEERS, MAX_TXT, SERVICE};
-use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, ffi::{c_char, c_void, CString},
+use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, ffi::{c_char, c_void, CStr, CString},
     ptr, rc::Rc, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, Ordering}},
     thread, time::{Duration, Instant}};
 use tokio::sync::{mpsc, oneshot};
@@ -18,6 +18,8 @@ const ADD: u32 = 2;
 const INCLUDE_PEERS: u32 = 0x20000 | 0x100000; // IncludeP2P | IncludeAWDL.
 const MAX_SOURCES: usize = MAX_PEERS * 2;
 const MAX_EVENTS: usize = 1024;
+const DNS_SERVICE_NAME_CAPACITY: usize = 1009; // kDNSServiceMaxDomainName
+const MAX_BROWSE_ID_BYTES: usize = 255;
 /// An unresolved record is expired after this long. A Watch event is the only
 /// other trigger for a resolve, so a transient timeout needs a bounded retry.
 const RESOLVE_TIMEOUT: Duration = Duration::from_secs(20);
@@ -513,11 +515,11 @@ impl Engine {
                 if ty.trim_end_matches('.') != "_localswarm._tcp" || !domain.eq_ignore_ascii_case("local.") || interface == 0 { return; }
                 let Ok(name) = CString::new(name) else { return; };
                 let Ok(ty) = CString::new(ty) else { return; }; let Ok(domain) = CString::new(domain) else { return; };
-                let mut full = [0 as c_char; 1009];
-                if unsafe { DNSServiceConstructFullName(full.as_mut_ptr(), name.as_ptr(), ty.as_ptr(), domain.as_ptr()) } != 0 { return; }
-                let Some(id) = (unsafe { bounded_string(full.as_ptr(), full.len()) }) else { return; };
-                if id.len() > 255 { return; }
-                let key = SourceKey { id, interface };
+                let mut full = [0u8; DNS_SERVICE_NAME_CAPACITY];
+                // SAFETY: full has the SDK's required capacity and the input C strings live through the call.
+                if unsafe { DNSServiceConstructFullName(full.as_mut_ptr().cast(), name.as_ptr(), ty.as_ptr(), domain.as_ptr()) } != 0 { return; }
+                let Some(id) = browse_id(&full) else { return; };
+                let key = SourceKey { id: id.to_owned(), interface };
                 if !add { self.remove_source(&key); return; }
                 if self.sources.contains_key(&key) || self.sources.len() >= MAX_SOURCES { return; }
                 let mut watches = [0; 2];
@@ -606,11 +608,18 @@ impl Engine {
 /// lifetime of the record.
 fn direct_interface(index: u32) -> bool {
     if index == 0 { return false; }
-    let mut name = [0 as c_char; 64];
-    let resolved = unsafe { libc::if_indextoname(index, name.as_mut_ptr()) };
-    if resolved.is_null() { return false; }
-    let name = unsafe { std::ffi::CStr::from_ptr(resolved) }.to_bytes();
-    name.starts_with(b"awdl") || name.starts_with(b"llw")
+    let mut output = [0u8; libc::IF_NAMESIZE];
+    // SAFETY: if_indextoname writes at most IF_NAMESIZE bytes into the owned output buffer.
+    if unsafe { libc::if_indextoname(index, output.as_mut_ptr().cast()) }.is_null() { return false; }
+    CStr::from_bytes_until_nul(&output).is_ok_and(|name| {
+        let name = name.to_bytes();
+        name.starts_with(b"awdl") || name.starts_with(b"llw")
+    })
+}
+
+fn browse_id(output: &[u8]) -> Option<&str> {
+    let bounded = output.get(..MAX_BROWSE_ID_BYTES + 1).unwrap_or(output);
+    CStr::from_bytes_until_nul(bounded).ok()?.to_str().ok()
 }
 
 fn append_txt(txt: &mut Vec<u8>, key: &str, value: &str) -> Result<(), String> {
@@ -728,6 +737,32 @@ unsafe extern "C" fn record_callback(_: Ref, _: Ref, _: u32, code: i32, context:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browse_id_checks_termination_utf8_and_byte_limit() {
+        let name = "Kiwix\\. 中文._localswarm._tcp.local.";
+        let mut output = [0xff; DNS_SERVICE_NAME_CAPACITY];
+        output[..name.len()].copy_from_slice(name.as_bytes());
+        output[name.len()] = 0;
+        assert_eq!(browse_id(&output), Some(name));
+
+        output.fill(b'a');
+        output[MAX_BROWSE_ID_BYTES] = 0;
+        assert_eq!(browse_id(&output).unwrap().len(), MAX_BROWSE_ID_BYTES);
+        output[MAX_BROWSE_ID_BYTES] = b'a';
+        output[MAX_BROWSE_ID_BYTES + 1] = 0;
+        assert_eq!(browse_id(&output), None);
+        assert_eq!(browse_id(b"unterminated"), None);
+        assert_eq!(browse_id(b"invalid\xff\0"), None);
+    }
+
+    #[test]
+    fn direct_interface_rejects_missing_and_ordinary_interfaces() {
+        assert!(!direct_interface(0));
+        assert!(!direct_interface(u32::MAX));
+        let loopback = nix::net::if_::if_nametoindex("lo0").unwrap();
+        assert!(!direct_interface(loopback));
+    }
 
     #[test]
     fn callback_cookie_only_routes_during_its_own_native_call() {
