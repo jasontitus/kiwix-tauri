@@ -121,17 +121,14 @@ struct VolumeSpace {
 #[cfg(unix)]
 fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
     use std::os::unix::ffi::OsStrExt;
-    let path = std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))?;
-    // SAFETY: `statvfs` is plain old data and the call fully initializes it on
-    // success; `path` is a valid NUL-terminated string for the call.
-    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statvfs(path.as_ptr(), &mut stat) } != 0 {
-        return Err(io::Error::last_os_error());
+    // rustix reports an interior NUL as EINVAL; keep the path diagnostic.
+    if path.as_os_str().as_bytes().contains(&0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
     }
-    // Field widths differ by platform; the casts are widening where needed.
-    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
-    let (fragment, available, total) = (stat.f_frsize as u64, stat.f_bavail as u64, stat.f_blocks as u64);
+    let stat = rustix::fs::statvfs(path).map_err(io::Error::from)?;
+    // `f_frsize` is the fragment size; rustix widens every field to u64 and its
+    // Linux backend falls back to `f_bsize` when the kernel reports no fragment.
+    let (fragment, available, total) = (stat.f_frsize, stat.f_bavail, stat.f_blocks);
     Ok(VolumeSpace { available: fragment.saturating_mul(available), total: fragment.saturating_mul(total) })
 }
 
@@ -216,5 +213,13 @@ mod tests {
         // root and succeeds, as it did under fs2.
         #[cfg(unix)]
         assert!(available_space(dir.join(format!("missing-{}", uuid::Uuid::new_v4()))).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let nul = Path::new(std::ffi::OsStr::from_bytes(b"bad\0path"));
+            let error = total_space(nul).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(error.to_string(), "path contains a NUL byte");
+        }
     }
 }
