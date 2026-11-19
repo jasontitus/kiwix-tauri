@@ -1,0 +1,349 @@
+{
+  "stock_app_source": "549f91e2423893cc9c8957b690b1e838d67e6e9f",
+  "candidate_overlay_sha256": "8c1127da6bcaad72d2cb9171a9fc37c31b90924b5bfcac0f67c34eb7ff6676dd",
+  "test_only_instrumentation_sha256": "e3bc953562b2f871ce1c30208f3a4f4019934e3e8f5859e0a4b6c0ffadf9b28c",
+  "binary_sha256": {
+    "stock-app-test": "291eafc43d19768c9faa55086eced33de1271cdf068e55ff642d59660debea4c",
+    "candidate-app-test": "052e4db167d6b5a63935c69ed7102a6753fad714d9bc3d938fed6e899d858d26"
+  },
+  "platform": "Linux x86-64, Intel Core i7-8809G (AVX2 and BMI2, no SHA extension)",
+  "toolchain": [
+    "cargo 1.100.0 (3acc79c0c 2026-11-05)",
+    "release: 1.100.0",
+    "commit-hash: 3acc79c0c841844675bc53a605922dbfc441e750",
+    "commit-date: 2026-11-05",
+    "host: x86_64-unknown-linux-gnu",
+    "libgit2: 1.9.6 (sys:0.21.0 vendored)",
+    "libcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)",
+    "ssl: OpenSSL 3.6.3 9 Jun 2026",
+    "os: Ubuntu 24.4.0 (noble) [64-bit]",
+    "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+    "binary: rustc",
+    "commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a",
+    "commit-date: 2026-11-09",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.100.0",
+    "LLVM version: 23.1.5"
+  ],
+  "unit_notes": "App-observed wall time includes internal 250 ms status updates and independent polling at 10 ms. Whole-test clocks include setup and verification. Profiles are on tmpfs, Docker network is loopback only.",
+  "cases": {
+    "climate": {
+      "fixture_name": "wikipedia_en_climate_change_mini_2024-06.zim",
+      "fixture_bytes": 8978471,
+      "fixture_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+      "median": {
+        "share_ms": {
+          "stock": 361.64053,
+          "candidate": 360.9104,
+          "paired_candidate_over_stock": 0.996427
+        },
+        "download_ms": {
+          "stock": 593.36443,
+          "candidate": 597.12518,
+          "paired_candidate_over_stock": 1.004486
+        }
+      },
+      "runs": [
+        {
+          "stage": "warmup",
+          "pair": 0,
+          "variant": "stock",
+          "share_ms": 362.25008,
+          "download_ms": 626.96791,
+          "whole_test_elapsed_s": 3.312,
+          "whole_test_user_s": 0.429,
+          "whole_test_system_s": 0.168
+        },
+        {
+          "stage": "warmup",
+          "pair": 0,
+          "variant": "candidate",
+          "share_ms": 362.16118,
+          "download_ms": 591.29571,
+          "whole_test_elapsed_s": 3.278,
+          "whole_test_user_s": 0.417,
+          "whole_test_system_s": 0.118
+        },
+        {
+          "stage": "measured",
+          "pair": 1,
+          "variant": "stock",
+          "share_ms": 361.31835,
+          "download_ms": 592.39219,
+          "whole_test_elapsed_s": 3.249,
+          "whole_test_user_s": 0.361,
+          "whole_test_system_s": 0.113
+        },
+        {
+          "stage": "measured",
+          "pair": 1,
+          "variant": "candidate",
+          "share_ms": 359.81139,
+          "download_ms": 596.80814,
+          "whole_test_elapsed_s": 3.246,
+          "whole_test_user_s": 0.391,
+          "whole_test_system_s": 0.115
+        },
+        {
+          "stage": "measured",
+          "pair": 2,
+          "variant": "candidate",
+          "share_ms": 361.8232,
+          "download_ms": 593.54955,
+          "whole_test_elapsed_s": 3.25,
+          "whole_test_user_s": 0.383,
+          "whole_test_system_s": 0.126
+        },
+        {
+          "stage": "measured",
+          "pair": 2,
+          "variant": "stock",
+          "share_ms": 361.00488,
+          "download_ms": 592.65062,
+          "whole_test_elapsed_s": 3.248,
+          "whole_test_user_s": 0.357,
+          "whole_test_system_s": 0.111
+        },
+        {
+          "stage": "measured",
+          "pair": 3,
+          "variant": "stock",
+          "share_ms": 361.99515,
+          "download_ms": 618.80844,
+          "whole_test_elapsed_s": 3.276,
+          "whole_test_user_s": 0.412,
+          "whole_test_system_s": 0.152
+        },
+        {
+          "stage": "measured",
+          "pair": 3,
+          "variant": "candidate",
+          "share_ms": 361.02055,
+          "download_ms": 597.44221,
+          "whole_test_elapsed_s": 3.258,
+          "whole_test_user_s": 0.383,
+          "whole_test_system_s": 0.112
+        },
+        {
+          "stage": "measured",
+          "pair": 4,
+          "variant": "candidate",
+          "share_ms": 361.88971,
+          "download_ms": 617.09672,
+          "whole_test_elapsed_s": 3.272,
+          "whole_test_user_s": 0.418,
+          "whole_test_system_s": 0.128
+        },
+        {
+          "stage": "measured",
+          "pair": 4,
+          "variant": "stock",
+          "share_ms": 363.31901,
+          "download_ms": 592.91494,
+          "whole_test_elapsed_s": 3.282,
+          "whole_test_user_s": 0.391,
+          "whole_test_system_s": 0.106
+        },
+        {
+          "stage": "measured",
+          "pair": 5,
+          "variant": "stock",
+          "share_ms": 361.96271,
+          "download_ms": 593.81393,
+          "whole_test_elapsed_s": 3.253,
+          "whole_test_user_s": 0.383,
+          "whole_test_system_s": 0.143
+        },
+        {
+          "stage": "measured",
+          "pair": 5,
+          "variant": "candidate",
+          "share_ms": 360.80026,
+          "download_ms": 593.79171,
+          "whole_test_elapsed_s": 3.251,
+          "whole_test_user_s": 0.379,
+          "whole_test_system_s": 0.103
+        },
+        {
+          "stage": "measured",
+          "pair": 6,
+          "variant": "candidate",
+          "share_ms": 358.94635,
+          "download_ms": 618.63304,
+          "whole_test_elapsed_s": 3.275,
+          "whole_test_user_s": 0.396,
+          "whole_test_system_s": 0.126
+        },
+        {
+          "stage": "measured",
+          "pair": 6,
+          "variant": "stock",
+          "share_ms": 360.46666,
+          "download_ms": 598.5157,
+          "whole_test_elapsed_s": 3.284,
+          "whole_test_user_s": 0.412,
+          "whole_test_system_s": 0.133
+        }
+      ]
+    },
+    "wikipedia100": {
+      "fixture_name": "wikipedia_en_100_maxi_2024-01.zim",
+      "fixture_bytes": 36522122,
+      "fixture_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+      "median": {
+        "share_ms": {
+          "stock": 360.95443,
+          "candidate": 359.95259,
+          "paired_candidate_over_stock": 0.996045
+        },
+        "download_ms": {
+          "stock": 739.27693,
+          "candidate": 740.90718,
+          "paired_candidate_over_stock": 1.001948
+        }
+      },
+      "runs": [
+        {
+          "stage": "warmup",
+          "pair": 0,
+          "variant": "stock",
+          "share_ms": 358.8518,
+          "download_ms": 738.71548,
+          "whole_test_elapsed_s": 3.952,
+          "whole_test_user_s": 1.159,
+          "whole_test_system_s": 0.356
+        },
+        {
+          "stage": "warmup",
+          "pair": 0,
+          "variant": "candidate",
+          "share_ms": 358.98612,
+          "download_ms": 748.74338,
+          "whole_test_elapsed_s": 3.964,
+          "whole_test_user_s": 1.165,
+          "whole_test_system_s": 0.314
+        },
+        {
+          "stage": "measured",
+          "pair": 1,
+          "variant": "stock",
+          "share_ms": 360.53764,
+          "download_ms": 741.25919,
+          "whole_test_elapsed_s": 3.964,
+          "whole_test_user_s": 1.096,
+          "whole_test_system_s": 0.298
+        },
+        {
+          "stage": "measured",
+          "pair": 1,
+          "variant": "candidate",
+          "share_ms": 358.73768,
+          "download_ms": 736.89243,
+          "whole_test_elapsed_s": 3.936,
+          "whole_test_user_s": 1.159,
+          "whole_test_system_s": 0.291
+        },
+        {
+          "stage": "measured",
+          "pair": 2,
+          "variant": "candidate",
+          "share_ms": 360.80352,
+          "download_ms": 740.12061,
+          "whole_test_elapsed_s": 3.962,
+          "whole_test_user_s": 1.178,
+          "whole_test_system_s": 0.314
+        },
+        {
+          "stage": "measured",
+          "pair": 2,
+          "variant": "stock",
+          "share_ms": 360.50778,
+          "download_ms": 739.00123,
+          "whole_test_elapsed_s": 3.952,
+          "whole_test_user_s": 1.113,
+          "whole_test_system_s": 0.287
+        },
+        {
+          "stage": "measured",
+          "pair": 3,
+          "variant": "stock",
+          "share_ms": 361.37122,
+          "download_ms": 739.55264,
+          "whole_test_elapsed_s": 3.933,
+          "whole_test_user_s": 1.09,
+          "whole_test_system_s": 0.309
+        },
+        {
+          "stage": "measured",
+          "pair": 3,
+          "variant": "candidate",
+          "share_ms": 360.31666,
+          "download_ms": 745.97445,
+          "whole_test_elapsed_s": 3.945,
+          "whole_test_user_s": 1.184,
+          "whole_test_system_s": 0.275
+        },
+        {
+          "stage": "measured",
+          "pair": 4,
+          "variant": "candidate",
+          "share_ms": 358.56397,
+          "download_ms": 741.69375,
+          "whole_test_elapsed_s": 3.939,
+          "whole_test_user_s": 1.168,
+          "whole_test_system_s": 0.291
+        },
+        {
+          "stage": "measured",
+          "pair": 4,
+          "variant": "stock",
+          "share_ms": 359.58093,
+          "download_ms": 739.9319,
+          "whole_test_elapsed_s": 3.93,
+          "whole_test_user_s": 1.124,
+          "whole_test_system_s": 0.266
+        },
+        {
+          "stage": "measured",
+          "pair": 5,
+          "variant": "stock",
+          "share_ms": 362.67889,
+          "download_ms": 737.26471,
+          "whole_test_elapsed_s": 3.934,
+          "whole_test_user_s": 1.074,
+          "whole_test_system_s": 0.298
+        },
+        {
+          "stage": "measured",
+          "pair": 5,
+          "variant": "candidate",
+          "share_ms": 360.35433,
+          "download_ms": 773.63728,
+          "whole_test_elapsed_s": 4.002,
+          "whole_test_user_s": 1.286,
+          "whole_test_system_s": 0.329
+        },
+        {
+          "stage": "measured",
+          "pair": 6,
+          "variant": "candidate",
+          "share_ms": 359.58853,
+          "download_ms": 726.80281,
+          "whole_test_elapsed_s": 3.925,
+          "whole_test_user_s": 1.153,
+          "whole_test_system_s": 0.297
+        },
+        {
+          "stage": "measured",
+          "pair": 6,
+          "variant": "stock",
+          "share_ms": 362.24707,
+          "download_ms": 738.5929,
+          "whole_test_elapsed_s": 3.935,
+          "whole_test_user_s": 1.067,
+          "whole_test_system_s": 0.315
+        }
+      ]
+    }
+  }
+}
