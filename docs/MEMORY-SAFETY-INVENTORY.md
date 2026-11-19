@@ -24,6 +24,10 @@ Before the checked Unicode engine was adopted, a standalone macOS ARM64 release 
 
 The same probe with GPL `380d84d` emitted 974 diagnostics across 15 package versions. The ICU normalization stack disappeared from the query engine's release graph. This probe covers the two standalone crates. The app also processes untrusted data in other Rust and native libraries. [Updated compiler counts](audit/2026-11-18-checked-unicode-dependencies.json)
 
+## Performance follow-up
+
+- [ ] Decide which platforms should enable Zimru’s `retained-cluster-buffers` feature by testing the release app against its current reader and libzim. Compare random articles, first article and media ranges on the same archives. Record elapsed time, CPU, peak memory and response-byte equality. Include physical Android and iOS measurements before selecting mobile defaults. Android emulator results varied by archive. [Four-platform measurements](benchmarks/2026-11-18-retained-clusters.md) · [Selectable MIT implementation](https://github.com/jasontitus/zimru-xapian/commit/1c0f5e3a8d748bf7304588e7db73022555323561)
+
 ## Historical search-only integration, 2026-11-18
 
 At `eccfcbe`, Kiwix opened the embedded Glass index on retained archive files through the Rust APIs of the MIT Zimru reader and the separate GPL-3.0-or-later search engine. Full-text search, indexed suggestions and title-prefix fallback use this path. Kiwix resolves redirects, reads article prefixes for excerpts and validates the checksum against the retained parts. The native bridge still opens the archive and handles article and media reads, metadata, title iteration and structural integrity checks. The historical A1–A5 rows below describe the starting point. See the [private dependency pins and verification instructions](DEPENDENCIES.md#rust-archive-search).
