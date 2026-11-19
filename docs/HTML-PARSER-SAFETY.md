@@ -33,6 +33,24 @@ The scanner also ran in release helpers on the ARM64 iOS 26.5 simulator and Andr
 
 A second experiment holds the checked scanner constant and replaces Tendril's single-threaded UTF-8 and byte storage with checked Rust. Independent review found that a capacity hint on a shared slice could force an allocation or panic. The corrected implementation preserves the shared slice and has a regression test. One million comparisons covered split UTF-8, error positions and shared-string mutations. The two real articles took 17.4% and 18.7% longer on the Mac, and the four-input sanitizer took 10.2% longer. An earlier storage version took 29.8–35.2% longer on the six held-out Linux articles with app-sized chunks. The prototype covers a subset of Tendril's API. Improving its speed, testing its memory use on mobile and replacing the dynamic atom interner remain open. [Storage prototype, review findings and measurements](https://github.com/jasontitus/zimru-xapian/blob/4c884281d8333f87d6d9e676da90f947bee9495a/experiments/html-storage/README.md)
 
+## Application integration
+
+In the locally signed ARM64 Mac app at `f7fc9b8`, the linked binary's dependency file names both checked parser sources. The packaged executable's machine-code section matches the linker output. The bundle contains all 49 mapped license resources, including the five html5ever notices. A fresh compiler inventory found zero unsafe sites in either checked parser crate on host or target. Tendril and the atom interner still process parser data. [Compiler inventory](audit/2026-11-18-macos-checked-html-compiled-unsafe.json)
+
+Three Mac binaries exercised the normal article preview and MHTML export commands. Each ran in a fresh profile for each archive in six rounds. All six orders of the three binaries were used. For each of the seven articles, all three builds returned identical preview JSON in every round, including excerpts and thumbnail data (126 responses). The two exported articles each produced identical MHTML across builds and rounds after replacing the random MIME boundary (36 files). Native zimdump returned the same original bytes for all 31 distinct exported parts.
+
+| Workload | libzim 9.8.2 app (ms) | Previous Rust app (ms) | Checked parser app (ms) |
+|---|---:|---:|---:|
+| Climate, three previews | 23.50 | 22.13 | 23.79 |
+| Wikipedia 100, three previews | 51.56 | 54.63 | 54.09 |
+| Climate, 27-part MHTML export | 42.82 | 53.10 | 42.05 |
+| Test archive, one preview | 4.23 | 2.90 | 2.77 |
+| Test archive, four-part MHTML export | 27.78 | 29.30 | 28.82 |
+
+Times are medians of six per-build observations on a shared Mac. Preview time includes the complete local request and response. Export time includes writing the file. Pair-to-pair variation was substantial. For the Climate export, the checked parser app took between 0.62× and 1.50× the previous Rust app's time. These observations cover the listed articles and exports. [Build identities, resource digests and all timing pairs](benchmarks/2026-11-18-checked-html-app-workflows.json)
+
+The first complete Mac release test run reported one profile-lock contention error when immediately reopening a temporary profile. The same executable then passed all 1,257 active tests with four workers and again at the original concurrency. Each run skipped 25 tests. All 128 isolated repetitions of the restart test passed. The original lock holder was unidentified. The path opens the profile lock before reading saved settings and uses neither checked parser. A separate run of the corpus test compared bounded and ordinary parsing of the real Climate and Nollywood articles.
+
 ## Verification
 
 Run the search equivalence test and the manual release timing comparison from the app checkout.
