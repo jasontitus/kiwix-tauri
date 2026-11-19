@@ -1541,7 +1541,7 @@ pub(super) fn engine_files(path: &Path, cancel: Option<&CancellationToken>) -> R
 mod tests {
     use super::*;
     use std::fs;
-    use tempfile::tempdir;
+    use super::super::fixtures;
 
     #[test]
     fn layout_is_bounded_unique_and_contains_only_preceding_parent_directories() {
@@ -1575,7 +1575,7 @@ mod tests {
     #[test]
     fn substituted_model_parent_never_opens_the_target_cache() {
         use std::os::unix::fs::symlink;
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let base = profile.path().canonicalize().unwrap();
         let target = base.join("unrelated");
         fs::create_dir(&target).unwrap();
@@ -1587,7 +1587,7 @@ mod tests {
 
     #[test]
     fn concurrent_installer_and_mutated_staging_preserve_unrelated_files() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         assert!(Lease::admit(&root).is_err());
@@ -1617,7 +1617,7 @@ mod tests {
 
     #[test]
     fn an_unverified_partial_is_preserved_until_an_authenticated_retry() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (mut journal, dir) = Journal::create(&lease.parent, false).unwrap();
@@ -1644,7 +1644,7 @@ mod tests {
 
     #[test]
     fn truncated_bundled_input_leaves_no_published_or_partial_model() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let error = bundled(
@@ -1665,11 +1665,11 @@ mod tests {
 
     #[test]
     fn torn_headers_and_rows_do_not_authorize_cleanup_or_block_a_new_generation() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let torn = root.join(format!("{PENDING}unrelated.jsonl"));
-        fs::write(&torn, b"{").unwrap();
+        fixtures::write_private(&torn, b"{").unwrap();
         let (mut journal, dir) = Journal::create(&lease.parent, false).unwrap();
         let pending = journal.pending_name();
         journal.file.write_all(b"{broken row").unwrap();
@@ -1682,7 +1682,7 @@ mod tests {
 
     #[test]
     fn captured_owned_file_can_resume_and_preserves_a_reused_original_name() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let original = file(&lease.parent, "entry".as_ref(), true).unwrap();
@@ -1698,7 +1698,7 @@ mod tests {
 
     #[test]
     fn absent_staging_directory_and_captured_journal_resume_after_interruption() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         for captured in [false, true] {
             let lease = Lease::admit(&root).unwrap();
@@ -1734,7 +1734,7 @@ mod tests {
                 self.0.flush()
             }
         }
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (mut journal, dir) = Journal::create(&lease.parent, false).unwrap();
@@ -1756,7 +1756,7 @@ mod tests {
 
     #[test]
     fn legacy_removal_detaches_without_deleting_existing_contents() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         drop(lease);
@@ -1773,7 +1773,7 @@ mod tests {
 
     #[test]
     fn failed_final_selection_keeps_the_old_fallback_and_factory_removal_choice() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let old = new_directory(&lease.parent, super::super::MODEL_DIR.as_ref()).unwrap();
@@ -1822,7 +1822,7 @@ mod tests {
 
     #[test]
     fn failed_install_preserves_same_inode_edits_and_removes_unchanged_live_writes() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         for changed in [true, false] {
@@ -1866,7 +1866,7 @@ mod tests {
 
     #[test]
     fn two_records_with_missing_members_do_not_block_explicit_repair_or_delete() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (old, old_dir) = Journal::create(&lease.parent, false).unwrap();
@@ -1893,7 +1893,7 @@ mod tests {
     #[ignore = "requires the verified KIWIX_TEST_KOKORO_BUNDLED factory asset"]
     fn durable_previous_is_restored_when_selected_bytes_change_without_a_size_change() {
         let fixture = std::env::var_os("KIWIX_TEST_KOKORO_BUNDLED").unwrap();
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let cancel = CancellationToken::new();
@@ -1929,7 +1929,7 @@ mod tests {
 
     #[test]
     fn explicit_retry_detaches_a_changed_removal_without_erasing_the_payload() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (mut journal, dir) = Journal::create(&lease.parent, true).unwrap();
@@ -1956,7 +1956,7 @@ mod tests {
     #[test]
     fn inconclusive_model_access_keeps_both_selection_records_for_retry() {
         use std::os::unix::fs::PermissionsExt;
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (old, _) = Journal::create(&lease.parent, false).unwrap();
@@ -1990,7 +1990,7 @@ mod tests {
 
     #[test]
     fn complete_authentication_requires_a_member_that_partial_cleanup_can_skip() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (mut journal, dir) = Journal::create(&lease.parent, false).unwrap();
@@ -2016,7 +2016,7 @@ mod tests {
 
     #[test]
     fn reclaim_keeps_the_fallback_if_the_selection_directory_or_pointer_changed() {
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         let lease = Lease::admit(&root).unwrap();
         let (old, _) = Journal::create(&lease.parent, false).unwrap();
@@ -2054,11 +2054,53 @@ mod tests {
         assert!(check_space(limit + super::super::MODEL_BYTES - 1, true).is_err());
     }
 
+    #[cfg(all(unix, desktop))]
+    #[test]
+    fn desktop_profile_protects_voice_files_and_preserves_existing_shared_profiles() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let temp = tempfile::tempdir().unwrap();
+        let base = temp.path().canonicalize().unwrap();
+        let profile = base.join("fresh");
+        let _store = crate::store::Store::new(profile.clone()).unwrap();
+        assert_eq!(mode(&profile), 0o700);
+        let models = profile.join("models");
+        let lease = Lease::admit(&models).unwrap();
+        assert_eq!(mode(&models), 0o700);
+        assert_eq!(mode(&models.join(LOCK)), 0o600);
+        assert_eq!(lease.scratch().unwrap().metadata().unwrap().permissions().mode() & 0o777, 0o600);
+        let cache = models.join("voice-audio-v2");
+        let name = format!("{}.wav", "a".repeat(64));
+        let wav = super::super::wav_bytes(&[0.25], 24000);
+        drop(publish_audio(&cache, name.as_ref(), &wav).unwrap());
+        assert_eq!(mode(&cache), 0o700);
+        let entries: Vec<_> = fs::read_dir(&cache).unwrap()
+            .map(|entry| entry.unwrap().path()).collect();
+        assert_eq!(entries.len(), 3);
+        assert!(entries.contains(&cache.join(LOCK)));
+        assert!(entries.contains(&cache.join(format!("{}.receipt", "a".repeat(64)))));
+        assert!(entries.iter().any(|entry| entry.extension() == Some(OsStr::new("wav"))));
+        assert!(entries.iter().all(|entry| mode(entry) == 0o600));
+        assert!(cached_audio(&cache, name.as_ref()).unwrap().is_some());
+
+        let shared = base.join("shared");
+        fs::create_dir(&shared).unwrap();
+        fs::set_permissions(&shared, fs::Permissions::from_mode(0o775)).unwrap();
+        let sentinel = shared.join("existing");
+        fs::write(&sentinel, b"keep").unwrap();
+        let _shared_store = crate::store::Store::new(shared.clone()).unwrap();
+        let error = Lease::admit(&shared.join("models")).err().unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(mode(&shared), 0o775);
+        assert_eq!(fs::read(sentinel).unwrap(), b"keep");
+        assert!(!shared.join("models").exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn writable_namespace_and_linked_record_are_preserved() {
         use std::os::unix::fs::{symlink, PermissionsExt};
-        let profile = tempdir().unwrap();
+        let profile = fixtures::profile().unwrap();
         let root = profile.path().canonicalize().unwrap().join("models");
         fs::create_dir(&root).unwrap();
         fs::set_permissions(&root, fs::Permissions::from_mode(0o775)).unwrap();

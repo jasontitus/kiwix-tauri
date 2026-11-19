@@ -216,16 +216,15 @@ pub(in super::super) fn clean_cache(path: &Path, remove_all: bool) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::super::fixtures;
     use std::fs;
 
     #[test]
     fn missing_owned_audio_can_be_regenerated() {
-        let profile = tempfile::tempdir().unwrap();
-        let cache = profile
-            .path()
-            .canonicalize()
-            .unwrap()
-            .join("voice-audio-v2");
+        let profile = fixtures::profile().unwrap();
+        let models = profile.path().canonicalize().unwrap().join("models");
+        crate::fs_ext::create_private_dir_all(&models).unwrap();
+        let cache = models.join("voice-audio-v2");
         let key = "f".repeat(64);
         let name = format!("{key}.wav");
         let bytes = super::super::super::wav_bytes(&[0.25], 24000);
@@ -242,12 +241,10 @@ mod tests {
 
     #[test]
     fn retained_audio_and_receipts_preserve_even_a_valid_replacement_wav() {
-        let profile = tempfile::tempdir().unwrap();
-        let cache = profile
-            .path()
-            .canonicalize()
-            .unwrap()
-            .join("voice-audio-v2");
+        let profile = fixtures::profile().unwrap();
+        let models = profile.path().canonicalize().unwrap().join("models");
+        crate::fs_ext::create_private_dir_all(&models).unwrap();
+        let cache = models.join("voice-audio-v2");
         let key = "a".repeat(64);
         let name = format!("{key}.wav");
         let expected = super::super::super::wav_bytes(&[0.25, 0.5], 24000);
@@ -258,12 +255,13 @@ mod tests {
         let source = cache.join(&row.file);
         fs::rename(&source, cache.join("saved.wav")).unwrap();
         let other = super::super::super::wav_bytes(&[0.5, 0.75], 24000);
-        fs::write(&source, &other).unwrap();
+        fixtures::write_private(&source, &other).unwrap();
         assert!(cached_audio(&cache, name.as_ref()).is_err());
         let mut bytes = Vec::new();
         retained.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, expected);
         clean_cache(&cache, true).unwrap();
+        assert!(preserved_legacy(&models).1);
         assert_eq!(fs::read(&source).unwrap(), other);
         assert!(cache.join(receipt_name(&key)).is_file());
         assert!(cache.join("saved.wav").is_file());
