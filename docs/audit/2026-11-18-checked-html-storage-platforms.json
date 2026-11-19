@@ -1,0 +1,237 @@
+{
+  "source_commit": "f8ebacb919fdcb52cc332983233fb05f9d1f1290",
+  "primary_application_commit": "2d2a1cb1653d3c13a7a13f2695706e9b2fe774a9",
+  "source_equivalence": "The primary application differs from the tested adoption commit only in the performance guidance paragraph.",
+  "tendril": {
+    "version": "0.5.1",
+    "library_sha256": "8b920323cf4d6fb76053a1cd95837adcb3fd7afd9f8851fb1232f53e46f7c3e8",
+    "stream_sha256": "27f6c89997d1a995d4b6eda5f95d319f44ed120355a3978a0082760c7dbf8cd4",
+    "compiled_source": "The app, DOM and tokenizer resolve the checked local library through the locked dependency graph."
+  },
+  "linux": {
+    "checked_source_commit": "f8ebacb919fdcb52cc332983233fb05f9d1f1290",
+    "included_in_primary": "2d2a1cb1653d3c13a7a13f2695706e9b2fe774a9",
+    "host": "Ubuntu 24.04 x86-64",
+    "binary_sha256": "907326190ba3e7632e25de32142d5f2750e10cc22415eccf1fe076191e84b068",
+    "release_suite": {
+      "passed": 1240,
+      "failed": 0,
+      "ignored": 16
+    },
+    "observed_compiler_packages": {
+      "tendril": [
+        "tendril@0.5.1"
+      ],
+      "html5ever": [
+        "html5ever@0.39.0"
+      ],
+      "markup5ever": [
+        "markup5ever@0.39.0"
+      ],
+      "dom_query": [
+        "dom_query@0.28.0"
+      ],
+      "kiwix-workbench": [
+        "kiwix-workbench@0.1.0"
+      ]
+    },
+    "passed_runtime_groups": [
+      "single",
+      "reopen",
+      "split",
+      "image"
+    ],
+    "matches_previous_report_sha256": "6f50320c4c8810295522bb0f1951a5f477bc1259484fc212ef742e55dc5a6a4b",
+    "article": {
+      "articleBytes": 7669,
+      "originalSha256": "f5309503c148af7dc688cf9a50e53d2136a5823bd54c30488f291136e725815c",
+      "attachedResources": 24
+    },
+    "image": {
+      "bytes": 12414,
+      "sha256": "c11e2ccd984681167b7ea8e333882ca3c801cdb9fa302d402b9a46c266723811",
+      "mime": "image/webp",
+      "rangeStatus": 206,
+      "contentRange": "bytes 137-1111/12414"
+    }
+  },
+  "mobile_compile": {
+    "command": "cargo check --locked --offline --lib --features custom-protocol --target <triple>",
+    "architecture_metadata": {
+      "aarch64-apple-ios-sim": {
+        "tendril": {
+          "metadata_sha256": "01b7e1219c7a2b5fed84035413448066efd4ce5914a78a7c10689386560017ea",
+          "features": []
+        },
+        "markup5ever": {
+          "metadata_sha256": "99dda9368c03ea501d062cbece972f6aecf56359f6108a44034a7336483f3f11",
+          "features": []
+        },
+        "html5ever": {
+          "metadata_sha256": "9d08d6ba233fffd8a6b4a2a74e131c3f7f1fabddb79b59b149926441b49bb6df",
+          "features": []
+        },
+        "dom_query": {
+          "metadata_sha256": "3a79012175af179c9f470d756890b70682ebb1b4e6766fdbd4f9d0e609271776",
+          "features": []
+        },
+        "kiwix_app": {
+          "metadata_sha256": "d49eb3b80cc105931e7228eed9266e324dd7e082db9d537032287e5e55dee115",
+          "features": [
+            "custom-protocol"
+          ]
+        }
+      },
+      "aarch64-apple-ios": {
+        "tendril": {
+          "metadata_sha256": "c0765d0e3ee7a8ca1d0456bf8c3afa87dc60b75d8f21d177f314500cd500fecd",
+          "features": []
+        },
+        "markup5ever": {
+          "metadata_sha256": "ddf0145241201a549180693c5a457e6474cf1a253778a8ab816716badecb806c",
+          "features": []
+        },
+        "html5ever": {
+          "metadata_sha256": "7f4ed8bf092dfee3ec50cb524f8096bb15c50bd38e744cca5975b3df9cfb08d3",
+          "features": []
+        },
+        "dom_query": {
+          "metadata_sha256": "2fcdcc50090eea1307c04504beed4a078e742c5112fda86037a173c7df6935d6",
+          "features": []
+        },
+        "kiwix_app": {
+          "metadata_sha256": "1d2083361f8fb74f16296c645af2cf4a1709912e2315811398738a5764f7ef78",
+          "features": [
+            "custom-protocol"
+          ]
+        }
+      },
+      "aarch64-linux-android": {
+        "tendril": {
+          "metadata_sha256": "4d07aa4430f45e2315381115f6564c57dc68bdbf6701aab31d0aa912bcfa7abc",
+          "features": []
+        },
+        "markup5ever": {
+          "metadata_sha256": "1517499b21350c26eda593ba75da38cd07e31b77da61cbb8c13668f048bd43b6",
+          "features": []
+        },
+        "html5ever": {
+          "metadata_sha256": "7c64d367481241a42ce4a1bb214606265ce62f126f0dd4c59aacdf9017af0c54",
+          "features": []
+        },
+        "dom_query": {
+          "metadata_sha256": "cbb270cedbf7bbc03eb9fe7b4ffe3f73657e4bbcba408026f5b34f7ce6eaf9f9",
+          "features": []
+        },
+        "kiwix_app": {
+          "metadata_sha256": "b0ec593cdf096ed4e2e418a6eaeb02b93ba0274840ce2f81b9d463a2b2f230ba",
+          "features": [
+            "custom-protocol"
+          ]
+        }
+      },
+      "armv7-linux-androideabi": {
+        "tendril": {
+          "metadata_sha256": "3251bd9599a820da0e143fc01b233d7e66b4752a43464a10560cb0a4a11c52a7",
+          "features": []
+        },
+        "markup5ever": {
+          "metadata_sha256": "9d66c90e65ca7ac2ba091abcf8d1a7f542af60f50105e07a8d150005b43b031a",
+          "features": []
+        },
+        "html5ever": {
+          "metadata_sha256": "0796de24c3103a4ed2d4b4312dd28ce2acc49904a1b4325a222cea05a5c1bb63",
+          "features": []
+        },
+        "dom_query": {
+          "metadata_sha256": "fcb7fed8acd24e431df27d6d709e0dd3d719bb3c1970c12a6418d38b5b35fd1c",
+          "features": []
+        },
+        "kiwix_app": {
+          "metadata_sha256": "ff5e6bd0f1489cee9295d1ce4feb8c63ee3b22b50ac611d29429b2baf07544c9",
+          "features": [
+            "custom-protocol"
+          ]
+        }
+      }
+    }
+  },
+  "ios": {
+    "target": {
+      "architecture": "arm64",
+      "osVersion": "26.5",
+      "platform": "iOS Simulator"
+    },
+    "package": "5d569a3a73f68b8567536249eed1f85d8cfa885a1a14c85803f50a97eafa16ad",
+    "main": "3254ddcd327ed71197bf025052135fbc09e84a7c5628e6598f70374ed340e59a",
+    "verified_resources": 52,
+    "ui": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "archive": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "source_and_imported_copy_match": true,
+    "workflow": "One externally hosted XCTest UI connected to the signed app via its normal library, search, reading and settings surfaces. App restarted once within the test. Speech was not downloaded or played. No physical device.",
+    "owned_simulator_removed": true
+  },
+  "android": {
+    "target": "ARM64 Android API 35 emulator",
+    "package": "0a8b71e2cffe918b27cc00fa14559dab88bb8d81ac4a99c37db6ad83c7f588ff",
+    "unsigned": "6a7716d0f0d2b6ad0566cd407ae050ae71f996a9625655271b6c8a42b83b7204",
+    "application_library": "6c73c867915b2d5932b780057e09867ccdc94e15c10b2a8b039fba2c636fed35",
+    "verified_resources": 52,
+    "native_libraries": [
+      "lib/arm64-v8a/libkiwix_app.so",
+      "lib/arm64-v8a/libonnxruntime.so",
+      "lib/arm64-v8a/libsherpa-onnx-c-api.so",
+      "lib/arm64-v8a/libsherpa-onnx-cxx-api.so",
+      "lib/arm64-v8a/libsherpa-onnx-jni.so"
+    ],
+    "missing_strong_symbol_imports_api24": [],
+    "observations": {
+      "about-zimru": "ff8b0ab5e561",
+      "about-glass": "380d84d7bb4b",
+      "opt-in-checked": "Offer spelling suggestions for searches",
+      "open-file": "Open file",
+      "android-downloads": "Downloads",
+      "picker": "Kiwix-Climate.zim",
+      "library": "Open Climate change by Wikipedia",
+      "home": "Antarctica",
+      "build-index": "Build spelling index",
+      "index-ready": "Spelling index ready",
+      "correction": "Search instead for “climate”",
+      "accepted": "climate",
+      "corrected-hit": "Climate 200",
+      "corrected-article": "provides political funding",
+      "title-results": "About 35 results",
+      "title-hit": "Solar energy",
+      "title-article": "is radiant light and heat from the Sun",
+      "fulltext-results": "About 271 results",
+      "fulltext-hit": "Solar power",
+      "fulltext-article": "solar electricity",
+      "restored": "solar electricity",
+      "cold-index-ready": "Spelling index ready",
+      "cold-correction": "Search instead for “climate”",
+      "cold-accepted": "climate",
+      "cold-hit": "Climate 200",
+      "cold-article": "provides political funding"
+    },
+    "existing_article_verified_after_cold_start": true,
+    "archive": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+    "temporary_profile_and_emulator_removed": true
+  },
+  "limits": [
+    "Mobile tests ran on a simulator and emulator. Physical latency, peak working memory and final mobile print rendering remain unmeasured for this adoption.",
+    "The full Android speech provider contributed four native libraries. The UI test left speech unused. The Linux tests exercised the release executable, separately from the AppImage loader research."
+  ],
+  "verification_environment": [
+    "The mobile compiler checks needed normal access to the Swift and Tauri Android plugin build caches. The Android packaging retry used a fresh Gradle project cache after a copied cache referred to the previous checkout."
+  ],
+  "raw_receipts_sha256": {
+    "linux_build_and_suite_tgz": "dfdafc0b1d7dbe12c38f9fde46b7ed358efccb2304c76203b0353b55a380ea0c",
+    "ios_verification_json": "b6a9343760e3047706b440ab47106a0fa22a3c0424d7ce0c6253a8003e588eff",
+    "android_verification_json": "c2db88881eef147b6d0deaa6232ec8bd7dda407831d0138bb6ed274c98584a96",
+    "mobile_compiler_artifacts_json": "4b3d29c9af7b17103b8c542f8555023af1a4468aa99c00e005355a8a272125a3"
+  }
+}
