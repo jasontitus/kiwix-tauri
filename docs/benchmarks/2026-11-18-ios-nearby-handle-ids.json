@@ -1,0 +1,951 @@
+{
+ "base": "3e566a44109538732695e270b5802e3e0d57d402",
+ "candidate": "26ced3277ccf3a9f0bf0a6197888a8a50d3344bd",
+ "binaries": {
+  "baseline": "3669a171ca1d11f34edee3d1d3e8143ecdcc8d2c7e96deaf81e7265a86856167",
+  "candidate": "d7112a5153df26c462d7347b13554d454fa71e5ecd450ee85ab4b38c5eb02215"
+ },
+ "scope": "iOS 26.5 arm64, loopback-only Apple Network.framework QUIC sender to independent Quinn recipient with pinned TLS/ALPN. Fresh process per case/lane, same 32-byte admission and exact per-message payload; no discovery, radio or hardware throughput measurement. Other builds shared the host.",
+ "method": "One warm-up payload discarded per process. Six balanced alternating pairs, 48 processes total; each retained row sums nanoseconds across 48\u00d781 B, 32\u00d716 KiB, 16\u00d7256 KiB or 8\u00d71 MiB. Divide those sums by each row\u2019s iteration count, then report the median of six process means. Dispatch is local synchronous copy/enqueue. Completion includes filling original buffer with replacement bytes, waiting for all accept receipts; counter checks run after the measured series. Roundtrip includes peer byte equality, 1 B application ACK and receiving it. Effective throughput includes those costs.",
+ "units": {
+  "latency": "microseconds per payload",
+  "effective_MiB_s": "payload MiB per second derived from median verified roundtrip"
+ },
+ "cases": {
+  "small": {
+   "baseline": {
+    "dispatch_us": 8.59975,
+    "completion_us": 121.94789583333333,
+    "verified_roundtrip_us": 374.98787500000003,
+    "effective_MiB_s": 0.20600031302053767
+   },
+   "candidate": {
+    "dispatch_us": 10.189645833333334,
+    "completion_us": 132.87666666666667,
+    "verified_roundtrip_us": 402.33894791666665,
+    "effective_MiB_s": 0.19199637526741745
+   },
+   "paired_rtt_median_delta_percent": 15.720980058845036,
+   "candidate_faster_rtt_rounds": 1
+  },
+  "medium": {
+   "baseline": {
+    "dispatch_us": 16.61125,
+    "completion_us": 334.947203125,
+    "verified_roundtrip_us": 848.4915625000001,
+    "effective_MiB_s": 18.415032854260115
+   },
+   "candidate": {
+    "dispatch_us": 16.32025,
+    "completion_us": 340.298234375,
+    "verified_roundtrip_us": 848.880296875,
+    "effective_MiB_s": 18.406599914641234
+   },
+   "paired_rtt_median_delta_percent": -6.621387952954022,
+   "candidate_faster_rtt_rounds": 3
+  },
+  "piece": {
+   "baseline": {
+    "dispatch_us": 73.281125,
+    "completion_us": 3007.6393125,
+    "verified_roundtrip_us": 5382.1144375,
+    "effective_MiB_s": 46.45014573791288
+   },
+   "candidate": {
+    "dispatch_us": 72.38415625,
+    "completion_us": 3212.3216875,
+    "verified_roundtrip_us": 5294.52478125,
+    "effective_MiB_s": 47.21859096501892
+   },
+   "paired_rtt_median_delta_percent": -2.8742524823525626,
+   "candidate_faster_rtt_rounds": 5
+  },
+  "large": {
+   "baseline": {
+    "dispatch_us": 262.1796875,
+    "completion_us": 13549.299500000001,
+    "verified_roundtrip_us": 16710.1485,
+    "effective_MiB_s": 59.84387272201681
+   },
+   "candidate": {
+    "dispatch_us": 259.84375,
+    "completion_us": 13344.2293125,
+    "verified_roundtrip_us": 17002.80475,
+    "effective_MiB_s": 58.813825995384676
+   },
+   "paired_rtt_median_delta_percent": -0.09506954987036353,
+   "candidate_faster_rtt_rounds": 3
+  }
+ },
+ "observations": [
+  {
+   "round": 0,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 263756,
+   "completion_ns": 3288085,
+   "verified_roundtrip_ns": 10929333
+  },
+  {
+   "round": 0,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 383916,
+   "completion_ns": 4567581,
+   "verified_roundtrip_ns": 14924210
+  },
+  {
+   "round": 0,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 713669,
+   "completion_ns": 11923504,
+   "verified_roundtrip_ns": 30323046
+  },
+  {
+   "round": 0,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 555121,
+   "completion_ns": 10948124,
+   "verified_roundtrip_ns": 26718791
+  },
+  {
+   "round": 0,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1201999,
+   "completion_ns": 48251250,
+   "verified_roundtrip_ns": 85493874
+  },
+  {
+   "round": 0,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1045916,
+   "completion_ns": 50540501,
+   "verified_roundtrip_ns": 84941417
+  },
+  {
+   "round": 0,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2699834,
+   "completion_ns": 112786001,
+   "verified_roundtrip_ns": 149110000
+  },
+  {
+   "round": 0,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1984042,
+   "completion_ns": 120740000,
+   "verified_roundtrip_ns": 140185460
+  },
+  {
+   "round": 1,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 544414,
+   "completion_ns": 8523915,
+   "verified_roundtrip_ns": 27555833
+  },
+  {
+   "round": 1,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 633584,
+   "completion_ns": 9512378,
+   "verified_roundtrip_ns": 24977458
+  },
+  {
+   "round": 1,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 514206,
+   "completion_ns": 10432414,
+   "verified_roundtrip_ns": 27584669
+  },
+  {
+   "round": 1,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 488751,
+   "completion_ns": 11212126,
+   "verified_roundtrip_ns": 27818253
+  },
+  {
+   "round": 1,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1391584,
+   "completion_ns": 48616874,
+   "verified_roundtrip_ns": 84483376
+  },
+  {
+   "round": 1,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1140210,
+   "completion_ns": 47277793,
+   "verified_roundtrip_ns": 86223999
+  },
+  {
+   "round": 1,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2253249,
+   "completion_ns": 106707167,
+   "verified_roundtrip_ns": 127783792
+  },
+  {
+   "round": 1,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2271500,
+   "completion_ns": 95099833,
+   "verified_roundtrip_ns": 132279001
+  },
+  {
+   "round": 2,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 406582,
+   "completion_ns": 5366251,
+   "verified_roundtrip_ns": 17917086
+  },
+  {
+   "round": 2,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 400457,
+   "completion_ns": 5103915,
+   "verified_roundtrip_ns": 17214000
+  },
+  {
+   "round": 2,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 516997,
+   "completion_ns": 10566961,
+   "verified_roundtrip_ns": 26510086
+  },
+  {
+   "round": 2,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 531248,
+   "completion_ns": 26221126,
+   "verified_roundtrip_ns": 51458710
+  },
+  {
+   "round": 2,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1350001,
+   "completion_ns": 48878294,
+   "verified_roundtrip_ns": 89617710
+  },
+  {
+   "round": 2,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1615876,
+   "completion_ns": 57002877,
+   "verified_roundtrip_ns": 99191501
+  },
+  {
+   "round": 2,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1750084,
+   "completion_ns": 118871709,
+   "verified_roundtrip_ns": 140626083
+  },
+  {
+   "round": 2,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2210833,
+   "completion_ns": 115571583,
+   "verified_roundtrip_ns": 143194083
+  },
+  {
+   "round": 3,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 736707,
+   "completion_ns": 12119337,
+   "verified_roundtrip_ns": 31139542
+  },
+  {
+   "round": 3,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 523164,
+   "completion_ns": 6059622,
+   "verified_roundtrip_ns": 19636202
+  },
+  {
+   "round": 3,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 2017794,
+   "completion_ns": 69081627,
+   "verified_roundtrip_ns": 105370168
+  },
+  {
+   "round": 3,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 1506166,
+   "completion_ns": 31610962,
+   "verified_roundtrip_ns": 64313665
+  },
+  {
+   "round": 3,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1196583,
+   "completion_ns": 55514542,
+   "verified_roundtrip_ns": 90738209
+  },
+  {
+   "round": 3,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1167042,
+   "completion_ns": 57440625,
+   "verified_roundtrip_ns": 94253666
+  },
+  {
+   "round": 3,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2988707,
+   "completion_ns": 109753251,
+   "verified_roundtrip_ns": 139578584
+  },
+  {
+   "round": 3,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 2856167,
+   "completion_ns": 116738042,
+   "verified_roundtrip_ns": 139765875
+  },
+  {
+   "round": 4,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 400792,
+   "completion_ns": 5886000,
+   "verified_roundtrip_ns": 18081750
+  },
+  {
+   "round": 4,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 433792,
+   "completion_ns": 5696208,
+   "verified_roundtrip_ns": 18452751
+  },
+  {
+   "round": 4,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 527499,
+   "completion_ns": 10263875,
+   "verified_roundtrip_ns": 26019876
+  },
+  {
+   "round": 4,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 531872,
+   "completion_ns": 10389414,
+   "verified_roundtrip_ns": 25766706
+  },
+  {
+   "round": 4,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1177954,
+   "completion_ns": 47993208,
+   "verified_roundtrip_ns": 86003663
+  },
+  {
+   "round": 4,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 1119710,
+   "completion_ns": 52253793,
+   "verified_roundtrip_ns": 73440794
+  },
+  {
+   "round": 4,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1886000,
+   "completion_ns": 100721668,
+   "verified_roundtrip_ns": 125674000
+  },
+  {
+   "round": 4,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1874625,
+   "completion_ns": 107035541,
+   "verified_roundtrip_ns": 126082915
+  },
+  {
+   "round": 5,
+   "case": "small",
+   "lane": "candidate",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 558246,
+   "completion_ns": 7059952,
+   "verified_roundtrip_ns": 20171788
+  },
+  {
+   "round": 5,
+   "case": "small",
+   "lane": "baseline",
+   "bytes": 81,
+   "iterations": 48,
+   "dispatch_ns": 418994,
+   "completion_ns": 5820998,
+   "verified_roundtrip_ns": 16654499
+  },
+  {
+   "round": 5,
+   "case": "medium",
+   "lane": "baseline",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 527872,
+   "completion_ns": 10488497,
+   "verified_roundtrip_ns": 26552459
+  },
+  {
+   "round": 5,
+   "case": "medium",
+   "lane": "candidate",
+   "bytes": 16384,
+   "iterations": 32,
+   "dispatch_ns": 495169,
+   "completion_ns": 8724625,
+   "verified_roundtrip_ns": 22811333
+  },
+  {
+   "round": 5,
+   "case": "piece",
+   "lane": "candidate",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 976041,
+   "completion_ns": 38553795,
+   "verified_roundtrip_ns": 76043750
+  },
+  {
+   "round": 5,
+   "case": "piece",
+   "lane": "baseline",
+   "bytes": 262144,
+   "iterations": 16,
+   "dispatch_ns": 962748,
+   "completion_ns": 41897710,
+   "verified_roundtrip_ns": 82338375
+  },
+  {
+   "round": 5,
+   "case": "large",
+   "lane": "baseline",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1832292,
+   "completion_ns": 91711334,
+   "verified_roundtrip_ns": 114226793
+  },
+  {
+   "round": 5,
+   "case": "large",
+   "lane": "candidate",
+   "bytes": 1048576,
+   "iterations": 8,
+   "dispatch_ns": 1791292,
+   "completion_ns": 90242374,
+   "verified_roundtrip_ns": 111015001
+  }
+ ],
+ "small_message_repeat": {
+  "method": "18 alternating pairs, each fresh process verifies 48 sends of 81 bytes after a discarded warmup; dispatch/completion/RTT values in microseconds per payload (raw sums divided by count then median across processes). This task\u2019s package compile and hosted suite finished, UI had not started. Other host workloads uncontrolled.",
+  "result": {
+   "baseline": {
+    "dispatch_us": 3.3555416666666664,
+    "completion_us": 50.043458333333334,
+    "verified_roundtrip_us": 217.32770833333333
+   },
+   "candidate": {
+    "dispatch_us": 3.6739895833333334,
+    "completion_us": 46.24038541666666,
+    "verified_roundtrip_us": 218.24992708333332
+   },
+   "dispatch_pairs": {
+    "median_delta_percent": 8.623026645492427,
+    "faster": 6
+   },
+   "completion_pairs": {
+    "median_delta_percent": -5.5275531049264695,
+    "faster": 12
+   },
+   "verified_roundtrip_pairs": {
+    "median_delta_percent": -0.3062740302681721,
+    "faster": 10
+   }
+  },
+  "observations": [
+   {
+    "round": 0,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 198416,
+    "completion_ns": 2839958,
+    "verified_roundtrip_ns": 11155123
+   },
+   {
+    "round": 0,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 189459,
+    "completion_ns": 2672165,
+    "verified_roundtrip_ns": 10120913
+   },
+   {
+    "round": 1,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 178910,
+    "completion_ns": 2574082,
+    "verified_roundtrip_ns": 10489830
+   },
+   {
+    "round": 1,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 151338,
+    "completion_ns": 2444668,
+    "verified_roundtrip_ns": 9206046
+   },
+   {
+    "round": 2,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 210962,
+    "completion_ns": 3244376,
+    "verified_roundtrip_ns": 11642832
+   },
+   {
+    "round": 2,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 202747,
+    "completion_ns": 2744916,
+    "verified_roundtrip_ns": 10652792
+   },
+   {
+    "round": 3,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 288002,
+    "completion_ns": 3118750,
+    "verified_roundtrip_ns": 11394708
+   },
+   {
+    "round": 3,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 215749,
+    "completion_ns": 2808042,
+    "verified_roundtrip_ns": 11678503
+   },
+   {
+    "round": 4,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 161544,
+    "completion_ns": 2574838,
+    "verified_roundtrip_ns": 10399128
+   },
+   {
+    "round": 4,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 211459,
+    "completion_ns": 2752169,
+    "verified_roundtrip_ns": 9930421
+   },
+   {
+    "round": 5,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 129706,
+    "completion_ns": 2222912,
+    "verified_roundtrip_ns": 9369955
+   },
+   {
+    "round": 5,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 183874,
+    "completion_ns": 2645047,
+    "verified_roundtrip_ns": 11296375
+   },
+   {
+    "round": 6,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 220668,
+    "completion_ns": 2648083,
+    "verified_roundtrip_ns": 11786748
+   },
+   {
+    "round": 6,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 181250,
+    "completion_ns": 2196040,
+    "verified_roundtrip_ns": 10604288
+   },
+   {
+    "round": 7,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 138082,
+    "completion_ns": 2216165,
+    "verified_roundtrip_ns": 10227204
+   },
+   {
+    "round": 7,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 179917,
+    "completion_ns": 2336416,
+    "verified_roundtrip_ns": 12109120
+   },
+   {
+    "round": 8,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 181710,
+    "completion_ns": 2690586,
+    "verified_roundtrip_ns": 12401712
+   },
+   {
+    "round": 8,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 180330,
+    "completion_ns": 2206206,
+    "verified_roundtrip_ns": 11182749
+   },
+   {
+    "round": 9,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 173793,
+    "completion_ns": 2446830,
+    "verified_roundtrip_ns": 10981376
+   },
+   {
+    "round": 9,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 145543,
+    "completion_ns": 2173916,
+    "verified_roundtrip_ns": 9879466
+   },
+   {
+    "round": 10,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 149708,
+    "completion_ns": 2249497,
+    "verified_roundtrip_ns": 10325204
+   },
+   {
+    "round": 10,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 159585,
+    "completion_ns": 2134501,
+    "verified_roundtrip_ns": 10332005
+   },
+   {
+    "round": 11,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 156423,
+    "completion_ns": 2034503,
+    "verified_roundtrip_ns": 10632128
+   },
+   {
+    "round": 11,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 130414,
+    "completion_ns": 2203334,
+    "verified_roundtrip_ns": 10464332
+   },
+   {
+    "round": 12,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 142874,
+    "completion_ns": 2157374,
+    "verified_roundtrip_ns": 10364414
+   },
+   {
+    "round": 12,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 158088,
+    "completion_ns": 1989835,
+    "verified_roundtrip_ns": 10364170
+   },
+   {
+    "round": 13,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 141876,
+    "completion_ns": 1949210,
+    "verified_roundtrip_ns": 10010749
+   },
+   {
+    "round": 13,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 135668,
+    "completion_ns": 2075754,
+    "verified_roundtrip_ns": 10072209
+   },
+   {
+    "round": 14,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 121832,
+    "completion_ns": 2012579,
+    "verified_roundtrip_ns": 10111331
+   },
+   {
+    "round": 14,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 142418,
+    "completion_ns": 1969667,
+    "verified_roundtrip_ns": 10279540
+   },
+   {
+    "round": 15,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 167334,
+    "completion_ns": 2204871,
+    "verified_roundtrip_ns": 10462163
+   },
+   {
+    "round": 15,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 160588,
+    "completion_ns": 2359504,
+    "verified_roundtrip_ns": 9512087
+   },
+   {
+    "round": 16,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 174421,
+    "completion_ns": 2462005,
+    "verified_roundtrip_ns": 11665914
+   },
+   {
+    "round": 16,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 198752,
+    "completion_ns": 2648666,
+    "verified_roundtrip_ns": 12770042
+   },
+   {
+    "round": 17,
+    "case": "small",
+    "lane": "candidate",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 195542,
+    "completion_ns": 2529375,
+    "verified_roundtrip_ns": 10751627
+   },
+   {
+    "round": 17,
+    "case": "small",
+    "lane": "baseline",
+    "bytes": 81,
+    "iterations": 48,
+    "dispatch_ns": 123831,
+    "completion_ns": 2098335,
+    "verified_roundtrip_ns": 9902169
+   }
+  ]
+ }
+}
