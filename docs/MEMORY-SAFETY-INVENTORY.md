@@ -29,6 +29,8 @@ The same probe with GPL `380d84d` emitted 974 diagnostics across 15 package vers
 
 ## Performance follow-up
 
+Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.
+
 - [ ] Decide which platforms should enable Zimru’s `retained-cluster-buffers` feature by testing the release app against its current reader and libzim. Compare random articles, first article and media ranges on the same archives. Record elapsed time, CPU, peak memory and response-byte equality. Include physical Android and iOS measurements before selecting mobile defaults. Android emulator results varied by archive. [Four-platform measurements](benchmarks/2026-11-18-retained-clusters.md) · [Selectable MIT implementation](https://github.com/jasontitus/zimru-xapian/commit/1c0f5e3a8d748bf7304588e7db73022555323561)
 - [x] Evaluate the early Zstandard sequence update in the signed Mac app. It reduced median complete-article time by 1.2% on Climate and 0.4% on Wikipedia 100 and won six of ten pairs on each. Direct random reads slowed on both Linux archives. The measurements cover two archives and the app keeps its current decoder. [Signed app comparison](benchmarks/2026-11-18-served-articles.md#mac-zstandard-sequence-experiment) · [MIT experiment and native comparisons](https://github.com/jasontitus/zimru-xapian/blob/5c7f4de7e9ffcff11cb48475b5c3ea73099b4fbd/docs/rust-codecs.md#experimental-zstandard-sequence-update-order)
 
