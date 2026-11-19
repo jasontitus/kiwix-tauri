@@ -1,0 +1,2786 @@
+{
+  "base_revision": "8276cc471ed831afae17e6f3e065eb2753bee63d",
+  "inlining_revision": "6b865ee3e6f5d460cdef1858cdcebc46c7651582",
+  "changed_source_sha256": "9461dba28e3b246ee09af4d5de6e08fe5599e1f5458f2fb393e406e16e338d8e",
+  "prototype_source_manifest_sha256": "8c1127da6bcaad72d2cb9171a9fc37c31b90924b5bfcac0f67c34eb7ff6676dd",
+  "scope": "Standalone torrent-wrapper hash tests with an AWS-LC reference. The inlining change is integrated. The provider and dependency changes are an isolated prototype.",
+  "benchmarks": {
+    "macos_aws_vs_original_rust": {
+      "host_arch": "arm64",
+      "host_os": "Darwin",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "710cd525f23cb61b237aa4634bd9108ec45a74edf41e8036120c64ad9b2d1ff0",
+        "rust": "a93b1c568cdd3b958236c56995523ceeb8da8c570e86bc7a417ad659141b7a4d"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 13784584,
+                "rust": 13224125
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12094750,
+                "aws": 11547042
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11425292,
+                "rust": 11967875
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 11971417,
+                "aws": 11324792
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11299000,
+                "rust": 11985708
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12105958,
+                "aws": 11314250
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11529084,
+                "rust": 11968000
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12076042,
+                "aws": 11396500
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11320916,
+                "rust": 11958416
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 11980459,
+                "aws": 11311125
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11369417,
+                "rust": 11950958
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12090083,
+                "aws": 11430166
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 3794319.5,
+            "rust": 3994361.1666666665
+          },
+          "median_ratio": 1.0567049383397267
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46644208,
+                "rust": 49532250
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49054375,
+                "aws": 46447916
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46843917,
+                "rust": 49109791
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49326583,
+                "aws": 46334458
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46483208,
+                "rust": 49250458
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49133250,
+                "aws": 46501042
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46363708,
+                "rust": 49199209
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49050417,
+                "aws": 46380958
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46335917,
+                "rust": 48926541
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49105625,
+                "aws": 46630042
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46589250,
+                "rust": 49093083
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 49328333,
+                "aws": 46410916
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 15488520.666666666,
+            "rust": 16373840.166666666
+          },
+          "median_ratio": 1.0570802095390643
+        },
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha256",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "bd2ed4bffaebef8681811219f3aa7c8b34799b8e44b43518ac86a2359897e085",
+            "8fc780971a2f53bea901e649e96f67ef722ffd72a7f23781489adcfc23188c79",
+            "96b17ddcaf16d109a4bced8cc03568ac9a2ef55a642dcae9d175258ac54e0821",
+            "65da94002ff30205b74c5ce9c8d46a7790d15029a19710fc70aff724fc1ce4a9",
+            "87e0a761610e07d33d7d31d36c2b281852eb70097e229dd4a8d624d11d705181"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11270875,
+                "rust": 12748166
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12622750,
+                "aws": 11376625
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11393709,
+                "rust": 12836125
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12659417,
+                "aws": 11375125
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11453667,
+                "rust": 12662541
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12694000,
+                "aws": 11255959
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11263458,
+                "rust": 12815042
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12669666,
+                "aws": 11372834
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11264667,
+                "rust": 12629167
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12609500,
+                "aws": 11407375
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 11450959,
+                "rust": 12678167
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 12840375,
+                "aws": 11384083
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 3791958.3333333335,
+            "rust": 4224638.833333333
+          },
+          "median_ratio": 1.117579944156562
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha256",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "560192df3e9b0b6f8c8a59c3a82da92f8f6d1dfd7a71255d989ea664949e68dd",
+            "e796250b51866324d419d0dac4d6892355989e553babdbc87be1a89103e6b8b5",
+            "43e5c69c8b1ca67d9d7a775776fe5c1917074c0d6be4275f79167af125d89f90",
+            "4d06af7eb231b8e12a8f45ea8f2e66dc07c4581b84e03eb054f1f83e843d9c19",
+            "29da72e3e550d8cd4e452c16f50ddad801c92f277d1a68445ed13933945170ac",
+            "f57de0edcf98c2e9c94f9392737171a41b38cf838c753791a1cafeb59080703c",
+            "3acd18092160046f56ed70f81d51f46303a2dfd9bee8a9ab3bbcce935b6b5718",
+            "4baffd9517f0f68cddd4035f81b7049e123cd8e01919391df8bb02f28c2c8b9e",
+            "eafc98e3dd50ef4d43ec4a82a78427dc2750a452a7e5bc71b750ebf324c6cdb3",
+            "d584cedd7e589a2301c8ce47ff6c97e8fbbc53b1afe3a02a0f260b89e17441d5",
+            "c18cd3a628d29aecddbb0a4179f1dd10ef86f15b8094811ef8eedb5bc29df4c2",
+            "f507914d10851949f7135c2b69348ad1020c5cca051c1ab17c4591208741b6d8",
+            "60dd0d6111709534377ec470fdf7c587a5ed8a67f6cc7f3db424351b0b7d7372",
+            "8f68e1444d78cb4f95f53c4d5d09291407d73db17abcda25d54c67c99dbbec67",
+            "689894dfd939a12a7abf7210800957e55d7fb9de5f7b246f9b2b5d8f24c5c5fd",
+            "116153f8bf4a455c063567797cbc1e7e9188a5f227c36823d6383cfa4b02d0bf",
+            "a33776fe0f0653edd967fc766b8d2d7138fd3b0286c2a663c48f72c2652db7e6",
+            "ec193e9c0af9032a9e72cc01ddc06779b33b926767da9d3cda3bce35a24ec4d9"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 46045583,
+                "rust": 51215000
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 51737584,
+                "aws": 45984708
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 45720584,
+                "rust": 51810708
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 51527000,
+                "aws": 46125458
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 45667792,
+                "rust": 51540750
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 52134208,
+                "aws": 45776750
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 45995250,
+                "rust": 51694916
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 51567958,
+                "aws": 45748833
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 45727667,
+                "rust": 51615041
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 51566333,
+                "aws": 46047875
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 45751125,
+                "rust": 51585166
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 51438000,
+                "aws": 45790666
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 15261236.0,
+            "rust": 17192187.333333332
+          },
+          "median_ratio": 1.126150672170035
+        }
+      ]
+    },
+    "linux_aws_vs_original_rust": {
+      "host_arch": "x86_64",
+      "host_os": "Linux",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "41133a2d500b71b843343d2cd7d37aeb8e9f09d045278c37e3975c0063201a82",
+        "rust": "b589213c496ea303b60be56e5249abccdb59c96a69f6efb0675e807457fdfd7a"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 24091812,
+                "rust": 100143464
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 100430430,
+                "aws": 24374553
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 24193686,
+                "rust": 101852307
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 99880935,
+                "aws": 24024785
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 23783486,
+                "rust": 100387289
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 101063998,
+                "aws": 24424298
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 24475851,
+                "rust": 98772149
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 100262937,
+                "aws": 24047921
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 24763127,
+                "rust": 100520717
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 101826617,
+                "aws": 23962554
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 23778835,
+                "rust": 103867289
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 99998721,
+                "aws": 24079247
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 8028509.833333333,
+            "rust": 33469619.833333332
+          },
+          "median_ratio": 4.157077472412413
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 97285650,
+                "rust": 408119037
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 409933726,
+                "aws": 97622725
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 94307908,
+                "rust": 413318183
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 409271295,
+                "aws": 96334833
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 94294059,
+                "rust": 408243976
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 412200553,
+                "aws": 95346675
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 95402552,
+                "rust": 410474601
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 409794155,
+                "aws": 95138905
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 94717669,
+                "rust": 435923684
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 411081473,
+                "aws": 94457727
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 97842920,
+                "rust": 407451221
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 417339569,
+                "aws": 95234388
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 31763510.5,
+            "rust": 136734721.16666666
+          },
+          "median_ratio": 4.3152508509183125
+        },
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha256",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "bd2ed4bffaebef8681811219f3aa7c8b34799b8e44b43518ac86a2359897e085",
+            "8fc780971a2f53bea901e649e96f67ef722ffd72a7f23781489adcfc23188c79",
+            "96b17ddcaf16d109a4bced8cc03568ac9a2ef55a642dcae9d175258ac54e0821",
+            "65da94002ff30205b74c5ce9c8d46a7790d15029a19710fc70aff724fc1ce4a9",
+            "87e0a761610e07d33d7d31d36c2b281852eb70097e229dd4a8d624d11d705181"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 58382742,
+                "rust": 104780850
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 106283807,
+                "aws": 58613511
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 57753443,
+                "rust": 108332661
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 109732849,
+                "aws": 60245441
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 59805266,
+                "rust": 104843725
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 104360939,
+                "aws": 57487497
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 59037498,
+                "rust": 105337649
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 104856108,
+                "aws": 57716302
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 57147837,
+                "rust": 105579125
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 105775207,
+                "aws": 56893456
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 57315863,
+                "rust": 106744833
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 105606398,
+                "aws": 57406976
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 19244957.5,
+            "rust": 35197587.166666664
+          },
+          "median_ratio": 1.819090103385064
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha256",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "560192df3e9b0b6f8c8a59c3a82da92f8f6d1dfd7a71255d989ea664949e68dd",
+            "e796250b51866324d419d0dac4d6892355989e553babdbc87be1a89103e6b8b5",
+            "43e5c69c8b1ca67d9d7a775776fe5c1917074c0d6be4275f79167af125d89f90",
+            "4d06af7eb231b8e12a8f45ea8f2e66dc07c4581b84e03eb054f1f83e843d9c19",
+            "29da72e3e550d8cd4e452c16f50ddad801c92f277d1a68445ed13933945170ac",
+            "f57de0edcf98c2e9c94f9392737171a41b38cf838c753791a1cafeb59080703c",
+            "3acd18092160046f56ed70f81d51f46303a2dfd9bee8a9ab3bbcce935b6b5718",
+            "4baffd9517f0f68cddd4035f81b7049e123cd8e01919391df8bb02f28c2c8b9e",
+            "eafc98e3dd50ef4d43ec4a82a78427dc2750a452a7e5bc71b750ebf324c6cdb3",
+            "d584cedd7e589a2301c8ce47ff6c97e8fbbc53b1afe3a02a0f260b89e17441d5",
+            "c18cd3a628d29aecddbb0a4179f1dd10ef86f15b8094811ef8eedb5bc29df4c2",
+            "f507914d10851949f7135c2b69348ad1020c5cca051c1ab17c4591208741b6d8",
+            "60dd0d6111709534377ec470fdf7c587a5ed8a67f6cc7f3db424351b0b7d7372",
+            "8f68e1444d78cb4f95f53c4d5d09291407d73db17abcda25d54c67c99dbbec67",
+            "689894dfd939a12a7abf7210800957e55d7fb9de5f7b246f9b2b5d8f24c5c5fd",
+            "116153f8bf4a455c063567797cbc1e7e9188a5f227c36823d6383cfa4b02d0bf",
+            "a33776fe0f0653edd967fc766b8d2d7138fd3b0286c2a663c48f72c2652db7e6",
+            "ec193e9c0af9032a9e72cc01ddc06779b33b926767da9d3cda3bce35a24ec4d9"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 232223062,
+                "rust": 433635474
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 424565853,
+                "aws": 237282916
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 239332791,
+                "rust": 429581926
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 431660896,
+                "aws": 231717644
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 234198236,
+                "rust": 430919458
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 424345900,
+                "aws": 235666600
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 232781315,
+                "rust": 430778357
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 429338087,
+                "aws": 233708571
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 235342175,
+                "rust": 431682981
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 423263755,
+                "aws": 234602139
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "rust"
+              ],
+              "elapsed_ns": {
+                "aws": 236301419,
+                "rust": 424458030
+              }
+            },
+            {
+              "order": [
+                "rust",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "rust": 431822177,
+                "aws": 234493187
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 78182554.33333333,
+            "rust": 143393380.5
+          },
+          "median_ratio": 1.8356720517409189
+        }
+      ]
+    },
+    "linux_aws_vs_inlined_rust": {
+      "host_arch": "x86_64",
+      "host_os": "Linux",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "41133a2d500b71b843343d2cd7d37aeb8e9f09d045278c37e3975c0063201a82",
+        "inline": "854620cc4bd2765c4f7287d2033549b250cb33f173629301914ff9a60dfbef9d"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 23936061,
+                "inline": 41659304
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 42987114,
+                "aws": 24168298
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 23449715,
+                "inline": 41942007
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 41580729,
+                "aws": 23844352
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 23366159,
+                "inline": 41605330
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 41686222,
+                "aws": 23622227
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 24089709,
+                "inline": 42707352
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 41551438,
+                "aws": 24056921
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 23980835,
+                "inline": 41852219
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 41797008,
+                "aws": 23501653
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 23335393,
+                "inline": 42286779
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 41532368,
+                "aws": 23425353
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 7911096.5,
+            "inline": 13913871.666666666
+          },
+          "median_ratio": 1.7729064511613875
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 94781994,
+                "inline": 171844170
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 170786533,
+                "aws": 95885203
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 94684074,
+                "inline": 168495895
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 168626403,
+                "aws": 94667117
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 96195055,
+                "inline": 169338546
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 169500960,
+                "aws": 95693314
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 94715714,
+                "inline": 170894978
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 171031910,
+                "aws": 94661627
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 94858326,
+                "inline": 171382738
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 170010676,
+                "aws": 94678771
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline"
+              ],
+              "elapsed_ns": {
+                "aws": 95031316,
+                "inline": 168432287
+              }
+            },
+            {
+              "order": [
+                "inline",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline": 169921164,
+                "aws": 94600561
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 31582951.333333332,
+            "inline": 56655306.666666664
+          },
+          "median_ratio": 1.7884570859156321
+        }
+      ]
+    },
+    "linux_aws_vs_scalar_schedule": {
+      "host_arch": "x86_64",
+      "host_os": "Linux",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "41133a2d500b71b843343d2cd7d37aeb8e9f09d045278c37e3975c0063201a82",
+        "scalar": "de35b1d35c0bf074a5b36c6861d750abbe650a3bd3024b50b49ba7ee6ceb553c"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 23426408,
+                "scalar": 45895497
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 45838414,
+                "aws": 23684045
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 23552815,
+                "scalar": 45970049
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 45777810,
+                "aws": 23488898
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 23654934,
+                "scalar": 45651719
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 46142398,
+                "aws": 23817288
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 24124714,
+                "scalar": 46163370
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 45496115,
+                "aws": 23884508
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 23660465,
+                "scalar": 46136136
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 45752897,
+                "aws": 24710112
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 24071202,
+                "scalar": 45251745
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 45306744,
+                "aws": 23797842
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 7913647.833333333,
+            "scalar": 15269370.666666666
+          },
+          "median_ratio": 1.932657922137976
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 96434957,
+                "scalar": 186867002
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 194072107,
+                "aws": 94710585
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 95590873,
+                "scalar": 186526071
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 189541781,
+                "aws": 95654172
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 102443848,
+                "scalar": 189459118
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 184387247,
+                "aws": 96131130
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 97410307,
+                "scalar": 184154328
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 186112032,
+                "aws": 96800254
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 95142830,
+                "scalar": 184346847
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 184042891,
+                "aws": 102104316
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "scalar"
+              ],
+              "elapsed_ns": {
+                "aws": 98702113,
+                "scalar": 184571454
+              }
+            },
+            {
+              "order": [
+                "scalar",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "scalar": 188099699,
+                "aws": 96185136
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 32103348.833333332,
+            "scalar": 62106350.5
+          },
+          "median_ratio": 1.930109969735077
+        }
+      ]
+    },
+    "linux_aws_vs_batched_schedule": {
+      "host_arch": "x86_64",
+      "host_os": "Linux",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "41133a2d500b71b843343d2cd7d37aeb8e9f09d045278c37e3975c0063201a82",
+        "batched": "a1b6b2718f6f73bc48cef4d6f3eb24880cc4d4a873c1ac0542b41bb99e315597"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 23917594,
+                "batched": 49288737
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 48794361,
+                "aws": 23545995
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 23908416,
+                "batched": 49191457
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 49420101,
+                "aws": 24131314
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 24083681,
+                "batched": 49231965
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 49371296,
+                "aws": 24189012
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 24324948,
+                "batched": 49406375
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 50744421,
+                "aws": 23960578
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 24409383,
+                "batched": 49211431
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 49824169,
+                "aws": 23797099
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 23854532,
+                "batched": 48786115
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 49552303,
+                "aws": 23770845
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 7979695.333333333,
+            "batched": 16443338.833333334
+          },
+          "median_ratio": 2.0527305230775994
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 96732447,
+                "batched": 203726989
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 199905989,
+                "aws": 96244725
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 93977058,
+                "batched": 202461181
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 208469371,
+                "aws": 94622939
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 94607811,
+                "batched": 197721535
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 199222405,
+                "aws": 96441252
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 93905587,
+                "batched": 218584356
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 200831351,
+                "aws": 95973670
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 94644144,
+                "batched": 204074251
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 208554878,
+                "aws": 95794167
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "batched"
+              ],
+              "elapsed_ns": {
+                "aws": 95016664,
+                "batched": 204273485
+              }
+            },
+            {
+              "order": [
+                "batched",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "batched": 200505352,
+                "aws": 95353576
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 31728373.333333332,
+            "batched": 67698028.33333333
+          },
+          "median_ratio": 2.127978756553919
+        }
+      ]
+    },
+    "linux_aws_vs_inlined_host_specific": {
+      "host_arch": "x86_64",
+      "host_os": "Linux",
+      "piece_bytes": 2097152,
+      "updates_bytes": 65536,
+      "archive_passes_per_sample": 3,
+      "executables_sha256": {
+        "aws": "41133a2d500b71b843343d2cd7d37aeb8e9f09d045278c37e3975c0063201a82",
+        "inline-native": "d484359d68a4cd72223961ba960ab4f93bf50e2fe2ac9fce80bf557f44e4d56e"
+      },
+      "workloads": [
+        {
+          "name": "wikipedia_en_climate_change_mini_2024-06.zim",
+          "algorithm": "sha1",
+          "bytes": 8978471,
+          "archive_sha256": "3485a2c475a2356331f33f137ce26ed7116e62c7062d73a7773362d6dff005f4",
+          "expected_piece_digests": [
+            "9e343902702c44a1ff8408832a9f698fc07b9967",
+            "f739ec1d7280b07dbed15b41f4638672d849c809",
+            "a1cdedb2b556cbe111322e3753d41e6dbf454e66",
+            "39974aa79e4f978d4df87334b86684168cadf6ab",
+            "e23c2aaacfe5c98725d650e93f22e183db99e628"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23929011,
+                "inline-native": 36230988
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 35430775,
+                "aws": 24178842
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23340377,
+                "inline-native": 36788993
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 35905136,
+                "aws": 23666848
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23289332,
+                "inline-native": 35655666
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 35759101,
+                "aws": 23496309
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23169000,
+                "inline-native": 35654282
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 36140859,
+                "aws": 24538079
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23649177,
+                "inline-native": 36037769
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 37147086,
+                "aws": 23814609
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 23692488,
+                "inline-native": 35488092
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 35731171,
+                "aws": 23758041
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 7893222.666666667,
+            "inline-native": 11944039.5
+          },
+          "median_ratio": 1.5195048533727071
+        },
+        {
+          "name": "wikipedia_en_100_maxi_2024-01.zim",
+          "algorithm": "sha1",
+          "bytes": 36522122,
+          "archive_sha256": "bde9d73bb1a6b959af6cf4f00ed8f6aac6cf7f4392e28a16a46cd77228b16613",
+          "expected_piece_digests": [
+            "55a57c8e919a59f8965d4e434946e2ca3dfed7ab",
+            "5da58f2fee61a63ab653f1e2b4fc3aae11d22656",
+            "7590881e7497416a525a77175b24b27068723950",
+            "3cf3ee3e1e8fe1346e712d4abdabf3ce5f7ed3b1",
+            "4387418a9616be64e73134dcce7940824b739072",
+            "a092cc8781fcce052af201fb8b0f7633b86e3c3b",
+            "3bd7af0ff0218d08e3ad8fccec162beccf49c60b",
+            "577d99aaad52c6805cb86d97d99796464810ace7",
+            "c15fed54544ac4583a77358514a0c7264e438361",
+            "bee823a4c89293357e0032dbb8aa0f91270899be",
+            "e4fa148fddb8aef2ea17e17f94fe0234e04ed12c",
+            "3aceeee91046b204052b80fa26d6b9462629e733",
+            "9b7f2aeea802c925906d7c062c20107dbe3b49af",
+            "538a99d4d688a5ccb2f15e123af4d394abe159e4",
+            "a813acc5bbe5b533320d7484a5e4d3f10b1bf561",
+            "7895a670042975913dbc0fe980190a4469799e37",
+            "4464bf5f94210dd7be1cc9403c68d3cbef410aba",
+            "8dd276b28608d4e386bbed3e5c3e536f52b93c54"
+          ],
+          "pairs": [
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 96783290,
+                "inline-native": 149909087
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 150171598,
+                "aws": 95571302
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 94961768,
+                "inline-native": 148786804
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 151457346,
+                "aws": 96716585
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 97273934,
+                "inline-native": 146386737
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 146393436,
+                "aws": 94470971
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 94668477,
+                "inline-native": 149096782
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 145374987,
+                "aws": 94241540
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 94290891,
+                "inline-native": 145748929
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 151703628,
+                "aws": 99919619
+              }
+            },
+            {
+              "order": [
+                "aws",
+                "inline-native"
+              ],
+              "elapsed_ns": {
+                "aws": 94975750,
+                "inline-native": 145374502
+              }
+            },
+            {
+              "order": [
+                "inline-native",
+                "aws"
+              ],
+              "elapsed_ns": {
+                "inline-native": 145594535,
+                "aws": 96607237
+              }
+            }
+          ],
+          "median_ns_per_archive": {
+            "aws": 31757842.0,
+            "inline-native": 49196706.666666664
+          },
+          "median_ratio": 1.5473260395357422
+        }
+      ]
+    }
+  },
+  "locked_candidate_graphs": {
+    "aarch64-apple-darwin": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "x86_64-unknown-linux-gnu": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "aarch64-unknown-linux-gnu": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "aarch64-apple-ios": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "aarch64-apple-ios-sim": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "aarch64-linux-android": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "armv7-linux-androideabi": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    },
+    "x86_64-pc-windows-msvc": {
+      "librqbit 9.1.0": [],
+      "librqbit-core 9.1.0": [
+        "sha1-ring",
+        "sha1w"
+      ],
+      "librqbit-sha1-wrapper 9.1.0": [
+        "sha1-ring"
+      ],
+      "reqwest 0.13.5": [
+        "__rustls",
+        "__tls",
+        "json",
+        "rustls-no-provider",
+        "socks",
+        "stream"
+      ],
+      "rustls 0.23.46": [
+        "log",
+        "logging",
+        "ring",
+        "std",
+        "tls12"
+      ],
+      "sha1 0.11.0": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ],
+      "sha2 0.11.1": [
+        "alloc",
+        "default",
+        "oid",
+        "std"
+      ]
+    }
+  },
+  "standalone_tls_probe": {
+    "linux_trusted": {
+      "mode": "trusted",
+      "sha256": "3c4132ae37d8d6a4a8ef5fbbeb6cbb965488eb8713732c136e23f2e06c03d735",
+      "client_assertions": [
+        "30 independent hash comparisons passed",
+        "Direct HTTPS accepted the supplied root",
+        "The isolated torrent session stopped"
+      ],
+      "tracker_requests": [
+        {
+          "path": "/direct",
+          "user_agent": null
+        },
+        {
+          "path": "/announce",
+          "user_agent": "Kiwix isolated tracker check",
+          "info_hash": "c9e15763f722f23e98a29decdfae341b98d53056"
+        }
+      ]
+    },
+    "linux_untrusted": {
+      "mode": "untrusted",
+      "sha256": "3c4132ae37d8d6a4a8ef5fbbeb6cbb965488eb8713732c136e23f2e06c03d735",
+      "client_assertions": [
+        "30 independent hash comparisons passed",
+        "Direct HTTPS rejected the untrusted root: reqwest::Error { kind: Request, url: \"https://127.0.0.1:44889/direct\", source: hyper_util::client::legacy::Error(Connect, Custom { kind: Other, error: Custom { kind: InvalidData, error: InvalidCertificate(UnknownIssuer) } }) }",
+        "The isolated torrent session stopped"
+      ],
+      "tracker_requests": []
+    },
+    "macos_untrusted": {
+      "mode": "untrusted",
+      "sha256": "560efa270a5c6f3df1fba08692736f9455de40f6f0e405c9667928f02391ffe1",
+      "client_assertions": [
+        "30 independent hash comparisons passed",
+        "Direct HTTPS rejected the untrusted root: reqwest::Error { kind: Request, url: \"https://127.0.0.1:62557/direct\", source: hyper_util::client::legacy::Error(Connect, Custom { kind: Other, error: Custom { kind: InvalidData, error: InvalidCertificate(UnknownIssuer) } }) }",
+        "The isolated torrent session stopped"
+      ],
+      "tracker_requests": []
+    }
+  },
+  "candidate_application_checks": {
+    "linux_x86_64_test_executable_sha256": "dabe7ffc3fffb0f8288c1116feca19e765882736a2c800bdbb707132026278e7",
+    "linux_targeted_tests": [
+      "torrent::tests::created_torrent_info_hash_matches_independent_sha1",
+      "torrent::tests::shared_library_archive_downloads_from_magnet_in_second_profile",
+      "torrent::tests::web_seed_only_torrent_completes_through_the_engine"
+    ],
+    "compile_checks": [
+      "macos_arm64",
+      "android_arm64_development",
+      "android_arm64_packaged",
+      "ios_arm64",
+      "ios_simulator_arm64"
+    ]
+  }
+}
