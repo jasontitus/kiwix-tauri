@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Read-only archive origins. No privileged application command is exposed here.
 //! Retirement closes network IO and joins archive workers before releasing providers.
 use crate::archive::{is_html_mime, Archive, MAX_READ_LENGTH};

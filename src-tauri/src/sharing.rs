@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Opt-in read-only sharing. Public listeners never expose app IPC or sensors.
 //! Each shared book gets a root-serving listener so root-relative assets work.
 //! Service-worker registration is rejected at the HTTP edge, not merely by CSP.

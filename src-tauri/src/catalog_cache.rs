@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Profile-scoped, bounded raw OPDS cache. Cached XML always passes the live parsers.
 use super::*;
 use crate::store::Store;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::*;
 fn state() -> OriginState {
     let directory = std::env::temp_dir().join(format!("kiwix-pdf-test-{}", Uuid::new_v4()));

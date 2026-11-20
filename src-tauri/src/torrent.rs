@@ -37,6 +37,7 @@
 //! shares: no final `.torrent` name exists before its complete bytes are synced
 //! and its size/SHA-256 ownership intent is checkpointed. Startup and resume
 //! finish complete intents or reclaim interrupted partials without an engine.
+#![forbid(unsafe_code)]
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fs::{self, File, OpenOptions},

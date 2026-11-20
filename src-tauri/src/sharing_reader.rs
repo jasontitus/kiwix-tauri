@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Capability-scoped LAN article search. No app IPC, profile data or sensors.
 use super::*;
 use crate::search::{self, Mode};

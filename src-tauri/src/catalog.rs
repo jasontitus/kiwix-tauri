@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Bounded OPDS/Atom acquisition feeds. Feed URLs and every resolved link require HTTPS.
 //! Metalink acquisition retains exact transport metadata; OpenSearch offsets provide
 //! pagination when a producer omits an explicit next link without losing filters.

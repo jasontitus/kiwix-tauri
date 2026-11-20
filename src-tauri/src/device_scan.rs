@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Device-wide ZIM discovery for Android. Native code reports only display
 //! metadata and opaque open tokens; no URI or filesystem path crosses into the
 //! UI. Candidates from MediaStore and granted SAF trees are normalized and

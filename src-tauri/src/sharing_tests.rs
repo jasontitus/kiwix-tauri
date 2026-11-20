@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Unit tests for `sharing`, kept beside it rather than inline.
 use super::*;
 use axum::http::HeaderValue;

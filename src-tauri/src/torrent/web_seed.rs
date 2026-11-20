@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! BEP 19 HTTP web seeds for torrents whose swarm is empty.
 //!
 //! The torrent engine has no web-seed support. This adapter downloads the

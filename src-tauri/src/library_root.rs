@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! App-owned library locations and verified copy migration.
 //!
 //! Archives are still served from paths this application owns. On Android the
