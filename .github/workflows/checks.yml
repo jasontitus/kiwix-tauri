@@ -40,6 +40,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Unsafe census
+        run: node scripts/check-unsafe-census.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

@@ -13,15 +13,19 @@ fn finish(reply: &Reply, result: Result<(), String>) { if let Some(sender) = rep
 fn retire(id: &str) {
     let job = JOBS.with(|jobs| jobs.borrow_mut().remove(id));
     if let Some(job) = job {
-        // SAFETY: retire runs on the GTK main thread; removing the job prevents
-        // this map from retiring it twice, but a title-bar close may already
-        // have destroyed the dialog. The response/destroy is best-effort and no
-        // Rust reference to the widget is kept afterwards.
-        if let Some(dialog) = job.dialog { dialog.response(gtk::ResponseType::Cancel); unsafe { dialog.destroy(); } }
+        if let Some(dialog) = job.dialog {
+            dialog.response(gtk::ResponseType::Cancel);
+            // SAFETY: retire runs on the GTK main thread; removing the job
+            // prevents this map from retiring it twice, but a title-bar close
+            // may already have destroyed the dialog. This is a best-effort
+            // destroy and no Rust reference to the widget is kept afterwards.
+            unsafe { dialog.destroy(); }
+        }
+        job.view.stop_loading();
         // SAFETY: the removed job owns this offscreen window, and destruction
         // runs on the GTK main thread before the job's fields drop; the call is
         // the job's single explicit destroy attempt.
-        job.view.stop_loading(); unsafe { job.window.destroy(); }
+        unsafe { job.window.destroy(); }
         finish(&job.reply, Err("Article PDF export was cancelled".into()));
     }
 }

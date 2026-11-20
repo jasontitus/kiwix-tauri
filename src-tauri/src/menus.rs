@@ -192,9 +192,9 @@ fn focused_shell(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
     // foreground window is the one the user is acting in.
     #[cfg(windows)]
     {
-        // SAFETY: the call takes no arguments and returns a borrowed window
-        // handle value, which is only compared by address and never dereferenced.
         let foreground =
+            // SAFETY: the call takes no arguments and returns a borrowed window
+            // handle value, which is only compared by address and never dereferenced.
             unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() }.0 as isize;
         if foreground != 0 {
             return windows

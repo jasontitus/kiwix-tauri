@@ -1,0 +1,38 @@
+{
+  "matches": 130,
+  "blocks": 130,
+  "impls": 2,
+  "implsByFile": {
+    "src-tauri/src/agent_connector.rs": 2
+  },
+  "files": {
+    "kiwix-mcp/src/ipc.rs": 13,
+    "src-tauri/src/acquisition.rs": 2,
+    "src-tauri/src/agent_connector.rs": 16,
+    "src-tauri/src/android_tls.rs": 3,
+    "src-tauri/src/cpu_time.rs": 1,
+    "src-tauri/src/fs_ext.rs": 2,
+    "src-tauri/src/localswarm/apple_transport.rs": 4,
+    "src-tauri/src/localswarm/ios_discovery.rs": 17,
+    "src-tauri/src/location_windows.rs": 2,
+    "src-tauri/src/menus.rs": 1,
+    "src-tauri/src/mobile.rs": 1,
+    "src-tauri/src/mobile_backup.rs": 3,
+    "src-tauri/src/native_pdf.rs": 1,
+    "src-tauri/src/native_pdf/apple.rs": 2,
+    "src-tauri/src/native_pdf/handoff.rs": 2,
+    "src-tauri/src/native_pdf/linux.rs": 15,
+    "src-tauri/src/native_pdf/windows.rs": 2,
+    "src-tauri/src/native_pdf/windows_print.rs": 12,
+    "src-tauri/src/private_sync_identity.rs": 13,
+    "src-tauri/src/provider_reference.rs": 1,
+    "src-tauri/src/publication.rs": 1,
+    "src-tauri/src/sandbox.rs": 2,
+    "src-tauri/src/share.rs": 1,
+    "src-tauri/src/storage.rs": 7,
+    "src-tauri/src/store.rs": 1,
+    "src-tauri/src/transfer_policy.rs": 1,
+    "src-tauri/src/webkit_backdrop.rs": 2,
+    "src-tauri/src/windows.rs": 2
+  }
+}

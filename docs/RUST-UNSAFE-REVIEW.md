@@ -419,6 +419,11 @@ safe replacement for `GetFileInformationByHandle`. That requires a direct Window
 verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
 outstanding.
 
+`npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
+`unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
+(130 blocks in 28 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+update it in the same change when reducing to keep the ceiling tight.
+
 The current build's paired reader comparison at the app's 32 MiB cache is recorded in
 [the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
 24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in

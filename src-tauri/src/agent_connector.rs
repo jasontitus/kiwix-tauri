@@ -651,6 +651,7 @@ mod transport {
     // SAFETY: the descriptor is immutable after construction, has no thread affinity, and is only
     // read during pipe creation, so sharing it across threads is sound.
     unsafe impl Send for Descriptor {}
+    // SAFETY: shared reads of the same immutable descriptor are sound for the same reason.
     unsafe impl Sync for Descriptor {}
 
     pub(super) fn is_default_profile(profile: &std::path::Path) -> bool {

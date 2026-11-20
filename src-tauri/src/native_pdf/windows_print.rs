@@ -38,7 +38,11 @@ unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam
             unsafe { &*dialog }.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
             // SAFETY: same live `&Dialog`; `cancel` only posts to the HWND just
             // stored above and never outlives `choose`.
-            if unsafe { &*dialog }.cancelled.load(Ordering::SeqCst) { unsafe { &*dialog }.cancel(); }
+            if unsafe { &*dialog }.cancelled.load(Ordering::SeqCst) {
+                // SAFETY: same live `&Dialog`; `cancel` only posts to the HWND
+                // stored above and never outlives `choose`.
+                unsafe { &*dialog }.cancel();
+            }
         }
     } else if message == WM_NCDESTROY {
         if let Some(dialog) = HOOKS.with(|hooks| hooks.borrow_mut().remove(&(hwnd.0 as isize))) {
@@ -92,6 +96,8 @@ pub fn choose(core: &ICoreWebView2, owner: HWND, dialog: &Dialog, width: u32) ->
 // `selection`; each global block is sized by GlobalSize, locked and unlocked
 // once here, and its unaligned contents are read only inside those bounds.
 unsafe fn settings(core: &ICoreWebView2, print: &PRINTDLGW, width: u32) -> Result<ICoreWebView2PrintSettings, String> {
+    // SAFETY: the function contract above guarantees `print` and its handle
+    // blocks are live and bounded for this call; this block only reads them.
     unsafe {
         let flags = print.Flags;
         // DEVNAMES offsets are UTF-16 units into the bounded global allocation,

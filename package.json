@@ -22,6 +22,7 @@
     "test:speech-preferences": "node --test scripts/test-speech-preferences.mjs",
     "update:manifest": "node scripts/make-update-manifest.mjs",
     "docs:errors": "node scripts/generate-error-docs.mjs",
+    "check:unsafe": "node scripts/check-unsafe-census.mjs",
     "tauri": "node scripts/tauri-cli.mjs",
     "iphone": "python3 scripts/iphone.py",
     "desktop": "tauri dev",
