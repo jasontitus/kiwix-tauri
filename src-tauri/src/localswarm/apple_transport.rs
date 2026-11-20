@@ -138,9 +138,10 @@ enum Operation {
     Write { bytes: usize, stats: Option<Arc<super::network::SeedStats>> },
 }
 
-fn completion(operation: Operation) ->
-    (RcBlock<dyn Fn(i32, usize)>, oneshot::Receiver<Result<usize, String>>)
-{
+type CompletionBlock = RcBlock<dyn Fn(i32, usize)>;
+type CompletionReply = oneshot::Receiver<Result<usize, String>>;
+
+fn completion(operation: Operation) -> (CompletionBlock, CompletionReply) {
     let (reply, received) = oneshot::channel();
     let reply = std::sync::Mutex::new(Some(reply));
     let block = RcBlock::new(queue_callback(move |status: i32, length: usize| {

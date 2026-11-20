@@ -52,7 +52,7 @@ impl Receipt {
             || row.parent != id(&dir.dir_metadata()?)
             || row.bytes < 44
             || row.bytes > u32::MAX as u64
-            || row.bytes % 2 != 0
+            || !row.bytes.is_multiple_of(2)
         {
             return Err(changed());
         }

@@ -468,7 +468,7 @@ fn merge(
     let (mut left, mut right) = (a.next()?, b.next()?);
     let mut rows = 0u32;
     while left.is_some() || right.is_some() {
-        if rows % 256 == 0 {
+        if rows.is_multiple_of(256) {
             cancelled(flag)?;
         }
         rows += 1;
@@ -818,7 +818,7 @@ impl Lexicon {
         let reversed: String = chars.iter().rev().collect();
         for length in (n - 1).max(2)..=(n + 1).min(64) {
             self.forward.scan(length as u8, &prefix, false, |s, f| {
-                if examined % 64 == 0 {
+                if examined.is_multiple_of(64) {
                     poll()?;
                 }
                 examined += 1;
@@ -828,7 +828,7 @@ impl Lexicon {
                 Ok(())
             })?;
             self.reverse.scan(length as u8, &suffix, false, |s, f| {
-                if examined % 64 == 0 {
+                if examined.is_multiple_of(64) {
                     poll()?;
                 }
                 examined += 1;

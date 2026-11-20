@@ -789,10 +789,8 @@ impl Lease {
         .iter()
         .try_fold(false, |v, n| {
             lease.parent.try_exists(n).map(|exists| v || exists)
-        })? {
-            if !explicit {
-                return Err(io::Error::other("An older voice installation was preserved. Choose Install or Repair in Settings to continue."));
-            }
+        })? && !explicit {
+            return Err(io::Error::other("An older voice installation was preserved. Choose Install or Repair in Settings to continue."));
         }
         recover(&lease.parent, None, cancel)?;
         Ok(lease)
