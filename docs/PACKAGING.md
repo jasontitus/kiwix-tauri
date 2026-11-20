@@ -1,6 +1,6 @@
 # Native application packaging
 
-The app reads ZIM content with Zimru and searches embedded indexes with the Rust Xapian reader. Cargo fetches both exact Git revisions from the private repository listed in `src-tauri/Cargo.lock`. Configure read access before building. The native archive SDK recipes below reproduce earlier releases and provide independent comparison tools.
+The app reads ZIM content with Zimru and searches embedded indexes with the Rust Xapian reader. Cargo fetches both exact Git revisions from the public `zimru-xapian` repository listed in `src-tauri/Cargo.lock`; no credentials are required. The native archive SDK recipes below reproduce earlier releases and provide independent comparison tools.
 
 All commands below run from the standalone `kiwix-tauri` repository root. No sibling checkout is required. The workflow is `.github/workflows/build.yml`.
 

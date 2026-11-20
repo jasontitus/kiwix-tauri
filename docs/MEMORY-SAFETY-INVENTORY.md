@@ -92,7 +92,7 @@ A matched-cache Mac comparison used the current Zimru pin. All 18 sampled cases 
 
 ## Historical search-only integration, 2026-11-18
 
-At `eccfcbe`, Kiwix opened the embedded Glass index on retained archive files through the Rust APIs of the MIT Zimru reader and the separate GPL-3.0-or-later search engine. Full-text search, indexed suggestions and title-prefix fallback use this path. Kiwix resolves redirects, reads article prefixes for excerpts and validates the checksum against the retained parts. The native bridge still opens the archive and handles article and media reads, metadata, title iteration and structural integrity checks. The historical A1–A5 rows below describe the starting point. See the [private dependency pins and verification instructions](DEPENDENCIES.md#rust-archive-search).
+At `eccfcbe`, Kiwix opened the embedded Glass index on retained archive files through the Rust APIs of the MIT Zimru reader and the separate GPL-3.0-or-later search engine. Full-text search, indexed suggestions and title-prefix fallback use this path. Kiwix resolves redirects, reads article prefixes for excerpts and validates the checksum against the retained parts. The native bridge still opens the archive and handles article and media reads, metadata, title iteration and structural integrity checks. The historical A1–A5 rows below describe the starting point. See the [dependency pins and verification instructions](DEPENDENCIES.md#rust-archive-search).
 
 ## Filesystem boundary update
 

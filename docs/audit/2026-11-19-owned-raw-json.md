@@ -15,7 +15,7 @@ To deserialize a borrowed field, use `BorrowedRawValue<'a>` by value in
 place of the former `&'a RawValue` destination. The new type holds the original
 `&str`. Its `into_owned()` method copies the span when the value must outlive
 the input. Both forms retain the original display, debug and embedded JSON
-formatting. The migration is local to the private dependency. [Source and
+formatting. The migration is local to the forked dependency. [Source and
 migration notice](../../src-tauri/vendor/serde_json-1.0.154/SOURCE.txt)
 
 The library lint applies to serde_json source. Its dependencies, including

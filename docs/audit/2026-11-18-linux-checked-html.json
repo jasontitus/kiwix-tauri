@@ -17,7 +17,7 @@
     "features": [
       "custom-protocol"
     ],
-    "cargo": "build and test --locked --release, cloned private dependency cache and target directory, offline build, clang/lld, 5 jobs",
+    "cargo": "build and test --locked --release, cloned dependency cache and target directory, offline build, clang/lld, 5 jobs",
     "frontend": "Exact application sources compiled by ordinary npm run build on ARM64 macOS with the project\u2019s installed locked dependencies. The generated static files were embedded by the Linux native build.",
     "bundle": "Locked Tauri CLI bundle --bundles deb and --bundles appimage. Test-only outputs, no install or signing. Both ran unprivileged on fresh temporary virtual desktop profiles. AppImage ran with APPIMAGE_EXTRACT_AND_RUN=1."
   },

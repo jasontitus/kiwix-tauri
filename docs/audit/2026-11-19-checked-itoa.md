@@ -35,7 +35,7 @@ its float formatter or other JSON and HTTP dependencies.
   Four packaging configuration tests passed and one Linux-only test skipped.
 - The Linux x86-64 app library test executable passed 374 focused tests and
   skipped nine. The release MCP relay passed nine tests. The first app build
-  lacked the locked private archive dependency in its offline cache. The retry
+  lacked the pinned archive dependency in its offline cache. The retry
   supplied the two pinned archive and search commits to a fresh cache and kept
   the lockfile unchanged.
 - Five additional reader tests passed on each desktop. They exercised GET,

@@ -58,10 +58,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Fetch private archive dependencies
-        uses: ./.github/actions/fetch-archive-dependencies
-        with:
-          token: ${{ secrets.ZIMRU_READ_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -180,10 +176,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Fetch private archive dependencies
-        uses: ./.github/actions/fetch-archive-dependencies
-        with:
-          token: ${{ secrets.ZIMRU_READ_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -318,10 +310,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
-      - name: Fetch private archive dependencies
-        uses: ./.github/actions/fetch-archive-dependencies
-        with:
-          token: ${{ secrets.ZIMRU_READ_TOKEN }}
       - name: Build NSIS installer
         env:
           KIWIX_UPDATER_PUBLIC_KEY: ${{ vars.KIWIX_UPDATER_PUBLIC_KEY }}

@@ -96,10 +96,6 @@ jobs:
         with:
           targets: ${{ matrix.target }}
           components: clippy
-      - name: Fetch private archive dependencies
-        uses: ./.github/actions/fetch-archive-dependencies
-        with:
-          token: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.ZIMRU_READ_TOKEN || '' }}
       - name: Download the built frontend assets
         uses: actions/download-artifact@v4
         with:
@@ -136,10 +132,6 @@ jobs:
         with:
           targets: x86_64-pc-windows-gnu
           components: clippy
-      - name: Fetch private archive dependencies
-        uses: ./.github/actions/fetch-archive-dependencies
-        with:
-          token: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.ZIMRU_READ_TOKEN || '' }}
       - name: Install the MinGW-w64 cross compiler for C/C++ build scripts
         run: |
           sudo apt-get update
