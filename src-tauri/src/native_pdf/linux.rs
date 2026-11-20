@@ -152,7 +152,8 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
                 let pointer = widget.cast::<c_void>();
                 // SAFETY: `pointer` is the live dialog owned by `dialog`; GTK
                 // takes its own strong reference to the same page setup, so the
-                // Rust wrapper may drop without freeing it while the dialog lives.
+                // Rust wrapper may drop without freeing it. The dialog's
+                // reference lasts until it replaces the setup or is destroyed.
                 unsafe { gtk_print_unix_dialog_set_page_setup(pointer, page.to_glib_none().0); }
                 let print_operation = operation.clone(); let print_reply = loaded_reply.clone();
                 let print_commit = commit.clone(); let print_handed_off = handed_off.clone();
@@ -164,9 +165,10 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
                     // while the dialog is alive; the getter returns a new
                     // settings reference that the caller owns.
                     let settings = unsafe { gtk_print_unix_dialog_get_settings(pointer) };
-                    // SAFETY: the dialog is alive for this callback, and the
-                    // returned page setup is borrowed from it, so it stays
-                    // valid while the dialog lives.
+                    // SAFETY: the dialog is alive for this callback; the getter
+                    // borrows the dialog's page setup until the dialog replaces
+                    // it or is destroyed. from_glib_none below takes its own
+                    // reference before this handler returns.
                     let page = unsafe { gtk_print_unix_dialog_get_page_setup(pointer) };
                     if settings.is_null() || page.is_null() { finish(&print_reply, Err("The system print settings are unavailable".into())); return; }
                     // SAFETY: settings was checked non-null and is a full
