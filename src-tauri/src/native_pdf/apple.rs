@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-use super::{Authority, Commit, Destination, Files, Phase, Presentation};
+use super::{Authority, Commit, Destination, Files, Presentation};
+#[cfg(target_os = "macos")]
+use super::Phase;
 use crate::apple_requests::Registry;
 use std::{ffi::{c_char, CString}, path::PathBuf, sync::{Arc, LazyLock, atomic::AtomicBool}};
 #[cfg(target_os = "macos")]

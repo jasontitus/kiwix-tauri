@@ -434,6 +434,11 @@ The current build's paired reader comparison at the app's 32 MiB cache is record
 24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
 the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
 
+Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under Rust 1.99.1 with
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
+Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
+CommandLineTools, so the developer directory is required. This is a type check, not a device run.
+
 ### Thread-safety assertion sign-off
 
 Only one type still carries a handwritten thread-safety assertion, `agent_connector::Descriptor` (`Send` and
