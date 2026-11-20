@@ -1,0 +1,12 @@
+librqbit 9.1.0
+Upstream: https://github.com/ikatson/rqbit
+Upstream revision: 4309d38769ef93f6ee4f01a1ab147009a197fa8f
+Upstream directory: crates/librqbit
+Published crate SHA-256: 4e35a06e481e854f69141928d067406397b3ad7a47bfdc095bc31325f44f5d13
+License: Apache-2.0 (LICENSE-APACHE and NOTICE)
+
+Kiwix's peer receive buffer checks frame readiness before borrowing
+the decoded frame. Wrapped pieces still borrow both ring segments.
+The engine denies unsafe code by default. Exceptions are the Windows
+sparse-file system call and the optional memory-mapped storage example.
+Kiwix does not select that example.

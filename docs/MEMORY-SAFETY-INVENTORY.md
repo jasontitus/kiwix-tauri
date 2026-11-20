@@ -67,7 +67,9 @@ The vendored JSON library forbids unsafe Rust with every feature. It uses checke
 
 Torrent filename detection and decoding now use checked chardetng and encoding_rs. Both crates forbid unsafe Rust. The published crates accounted for 145 compiler-reported unsafe locations on Mac ARM64 and 148 on Linux x86-64 in the selected release configurations. The checked crates reported zero on both. The filename codec covers text in torrent metadata. [Filename parity, platform checks and timings](audit/2026-11-19-checked-torrent-encoding.md)
 
-Torrent metadata and peer messages now use checked bencode, peer framing and byte-order crates. Release compiler checks reported zero unsafe-code locations in these crates on Mac ARM64 and Linux x86-64, down from 40 on each target. The engine still owns a raw reborrow in its socket ring buffer. Transport and storage are tracked separately. [Torrent wire checks and timings](audit/2026-11-19-checked-torrent-wire.md)
+Torrent metadata and peer messages now use checked bencode, peer framing and byte-order crates. Release compiler checks reported zero unsafe-code locations in these crates on Mac ARM64 and Linux x86-64, down from 40 on each target. [Torrent wire checks and timings](audit/2026-11-19-checked-torrent-wire.md)
+
+The torrent engine now finishes reading each frame before returning a decoded message that borrows the receive buffer. Wrapped piece data still borrows both ring slices. The receive module forbids unsafe Rust. The engine library retains a scoped Windows sparse-file call and an optional memory-mapped storage example that Kiwix leaves disabled. The transport, TLS and storage dependencies remain in the inventory. [Receive-buffer review and verification](audit/2026-11-19-checked-torrent-receive.md)
 
 ## Performance follow-up
 

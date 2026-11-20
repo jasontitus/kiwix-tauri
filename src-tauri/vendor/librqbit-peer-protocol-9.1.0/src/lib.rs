@@ -1,3 +1,5 @@
+// Modified by Kiwix Tauri. Check buffered frame headers and layout.
+
 #![forbid(unsafe_code)]
 
 // BitTorrent peer protocol implementation: parsing, serialization etc.
@@ -339,41 +341,87 @@ impl Message<'_> {
     }
 }
 
+struct MessageHeader {
+    id: MsgId,
+    payload_len: usize,
+    total_len: usize,
+}
+
+#[inline]
+fn read_message_header(
+    buf: &mut DoubleBufHelper<'_>,
+) -> Result<Option<MessageHeader>, MessageDeserializeError> {
+    let len_prefix = buf
+        .read_u32_be()
+        .map_err(|missing| MessageDeserializeError::NotEnoughData(missing, None))?;
+    let total_len = usize::try_from(len_prefix)
+        .ok()
+        .and_then(|len| len.checked_add(INTEGER_LEN))
+        .ok_or(MessageDeserializeError::FrameLengthOverflow(len_prefix))?;
+    if len_prefix == 0 {
+        return Ok(None);
+    }
+
+    let id = buf.read_u8().ok_or(MessageDeserializeError::NotEnoughData(
+        len_prefix as usize,
+        None,
+    ))?;
+    let payload_len = total_len - PREAMBLE_LEN;
+    if buf.len() < payload_len {
+        return Err(MessageDeserializeError::NotEnoughData(
+            payload_len - buf.len(),
+            Some(MsgIdDebug(id)),
+        ));
+    }
+    Ok(Some(MessageHeader {
+        id,
+        payload_len,
+        total_len,
+    }))
+}
+
 impl Message<'_> {
+    /// Checks that the first frame is complete and can be passed to the
+    /// decoder without refilling or compacting the buffer.
+    ///
+    /// Call `deserialize` on the same slices to validate and decode it.
+    #[inline]
+    pub fn check_frame_ready(first: &[u8], second: &[u8]) -> Result<(), MessageDeserializeError> {
+        let mut buf = DoubleBufHelper::new(first, second);
+        let Some(header) = read_message_header(&mut buf)? else {
+            return Ok(());
+        };
+        match header.id {
+            MSGID_BITFIELD if buf.get_contiguous(header.payload_len).is_none() => {
+                return Err(MessageDeserializeError::NeedContiguous);
+            }
+            MSGID_EXTENDED if buf.get_contiguous(header.payload_len).is_none() => {
+                ExtendedMessage::check_frame_ready(buf.with_max_len(header.payload_len))?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     pub fn deserialize<'a>(
         buf: &'a [u8],
         buf2: &'a [u8],
     ) -> Result<(Message<'a>, usize), MessageDeserializeError> {
         let mut buf = DoubleBufHelper::new(buf, buf2);
-        let len_prefix = buf
-            .read_u32_be()
-            .map_err(|rem| MessageDeserializeError::NotEnoughData(rem, None))?;
-        let total_len = usize::try_from(len_prefix)
-            .ok()
-            .and_then(|len| len.checked_add(INTEGER_LEN))
-            .ok_or(MessageDeserializeError::FrameLengthOverflow(len_prefix))?;
-        if len_prefix == 0 {
-            return Ok((Message::KeepAlive, total_len));
-        }
-
-        let msg_id = buf.read_u8().ok_or(MessageDeserializeError::NotEnoughData(
-            len_prefix as usize,
-            None,
-        ))?;
-
-        let msg_len = len_prefix as usize - 1;
-        if buf.len() < msg_len {
-            return Err(MessageDeserializeError::NotEnoughData(
-                msg_len - buf.len(),
-                Some(MsgIdDebug(msg_id)),
-            ));
-        }
+        let Some(MessageHeader {
+            id: msg_id,
+            payload_len: msg_len,
+            total_len,
+        }) = read_message_header(&mut buf)?
+        else {
+            return Ok((Message::KeepAlive, INTEGER_LEN));
+        };
 
         macro_rules! check_msg_len {
             ($expected:expr) => {{
                 if msg_len != $expected {
                     return Err(MessageDeserializeError::IncorrectMsgLen {
-                        received: len_prefix - 1,
+                        received: msg_len as u32,
                         expected: $expected,
                         msg_id: MsgIdDebug(msg_id),
                     });
@@ -382,7 +430,7 @@ impl Message<'_> {
             (min $expected:expr) => {{
                 if msg_len < $expected {
                     return Err(MessageDeserializeError::IncorrectMsgLen {
-                        received: len_prefix - 1,
+                        received: msg_len as u32,
                         expected: $expected,
                         msg_id: MsgIdDebug(msg_id),
                     });
@@ -599,15 +647,23 @@ mod tests {
 
     #[test]
     fn test_deserialize_serialize_extended_non_contiguous() {
-        for split_point in 0..EXTENDED.len() {
-            let (first, second) = EXTENDED.split_at(split_point);
+        let mut frames = EXTENDED.to_vec();
+        frames.extend_from_slice(&[0; INTEGER_LEN]); // Following keep-alive.
+        for split_point in 0..=frames.len() {
+            let (first, second) = frames.split_at(split_point);
+            let ready = Message::check_frame_ready(first, second);
             let res = Message::deserialize(first, second);
             if split_point > PREAMBLE_LEN + 1 && split_point < EXTENDED.len() {
+                assert!(
+                    matches!(ready, Err(MessageDeserializeError::NeedContiguous)),
+                    "expected compaction before parsing: {split_point}"
+                );
                 assert!(
                     matches!(res, Err(MessageDeserializeError::NeedContiguous)),
                     "expected NeedContiguous: {split_point}"
                 )
             } else {
+                ready.unwrap();
                 let (msg, len) = res
                     .inspect_err(|e| panic!("split_point={split_point:?}; error: {e:#}"))
                     .unwrap();
@@ -615,6 +671,19 @@ mod tests {
                 assert_eq!(len, EXTENDED.len());
             }
         }
+    }
+
+    #[test]
+    fn readiness_does_not_decode_a_contiguous_extension_body() {
+        // The extension ID ends the first slice and the invalid bencode
+        // body is contiguous in the second slice.
+        let first = [0, 0, 0, 3, MSGID_EXTENDED, 0];
+        let second = b"x";
+        assert!(Message::check_frame_ready(&first, second).is_ok());
+        assert!(matches!(
+            Message::deserialize(&first, second),
+            Err(MessageDeserializeError::Bencode(_))
+        ));
     }
 
     #[test]

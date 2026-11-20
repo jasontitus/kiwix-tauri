@@ -1,3 +1,5 @@
+// Modified by Kiwix Tauri. Check the layout of split extensions.
+
 use std::io::Cursor;
 
 use bencode::BencodeValue;
@@ -79,6 +81,25 @@ impl<'a> ExtendedMessage<ByteBuf<'a>> {
             }
         }
         Ok(out.position() as usize)
+    }
+
+    pub(crate) fn check_frame_ready(
+        mut buf: DoubleBufHelper<'_>,
+    ) -> Result<(), MessageDeserializeError> {
+        let emsg_id = buf.read_u8().ok_or(MessageDeserializeError::NotEnoughData(
+            1,
+            Some(crate::MsgIdDebug(MSGID_EXTENDED)),
+        ))?;
+        if buf.get_contiguous(buf.len()).is_some() {
+            return Ok(());
+        }
+        if emsg_id == MY_EXTENDED_UT_METADATA {
+            // A metadata piece can span two slices if its dictionary header
+            // can already be decoded.
+            UtMetadata::deserialize(buf)?;
+            return Ok(());
+        }
+        Err(MessageDeserializeError::NeedContiguous)
     }
 
     pub fn deserialize(mut buf: DoubleBufHelper<'a>) -> Result<Self, MessageDeserializeError> {

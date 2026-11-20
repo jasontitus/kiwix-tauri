@@ -6,7 +6,8 @@ Published crate SHA-256: 88b018302dbb1d053dfe34aca20b200e9c434d2bc8ea27e41875771
 License: Apache-2.0 (LICENSE-APACHE and NOTICE)
 
 Kiwix selects IDs through exhaustive message arms and uses checked frame
-length arithmetic and slices. The crate forbids unsafe Rust. Existing tests
+length arithmetic and slices. A readiness check lets the socket ring borrow
+a complete frame after its last refill. The crate forbids unsafe Rust. Tests
 use the same extended handshake fixture from the librqbit 9.1.0 published crate,
 now with a self-contained path.
 
