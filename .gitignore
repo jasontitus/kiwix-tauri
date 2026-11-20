@@ -45,3 +45,8 @@ src-tauri/gen/android/app/src/main/jniLibs/
 
 # Local release upload staging
 release-artifacts/
+
+# Local fuzz corpora and crash artifacts; the seed fixtures are tracked separately.
+src-tauri/fuzz/corpus/
+src-tauri/fuzz/artifacts/
+src-tauri/fuzz/target/

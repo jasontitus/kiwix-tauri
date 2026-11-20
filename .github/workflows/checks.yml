@@ -186,3 +186,15 @@ jobs:
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/kiwix-mcp-x86_64-unknown-linux-gnu
           cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol -- -D warnings
+
+  native-sanitizers:
+    name: LocalSwarm ASan/UBSan (macOS)
+    runs-on: macos-15
+    timeout-minutes: 15
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and run the native bridge with ASan/UBSan
+        run: ./scripts/test-native-sanitizers.sh
