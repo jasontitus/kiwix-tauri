@@ -1,0 +1,15 @@
+librqbit-bencode 9.1.0
+Upstream: https://github.com/ikatson/rqbit
+Upstream revision: 4309d38769ef93f6ee4f01a1ab147009a197fa8f
+Upstream directory: crates/bencode
+Published crate SHA-256: 0cf295fa65b3ad66bd363a5d3a278730352745b72ff0f5b6e6010612351924e5
+License: Apache-2.0 (LICENSE-APACHE and NOTICE)
+
+Kiwix reads byte strings through checked slices. Integer values and string
+lengths are checked against their destination types before use. Ignored
+integers are syntax-checked without a destination limit. The crate
+forbids unsafe Rust. Existing tests use the same Ubuntu torrent metadata
+fixture from the librqbit 9.1.0 published crate, now with a self-contained path.
+
+Fixture SHA-256:
+4377c0ec9e28d582e0f3014d47916c5a6b949fd9da18ef87a729628c6546719f

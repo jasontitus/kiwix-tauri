@@ -1,0 +1,11 @@
+byteorder 1.5.0
+Upstream: https://github.com/BurntSushi/byteorder
+Upstream revision: ec068eefa042d494475db125c4b034bd8e9e34dd
+Published crate SHA-256: 1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b
+License: Unlicense OR MIT (COPYING, LICENSE-MIT and UNLICENSE)
+
+Kiwix uses checked scalar and slice conversions for signed integers, floats,
+and variable-width fields. Bulk Read methods stage initialized bytes in
+bounded chunks. Floating-point conversions preserve raw bits. The public
+method names and feature declarations are retained. The crate forbids unsafe
+Rust.

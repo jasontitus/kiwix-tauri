@@ -1,0 +1,14 @@
+librqbit-peer-protocol 9.1.0
+Upstream: https://github.com/ikatson/rqbit
+Upstream revision: 4309d38769ef93f6ee4f01a1ab147009a197fa8f
+Upstream directory: crates/peer_binary_protocol
+Published crate SHA-256: 88b018302dbb1d053dfe34aca20b200e9c434d2bc8ea27e41875771bd31008ef
+License: Apache-2.0 (LICENSE-APACHE and NOTICE)
+
+Kiwix selects IDs through exhaustive message arms and uses checked frame
+length arithmetic and slices. The crate forbids unsafe Rust. Existing tests
+use the same extended handshake fixture from the librqbit 9.1.0 published crate,
+now with a self-contained path.
+
+Fixture SHA-256:
+3ab042b22660e934286122d0ee917d748858021a48b284ccf9aceb32eb8b1879
