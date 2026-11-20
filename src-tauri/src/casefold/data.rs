@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unicode-3.0
 // Generated with generate_casefold from ICU4X 2.4.0 (Unicode 18).
 // See src-tauri/licenses/glass/Unicode-3.0.txt.
+#![forbid(unsafe_code)]
 pub(super) fn page(high: u32) -> &'static [(u8, &'static str)] {
     match high {
         0x0 => &[

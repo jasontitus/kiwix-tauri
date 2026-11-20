@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Loading, validating and quarantining saved download rows and segment plans.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

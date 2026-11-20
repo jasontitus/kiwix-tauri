@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Ephemeral selected-peer QUIC receipts. Durable URLs are correlation, never authority.
+#![forbid(unsafe_code)]
 use crate::acquisition::{DownloadManager, DownloadSnapshot};
 use crate::localswarm::{library::{self, LibraryPeerDescriptor}, LocalSwarmManager};
 use crate::store::Store;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! An owned receipt binds one article/rate/voice key to a private PCM file.
 //! Existing files without that receipt are never served, overwritten or evicted.
+#![forbid(unsafe_code)]
 use super::*;
 use crate::integrity::ContentIdentity;
 

@@ -14,6 +14,7 @@
 //!   the two completion commands (see `lib.rs` dispatch).
 //!
 //! Photos pass through memory only; nothing is written to disk.
+#![forbid(unsafe_code)]
 
 use super::Service;
 use base64::Engine as _;

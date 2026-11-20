@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Unit tests for `store`, kept beside it rather than inline.
+#![forbid(unsafe_code)]
 use super::*;
 
 #[test]

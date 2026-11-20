@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::{Authority, Commit, Destination, Files, Phase, Presentation};
 use serde_json::json;
 use std::{path::PathBuf, sync::{Arc, atomic::{AtomicBool, Ordering}}};

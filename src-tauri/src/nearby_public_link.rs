@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Public connection metadata, not invitation authentication or network authority.
 //! A selected Connect permits a join; reading/subscribing never does.
+#![forbid(unsafe_code)]
 mod framing;
 pub(crate) use framing::{Framing, Kind};
 use serde::{Deserialize, Serialize};

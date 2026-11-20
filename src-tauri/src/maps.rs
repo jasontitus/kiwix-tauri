@@ -38,6 +38,7 @@
 //! warning for explicit retry of the same request with its opaque acknowledgement.
 //! Replacing the current job retains earlier completed destinations as durable
 //! automatic-monitor exclusions only, never as publication or import authority.
+#![forbid(unsafe_code)]
 use base64::{engine::general_purpose::STANDARD, Engine};
 use crate::map_chunk_cache::{MapChunkCache, MAX_BYTES as MAX_CACHE_BYTES};
 use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsFollowExt};

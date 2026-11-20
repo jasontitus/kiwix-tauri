@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Library extension v1: bounded JSON controls, then length-framed byte payloads.
 //! This is not HTTP. Status/header semantics are an internal acquisition adapter.
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use super::{library::LibraryInventory, network::{self, RecvStream, SendStream}};
 use tokio_util::sync::CancellationToken;

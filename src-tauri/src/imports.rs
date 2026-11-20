@@ -5,6 +5,7 @@
 //! retirement invalidates queued/late results immediately; terminal retirement
 //! additionally joins that worker before native provider resources are released.
 //! There are no profile writes, events, receipt commits, or private caches here.
+#![forbid(unsafe_code)]
 use crate::{
     archive::Archive,
     store::{new_installation_id, now, Book},

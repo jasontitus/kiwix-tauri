@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Owner-authenticated, foreground-only private TCP endpoint, isolated from public sharing.
+#![forbid(unsafe_code)]
 use super::*;
 use crate::private_sync::{Channel, Invitation, Message, Peer};
 use crate::reading_data::Categories;

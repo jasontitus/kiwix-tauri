@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Runs on native mobile test targets: real lifecycle state, no transport mocks.
+#![forbid(unsafe_code)]
 use super::*;
 struct Profile(PathBuf);
 impl Profile { fn new() -> Self { Self(std::env::temp_dir().join(format!("kiwix-private-mobile-{}", Uuid::new_v4()))) } }

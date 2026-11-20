@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native Quit waits for each trusted shell's latest session, never archive messages.
+#![forbid(unsafe_code)]
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},

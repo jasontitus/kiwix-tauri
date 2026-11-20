@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Unit tests for `server`, kept beside it rather than inline.
+#![forbid(unsafe_code)]
 use super::parse_range;
 use super::{ArchiveWorkers, ReaderConnection, ReaderListener, ReaderStorage, Store};
 use serde_json::{json, Value};

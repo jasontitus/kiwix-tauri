@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::*;
 use crate::mobile::{self, BackgroundRequest, IncomingRequest};
 #[cfg(target_os = "android")]

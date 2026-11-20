@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Include as a Service child module. Policy is an additional fence, never a substitute
 //! for iOS checkpoint ownership, Android foreground-service admission or privacy leases.
+#![forbid(unsafe_code)]
 #[cfg(mobile)]
 use super::Service;
 use serde::Deserialize;

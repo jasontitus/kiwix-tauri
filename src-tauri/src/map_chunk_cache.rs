@@ -4,6 +4,7 @@
 //! one cache instance per private directory: independent writers cannot share
 //! an in-memory capacity ledger. All payload operations use the retained Dir,
 //! including when the original directory path is moved or replaced.
+#![forbid(unsafe_code)]
 use cap_fs_ext::{FollowSymlinks, MetadataExt, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, OpenOptions};
 use std::{

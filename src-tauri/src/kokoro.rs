@@ -5,6 +5,7 @@
 //! existing platform voice path remains the only engine. Synthesis and playback
 //! run on a dedicated thread because sherpa-onnx is CPU-bound and rodio owns a
 //! platform audio stream; neither may block the Tauri command executor.
+#![forbid(unsafe_code)]
 
 #[path = "kokoro/install.rs"]
 mod install;

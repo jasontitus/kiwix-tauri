@@ -208,7 +208,12 @@ if (printOnly) {
 }
 
 const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
+const forbidBaseline = JSON.parse(readFileSync("scripts/unsafe-forbid-baseline.json", "utf8"));
 const problems = [];
+const missingForbid = forbidBaseline.filter((file) => !readFileSync(file, "utf8").includes("forbid(unsafe_code)"));
+if (missingForbid.length > 0) {
+  problems.push(`modules lost #![forbid(unsafe_code)]: ${missingForbid.join(", ")}`);
+}
 if (undocumented.length > 0) {
   problems.push(`undocumented unsafe items:\n  ${undocumented.join("\n  ")}`);
 }

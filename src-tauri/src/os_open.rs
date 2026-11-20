@@ -5,6 +5,7 @@
 //! inside the App Sandbox, NSWorkspace hands the receiving application a
 //! sandbox extension for the file, so it can read attachments that Kiwix
 //! extracted into its container. Elsewhere the `opener` crate is used.
+#![forbid(unsafe_code)]
 use std::ffi::OsStr;
 
 pub(crate) fn open(target: impl AsRef<OsStr>) -> Result<(), String> {

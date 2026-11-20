@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use super::{LinkError, Result, MAX_MESSAGE};
 use zeroize::Zeroizing;
 

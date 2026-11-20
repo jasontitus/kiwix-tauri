@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Android's durable handoff uses the same verified receipt/install identity as
 //! library admission. No transport callback is notification authority.
+#![forbid(unsafe_code)]
 use super::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

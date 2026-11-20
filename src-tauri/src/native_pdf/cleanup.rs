@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Scratch lifetime is independent of application authority. A late native
 //! producer or response body may retain only this lease, never publication.
+#![forbid(unsafe_code)]
 use std::{collections::HashSet, fs, path::{Path, PathBuf}, sync::{Arc, LazyLock, Mutex}};
 pub type Report = Arc<dyn Fn(String) + Send + Sync>;
 static PENDING: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(|| Mutex::new(HashSet::new()));

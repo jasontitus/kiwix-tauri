@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Opt-in bounded local diagnostics; never network telemetry or article history.
+#![forbid(unsafe_code)]
 use crate::store::Store;
 use serde_json::{json, Value};
 use std::{io::{Read, Write}, sync::Mutex};

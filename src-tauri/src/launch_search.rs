@@ -6,6 +6,7 @@
 //! window: it never opens files, changes settings, downloads or reaches the
 //! network. The text is untrusted, so it is sanitised here before anything
 //! queues it, and only the latest pending request is kept.
+#![forbid(unsafe_code)]
 
 use unicode_normalization::UnicodeNormalization;
 

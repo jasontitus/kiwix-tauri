@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Terminal cleanup retains ownership until both deletion and its receipt commit.
+#![forbid(unsafe_code)]
 use super::*;
 
 #[derive(Clone, Serialize, Deserialize)]

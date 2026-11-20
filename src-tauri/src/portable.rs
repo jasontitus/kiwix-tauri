@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Desktop portable profiles are selected only by a real `.portable` file.
+#![forbid(unsafe_code)]
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, OpenOptions};
 use std::{collections::HashMap, fs, io::{Read, Write}, path::{Component, Path, PathBuf}};

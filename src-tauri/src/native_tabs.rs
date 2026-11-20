@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native window tabs are independent of each shell's reader-tab session.
+#![forbid(unsafe_code)]
 use crate::store::WindowSession;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};

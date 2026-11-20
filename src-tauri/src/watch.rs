@@ -10,6 +10,7 @@
 //! The periodic `library_maintenance` scan remains the fallback: it keeps
 //! running when no OS watcher can be installed, when a backend silently misses
 //! an event, and when the watcher thread has already stopped.
+#![forbid(unsafe_code)]
 use crate::store::Store;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The public `DownloadManager` API: admission, control, listing and import handoff.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

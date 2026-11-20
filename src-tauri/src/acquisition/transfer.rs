@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The single-stream HTTP transfer worker and its stop/resume outcomes.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

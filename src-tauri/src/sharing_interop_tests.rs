@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::*;
 fn fixture() -> std::path::PathBuf { std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim") }
 fn state(store: Arc<Store>) -> LibraryIndex {

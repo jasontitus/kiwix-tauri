@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Confined librqbit storage backends that write only inside owned staging or library directories.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

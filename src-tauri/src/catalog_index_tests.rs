@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::*;
 use axum::{extract::State, http::{HeaderMap, StatusCode, Uri}, response::{IntoResponse, Response}, routing::get, Router};
 use std::{path::PathBuf, sync::atomic::AtomicUsize};

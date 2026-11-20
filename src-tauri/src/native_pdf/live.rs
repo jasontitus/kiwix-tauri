@@ -2,6 +2,7 @@
 //! A self-contained snapshot of the authenticated reader frame, not a reload of
 //! the archive. Scripts never run in the export renderer; all visual resources
 //! must already have been captured by the bridge as data URLs.
+#![forbid(unsafe_code)]
 use crate::exports::html::{self, Html};
 use dom_query::NodeRef;
 use serde::Deserialize;

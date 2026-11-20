@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native desktop picker preferences. Mobile document URIs never enter this module.
+#![forbid(unsafe_code)]
 
 use crate::store::Store;
 use std::path::{Path, PathBuf};

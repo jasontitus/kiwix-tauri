@@ -17,6 +17,7 @@
 //! A process-wide registry maps each token to a wake-up so `cancel` also stops
 //! waiting here, even if the plugin never answers (for example when another
 //! permission sheet replaced the location sheet's callback).
+#![forbid(unsafe_code)]
 
 use crate::permissions::{Coordinates, LocationError, Position};
 use serde_json::{json, Value};

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Logical ZIM bytes over an admitted, retained exact cohort. The source owns
 //! provider leases as well as descriptors until the response retires.
+#![forbid(unsafe_code)]
 use crate::archive_source::RetainedSource;
 use std::io::{self, Read, Seek, SeekFrom};
 

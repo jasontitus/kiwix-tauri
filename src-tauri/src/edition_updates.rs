@@ -2,6 +2,7 @@
 //! Explicit full-archive edition cutover. Durable intent is evidence, never a
 //! restored authorization; all mutating entry points require the service's
 //! normal-writable/privacy/window admission lease and source-mutation gate.
+#![forbid(unsafe_code)]
 use crate::{
     acquisition::{DownloadJob, DownloadManager},
     archive_source::{self, RetainedSource},

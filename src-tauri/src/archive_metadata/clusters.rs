@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Verify clusters from one retained archive with a bounded desktop worker budget.
+#![forbid(unsafe_code)]
 use super::{archive_error, check_cancel, Archive, CancellationToken, Error};
 use std::sync::atomic::{AtomicBool, Ordering};
 use zimru::ClusterReadLimits;

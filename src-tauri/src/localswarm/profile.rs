@@ -1,4 +1,5 @@
 // Temporary owned-device diagnosis only; remove after the bounded capture.
+#![forbid(unsafe_code)]
 use std::time::Instant;
 #[cfg(feature = "localswarm-profiling")]
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};

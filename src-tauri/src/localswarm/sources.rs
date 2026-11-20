@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Discovery records are multihomed sources, not one arbitrarily sorted IP.
+#![forbid(unsafe_code)]
 use super::{discovery::Peer, network::{self, RateBudget, ReceiveActivity, Session}};
 use futures_util::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use std::{collections::{HashMap, HashSet, VecDeque}, net::IpAddr, sync::{Arc, LazyLock}, time::Duration};

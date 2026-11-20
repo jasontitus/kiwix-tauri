@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Segmented (multi-range) HTTP transfers with durable per-range progress.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

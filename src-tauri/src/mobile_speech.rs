@@ -2,6 +2,7 @@
 //! Root-only native read-aloud. No archive frame receives a native capability.
 //! The synchronous ownership gate orders source retirement before any async
 //! privacy/reader gate; native calls never retain this gate or a privacy lease.
+#![forbid(unsafe_code)]
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

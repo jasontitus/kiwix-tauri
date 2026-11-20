@@ -2,6 +2,7 @@
 //! Android local-only hotspot hosting: platform credentials and the Wi-Fi QR
 //! payload the iPhone camera understands, plus the reservation lifecycle that
 //! keeps native ownership and Rust state in agreement.
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashSet;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Trusted service-owned presentation metadata, separate from archive DOM data.
+#![forbid(unsafe_code)]
 pub struct Presentation {
     // Linux/Android consume the suggested filename; Apple/Windows retain the
     // same trusted presentation contract without reading this field.

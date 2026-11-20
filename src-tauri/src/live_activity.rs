@@ -15,6 +15,7 @@
 //!
 //! The decision logic is platform-neutral so it is unit-tested on the host; only
 //! the Service glue and the native call are iOS-only.
+#![forbid(unsafe_code)]
 
 use crate::acquisition::DownloadJob;
 #[cfg(target_os = "ios")]

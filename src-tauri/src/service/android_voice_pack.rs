@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 #[cfg(target_os = "android")]
 use super::{kokoro, Service};
 use serde_json::{json, Value};

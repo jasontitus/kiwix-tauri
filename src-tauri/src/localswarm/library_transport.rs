@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Actual Quinn / Network.framework streams; no TCP or HTTP fallback.
+#![forbid(unsafe_code)]
 use super::{library::LibraryPeerDescriptor, network::{self, RecvStream, SendStream}};
 use crate::transfer_policy;
 use std::{collections::HashMap, net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr}, sync::{Arc, LazyLock, Mutex, Weak}};

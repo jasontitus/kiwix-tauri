@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Accepted PDF jobs own only immutable identity and cancellation while native
 //! loading/system UI runs. Short commits use Mode -> Android -> Window -> Store.
+#![forbid(unsafe_code)]
 use super::*;
 use crate::native_pdf::{Authority, Commit, Outcome, Phase};
 #[cfg(not(target_os = "android"))]

@@ -12,6 +12,7 @@
 //! A process-wide registry maps the request token to a cancel channel created
 //! before the thread starts, so a cancel is honoured at any point, including
 //! before the connection exists.
+#![forbid(unsafe_code)]
 
 use crate::permissions::{Coordinates, LocationError, Position};
 use futures_util::StreamExt;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 use super::*;
 fn source() -> (std::path::PathBuf, Arc<Store>, Book) {
     let root = std::env::temp_dir().canonicalize().unwrap().join(format!("kiwix-quic-library-source-{}", uuid::Uuid::new_v4()));

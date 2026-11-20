@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Public BLE connection assistance. Only trusted Share all / selected Connect
 //! actions authorize native radio configuration. Metadata reads never authorize it.
+#![forbid(unsafe_code)]
 use super::*;
 use crate::{localswarm::library::LibraryPeerDescriptor, nearby_public_link::{Framing, Kind, PublicLibrary, HostRequest, ReverseReply}};
 use serde::{Deserialize, Serialize};

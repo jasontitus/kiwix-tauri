@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private reading-data protocol. This has no public Nearby route or archive handler.
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
