@@ -7,6 +7,7 @@
 //! run inside the operation that creates or processes the native reference.
 //! One address registration can own multiple A records on the same reference.
 use super::{protocol, truncate_utf8, library_addresses, library_instance, valid_library_session_id, Manifest, Peer, MAX_ADVERTISEMENTS, MAX_PEERS, MAX_TXT, SERVICE};
+use nix::net::if_::{if_nameindex, Interfaces};
 use rustix::{event::{poll, PollFd, PollFlags, Timespec}, io::Errno};
 use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, ffi::{c_char, c_void, CStr, CString},
     os::fd::BorrowedFd,
@@ -632,9 +633,12 @@ impl Engine {
                 if !peer.host.is_empty() { candidates.push((key, peer)); }
             }
         }
-        let selected = if self.direct {
-            candidates.iter().find(|(key, _)| direct_interface(key.interface)).or_else(|| candidates.first())
-        } else { candidates.first() };
+        let direct = if self.direct && candidates.len() > 1 {
+            if_nameindex().ok().and_then(|interfaces| {
+                candidates.iter().find(|(key, _)| direct_interface(&interfaces, key.interface))
+            })
+        } else { None };
+        let selected = direct.or_else(|| candidates.first());
         let peer = selected.map(|(_, peer)| (*peer).clone());
         let mut snapshot = self.snapshot.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(peer) = peer {
@@ -649,13 +653,10 @@ impl Engine {
 /// AWDL (`awdl0`) and low-latency WLAN (`llw0`) are Apple's peer-to-peer
 /// interfaces. Interface indices from DNS-SD callbacks are stable for the
 /// lifetime of the record.
-fn direct_interface(index: u32) -> bool {
-    if index == 0 { return false; }
-    let mut output = [0u8; libc::IF_NAMESIZE];
-    // SAFETY: if_indextoname writes at most IF_NAMESIZE bytes into the owned output buffer.
-    if unsafe { libc::if_indextoname(index, output.as_mut_ptr().cast()) }.is_null() { return false; }
-    CStr::from_bytes_until_nul(&output).is_ok_and(|name| {
-        let name = name.to_bytes();
+fn direct_interface(interfaces: &Interfaces, index: u32) -> bool {
+    interfaces.into_iter().any(|interface| {
+        if interface.index() != index { return false; }
+        let name = interface.name().to_bytes();
         name.starts_with(b"awdl") || name.starts_with(b"llw")
     })
 }
@@ -841,10 +842,11 @@ mod tests {
 
     #[test]
     fn direct_interface_rejects_missing_and_ordinary_interfaces() {
-        assert!(!direct_interface(0));
-        assert!(!direct_interface(u32::MAX));
+        let interfaces = if_nameindex().unwrap();
+        assert!(!direct_interface(&interfaces, 0));
+        assert!(!direct_interface(&interfaces, u32::MAX));
         let loopback = nix::net::if_::if_nametoindex("lo0").unwrap();
-        assert!(!direct_interface(loopback));
+        assert!(!direct_interface(&interfaces, loopback));
     }
 
     #[test]
