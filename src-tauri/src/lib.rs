@@ -31,6 +31,8 @@ mod device_scan;
 mod diagnostics;
 mod disk_warning;
 mod exports;
+#[cfg(target_os = "ios")]
+mod ffi;
 mod fs_ext;
 #[cfg(any(target_os = "android", test))]
 mod hotspot;

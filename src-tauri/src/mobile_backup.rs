@@ -35,11 +35,11 @@ impl<T: ?Sized> BackupFile for T {}
 
 #[cfg(target_os = "ios")]
 unsafe extern "C" {
-    fn kiwix_mobile_archive_backup(
-        fd: i32, path: *const std::ffi::c_char, include: i32, admit: i32,
+    safe fn kiwix_mobile_archive_backup(
+        fd: i32, path: crate::ffi::CPath<'_>, include: i32, admit: i32,
     ) -> i32;
-    fn kiwix_mobile_archive_admitted(fd: i32, path: *const std::ffi::c_char) -> i32;
-    fn kiwix_mobile_exclude_unadmitted_payload(fd: i32, path: *const std::ffi::c_char) -> i32;
+    safe fn kiwix_mobile_archive_admitted(fd: i32, path: crate::ffi::CPath<'_>) -> i32;
+    safe fn kiwix_mobile_exclude_unadmitted_payload(fd: i32, path: crate::ffi::CPath<'_>) -> i32;
 }
 
 /// Invoke after exclusive owned-file creation, BEFORE writing or allocating payload bytes.
@@ -57,7 +57,7 @@ pub(crate) fn exclude_unadmitted_payload(file: &(impl BackupFile + ?Sized), path
     // SAFETY: the caller keeps this descriptor open through the synchronous
     // Swift call; `file` may be borrowed, so this code does not claim ownership.
     // `path` is a live NUL-terminated C string read synchronously.
-    if unsafe { kiwix_mobile_exclude_unadmitted_payload(file.as_raw_fd(), path.as_ptr()) } != 0 {
+    if kiwix_mobile_exclude_unadmitted_payload(file.as_raw_fd(), crate::ffi::CPath::new(&path)) != 0 {
         return Err("iOS could not conditionally exclude the owned payload".into());
     }
     Ok(())
@@ -84,7 +84,7 @@ pub(crate) fn admitted(file: &(impl BackupFile + ?Sized), path: &Path) -> Result
     // SAFETY: the caller keeps this descriptor open through the synchronous
     // Swift call; `file` may be borrowed, so this code does not claim ownership.
     // `path` is a live NUL-terminated C string read synchronously.
-    match unsafe { kiwix_mobile_archive_admitted(file.as_raw_fd(), path.as_ptr()) } {
+    match kiwix_mobile_archive_admitted(file.as_raw_fd(), crate::ffi::CPath::new(&path)) {
         0 => Ok(false),
         1 => Ok(true),
         _ => Err("iOS could not inspect owned archive admission".into()),
@@ -107,9 +107,7 @@ fn apply(
         // SAFETY: the caller keeps this descriptor open through the synchronous
         // Swift call; `file` may be borrowed, so this code does not claim ownership.
         // `path` is a live NUL-terminated C string read synchronously.
-        if unsafe {
-            kiwix_mobile_archive_backup(file.as_raw_fd(), path.as_ptr(), i32::from(include), i32::from(admit))
-        } != 0 {
+        if kiwix_mobile_archive_backup(file.as_raw_fd(), crate::ffi::CPath::new(&path), i32::from(include), i32::from(admit)) != 0 {
             return Err("iOS could not apply the owned archive backup policy".into());
         }
     }

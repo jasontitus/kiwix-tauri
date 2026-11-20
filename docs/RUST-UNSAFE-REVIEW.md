@@ -401,15 +401,18 @@ This pass removed blocks that had a safe alternative available on this host:
 - `kiwix_mobile_bind_local_socket` is declared `safe fn`: it takes an integer descriptor, rejects invalid
   descriptors through checked socket calls, binds under its own lock and retains nothing. Pointer-taking
   bridges stay `unsafe` because a safe caller could pass a dangling or unterminated pointer.
+- The iOS PDF scratch exclusion and three archive-policy imports now take a private `ffi::CPath` that borrows
+  a live `CStr`. The native bodies read the path synchronously and retain no pointer, so the imports are
+  `safe fn`; this removes four call-site blocks. Independent review confirmed the transparent ABI and lifetimes.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **129** |
-| Files containing them | 30 | **27** |
+| `unsafe { … }` matches (app + relay) | 136 | **125** |
+| Files containing them | 30 | **25** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 129 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 125 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; Windows and Linux comments
 were source-reviewed but not compiled on this host.
 
@@ -424,10 +427,10 @@ outstanding.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(129 blocks in 27 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(125 blocks in 25 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
-`#![forbid(unsafe_code)]` is now on 139 safe modules, including archive source and search, map
+`#![forbid(unsafe_code)]` is now on 141 safe modules, including archive source and search, map
 composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
 reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
 add the attribute; the census gate covers the remaining native-boundary modules.

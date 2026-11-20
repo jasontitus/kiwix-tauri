@@ -1,6 +1,6 @@
 {
-  "matches": 129,
-  "blocks": 129,
+  "matches": 125,
+  "blocks": 125,
   "impls": 2,
   "implsByFile": {
     "src-tauri/src/agent_connector.rs": 2
@@ -17,8 +17,6 @@
     "src-tauri/src/location_windows.rs": 2,
     "src-tauri/src/menus.rs": 1,
     "src-tauri/src/mobile.rs": 1,
-    "src-tauri/src/mobile_backup.rs": 3,
-    "src-tauri/src/native_pdf.rs": 1,
     "src-tauri/src/native_pdf/apple.rs": 2,
     "src-tauri/src/native_pdf/handoff.rs": 2,
     "src-tauri/src/native_pdf/linux.rs": 15,
