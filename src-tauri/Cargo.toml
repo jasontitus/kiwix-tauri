@@ -252,6 +252,9 @@ block-buffer = { path = "vendor/block-buffer-0.12.1" }
 hybrid-array = { path = "vendor/hybrid-array-0.4.15" }
 # Shared checked token strings across exports, PDF validation and selector consumers.
 cssparser = { path = "vendor/cssparser-0.37.0" }
+# Use checked HTTP/1 token cursors and initialized header storage.
+httparse = { path = "vendor/httparse-1.10.1" }
+hyper = { path = "vendor/hyper-1.12.0" }
 # Keep the torrent metadata, peer framing and socket receive paths on checked slices.
 librqbit = { path = "vendor/librqbit-9.1.0" }
 byteorder = { path = "vendor/byteorder-1.5.0" }

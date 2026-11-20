@@ -71,6 +71,8 @@ Torrent metadata and peer messages now use checked bencode, peer framing and byt
 
 The torrent engine now finishes reading each frame before returning a decoded message that borrows the receive buffer. Wrapped piece data still borrows both ring slices. The receive module forbids unsafe Rust. The engine library retains a scoped Windows sparse-file call and an optional memory-mapped storage example that Kiwix leaves disabled. The transport, TLS and storage dependencies remain in the inventory. [Receive-buffer review and verification](audit/2026-11-19-checked-torrent-receive.md)
 
+The HTTP/1 parser now uses checked byte slices and initialized header storage. Httparse and Hyper's production HTTP/1 role module forbid unsafe Rust. Hyper checks that borrowed header fields fit inside the parsed head before separating it from the body. The rest of Hyper, HTTP/2, Tokio, TLS and shared byte buffers remain in scope. [HTTP/1 verification and timings](audit/2026-11-19-checked-http1.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.

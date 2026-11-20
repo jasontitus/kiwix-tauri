@@ -1,0 +1,10 @@
+httparse 1.10.1
+Upstream: https://github.com/seanmonstar/httparse
+Upstream revision: 9f29e79f9832dbd0ae5220acb17c1866745bdecd
+Published crate SHA-256: 6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87
+License: MIT OR Apache-2.0 (LICENSE-MIT and LICENSE-APACHE)
+
+Kiwix uses checked token slices and initialized header slots. The crate
+forbids unsafe Rust. The portable scanner replaces architecture-specific
+SIMD. Hyper uses the initialized request and response APIs. The local
+parser omits the uninitialized-header entry points.
