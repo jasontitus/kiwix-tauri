@@ -121,6 +121,7 @@
       "vendor/byteorder-1.5.0/UNLICENSE": "licenses/byteorder/UNLICENSE",
       "vendor/byteorder-1.5.0/SOURCE.txt": "licenses/byteorder/SOURCE.txt",
       "licenses/librqbit-sha1-wrapper": "licenses/librqbit-sha1-wrapper",
+      "licenses/librqbit-utp": "licenses/librqbit-utp",
       "licenses/digest": "licenses/digest",
       "licenses/block-buffer": "licenses/block-buffer",
       "licenses/hybrid-array": "licenses/hybrid-array",

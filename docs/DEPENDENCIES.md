@@ -62,7 +62,6 @@ Current advisory exceptions:
 
 | Advisory | Crate | Why it is ignored | Remove when |
 |---|---|---|---|
-| RUSTSEC-2026-0293 | ringbuf 0.4 (via librqbit-utp) | The double drop needs an element whose `Drop` panics; librqbit-utp stores `u8` | librqbit-utp moves to ringbuf ≥ 0.5.2 |
 | RUSTSEC-2024-0429 | glib 0.18 (Tauri's Linux GTK3 stack) | Pinned by Tauri; `VariantStrIter` is not used | Tauri moves to gtk-rs ≥ 0.20 |
 
 Fixed when cargo-deny was introduced: `rustls-pemfile` (unmaintained) was replaced with `rustls-pki-types` PEM parsing, and the yanked `async-executor` 1.14.0 was updated.
@@ -83,6 +82,12 @@ Fixed when cargo-deny was introduced: `rustls-pemfile` (unmaintained) was replac
 Regenerate with `cargo metadata --format-version 1 --locked --all-features`, computing reachability with and without each direct dependency.
 
 ## Done
+
+- **Torrent uTP ringbuf advisory.** `librqbit-utp 0.7.0` is vendored with
+  `ringbuf 0.5.3` instead of upstream's `0.4.7`, removing RUSTSEC-2026-0293.
+  The uTP element type is `u8`, so the advisory's panic-on-drop path was not
+  demonstrated reachable; the upgrade is still kept. The local Apache-2.0
+  notice and source provenance are under `src-tauri/licenses/librqbit-utp`.
 
 - **Unused direct dependencies removed:** `hyper`, `hyper-util` and `thiserror` were declared but never referenced. They stay in the graph through axum and Tauri, but the app no longer pins them. The npm devDependency `prettier` had no configuration, script or CI step and was removed.
 - **`local-ip-address` replaced with `if-addrs`**, which was already a direct dependency (`src/sharing.rs`, `src/hotspot.rs`, `src/localswarm/network.rs`). Removed 10 packages: local-ip-address, neli and neli-proc-macros (netlink), derive_builder ×3, darling 0.20 ×3 and getset. On Apple and Android both crates read `getifaddrs`. On Linux, if-addrs reads glibc `getifaddrs` and local-ip-address read netlink directly; both give the same per-address labels. On Windows both report the adapter FriendlyName, but if-addrs leaves out addresses that are not in the DAD `Preferred` state: deprecated IPv6 temporary addresses, and addresses still running duplicate-address detection just after a connect. The sharing interface list therefore no longer offers them, and a saved binding to one reports that the interface is unavailable (until DAD finishes; a deprecated address does not return).

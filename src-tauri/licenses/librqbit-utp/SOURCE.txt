@@ -1,0 +1,9 @@
+librqbit-utp 0.7.0
+Upstream: https://github.com/ikatson/librqbit-utp
+License: Apache-2.0
+
+Local modifications:
+- ringbuf requirement raised from 0.4.7 to 0.5.2 (RUSTSEC-2026-0293).
+- Rust 1.100 deprecation allowance on the existing f64 infinity constant.
+
+The modified source is vendored at vendor/librqbit-utp-0.7.0.

@@ -21,10 +21,6 @@ yanked = "deny"
 # Add an exception only with the advisory ID, the reason it does not apply
 # here, and the condition for removing it.
 ignore = [
-    # ringbuf 0.4 Consumer::skip/clear double-drop when an element's Drop
-    # panics. Only librqbit-utp uses it, with `u8` elements whose drop cannot
-    # panic. Remove when librqbit-utp moves to ringbuf >= 0.5.2.
-    { id = "RUSTSEC-2026-0293", reason = "u8 elements cannot panic on drop" },
     # glib 0.18 VariantStrIter unsoundness. glib 0.18 is pinned by Tauri's
     # GTK3 stack (Linux only); neither this crate nor its UI stack iterates
     # GVariant string arrays. Remove when Tauri moves to gtk-rs >= 0.20.

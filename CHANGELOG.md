@@ -18,6 +18,8 @@ This changelog records source changes, not release certification. Only unsigned 
 
 - Add native ASan/UBSan checks for the LocalSwarm bridge and bounded cargo-fuzz targets for the ZIM reader and MCP protocol. The native harness passes all 12 assertions; seeded fuzzing completed 100,000 runs per target without a crash. Platform test handoff is recorded in [SANITIZERS-AND-FUZZING](docs/SANITIZERS-AND-FUZZING.md).
 
+- Remove the `ringbuf 0.4.8` vulnerability from the torrent path by vendoring `librqbit-utp` with `ringbuf 0.5.3`; `cargo audit` now reports no vulnerabilities in the app, relay or shared-crate locks (six allowed unmaintained/unsound warnings remain).
+
 - Remove AWS-LC from the app dependency graph. librqbit's reqwest 0.13 now uses `rustls-no-provider`, and the app installs ring before the updater or torrent session builds a client. `aws-lc-rs`, `aws-lc-sys` and `fs_extra` no longer resolve for any checked target. A lib test builds a reqwest 0.13 client after installation; real TLS trust, certificate rejection and transfer throughput still need a runtime check.
 
 - Offer **Use camera** or **Choose a file** on Windows when an archive's image file input is activated (StreetZim photo search). The camera runs in an app-owned `camera-capture` window that alone is granted camera, only while a user-started capture is open; archives gain no camera access, WebView2 no longer saves permission decisions in the profile, requests carry a per-session secret hidden from archive scripts, and picked files are read bounded and content-sniffed. Three adversarial reviews (two design, one implementation); installed Windows 11 build verified with a USB webcam. Design and limits: [PHOTO-CHOOSER](docs/PHOTO-CHOOSER.md).

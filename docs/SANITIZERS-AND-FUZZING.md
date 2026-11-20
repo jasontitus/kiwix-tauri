@@ -35,6 +35,25 @@ The `-Zub-checks` suite's only failure is
 test binary ran from a `/tmp` symlink and the updater rejects that path. The
 targeted storage test and the other 1,286 tests pass with UB checks enabled.
 
+## Dependency audit
+
+`cargo audit --no-fetch` now reports **no vulnerabilities** in the app, relay or
+shared-crate lockfiles. It still reports six allowed warnings: `chrono`,
+`proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive` and the GTK
+`glib` `VariantStrIter` unsoundness. The app and its UI stack do not iterate
+`GVariant` string arrays, so that warning is outside the used surface; the others
+are unmaintained-package notices.
+
+The pass found `ringbuf 0.4.8` (double free/use-after-free when an element's
+`Drop` panics) in the app lockfile through `librqbit-utp 0.7.0`. uTP stores `u8`
+elements, whose `Drop` cannot panic, so this was a lockfile finding rather than a
+demonstrated reachable panic path. It is still upgraded: `librqbit-utp` is now
+vendored with `ringbuf 0.5.3`, and the host suite and Windows type checks pass. Run:
+
+```sh
+./scripts/check-dependency-audit.sh
+```
+
 ## Limits
 
 - The fuzz harnesses exercise Rust parsers. They do not fuzz the Windows named

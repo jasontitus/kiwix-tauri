@@ -267,6 +267,7 @@ httparse = { path = "vendor/httparse-1.10.1" }
 hyper = { path = "vendor/hyper-1.12.0" }
 # Keep the torrent metadata, peer framing and socket receive paths on checked slices.
 librqbit = { path = "vendor/librqbit-9.1.0" }
+librqbit-utp = { path = "vendor/librqbit-utp-0.7.0" }
 byteorder = { path = "vendor/byteorder-1.5.0" }
 librqbit-bencode = { path = "vendor/librqbit-bencode-9.1.0" }
 librqbit-peer-protocol = { path = "vendor/librqbit-peer-protocol-9.1.0" }

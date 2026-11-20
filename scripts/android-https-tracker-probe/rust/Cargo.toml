@@ -26,3 +26,4 @@ librqbit-bencode = { path = "../../../src-tauri/vendor/librqbit-bencode-9.1.0" }
 librqbit-peer-protocol = { path = "../../../src-tauri/vendor/librqbit-peer-protocol-9.1.0" }
 librqbit-sha1-wrapper = { path = "../../../src-tauri/vendor/librqbit-sha1-wrapper-9.1.0" }
 librqbit-dualstack-sockets = { path = "../../../src-tauri/vendor/librqbit-dualstack-sockets" }
+librqbit-utp = { path = "../../../src-tauri/vendor/librqbit-utp-0.7.0" }

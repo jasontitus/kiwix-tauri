@@ -1,0 +1,8 @@
+librqbit-utp 0.7.0
+Copyright the librqbit-utp contributors
+Upstream: https://github.com/ikatson/librqbit-utp
+License: Apache-2.0 (see LICENSE)
+
+Local modifications for Kiwix Workbench:
+- Require ringbuf >= 0.5.2 instead of 0.4.7 (RUSTSEC-2026-0293).
+- Suppress a Rust 1.100 deprecation on the existing f64 infinity constant; no behavior change.
