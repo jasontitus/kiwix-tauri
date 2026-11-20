@@ -146,7 +146,7 @@ Open a ZIM and Kiwix gives you a fast, quiet reader: a searchable library, tabs 
 
 ## Build and contribute
 
-Run these commands from the repository root with Node 22, stable Rust, a C++ toolchain and the platform’s Tauri development libraries. Cargo needs Git read access to the private archive libraries pinned in `src-tauri/Cargo.lock`. [Platform setup](docs/PACKAGING.md)
+Run these commands from the repository root with Node 22, stable Rust, a C++ toolchain and the platform’s Tauri development libraries. Cargo fetches the pinned public archive libraries from `src-tauri/Cargo.lock`; no credentials are required. [Platform setup](docs/PACKAGING.md)
 
 ```sh
 npm ci

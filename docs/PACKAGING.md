@@ -677,7 +677,7 @@ Android has no equivalent safe per-file runtime backup switch. Its application m
 
 ## macOS local application
 
-Run from the repository root with Xcode command-line tools and access to the private Rust dependencies.
+Run from the repository root with Xcode command-line tools and stable Rust.
 
 ```sh
 npm ci
