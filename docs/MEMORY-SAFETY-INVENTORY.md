@@ -6,7 +6,7 @@ The [memory-safety plan](MEMORY-SAFETY-PLAN.md) sets the implementation order, a
 
 The owner trusts the operating system and standard runtime. Application code and dependencies that process untrusted content must be memory safe. The application does **not yet meet this target**. A keyword scan, a safe API or a passing test covers only part of that claim. OS-provided WebViews fall within the platform boundary. The supported Ubuntu AppImage uses the host renderer. Its native package launcher, app-owned bridges and dependencies that process archive content remain in scope.
 
-The current production source census is **131 first-party Rust `unsafe` blocks**, with 118 in the app and 13 in the MCP relay, plus 35 separate declarations. Apple Bonjour removed one block by using a typed interface snapshot when direct mode needs to choose between resolved candidates. The native discovery references and callback borrows remain in scope. [Interface selection, runtime checks and timings](audit/2026-11-19-bonjour-interface-snapshot.md)
+The current production source census is **130 first-party Rust `unsafe` blocks**, with 117 in the app and 13 in the MCP relay, plus 35 separate explicit declarations. Apple Bonjour removed one block by using a typed interface snapshot. The iOS route check removed another by passing IP addresses by value to a Swift decoder that handles compact native netmasks. The native discovery references, callback borrows and socket binding remain in scope. [Bonjour interface selection](audit/2026-11-19-bonjour-interface-snapshot.md) · [iOS route address checks](audit/2026-11-19-ios-route-addresses.md)
 
 ### Earlier count snapshots
 
@@ -143,6 +143,8 @@ Independent review reproduced two incorrect results with controlled interface re
 On ARM64 Mac, six alternating pairs of real Bonjour and QUIC library inventory runs each included 64 route lookups per process. One warmup pair was excluded. Median elapsed time was 1.147 s before and 1.174 s after. The median within-pair change was −1.1%, with four of six pairs faster. The test process used more CPU in all six pairs, with a median within-pair increase of 4.4%. The interval includes startup, discovery and cleanup. [Individual samples and build identities](benchmarks/2026-11-18-bound-route-receipts.json)
 
 ## Nearby interface authority
+
+The iOS bound-peer check and Nearby Wi-Fi snapshot respect the native record's declared length. For a compact netmask, the Swift decoder fills omitted trailing bytes with zero. Rust passes the peer IP to Swift as integer values. Both iOS compile targets and the owned simulator tests passed. Physical network transitions remain open. [iOS route address verification](audit/2026-11-19-ios-route-addresses.md)
 
 Android's hotspot controller owns the reservation. The Rust socket owner checks its receipt against the kernel interface name and index, link flags, IPv4 address and netmask. It binds a new UDP socket to that device, reads the binding back, binds the local address, checks the live interface again and asks the controller to confirm the lease. A failed check discards the socket. The interface name must be ASCII without an embedded NUL, so lossy conversion of an unrelated kernel name cannot match it.
 

@@ -80,7 +80,9 @@ pub(crate) fn install(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg(target_os = "ios")]
 unsafe extern "C" {
     fn kiwix_mobile_bind_local_socket(fd: std::ffi::c_int) -> i64;
-    fn kiwix_mobile_is_local_peer(route: u32, address: *const std::ffi::c_char) -> i32;
+    // The Swift receiver validates the route and the address tag. The ABI
+    // carries only integers, with no borrowed address storage.
+    safe fn kiwix_mobile_is_local_peer_address(route: u32, version: u8, high: u64, low: u64) -> i32;
 }
 
 /// Receipt for the actual bound physical route, never a later default or another LAN.
@@ -122,8 +124,14 @@ impl LocalBinding {
             #[cfg(target_os = "ios")]
             let on_link = {
                 let route = u32::try_from(self.route).map_err(|_| "Invalid native LAN interface receipt")?;
-                let address = std::ffi::CString::new(peer.to_string()).map_err(|_| "Invalid numeric peer")?;
-                match unsafe { kiwix_mobile_is_local_peer(route, address.as_ptr()) } {
+                let (version, high, low) = match peer {
+                    std::net::IpAddr::V4(address) => (4, 0, u64::from(u32::from(address))),
+                    std::net::IpAddr::V6(address) => {
+                        let bits = u128::from(address);
+                        (6, (bits >> 64) as u64, bits as u64)
+                    }
+                };
+                match kiwix_mobile_is_local_peer_address(route, version, high, low) {
                     0 => false,
                     1 => true,
                     _ => return Err("The bound Wi-Fi or Ethernet route is no longer available".into()),

@@ -298,35 +298,13 @@ public func kiwixMobileBindLocalSocket(_ fd: Int32) -> Int64 {
   return Int64(applied)
 }
 
-private func sameOnLinkPrefix<T>(_ peer: T, _ local: T, _ mask: T) -> Bool {
-  withUnsafeBytes(of: peer) { peerBytes in
-    withUnsafeBytes(of: local) { localBytes in
-      withUnsafeBytes(of: mask) { maskBytes in
-        var nondefault = false
-        for offset in peerBytes.indices {
-          let byte = maskBytes[offset]
-          nondefault = nondefault || byte != 0
-          if (peerBytes[offset] & byte) != (localBytes[offset] & byte) { return false }
-        }
-        return nondefault
-      }
-    }
-  }
-}
-
 /// Classify only the actual bound route receipt. A public IPv6 LAN prefix is local;
 /// a default route or another simultaneously available physical interface is not proof.
-@_cdecl("kiwix_mobile_is_local_peer")
-public func kiwixMobileIsLocalPeer(_ route: UInt32, _ numeric: UnsafePointer<CChar>?) -> Int32 {
-  guard let numeric = numeric else { return -1 }
+@_cdecl("kiwix_mobile_is_local_peer_address")
+public func kiwixMobileIsLocalPeerAddress(_ route: UInt32, _ version: UInt8, _ high: UInt64, _ low: UInt64) -> Int32 {
+  guard let peer = RouteIPAddress(version: version, high: high, low: low) else { return -1 }
   localBindingLock.lock(); defer { localBindingLock.unlock() }
   guard route != 0, route == wifiInterfaceIndex || route == wiredInterfaceIndex else { return -1 }
-  var ipv4 = in_addr()
-  var ipv6 = in6_addr()
-  let family: Int32
-  if inet_pton(AF_INET, numeric, &ipv4) == 1 { family = AF_INET }
-  else if inet_pton(AF_INET6, numeric, &ipv6) == 1 { family = AF_INET6 }
-  else { return -1 }
   var first: UnsafeMutablePointer<ifaddrs>?
   guard getifaddrs(&first) == 0, let head = first else { return -1 }
   defer { freeifaddrs(head) }
@@ -337,16 +315,9 @@ public func kiwixMobileIsLocalPeer(_ route: UInt32, _ numeric: UnsafePointer<CCh
     guard if_nametoindex(interface.ifa_name) == route,
           interface.ifa_flags & UInt32(IFF_UP) != 0,
           let address = interface.ifa_addr, let mask = interface.ifa_netmask,
-          Int32(address.pointee.sa_family) == family else { continue }
-    if family == AF_INET {
-      let local = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr
-      let subnet = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr
-      if sameOnLinkPrefix(ipv4, local, subnet) { return 1 }
-    } else {
-      let local = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
-      let subnet = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
-      if sameOnLinkPrefix(ipv6, local, subnet) { return 1 }
-    }
+          let local = RouteIPAddress(UnsafeRawPointer(address), family: peer.family, netmask: false),
+          let subnet = RouteIPAddress(UnsafeRawPointer(mask), family: peer.family, netmask: true) else { continue }
+    if peer.isOnLink(local: local, mask: subnet) { return 1 }
   }
   return 0
 }
@@ -387,12 +358,11 @@ private func nearbyInterface(_ index: UInt32, generation: UInt64) -> NearbyInter
           item.ifa_flags & UInt32(IFF_LOOPBACK) == 0,
           item.ifa_flags & UInt32(IFF_POINTOPOINT) == 0,
           let address = item.ifa_addr, let mask = item.ifa_netmask,
-          Int32(address.pointee.sa_family) == AF_INET else { continue }
-    let local = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr.s_addr
-    let subnet = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr.s_addr
-    if local != 0, subnet != 0 {
-      prefixes.append(NearbyIPv4Prefix(address: local, mask: subnet))
-    }
+          case let .v4(local)? = RouteIPAddress(UnsafeRawPointer(address), family: sa_family_t(AF_INET), netmask: false),
+          case let .v4(subnet)? = RouteIPAddress(UnsafeRawPointer(mask), family: sa_family_t(AF_INET), netmask: true),
+          local != 0, subnet != 0 else { continue }
+    // NearbyJoin compares the snapshot with the native in_addr.s_addr word.
+    prefixes.append(NearbyIPv4Prefix(address: UInt32(bigEndian: local), mask: UInt32(bigEndian: subnet)))
   }
   guard !prefixes.isEmpty else { return nil }
   prefixes.sort { $0.address == $1.address ? $0.mask < $1.mask : $0.address < $1.address }
