@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! MCP over stdio, dual-era: the stateless revision (per-request `_meta`) and
 //! the handshake revisions (`initialize`). Only the `tools` capability is
 //! offered; the server never sends requests of its own.

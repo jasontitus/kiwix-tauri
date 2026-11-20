@@ -1,4 +1,5 @@
 [
+  "kiwix-mcp/src/protocol.rs",
   "src-tauri/src/acquisition/finalize.rs",
   "src-tauri/src/acquisition/http_meta.rs",
   "src-tauri/src/acquisition/manager.rs",
