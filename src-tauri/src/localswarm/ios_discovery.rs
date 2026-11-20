@@ -337,7 +337,7 @@ fn create(op: Create<'_>, raw: &mut Ref, cookie: *mut c_void) -> i32 {
                 // SAFETY: test-only injection uses null C strings and the live
                 // cookie registered by `operation`; the callback returns the
                 // injected error before reading any pointer.
-                unsafe { browse_callback(ptr::null_mut(), 0, 0, code, ptr::null(), ptr::null(), ptr::null(), cookie) };
+                browse_callback(ptr::null_mut(), 0, 0, code, ptr::null(), ptr::null(), ptr::null(), cookie);
                 code
             }
         }

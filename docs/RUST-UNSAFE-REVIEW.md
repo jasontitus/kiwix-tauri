@@ -425,12 +425,12 @@ This pass removed blocks that had a safe alternative available on this host:
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay + shared) | 136 | **74** |
+| `unsafe { … }` matches (app + relay + shared) | 136 | **73** |
 | Files containing them | 30 | **18** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 74 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 73 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; the Windows lib now
 cross-checks with mingw, while Linux comments remain source-reviewed but not compiled on this host.
 
@@ -443,7 +443,7 @@ unverified.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(74 blocks in 18 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(73 blocks in 18 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map
@@ -474,3 +474,15 @@ They are exercised by the Windows connector tests only, which were not run here.
 The other six assertions recorded in the 2026-11-12 inventory (`archive::Handle`,
 `localswarm::apple_transport::{RawConnection, RawListener}` and `power_activity::Token`) are gone: a
 repository search finds no `unsafe impl` outside `win-security`.
+
+## Ongoing safeguards
+
+- `check:unsafe` is a required CI gate. New files or higher per-file counts fail until the block is
+  documented and the baseline is reviewed.
+- Windows, Linux and Android type-check jobs compile the cfg-gated platform code; the Windows job
+  also checks the shared `win-security` crate and test targets.
+- Host tests exercise the safe reader, storage, torrent and sharing paths. Platform runtime checks
+  remain required for named pipes, print dialogs, DNS-SD/QUIC and document providers.
+- Keep unsafe adapters narrow and ownership-explicit. A pointer-taking bridge is not declared
+  `safe fn`; use a proof-carrying type such as `CPath` or keep the caller's `unsafe` block.
+- Re-run the reader benchmark after changes that touch archive, search or decoder paths.

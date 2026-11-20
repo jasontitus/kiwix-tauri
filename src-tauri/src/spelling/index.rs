@@ -993,7 +993,7 @@ mod tests {
         bytes[HEAD as usize + PAGE + 5] = 2;
         let mut crc = sha256::default();
         crc.update(&bytes[..HEAD as usize]);
-        for page in bytes[HEAD as usize..HEAD as usize + 2 * PAGE].chunks_exact(PAGE) {
+        for page in bytes[HEAD as usize..HEAD as usize + 2 * PAGE].as_chunks::<PAGE>().0 {
             crc.update(sha256::hash(page));
         }
         bytes[HEAD as usize + 2 * PAGE..].copy_from_slice(crc.digest().as_ref());

@@ -9,6 +9,7 @@
 //! allocations by `LocalAllocation`, and the SID inside `UserSid` points into
 //! owned, never-reallocated storage.
 #![cfg(windows)]
+#![deny(unsafe_op_in_unsafe_fn, improper_ctypes, improper_ctypes_definitions)]
 
 use std::ffi::c_void;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};

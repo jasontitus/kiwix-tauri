@@ -150,6 +150,39 @@ jobs:
           CXX_x86_64_pc_windows_gnu: x86_64-w64-mingw32-g++
         run: |
           cargo clippy --locked --manifest-path src-tauri/Cargo.toml \
-            --target x86_64-pc-windows-gnu --lib --features custom-protocol -- -D warnings
+            --target x86_64-pc-windows-gnu --lib --tests --features custom-protocol -- -D warnings
+      - name: Check the shared Windows security crate
+        run: cargo clippy --locked --manifest-path win-security/Cargo.toml --target x86_64-pc-windows-gnu -- -D warnings
       - name: Check Windows agent connector and its tests
         run: cargo clippy --locked --manifest-path kiwix-mcp/Cargo.toml --target x86_64-pc-windows-gnu --all-targets -- -D warnings
+
+  linux-typecheck:
+    # The GTK/WebKit code is cfg(linux); type-check it on the runner that
+    # provides the same system libraries as the Debian package/AppImage.
+    name: Linux clippy (x86_64-unknown-linux-gnu, type-check only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: frontend
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install GTK/WebKit development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libasound2-dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+      - name: Clippy with warnings as errors
+        env:
+          KIWIX_TYPECHECK_ONLY: '1'
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/kiwix-mcp-x86_64-unknown-linux-gnu
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol -- -D warnings
