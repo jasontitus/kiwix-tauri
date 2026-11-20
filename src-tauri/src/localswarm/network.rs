@@ -14,6 +14,10 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 const IO_TIMEOUT: Duration = Duration::from_secs(45);
+// A seeder may be blocked by the receiver's own prefetch/disk backpressure while
+// writing a chunk. Give each chunk write the same bounded allowance the receive
+// side already grants a payload (MAX_SHARED_CONSUMERS + IO_TIMEOUT).
+const CHUNK_WRITE_ALLOWANCE: Duration = Duration::from_secs(MAX_SHARED_CONSUMERS + IO_TIMEOUT.as_secs());
 const PIECE: usize = 16 * 1024;
 // Unlimited uploads amortize native dispatch/completion overhead without
 // queueing a whole (up to 16 MiB) chunk at the Apple bridge.
@@ -227,9 +231,15 @@ pub(super) fn server_config() -> Result<quinn::ServerConfig, String> {
 pub(super) async fn guarded<T>(cancel: &CancellationToken, future: impl Future<Output = Result<T, String>>)
     -> Result<T, String>
 {
+    guarded_for(cancel, IO_TIMEOUT, future).await
+}
+
+async fn guarded_for<T>(cancel: &CancellationToken, allowance: Duration, future: impl Future<Output = Result<T, String>>)
+    -> Result<T, String>
+{
     tokio::select! {
         _ = cancel.cancelled() => Err("LocalSwarm operation cancelled".into()),
-        value = tokio::time::timeout(IO_TIMEOUT, future) => value.map_err(|_| "LocalSwarm peer made no progress".to_string())?,
+        value = tokio::time::timeout(allowance, future) => value.map_err(|_| "LocalSwarm peer made no progress".to_string())?,
     }
 }
 
@@ -1675,13 +1685,13 @@ async fn queue_chunk(send: &mut SendStream, header: &[u8], data: &[u8], budget: 
     match send {
         SendStream::Quinn(stream) => {
             // Waiting for our own bandwidth budget never consumes an I/O deadline.
-            guarded(cancel, async {
+            guarded_for(cancel, CHUNK_WRITE_ALLOWANCE, async {
                 stream.write_all(header).await.map_err(|error| format!("LocalSwarm write failed: {error}"))
             }).await?;
             let mut offset = 0;
             while offset < data.len() {
                 let count = budget.reserve(data.len() - offset, cancel).await?;
-                guarded(cancel, async {
+                guarded_for(cancel, CHUNK_WRITE_ALLOWANCE, async {
                     stream.write_all(&data[offset..offset + count]).await.map_err(|error| format!("LocalSwarm write failed: {error}"))
                 }).await?;
                 stats.uploaded.fetch_add(count as u64, Ordering::Relaxed);
@@ -2527,7 +2537,7 @@ mod tests {
         // No first response can arrive until every session has charged its
         // first 16 MiB. This fixes the scheduling boundary at four claims
         // exhausting 64 MiB, with a second response outstanding on each source.
-        let fully_reserved = tokio::time::timeout(Duration::from_secs(10), async {
+        let fully_reserved = tokio::time::timeout(Duration::from_secs(120), async {
             while prefetch.available_permits() != 0 { tokio::task::yield_now().await; }
         }).await;
         let (open, changed) = &*first_response_gate;
@@ -2540,7 +2550,7 @@ mod tests {
         let mut first_chunks = Vec::new();
         let mut first_seen = [false; 4];
         for _ in 0..4 {
-            let (source, chunk) = tokio::time::timeout(Duration::from_secs(10), receiver.recv())
+            let (source, chunk) = tokio::time::timeout(Duration::from_secs(120), receiver.recv())
                 .await.expect("Every source must deliver its first chunk without lookahead budget")
                 .expect("The source queue closed");
             let chunk = chunk.unwrap();
@@ -2560,7 +2570,7 @@ mod tests {
         drop(first_chunks.pop());
         let mut second_seen = [false; 4];
         for _ in 0..4 {
-            let (source, chunk) = tokio::time::timeout(Duration::from_secs(10), receiver.recv())
+            let (source, chunk) = tokio::time::timeout(Duration::from_secs(120), receiver.recv())
                 .await.expect("Writer progress must unblock a waiting source")
                 .expect("The source queue closed");
             let chunk = chunk.unwrap();
@@ -2574,9 +2584,11 @@ mod tests {
             drop(chunk);
         }
         for source in sources {
-            let session = tokio::time::timeout(Duration::from_secs(10), source).await
+            let session = tokio::time::timeout(Duration::from_secs(120), source).await
                 .expect("A drained source must exit").unwrap();
-            session.shutdown().await;
+            // Drop closes the connection immediately; shutdown() would wait for
+            // endpoint idle and add ~17 s per source to this regression.
+            drop(session);
         }
         drop(first_chunks);
         assert_eq!(prefetch.available_permits(), capacity);

@@ -3422,9 +3422,20 @@ mod portable_policy_tests {
             Ok(_) => panic!("the profile is locked by its owner"),
         }
         // SIGKILL or a clean exit releases the flock; the next instance opens
-        // the same profile normally.
+        // the same profile normally. A concurrently forked child can inherit
+        // the descriptor between fork and exec and hold the advisory lock for a
+        // few milliseconds, so allow a short bounded settle before failing.
         drop(owner);
-        let store = Store::new_with_mode_checked(root.clone(), false).unwrap();
+        let settle = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let store = loop {
+            match Store::new_with_mode_checked(root.clone(), false) {
+                Ok(store) => break store,
+                Err(StoreOpenError::Busy(_)) if std::time::Instant::now() < settle => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => panic!("the released profile did not reopen: {error:?}"),
+            }
+        };
         drop(store);
         // A profile that cannot be opened at all still fails startup.
         assert!(matches!(
