@@ -344,8 +344,10 @@ impl Listener {
             }));
             let (callback, ready) = completion(Operation::Ready);
             // SAFETY: `accept` and `callback` are live `queue_callback` blocks
-            // requiring `Send + Sync + 'static`; native retains its own
-            // references and returns a nonzero listener ID checked before storing.
+            // requiring `Send + Sync + 'static`. On success native retains its
+            // own references and returns a nonzero ID; on failure it calls
+            // `ready(-1, 0)` synchronously and returns zero, which Rust handles
+            // without storing either block.
             (unsafe { kiwix_swarm_listen(&accept, &callback, one_request) }, ready)
         };
         let raw = NonZeroU64::new(raw).ok_or("Cannot create Apple QUIC listener")?;

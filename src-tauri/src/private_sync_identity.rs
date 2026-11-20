@@ -264,13 +264,14 @@ mod windows_acl {
                 Authorization::{ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
                     GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT},
                 EqualSid, GetAce, GetSecurityDescriptorControl, GetSecurityDescriptorDacl,
-                GetTokenInformation, IsWellKnownSid, ACL, ACCESS_ALLOWED_ACE, PSID,
+                GetTokenInformation, IsValidSid, IsWellKnownSid, ACL, ACE_HEADER, ACCESS_ALLOWED_ACE, PSID,
                 PSECURITY_DESCRIPTOR, TOKEN_USER, TokenUser, TOKEN_QUERY,
                 DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
                 PROTECTED_DACL_SECURITY_INFORMATION, SE_DACL_PROTECTED,
                 WinLocalSystemSid, WinBuiltinAdministratorsSid,
             },
             System::Threading::{GetCurrentProcess, OpenProcessToken},
+            Storage::FileSystem::{ReOpenFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE},
         },
     };
 
@@ -322,10 +323,11 @@ mod windows_acl {
             unsafe { text.to_string().map_err(err) }
         }
     }
-    fn directory_handle(dir: &Dir, writable: bool) -> Result<File, String> {
+    fn directory_handle(dir: &Dir, writable: bool, owner: bool) -> Result<File, String> {
         let mut options = OpenOptions::new();
         options.read(true).follow(FollowSymlinks::No)
-            .access_mode(0x0002_0000 | if writable { 0x0004_0000 } else { 0 })
+            .access_mode(0x0002_0000 | if writable { 0x0004_0000 } else { 0 }
+                | if owner { 0x0008_0000 } else { 0 })
             .custom_flags(0x0220_0000).share_mode(1 | 2 | 4);
         dir.open_with(".", &options).map_err(err)
     }
@@ -349,18 +351,50 @@ mod windows_acl {
         unsafe {
             GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted).map_err(err)?;
             if !present.as_bool() || dacl.is_null() { return Err(err("Windows private DACL is unavailable")); }
-            SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                None, None, Some(dacl), None).ok().map_err(err)?;
+            let owner_result = SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION,
+                Some(user.sid()), None, Some(dacl), None);
+            if owner_result.is_err() {
+                // The handle may lack WRITE_OWNER. The DACL is still required;
+                // `check` below rejects an owner that is not this user.
+                SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                    None, None, Some(dacl), None).ok().map_err(err)?;
+            }
         }
         check(file, false, directory)
     }
     pub(super) fn restrict_directory(dir: &Dir) -> Result<(), String> {
-        restrict(&directory_handle(dir, true)?, true)
+        let handle = directory_handle(dir, true, false)?;
+        match restrict(&handle, true) {
+            Ok(()) => Ok(()),
+            Err(first) => {
+                let owner = directory_handle(dir, true, true)?;
+                restrict(&owner, true).map_err(|_| first)
+            }
+        }
     }
-    pub(super) fn restrict_file(file: &File) -> Result<(), String> { restrict(file, false) }
+    pub(super) fn restrict_file(file: &File) -> Result<(), String> {
+        match restrict(file, false) {
+            Ok(()) => Ok(()),
+            Err(first) => {
+                // Reopen the same object, never a name that delete-sharing can
+                // replace between the original open and the retry.
+                // SAFETY: `file` owns a live handle; the returned handle is
+                // adopted exactly once by `File::from_raw_handle`.
+                let owner = unsafe {
+                    ReOpenFile(HANDLE(file.as_raw_handle()), 0x000e_0000,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                        FILE_FLAGS_AND_ATTRIBUTES(0))
+                }.map_err(err)?;
+                // SAFETY: ReOpenFile returned a new owned handle, adopted once.
+                let owner = unsafe { File::from_raw_handle(owner.0) };
+                restrict(&owner, false).map_err(|_| first)
+            }
+        }
+    }
     pub(super) fn check_directory(dir: &Dir, profile: bool) -> Result<(), String> {
-        check(&directory_handle(dir, false)?, profile, true)
+        check(&directory_handle(dir, false, false)?, profile, true)
     }
     pub(super) fn check_file(file: &File) -> Result<(), String> { check(file, false, false) }
 
@@ -395,10 +429,35 @@ mod windows_acl {
                 let mut raw = std::ptr::null_mut();
                 GetAce(dacl, index, &mut raw).map_err(err)?;
                 if raw.is_null() { return Err(err("Windows identity storage has an invalid ACE")); }
-                let ace = &*raw.cast::<ACCESS_ALLOWED_ACE>();
+                let header = &*raw.cast::<ACE_HEADER>();
+                let acl_start = dacl as usize;
+                let acl_end = acl_start.checked_add(usize::from((*dacl).AclSize))
+                    .ok_or_else(|| err("Windows identity ACL size is invalid"))?;
+                let ace_start = raw as usize;
+                let ace_end = ace_start.checked_add(usize::from(header.AceSize))
+                    .ok_or_else(|| err("Windows identity ACE size is invalid"))?;
+                if ace_start < acl_start || ace_end > acl_end {
+                    return Err(err("Windows identity ACE exceeds its ACL"));
+                }
                 // Reject callback/object/deny ACEs rather than interpreting arbitrary ACLs.
-                if ace.Header.AceType != 0 { return Err(err("Windows identity storage has an unexpected ACE type")); }
+                if header.AceType != 0 { return Err(err("Windows identity storage has an unexpected ACE type")); }
+                let sid_offset = std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart);
+                if usize::from(header.AceSize) < sid_offset + 8 {
+                    return Err(err("Windows identity ACE is too short for a SID"));
+                }
+                let sid_bytes = raw.cast::<u8>().add(sid_offset);
+                let subauthorities = usize::from(*sid_bytes.add(1));
+                let sid_length = 8usize.checked_add(subauthorities.checked_mul(4)
+                    .ok_or_else(|| err("Windows identity SID is too large"))?)
+                    .ok_or_else(|| err("Windows identity SID is too large"))?;
+                if sid_offset.checked_add(sid_length).is_none_or(|end| end > usize::from(header.AceSize)) {
+                    return Err(err("Windows identity SID exceeds its ACE"));
+                }
+                let ace = &*raw.cast::<ACCESS_ALLOWED_ACE>();
                 let sid = PSID(std::ptr::addr_of!(ace.SidStart).cast_mut().cast());
+                if !IsValidSid(sid).as_bool() {
+                    return Err(err("Windows identity ACE contains an invalid SID"));
+                }
                 let own = EqualSid(sid, user.sid()).is_ok();
                 if profile {
                     // Standard private Windows profiles also grant the two OS administrators.

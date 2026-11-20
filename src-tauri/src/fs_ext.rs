@@ -135,6 +135,12 @@ fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
     use windows::core::PCWSTR;
     use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetVolumePathNameW};
 
+    if path.as_os_str().encode_wide().any(|unit| unit == 0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
+    }
+    // An unqualified relative path makes GetVolumePathNameW report the boot
+    // volume; resolve it against the current directory first.
+    let path = std::path::absolute(path)?;
     let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     if wide.contains(&0) {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));

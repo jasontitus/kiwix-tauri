@@ -58,10 +58,15 @@ pub(crate) fn start(token: u64, high_accuracy: bool, timeout_ms: u64, sender: Se
             // result is authoritative; the matching CoUninitialize below runs on
             // this same thread after its WinRT objects are gone.
             let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-            let result = locate(token, high_accuracy, timeout_ms);
+            let initialized = com.is_ok();
+            let result = if initialized {
+                locate(token, high_accuracy, timeout_ms)
+            } else {
+                Err(LocationError::unavailable(&format!("Windows COM initialization failed: 0x{:08x}", com.0)))
+            };
             // Removing the entry drops its WinRT reference while COM is alive.
             let entry = PENDING.lock().ok().and_then(|mut pending| pending.remove(&token));
-            if com.is_ok() {
+            if initialized {
                 // SAFETY: pairs with the successful CoInitializeEx above on the
                 // same thread, after every WinRT reference this thread held has
                 // been dropped.

@@ -25,9 +25,10 @@ pub fn thread_cpu_time_micros() -> Option<u128> {
         let mut times = [FILETIME::default(); 4];
         let [creation, exit, kernel, user] = &mut times;
         // SAFETY: `GetCurrentThread` returns a pseudo-handle for the calling
-        // thread that needs no closing, and `creation`, `exit`, `kernel` and
-        // `user` each point into the live `times` array, a writable `FILETIME`
-        // that the call fully initializes on success.
+        // thread that needs no closing. All four pointers refer to the live
+        // `times` array. Only `kernel` and `user` are read: Windows leaves the
+        // exit time undefined for a thread that has not exited, which is always
+        // true for the current thread.
         unsafe { GetThreadTimes(GetCurrentThread(), creation, exit, kernel, user) }.ok()?;
         // Kernel plus user time in 100 ns units; one microsecond is ten of them.
         let ticks = |time: &FILETIME| {

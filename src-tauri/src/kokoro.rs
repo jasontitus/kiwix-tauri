@@ -1027,6 +1027,7 @@ mod fixtures {
     use std::{fs, io, path::Path};
 
     pub(super) fn profile() -> io::Result<tempfile::TempDir> {
+        #[cfg_attr(windows, allow(unused_mut))]
         let mut builder = tempfile::Builder::new();
         #[cfg(unix)]
         {

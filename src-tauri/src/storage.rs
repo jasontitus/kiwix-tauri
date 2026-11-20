@@ -233,7 +233,7 @@ pub(crate) fn rename_into_directory_noreplace(
 ) -> std::io::Result<()> {
     use std::{
         ffi::c_void,
-        mem::{offset_of, size_of},
+        mem::size_of,
         os::windows::ffi::OsStrExt,
     };
     // FILE_RENAME_INFORMATION: the BOOLEAN ReplaceIfExists shares its slot
@@ -280,9 +280,8 @@ pub(crate) fn rename_into_directory_noreplace(
     let too_long = || std::io::Error::new(std::io::ErrorKind::InvalidInput, "Rename filename is too long");
     let name_bytes = wide.len().checked_mul(2).ok_or_else(too_long)?;
     let name_length = u32::try_from(name_bytes).map_err(|_| too_long())?;
-    let length = offset_of!(RenameInformation, file_name)
+    let length = size_of::<RenameInformation>()
         .checked_add(name_bytes)
-        .map(|length| length.max(size_of::<RenameInformation>()))
         .and_then(|length| u32::try_from(length).ok())
         .ok_or_else(too_long)?;
     // usize backing gives pointer alignment; zero-filling covers ABI padding.

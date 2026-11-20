@@ -61,7 +61,7 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
     let files = OffUiFiles::new(files);
     let (sender, receiver) = oneshot::channel();
     let reply = Arc::new(Mutex::new(Some(sender)));
-    let setup_reply = reply.clone(); let app_on_main = app.clone();
+    let setup_reply = reply.clone(); let app_on_main = app.clone(); let continuation_app = app.clone();
     let setup_cancel = cancel.clone();
     app.run_on_main_thread(move || {
         let setup = (|| -> Result<(), String> {
@@ -122,27 +122,67 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
                             if once.swap(true, Ordering::SeqCst) { return Ok(()); }
                             if let Err(error) = authority(Phase::BeforeHandoff) { finish(&completed_reply, Err(error)); return Ok(()); }
                             if destination == Destination::Print {
-                                // The native dialog only selects settings. No
-                                // archive bytes reach a printer until the short
-                                // authority commit following user confirmation.
-                                let printer = match printing::choose(&webview, owner, &dialog, width) {
-                                    Ok(Some(settings)) => settings,
-                                    Ok(None) => { finish(&completed_reply, Ok(())); return Ok(()); },
-                                    Err(error) => { finish(&completed_reply, Err(error)); return Ok(()); },
-                                };
-                                let print_reply = completed_reply.clone();
-                                let print_lifetime = print_files.share();
-                                let callback = PrintCompletedHandler::create(Box::new(move |status, result| {
-                                    let _ = &print_lifetime;
-                                    finish(&print_reply, status.map_err(|error| format!("Native printing failed: {error}"))
-                                        .and_then(|_| if result == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED { Ok(()) } else { Err(format!("The Windows print spool rejected the job ({})", result.0)) }));
-                                    Ok(())
-                                }));
-                                let print = webview.cast::<ICoreWebView2_16>()?;
-                                if let Err(error) = commit(&mut || {
-                                    handed_off.store(true, Ordering::SeqCst);
-                                    print.Print(&printer, &callback).map_err(|error| format!("Sending the article to the Windows printer: {error}"))
-                                }) { finish(&completed_reply, Err(error)); }
+                                // PrintDlgW runs a nested message loop. Queue the
+                                // dialog after this NavigationCompleted callback
+                                // returns; WebView2 does not support reentrancy.
+                                let app = continuation_app.clone();
+                                let label = label.clone();
+                                let owner = owner.0 as isize;
+                                let dialog = dialog.clone();
+                                let reply = completed_reply.clone();
+                                let print_files = print_files.share();
+                                let commit = commit.clone();
+                                let handed_off = handed_off.clone();
+                                let queue_reply = completed_reply.clone();
+                                let queued = std::thread::Builder::new().name("pdf-print-dialog".into()).spawn(move || {
+                                    let app_for_window = app.clone();
+                                    let queued = app.run_on_main_thread(move || {
+                                    let Some(window) = app_for_window.get_webview_window(&label) else {
+                                        finish(&reply, Err("The native PDF view was closed".into()));
+                                        return;
+                                    };
+                                    let attach_reply = reply.clone();
+                                    let attached = window.with_webview(move |platform| {
+                                        let core = match platform.controller().CoreWebView2() {
+                                            Ok(core) => core,
+                                            Err(error) => { finish(&reply, Err(error.to_string())); return; }
+                                        };
+                                        // The native dialog only selects settings. No
+                                        // archive bytes reach a printer until the short
+                                        // authority commit following user confirmation.
+                                        let printer = match printing::choose(&core, HWND(owner as *mut _), &dialog, width) {
+                                            Ok(Some(settings)) => settings,
+                                            Ok(None) => { finish(&reply, Ok(())); return; },
+                                            Err(error) => { finish(&reply, Err(error)); return; },
+                                        };
+                                        let print_reply = reply.clone();
+                                        let print_lifetime = print_files;
+                                        let callback = PrintCompletedHandler::create(Box::new(move |status, result| {
+                                            let _ = &print_lifetime;
+                                            finish(&print_reply, status.map_err(|error| format!("Native printing failed: {error}"))
+                                                .and_then(|_| if result == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED { Ok(()) } else { Err(format!("The Windows print spool rejected the job ({})", result.0)) }));
+                                            Ok(())
+                                        }));
+                                        let print = match core.cast::<ICoreWebView2_16>() {
+                                            Ok(print) => print,
+                                            Err(error) => { finish(&reply, Err(error.to_string())); return; }
+                                        };
+                                        if let Err(error) = commit(&mut || {
+                                            handed_off.store(true, Ordering::SeqCst);
+                                            print.Print(&printer, &callback).map_err(|error| format!("Sending the article to the Windows printer: {error}"))
+                                        }) { finish(&reply, Err(error)); }
+                                    });
+                                    if let Err(error) = attached {
+                                        finish(&attach_reply, Err(format!("Accessing the native PDF view: {error}")));
+                                    }
+                                    });
+                                    if let Err(error) = queued {
+                                        finish(&queue_reply, Err(format!("Queueing the Windows print dialog: {error}")));
+                                    }
+                                });
+                                if let Err(error) = queued {
+                                    finish(&completed_reply, Err(format!("Queueing the Windows print dialog: {error}")));
+                                }
                                 return Ok(());
                             }
                             let output = HSTRING::from(output.as_os_str());

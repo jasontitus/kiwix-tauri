@@ -25,6 +25,7 @@
 //! downloads) uses bundled WebPKI roots and does not depend on this.
 use jni_0_22::{
     objects::{JClass, JObject},
+    refs::Cast,
     signature::{FieldSignature, MethodSignature, RuntimeFieldSignature, RuntimeMethodSignature},
     strings::JNIString,
     sys, Env, JavaVM,
@@ -78,12 +79,13 @@ fn initialize() -> Result<(), String> {
     // Scoped attach: a Tokio worker is not left permanently attached.
     vm.attach_current_thread_for_scope(|env| -> Result<(), Failure> {
         let result = (|| -> Result<(), Failure> {
+            let raw = android.context().cast::<sys::jobject>();
             // SAFETY: Tao owns a global reference to the application Context for
-            // the life of the process. The temporary wrapper is used only to
-            // create a frame-local reference; JObject has no Drop, so the global
-            // reference is never deleted here.
-            let global = unsafe { JObject::from_raw(env, android.context().cast()) };
-            let context = env.new_local_ref(&global)?;
+            // the life of the process. Cast borrows that global reference without
+            // adopting or deleting it; only the frame-local reference below is new.
+            let global = unsafe { Cast::<JObject>::from_raw(env, &raw) }
+                .map_err(|error| Failure(format!("Android application context is invalid: {error}")))?;
+            let context = env.new_local_ref(&*global)?;
             require_verifier_class(env, &context)?;
             rustls_platform_verifier::android::init_with_env(env, context)?;
             Ok(())
