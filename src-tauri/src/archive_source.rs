@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Read-only source admission. Provider authority never becomes a filesystem path
 //! exception; native leases outlive every libzim handle made from their descriptors.
+#![forbid(unsafe_code)]
 use crate::{archive::Archive, library_files::PinnedArchive, store::Book};
 use std::fs::File;
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The shell command table: `Service::dispatch_inner` routes every frontend
 //! command to its handler after window, generation and policy checks.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

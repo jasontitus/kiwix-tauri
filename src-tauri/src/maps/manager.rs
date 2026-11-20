@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The public `MapManager` API: catalog, preparation, composition jobs and control.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

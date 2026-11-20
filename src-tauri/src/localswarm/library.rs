@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Public encrypted library sharing. A session snapshots installation membership,
 //! not bytes: sources are lazily retained and identity-checked for every request.
+#![forbid(unsafe_code)]
 use super::{discovery::Peer, network::{self, RateBudget, RecvStream, SendStream}, library_transport as transport, library_wire as wire};
 use crate::{store::{Book, Store}, transfer_policy::JoinedRoute};
 use bytes::Bytes;

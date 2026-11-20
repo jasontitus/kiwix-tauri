@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Original publication authority for the background archive importer.
+#![forbid(unsafe_code)]
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

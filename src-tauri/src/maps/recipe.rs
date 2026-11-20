@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! StreetZim recipe, source and segment models with interval accounting.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

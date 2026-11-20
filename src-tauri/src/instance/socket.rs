@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Both desktop listeners use the profile lock and a private runtime directory.
 //! Capture a retired socket before removing it, and publish new sockets exclusively.
+#![forbid(unsafe_code)]
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{
     Dir, DirBuilder, DirBuilderExt, FileTypeExt, MetadataExt, OpenOptions, OpenOptionsExt,

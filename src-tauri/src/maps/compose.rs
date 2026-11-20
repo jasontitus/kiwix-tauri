@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Composition helpers: persistence, bounded fetches, capacity preflight and chunk reading.
+#![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
 

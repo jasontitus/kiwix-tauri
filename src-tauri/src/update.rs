@@ -16,6 +16,7 @@
 //! file grants no updater permission. `update_status`, `update_check` and
 //! `update_install` travel through the normal command dispatch, so they inherit
 //! the same privacy lease and window ownership checks as every other command.
+#![forbid(unsafe_code)]
 
 use base64::Engine;
 use crate::service::Service;

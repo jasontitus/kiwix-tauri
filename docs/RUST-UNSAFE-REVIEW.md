@@ -424,6 +424,11 @@ outstanding.
 (130 blocks in 28 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
+`#![forbid(unsafe_code)]` is now on 39 safe modules, including archive source and search, map
+composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
+reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
+add the attribute; the census gate covers the remaining native-boundary modules.
+
 The current build's paired reader comparison at the app's 32 MiB cache is recorded in
 [the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
 24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in

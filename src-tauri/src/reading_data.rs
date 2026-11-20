@@ -9,6 +9,7 @@
 //! converge. Conflicts commit to full causal revisions, including child records.
 //! Reset retires all old replica identities before rebuilding visible data; a
 //! forwarded pre-reset snapshot is rejected rather than resurrecting deletions.
+#![forbid(unsafe_code)]
 use crate::store::{self, Book, Bookmark, Highlight, LegacyBookmarkBook, State};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

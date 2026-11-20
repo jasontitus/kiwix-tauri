@@ -1,4 +1,5 @@
 //! Private, exact-pinned QUIC transport. The shared identity is not publisher trust.
+#![forbid(unsafe_code)]
 use super::protocol::{self, Manifest, Message};
 use crate::transfer_policy::{self, LocalBinding};
 use quinn::{Connection, Endpoint};

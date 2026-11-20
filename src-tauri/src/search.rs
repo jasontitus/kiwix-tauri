@@ -4,6 +4,7 @@
 //! Title suggestions page book-major through the resolved archive scope. The
 //! continuation token binds the prefix, scope, archive cursor, and local offset,
 //! so a page produced for another query or scope can never be appended.
+#![forbid(unsafe_code)]
 use crate::archive::{Archive, SearchHit};
 
 use serde_json::{json, Value};

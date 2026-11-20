@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Timestamps shared by saved reading data, diagnostics and network handoffs.
+#![forbid(unsafe_code)]
 use std::fmt::Write;
 use time::{
     format_description::well_known::{Rfc2822, Rfc3339},

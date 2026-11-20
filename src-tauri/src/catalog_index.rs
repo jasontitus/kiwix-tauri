@@ -2,6 +2,7 @@
 //! Current source membership, not publisher tombstones or installed-library authority.
 //! Every traversal starts at the configured root and revalidates every current next
 //! page. Offset pagination is never claimed to be an atomic publisher snapshot.
+#![forbid(unsafe_code)]
 use super::cache::Stamp;
 use super::{accept_language, checked_url, CatalogCache, CatalogEntry};
 use crate::store::Store;

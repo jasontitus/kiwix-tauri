@@ -1,4 +1,5 @@
 //! LocalSwarm v1 framing and hostile-input validation (see bundled NOTICE).
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
