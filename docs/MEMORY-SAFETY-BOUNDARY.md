@@ -40,10 +40,14 @@ around them remain in scope.
 - The reader benchmark remains within 10% of the prior run.
 - No device runtime, sanitizer, Miri or binary-level certification is claimed.
 
-## Next work
+## Audit status
 
-1. Finish the independent audits of the remaining Windows, Apple and Linux/Android/MCP blocks.
-2. Fix any false invariants or ownership defects they find.
-3. Record the accepted boundaries in the inventory and dependency rows, and keep the residual
-   risks explicit.
-4. Re-run the platform cross-checks and the reader benchmark after each cohesive batch.
+The Windows, Apple and Linux/Android/MCP independent audits are complete. They found and closed the
+ACE/SID extent, printer-name padding, DEVMODEW prefix, WebView2 reentrancy, dialog cancellation,
+NT rename length, COM initialization, relative-volume and JNI-reference defects. The GTK
+file-printer name is now rejected when another backend shares it.
+
+Two non-memory-safety residuals remain documented: GTK printer enumeration is still synchronous
+and can delay an export deadline if a backend never completes, and the Windows volume-capacity
+query still classifies remote mounted folders by the share root. Device runtime, sanitizer and
+binary-level certification are not claimed.
