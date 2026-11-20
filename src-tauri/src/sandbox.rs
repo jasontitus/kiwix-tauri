@@ -42,20 +42,8 @@ pub(crate) fn real_downloads_dir() -> Option<PathBuf> {
     #[cfg(not(target_os = "macos"))]
     return None;
     #[cfg(target_os = "macos")]
-    // SAFETY: getpwuid_r writes into the provided record and buffer only.
-    unsafe {
-        let mut record: libc::passwd = std::mem::zeroed();
-        let mut buffer = vec![0 as libc::c_char; 4096];
-        let mut result: *mut libc::passwd = std::ptr::null_mut();
-        if libc::getpwuid_r(libc::getuid(), &mut record, buffer.as_mut_ptr(), buffer.len(), &mut result) != 0
-            || result.is_null()
-            || record.pw_dir.is_null()
-        {
-            return None;
-        }
-        let home = std::ffi::CStr::from_ptr(record.pw_dir);
-        use std::os::unix::ffi::OsStrExt;
-        let home = PathBuf::from(std::ffi::OsStr::from_bytes(home.to_bytes()));
+    {
+        let home = nix::unistd::User::from_uid(nix::unistd::Uid::current()).ok().flatten()?.dir;
         home.is_absolute().then(|| home.join("Downloads"))
     }
 }

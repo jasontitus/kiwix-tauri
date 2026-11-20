@@ -386,3 +386,39 @@ earlier 201/238 figure used a six-line lookback on the pre-change tree. Largest 
 **Verification exercised:** `cargo check --lib`, `cargo clippy --lib -- -D warnings`, `notifications::`
 (2 tests), `native_pdf` (22) and `share` (28) on macOS. Comment-only change; the callback paths themselves
 were not exercised against a live share sheet, print panel or notification center.
+
+## Final first-party pass — 2026-11-20
+
+The merged branch plus this pass leaves **134 `unsafe` matches in 29 files** (136/30 before this commit).
+This pass removed the last two blocks that had a safe wrapper available on this host:
+
+- `sandbox::real_downloads_dir` uses `nix::unistd::User::from_uid` instead of a raw `getpwuid_r` record and
+  buffer.
+- The torrent publication regression creates its FIFO with `nix::unistd::mkfifo` instead of `libc::mkfifo`.
+
+| Metric | Before | After |
+|---|---:|---:|
+| `unsafe { … }` matches (app + relay) | 136 | **134** |
+| Files containing them | 30 | **29** |
+| `unsafe impl` items | 2 | **2** |
+| Blocks without a `SAFETY:` comment (eight-line lookback) | 96 | **95** |
+
+Every remaining block is a native ABI boundary with no safe wrapper in the current dependency set:
+Windows connector/identity/pipe/print/storage calls (73), Linux GTK printing (15), Apple/iOS DNS-SD,
+PDF, sharing, sandbox, provider and mobile backup calls (41), Android JNI/TLS (3), and one prose `unsafe {}`
+in `lib.rs`. No further first-party reduction is available without replacing those platform APIs or adding
+a new native wrapper; verification on Windows, Linux and physical devices remains outstanding.
+
+### Thread-safety assertion sign-off
+
+Only one type still carries a handwritten thread-safety assertion, `agent_connector::Descriptor` (`Send` and
+`Sync`, two items). The native object is a `SECURITY_DESCRIPTOR` allocated once by
+`ConvertStringSecurityDescriptorToSecurityDescriptorW`; the field is private to the Windows connector module,
+no method mutates it after construction, `CreateNamedPipeW` reads it synchronously and copies what it needs,
+and `Drop` releases it with `LocalFree`, which is safe from whichever thread drops the last owner. The
+assertions therefore add no concurrent-mutation permission: there is no `&mut` path to the descriptor.
+They are exercised by the Windows connector tests only, which were not run here.
+
+The other six assertions recorded in the 2026-11-12 inventory (`archive::Handle`,
+`localswarm::apple_transport::{RawConnection, RawListener}` and `power_activity::Token`) are gone: a
+repository search finds no `unsafe impl` outside `agent_connector.rs`.

@@ -2173,9 +2173,7 @@ fn publication_recovery_rejects_symlink_and_fifo_destinations() {
     std::os::unix::fs::symlink(profile.0.join("original.zim"), &destination).unwrap();
     assert!(publish_fixture(&manager, &id, false, false).is_err());
     fs::remove_file(&destination).unwrap();
-    use std::os::unix::ffi::OsStrExt;
-    let fifo = std::ffi::CString::new(destination.as_os_str().as_bytes()).unwrap();
-    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    assert!(nix::unistd::mkfifo(&destination, nix::sys::stat::Mode::from_bits_truncate(0o600)).is_ok());
     assert!(publish_fixture(&manager, &id, false, false).is_err());
     assert!(manager.record(&id).unwrap().job.completed_paths.is_empty());
 }

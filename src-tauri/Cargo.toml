@@ -115,7 +115,7 @@ sherpa-onnx = "2.0.1"
 # Typed Unix filesystem, ownership, clock and socket operations.
 [target.'cfg(unix)'.dependencies]
 # Preserve kernel interface flags, addresses, netmasks and exact name/index receipts.
-nix = { version = "0.32.0", default-features = false, features = ["net"] }
+nix = { version = "0.32.0", default-features = false, features = ["net", "fs"] }
 rustix = { version = "1", default-features = false, features = ["std", "fs", "process", "time", "net"] }
 
 # The typed getpeereid wrapper is used only on the Apple/BSD rendezvous path.
