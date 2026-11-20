@@ -1,6 +1,8 @@
 {
   "matches": 125,
   "blocks": 125,
+  "matches": 121,
+  "blocks": 121,
   "impls": 2,
   "implsByFile": {
     "src-tauri/src/agent_connector.rs": 2
@@ -16,8 +18,7 @@
     "src-tauri/src/localswarm/ios_discovery.rs": 17,
     "src-tauri/src/location_windows.rs": 2,
     "src-tauri/src/menus.rs": 1,
-    "src-tauri/src/mobile.rs": 1,
-    "src-tauri/src/native_pdf/apple.rs": 2,
+    "src-tauri/src/native_pdf/apple.rs": 1,
     "src-tauri/src/native_pdf/handoff.rs": 2,
     "src-tauri/src/native_pdf/linux.rs": 15,
     "src-tauri/src/native_pdf/windows.rs": 2,

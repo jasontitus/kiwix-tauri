@@ -444,6 +444,32 @@ Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under 
 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
 Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
 CommandLineTools, so the developer directory is required. This is a type check, not a device run.
+The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
+small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
+gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
+boundaries; the known remaining candidate is
+`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
+safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
+verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
+outstanding.
+
+`npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
+`unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
+update it in the same change when reducing to keep the ceiling tight.
+
+composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
+reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
+add the attribute; the census gate covers the remaining native-boundary modules.
+
+The current build's paired reader comparison at the app's 32 MiB cache is recorded in
+[the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
+24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
+the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
+
+Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under Rust 1.99.1 with
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
+Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
+CommandLineTools, so the developer directory is required. This is a type check, not a device run.
 
 ### Thread-safety assertion sign-off
 
