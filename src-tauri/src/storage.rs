@@ -260,7 +260,10 @@ pub(crate) fn rename_into_directory_noreplace(
             length: u32,
             class: u32,
         ) -> i32;
-        fn RtlNtStatusToDosError(status: i32) -> u32;
+        // No pointer arguments and total over every NTSTATUS: every i32 is a
+        // valid input and the call only maps a status code for the current
+        // thread, so rustc can require no precondition of us.
+        safe fn RtlNtStatusToDosError(status: i32) -> u32;
     }
     const FILE_RENAME_INFORMATION: u32 = 10;
     const STATUS_PENDING: i32 = 0x103;
@@ -306,8 +309,7 @@ pub(crate) fn rename_into_directory_noreplace(
     if status >= 0 && status != STATUS_PENDING {
         Ok(())
     } else {
-        // SAFETY: a pure status-code conversion with no pointer arguments.
-        let code = unsafe { RtlNtStatusToDosError(status) };
+        let code = RtlNtStatusToDosError(status);
         Err(std::io::Error::from_raw_os_error(code as i32))
     }
 }
@@ -364,21 +366,73 @@ pub(crate) fn remove_empty_directory_verified(
     // SAFETY: `handle` is owned by `directory`, which outlives both synchronous
     // calls; each buffer matches its class (FILE_DISPOSITION_INFO_EX is a ULONG
     // of flags, FILE_DISPOSITION_INFO a BOOLEAN) and outlives the call.
-    if unsafe { SetFileInformationByHandle(handle, FILE_DISPOSITION_INFO_EX, std::ptr::from_ref(&flags).cast(), 4) } == 0 {
-        let error = std::io::Error::last_os_error();
-        // ERROR_INVALID_FUNCTION, ERROR_NOT_SUPPORTED, ERROR_INVALID_PARAMETER,
-        // ERROR_INVALID_LEVEL: the volume lacks POSIX deletion.
-        if !matches!(error.raw_os_error(), Some(1 | 50 | 87 | 124)) {
-            return Err(error);
+    let disposition = unsafe {
+        if SetFileInformationByHandle(handle, FILE_DISPOSITION_INFO_EX, std::ptr::from_ref(&flags).cast(), 4) != 0 {
+            Ok(())
+        } else {
+            let error = std::io::Error::last_os_error();
+            // ERROR_INVALID_FUNCTION, ERROR_NOT_SUPPORTED, ERROR_INVALID_PARAMETER,
+            // ERROR_INVALID_LEVEL: the volume lacks POSIX deletion.
+            if !matches!(error.raw_os_error(), Some(1 | 50 | 87 | 124)) {
+                Err(error)
+            } else {
+                let delete: u8 = 1;
+                if SetFileInformationByHandle(handle, FILE_DISPOSITION_INFO, std::ptr::from_ref(&delete).cast(), 1) == 0 {
+                    Err(std::io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            }
         }
-        let delete: u8 = 1;
-        // SAFETY: as above.
-        if unsafe { SetFileInformationByHandle(handle, FILE_DISPOSITION_INFO, std::ptr::from_ref(&delete).cast(), 1) } == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
+    };
+    disposition?;
     drop(directory);
     Ok(())
+}
+
+/// Windows: one `MoveFileExW` for every whole-path move the app performs.
+///
+/// `NoReplace` passes no flags, so an existing destination fails with
+/// ERROR_ALREADY_EXISTS and a cross-volume pair fails with ERROR_NOT_SAME_DEVICE
+/// instead of degenerating into copy-then-delete. `ReplaceWriteThrough` passes
+/// REPLACE_EXISTING | WRITE_THROUGH, so replacing a file never opens a window
+/// where the destination is missing and the rename is flushed before return.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub(crate) enum MoveKind {
+    NoReplace,
+    ReplaceWriteThrough,
+}
+
+/// Move `source` to `destination` with the flag set `kind` selects. Both paths
+/// must be NUL-free; the buffers are built here and live only for the call.
+#[cfg(windows)]
+pub(crate) fn move_file(source: &Path, destination: &Path, kind: MoveKind) -> std::io::Result<()> {
+    use std::io;
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVE_FILE_FLAGS, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+    use windows::core::PCWSTR;
+    fn wide(path: &Path) -> io::Result<Vec<u16>> {
+        let mut value: Vec<u16> = path.as_os_str().encode_wide().collect();
+        if value.contains(&0) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Publication path contains NUL"));
+        }
+        value.push(0);
+        Ok(value)
+    }
+    let flags = match kind {
+        MoveKind::NoReplace => 0,
+        MoveKind::ReplaceWriteThrough => MOVEFILE_REPLACE_EXISTING.0 | MOVEFILE_WRITE_THROUGH.0,
+    };
+    let from = wide(source)?;
+    let to = wide(destination)?;
+    // SAFETY: `wide` rejects embedded NULs and appends a terminator, so both
+    // buffers are NUL-terminated and outlive this synchronous call; the flags
+    // value is the documented DWORD bitmask and neither buffer is retained.
+    unsafe { MoveFileExW(PCWSTR(from.as_ptr()), PCWSTR(to.as_ptr()), MOVE_FILE_FLAGS(flags)) }
+        .map_err(crate::fs_ext::win32_error)
 }
 
 /// Windows: NTFS refuses to rename a directory while any file inside it is

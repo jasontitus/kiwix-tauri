@@ -88,6 +88,7 @@ dependencies = [
  "same-file",
  "serde_json",
  "socket2",
+ "win-security",
  "windows-sys",
 ]
 
@@ -311,6 +312,13 @@ name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "win-security"
+version = "0.1.0"
+dependencies = [
+ "windows-sys",
+]
 
 [[package]]
 name = "winapi-util"

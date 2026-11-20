@@ -16,7 +16,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (argument === "--print") printOnly = true;
   else roots.push(argument);
 }
-if (roots.length === 0) roots.push("src-tauri/src", "kiwix-mcp/src");
+if (roots.length === 0) roots.push("src-tauri/src", "kiwix-mcp/src", "win-security/src");
 
 const repoRoot = process.cwd();
 const relative = (file) => path.relative(repoRoot, file).split(path.sep).join("/");

@@ -414,6 +414,10 @@ This pass removed blocks that had a safe alternative available on this host:
   AppKit's unsafe static pointers. `winapi-util::file::information` replaces the Windows file-identity call.
 - The Windows lib now type-checks with mingw after removing the parent `forbid` that covered native print
   children and fixing the deletion path's spelling cancellation. It is a cross-check, not a Windows run.
+- Shared `win-security` now owns the Windows token/SID, descriptor, ACL and pipe-peer checks for the app and
+  MCP relay (44 → 16 blocks). Windows print/COM consolidation is 23 → 13; storage/JNI consolidation is 13 → 8;
+  Apple bridge consolidation is 30 → 16. The PDF installer and QUIC start/write/listen remain `unsafe`: a safe
+  caller could otherwise register a callback or block that the native side invokes with unmet preconditions.
 - Windows audit fixes: ACE header/type/size/SID bounds before the typed borrow, explicit owner alongside the DACL,
   NUL-bounded printer names, dmSize-prefixed DEVMODEW reads, deferred print dialog after the WebView2 callback,
   UI-thread cancellation, documented NT rename length, COM-init failure propagation and absolute volume paths.
@@ -421,12 +425,12 @@ This pass removed blocks that had a safe alternative available on this host:
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **127** |
-| Files containing them | 30 | **23** |
+| `unsafe { … }` matches (app + relay + shared) | 136 | **74** |
+| Files containing them | 30 | **18** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 127 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 74 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; the Windows lib now
 cross-checks with mingw, while Linux comments remain source-reviewed but not compiled on this host.
 
@@ -439,7 +443,7 @@ unverified.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(127 blocks in 23 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(74 blocks in 18 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map
@@ -459,9 +463,9 @@ CommandLineTools, so the developer directory is required. This is a type check, 
 
 ### Thread-safety assertion sign-off
 
-Only one type still carries a handwritten thread-safety assertion, `agent_connector::Descriptor` (`Send` and
+Only one type still carries a handwritten thread-safety assertion, `win_security::SecurityDescriptor` (`Send` and
 `Sync`, two items). The native object is a `SECURITY_DESCRIPTOR` allocated once by
-`ConvertStringSecurityDescriptorToSecurityDescriptorW`; the field is private to the Windows connector module,
+`ConvertStringSecurityDescriptorToSecurityDescriptorW`; the field is private to the shared Windows security crate,
 no method mutates it after construction, `CreateNamedPipeW` reads it synchronously and copies what it needs,
 and `Drop` releases it with `LocalFree`, which is safe from whichever thread drops the last owner. The
 assertions therefore add no concurrent-mutation permission: there is no `&mut` path to the descriptor.
@@ -469,4 +473,4 @@ They are exercised by the Windows connector tests only, which were not run here.
 
 The other six assertions recorded in the 2026-11-12 inventory (`archive::Handle`,
 `localswarm::apple_transport::{RawConnection, RawListener}` and `power_activity::Token`) are gone: a
-repository search finds no `unsafe impl` outside `agent_connector.rs`.
+repository search finds no `unsafe impl` outside `win-security`.

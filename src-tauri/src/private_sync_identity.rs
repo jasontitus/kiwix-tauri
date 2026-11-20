@@ -72,7 +72,7 @@ impl Directory {
         };
         let dir = self.dir.open_dir_nofollow(DIRECTORY).map_err(err)?;
         #[cfg(windows)]
-        if created { windows_acl::restrict_directory(&dir)?; }
+        if created { restrict_directory(&dir)?; }
         check_directory(&dir)?;
         let metadata = dir.dir_metadata().map_err(err)?;
         let result = Self { path: self.path.join(DIRECTORY), dir, metadata };
@@ -122,9 +122,41 @@ fn check_file_metadata(metadata: &Metadata) -> Result<(), String> {
     Ok(())
 }
 #[cfg(windows)]
-fn check_profile(dir: &Dir) -> Result<(), String> { windows_acl::check_directory(dir, true) }
+fn directory_handle(dir: &Dir, writable: bool, owner: bool) -> Result<cap_std::fs::File, String> {
+    use cap_std::fs::OpenOptionsExt;
+    let mut options = OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No)
+        .access_mode(0x0002_0000 | if writable { 0x0004_0000 } else { 0 }
+            | if owner { 0x0008_0000 } else { 0 })
+        .custom_flags(0x0220_0000).share_mode(1 | 2 | 4);
+    dir.open_with(".", &options).map_err(err)
+}
 #[cfg(windows)]
-fn check_directory(dir: &Dir) -> Result<(), String> { windows_acl::check_directory(dir, false) }
+fn check_profile(dir: &Dir) -> Result<(), String> {
+    let handle = directory_handle(dir, false, false)?;
+    win_security::check_private_handle(&handle, true, true).map_err(err)
+}
+#[cfg(windows)]
+fn check_directory(dir: &Dir) -> Result<(), String> {
+    let handle = directory_handle(dir, false, false)?;
+    win_security::check_private_handle(&handle, false, true).map_err(err)
+}
+#[cfg(windows)]
+fn restrict_directory(dir: &Dir) -> Result<(), String> {
+    let handle = directory_handle(dir, true, false)?;
+    match win_security::restrict_handle(&handle, true) {
+        Ok(()) => Ok(()),
+        Err(first) => {
+            let first = err(first);
+            let owner = directory_handle(dir, true, true)?;
+            win_security::restrict_handle(&owner, true).map_err(|_| first)
+        }
+    }
+}
+#[cfg(windows)]
+fn restrict_file(file: &cap_std::fs::File) -> Result<(), String> {
+    win_security::restrict_file(file).map_err(err)
+}
 #[cfg(not(any(unix, windows)))]
 fn check_profile(_: &Dir) -> Result<(), String> { Err(err("this platform has no supported private-file permission implementation")) }
 #[cfg(not(any(unix, windows)))]
@@ -148,7 +180,7 @@ fn existing(directory: &Directory) -> Result<Option<Identity>, String> {
     check_file_metadata(&opened)?;
     if !same(&before, &opened) { return Err(err("identity changed while opening")); }
     #[cfg(windows)]
-    windows_acl::check_file(&file)?;
+    win_security::check_private_handle(&file, false, false).map_err(err)?;
     let mut identity = Identity { secret: Zeroizing::new(vec![0; KEY_LEN]), public: [0; KEY_LEN] };
     file.read_exact(&mut identity.secret).map_err(err)?;
     file.read_exact(&mut identity.public).map_err(err)?;
@@ -208,7 +240,7 @@ fn load_or_create_before_publish(data_dir: &Path, before_publish: impl FnOnce())
     { use cap_std::fs::OpenOptionsExt; options.access_mode(0xc006_0000).custom_flags(0x0020_0000).share_mode(1 | 4); }
     let mut file = directory.dir.open_with(&pending, &options).map_err(err)?;
     #[cfg(windows)]
-    windows_acl::restrict_file(&file)?;
+    restrict_file(&file)?;
     crate::mobile_backup::exclude_payload(&file, &directory.path.join(&pending))?;
     file.write_all(identity.secret_key()).map_err(err)?;
     file.write_all(identity.public_key()).map_err(err)?;
@@ -243,236 +275,11 @@ fn load_or_create_before_publish(data_dir: &Path, before_publish: impl FnOnce())
 // file owner, LocalSystem and Builtin Administrators may hold allow entries.
 #[cfg(windows)]
 pub(crate) fn check_cache_directory_access(dir: &Dir) -> Result<(), String> {
-    windows_acl::check_directory(dir, true)
+    check_profile(dir)
 }
 #[cfg(windows)]
 pub(crate) fn check_cache_file_access(file: &cap_std::fs::File) -> Result<(), String> {
-    windows_acl::check(file, true, false)
-}
-
-#[cfg(windows)]
-mod windows_acl {
-    use super::{err, Dir, OpenOptions};
-    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
-    use cap_std::fs::{File, OpenOptionsExt};
-    use std::{ffi::c_void, os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle}};
-    use windows::{
-        core::{BOOL, PCWSTR, PWSTR},
-        Win32::{
-            Foundation::{HANDLE, HLOCAL, LocalFree},
-            Security::{
-                Authorization::{ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
-                    GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT},
-                EqualSid, GetAce, GetSecurityDescriptorControl, GetSecurityDescriptorDacl,
-                GetTokenInformation, IsValidSid, IsWellKnownSid, ACL, ACE_HEADER, ACCESS_ALLOWED_ACE, PSID,
-                PSECURITY_DESCRIPTOR, TOKEN_USER, TokenUser, TOKEN_QUERY,
-                DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
-                PROTECTED_DACL_SECURITY_INFORMATION, SE_DACL_PROTECTED,
-                WinLocalSystemSid, WinBuiltinAdministratorsSid,
-            },
-            System::Threading::{GetCurrentProcess, OpenProcessToken},
-            Storage::FileSystem::{ReOpenFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE},
-        },
-    };
-
-    struct Allocation(*mut c_void);
-    impl Drop for Allocation {
-        fn drop(&mut self) {
-            // SAFETY: `self.0` is a non-null allocation that each constructor's API
-            // requires `LocalFree` for: ConvertStringSecurityDescriptorToSecurityDescriptorW,
-            // GetSecurityInfo and ConvertSidToStringSidW. It is freed exactly once
-            // here and never used afterwards.
-            if !self.0.is_null() { unsafe { let _ = LocalFree(Some(HLOCAL(self.0))); } }
-        }
-    }
-    struct User { storage: Vec<usize> }
-    impl User {
-        fn current() -> Result<Self, String> {
-            let mut raw = HANDLE::default();
-            // SAFETY: `GetCurrentProcess` returns a process-lifetime pseudo-handle that must not be
-            // closed and is only read; the token handle is written to the live local `raw`.
-            unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw).map_err(err)?; }
-            // SAFETY: `raw` is the handle just opened and is not copied elsewhere; `OwnedHandle`
-            // owns it and closes it exactly once.
-            let token = unsafe { OwnedHandle::from_raw_handle(raw.0) };
-            let mut required = 0;
-            // SAFETY: a null buffer with zero length only asks for the required size; the token
-            // handle is alive and `required` is a writable live local.
-            unsafe { let _ = GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, None, 0, &mut required); }
-            if required == 0 || required > 64 * 1024 { return Err(err("could not determine the Windows user SID")); }
-            let mut storage = vec![0usize; (required as usize).div_ceil(std::mem::size_of::<usize>())];
-            // SAFETY: `storage` holds at least `required` zeroed bytes, is `usize`-aligned, and
-            // stays put while the live token is queried; the API writes at most `required` bytes.
-            unsafe {
-                GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser,
-                    Some(storage.as_mut_ptr().cast()), required, &mut required).map_err(err)?;
-            }
-            Ok(Self { storage })
-        }
-        // SAFETY: `storage` owns a `TOKEN_USER` written by `GetTokenInformation` above; it is
-        // `usize`-aligned and never reallocated, so the SID points into live owned memory.
-        fn sid(&self) -> PSID { unsafe { (*(self.storage.as_ptr().cast::<TOKEN_USER>())).User.Sid } }
-        fn text(&self) -> Result<String, String> {
-            let mut text = PWSTR::null();
-            // SAFETY: `sid` points into `self.storage`, which outlives this call; the API allocates
-            // a NUL-terminated string and returns it through the live local `text`.
-            unsafe { ConvertSidToStringSidW(self.sid(), &mut text).map_err(err)?; }
-            let _allocation = Allocation(text.0.cast());
-            // SAFETY: `_allocation` owns the NUL-terminated string returned above and keeps it
-            // alive until after this read, which does not modify it.
-            unsafe { text.to_string().map_err(err) }
-        }
-    }
-    fn directory_handle(dir: &Dir, writable: bool, owner: bool) -> Result<File, String> {
-        let mut options = OpenOptions::new();
-        options.read(true).follow(FollowSymlinks::No)
-            .access_mode(0x0002_0000 | if writable { 0x0004_0000 } else { 0 }
-                | if owner { 0x0008_0000 } else { 0 })
-            .custom_flags(0x0220_0000).share_mode(1 | 2 | 4);
-        dir.open_with(".", &options).map_err(err)
-    }
-    fn restrict(file: &File, directory: bool) -> Result<(), String> {
-        let user = User::current()?;
-        let inheritance = if directory { "OICI" } else { "" };
-        let sddl: Vec<u16> = format!("D:P(A;{inheritance};FA;;;{})", user.text()?)
-            .encode_utf16().chain(Some(0)).collect();
-        let mut descriptor = PSECURITY_DESCRIPTOR::default();
-        // SAFETY: `sddl` is NUL-terminated and alive across the call; the API allocates a
-        // self-contained descriptor and stores it in the live local `descriptor`.
-        unsafe {
-            ConvertStringSecurityDescriptorToSecurityDescriptorW(PCWSTR(sddl.as_ptr()), 1, &mut descriptor, None).map_err(err)?;
-        }
-        let _allocation = Allocation(descriptor.0);
-        let mut present = BOOL::default();
-        let mut defaulted = BOOL::default();
-        let mut dacl = std::ptr::null_mut();
-        // SAFETY: `descriptor` is the live owned allocation above; `dacl` points into it and
-        // `present`/`defaulted` are writable locals, so the DACL stays valid for `SetSecurityInfo`.
-        unsafe {
-            GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted).map_err(err)?;
-            if !present.as_bool() || dacl.is_null() { return Err(err("Windows private DACL is unavailable")); }
-            let owner_result = SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION,
-                Some(user.sid()), None, Some(dacl), None);
-            if owner_result.is_err() {
-                // The handle may lack WRITE_OWNER. The DACL is still required;
-                // `check` below rejects an owner that is not this user.
-                SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
-                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                    None, None, Some(dacl), None).ok().map_err(err)?;
-            }
-        }
-        check(file, false, directory)
-    }
-    pub(super) fn restrict_directory(dir: &Dir) -> Result<(), String> {
-        let handle = directory_handle(dir, true, false)?;
-        match restrict(&handle, true) {
-            Ok(()) => Ok(()),
-            Err(first) => {
-                let owner = directory_handle(dir, true, true)?;
-                restrict(&owner, true).map_err(|_| first)
-            }
-        }
-    }
-    pub(super) fn restrict_file(file: &File) -> Result<(), String> {
-        match restrict(file, false) {
-            Ok(()) => Ok(()),
-            Err(first) => {
-                // Reopen the same object, never a name that delete-sharing can
-                // replace between the original open and the retry.
-                // SAFETY: `file` owns a live handle; the returned handle is
-                // adopted exactly once by `File::from_raw_handle`.
-                let owner = unsafe {
-                    ReOpenFile(HANDLE(file.as_raw_handle()), 0x000e_0000,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        FILE_FLAGS_AND_ATTRIBUTES(0))
-                }.map_err(err)?;
-                // SAFETY: ReOpenFile returned a new owned handle, adopted once.
-                let owner = unsafe { File::from_raw_handle(owner.0) };
-                restrict(&owner, false).map_err(|_| first)
-            }
-        }
-    }
-    pub(super) fn check_directory(dir: &Dir, profile: bool) -> Result<(), String> {
-        check(&directory_handle(dir, false, false)?, profile, true)
-    }
-    pub(super) fn check_file(file: &File) -> Result<(), String> { check(file, false, false) }
-
-    pub(super) fn check(file: &File, profile: bool, directory: bool) -> Result<(), String> {
-        let user = User::current()?;
-        let mut owner = PSID::default();
-        let mut dacl: *mut ACL = std::ptr::null_mut();
-        let mut descriptor = PSECURITY_DESCRIPTOR::default();
-        // SAFETY: `file` is a live handle owned by the caller; `owner`, `dacl` and `descriptor`
-        // are writable live locals, and the API allocates the descriptor recorded there.
-        unsafe {
-            GetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
-                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-                Some(&mut owner), None, Some(&mut dacl), None, Some(&mut descriptor)).ok().map_err(err)?;
-        }
-        let _allocation = Allocation(descriptor.0);
-        // SAFETY: `_allocation` keeps the descriptor allocation alive; `owner`, `dacl` and every
-        // `GetAce` result point inside it and are only read, and `user` outlives the comparisons.
-        unsafe {
-            if owner.0.is_null() || EqualSid(owner, user.sid()).is_err() || dacl.is_null() || (*dacl).AceCount == 0 {
-                return Err(err("Windows identity storage must be owned by this user with a restrictive DACL"));
-            }
-            if !profile {
-                let mut control = 0u16;
-                let mut revision = 0;
-                GetSecurityDescriptorControl(descriptor, &mut control, &mut revision).map_err(err)?;
-                if control & SE_DACL_PROTECTED.0 == 0 || (*dacl).AceCount != 1 {
-                    return Err(err("Windows identity storage must have a protected, single-user DACL"));
-                }
-            }
-            for index in 0..u32::from((*dacl).AceCount) {
-                let mut raw = std::ptr::null_mut();
-                GetAce(dacl, index, &mut raw).map_err(err)?;
-                if raw.is_null() { return Err(err("Windows identity storage has an invalid ACE")); }
-                let header = &*raw.cast::<ACE_HEADER>();
-                let acl_start = dacl as usize;
-                let acl_end = acl_start.checked_add(usize::from((*dacl).AclSize))
-                    .ok_or_else(|| err("Windows identity ACL size is invalid"))?;
-                let ace_start = raw as usize;
-                let ace_end = ace_start.checked_add(usize::from(header.AceSize))
-                    .ok_or_else(|| err("Windows identity ACE size is invalid"))?;
-                if ace_start < acl_start || ace_end > acl_end {
-                    return Err(err("Windows identity ACE exceeds its ACL"));
-                }
-                // Reject callback/object/deny ACEs rather than interpreting arbitrary ACLs.
-                if header.AceType != 0 { return Err(err("Windows identity storage has an unexpected ACE type")); }
-                let sid_offset = std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart);
-                if usize::from(header.AceSize) < sid_offset + 8 {
-                    return Err(err("Windows identity ACE is too short for a SID"));
-                }
-                let sid_bytes = raw.cast::<u8>().add(sid_offset);
-                let subauthorities = usize::from(*sid_bytes.add(1));
-                let sid_length = 8usize.checked_add(subauthorities.checked_mul(4)
-                    .ok_or_else(|| err("Windows identity SID is too large"))?)
-                    .ok_or_else(|| err("Windows identity SID is too large"))?;
-                if sid_offset.checked_add(sid_length).is_none_or(|end| end > usize::from(header.AceSize)) {
-                    return Err(err("Windows identity SID exceeds its ACE"));
-                }
-                let ace = &*raw.cast::<ACCESS_ALLOWED_ACE>();
-                let sid = PSID(std::ptr::addr_of!(ace.SidStart).cast_mut().cast());
-                if !IsValidSid(sid).as_bool() {
-                    return Err(err("Windows identity ACE contains an invalid SID"));
-                }
-                let own = EqualSid(sid, user.sid()).is_ok();
-                if profile {
-                    // Standard private Windows profiles also grant the two OS administrators.
-                    if !own && !IsWellKnownSid(sid, WinLocalSystemSid).as_bool()
-                        && !IsWellKnownSid(sid, WinBuiltinAdministratorsSid).as_bool() {
-                        return Err(err("Windows profile grants access to another user or group"));
-                    }
-                } else if !own || ace.Mask != 0x001f_01ff
-                    || ace.Header.AceFlags != if directory { 3 } else { 0 } {
-                    return Err(err("Windows identity permissions are not current-user-only full control"));
-                }
-            }
-        }
-        Ok(())
-    }
+    win_security::check_private_handle(file, true, false).map_err(err)
 }
 
 #[cfg(test)]
@@ -706,42 +513,15 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_broad_dacl_is_rejected_without_repair_or_clobber() {
-        use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
-        use windows::Win32::{
-            Foundation::{HANDLE, HLOCAL, LocalFree},
-            Security::{
-                Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SetSecurityInfo, SE_FILE_OBJECT},
-                ACL, DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
-                GetSecurityDescriptorDacl, PSECURITY_DESCRIPTOR,
-            },
-        };
+        use std::os::windows::fs::OpenOptionsExt;
         for relative in [PathBuf::new(), PathBuf::from(DIRECTORY), PathBuf::from(DIRECTORY).join(KEY_FILE)] {
             let profile = OwnedProfile::new();
             load_or_create(&profile.profile).unwrap();
             let original = Zeroizing::new(fs::read(profile.key()).unwrap());
             let file = fs::OpenOptions::new().read(true).access_mode(0x0006_0000)
                 .custom_flags(0x0220_0000).open(profile.profile.join(relative)).unwrap();
-            let mut descriptor = PSECURITY_DESCRIPTOR::default();
-            let mut present = windows::core::BOOL::default();
-            let mut defaulted = windows::core::BOOL::default();
-            let mut dacl: *mut ACL = std::ptr::null_mut();
-            // SAFETY: the descriptor is allocated by `ConvertString...` and freed exactly once in
-            // both branches below; `present`, `defaulted` and `dacl` are writable locals, the DACL
-            // pointer stays inside the live allocation, and `file` is a live handle.
-            unsafe {
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    windows::core::w!("D:P(A;;FA;;;WD)"), 1, &mut descriptor, None).unwrap();
-                let parsed = GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted);
-                if let Err(error) = parsed {
-                    let _ = LocalFree(Some(HLOCAL(descriptor.0)));
-                    panic!("Reading test security descriptor: {error}");
-                }
-                let changed = SetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
-                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                    None, None, Some(dacl), None);
-                let _ = LocalFree(Some(HLOCAL(descriptor.0)));
-                changed.ok().unwrap();
-            }
+            let descriptor = win_security::SecurityDescriptor::from_sddl("D:P(A;;FA;;;WD)").unwrap();
+            win_security::set_dacl(&file, &descriptor, None).unwrap();
             drop(file);
             assert!(load_or_create(&profile.profile).is_err());
             assert!(fs::read(profile.key()).unwrap().as_slice() == original.as_slice());

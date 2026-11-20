@@ -40,6 +40,11 @@ const _: () = {
 };
 
 type Completion = Block<dyn Fn(i32, usize)>;
+// Every block handed to these calls is built by `resilient_block`, which
+// requires `Send + Sync + 'static`; block2 erases those bounds from its type,
+// so this module keeps that constructor as the only way to make one. Native
+// retains its own reference before returning and invokes the block on its own
+// dispatch queue.
 unsafe extern "C" {
     safe fn kiwix_swarm_identity(p12: &NSData, der: &NSData) -> bool;
     safe fn kiwix_swarm_connect(instance: BonjourInstance, peer_to_peer: bool, isolated_transport: bool, required_index: u32) -> u64;
@@ -129,9 +134,11 @@ pub(super) fn interface_has_address(index: u32, address: IpAddr) -> bool {
 /// per read, so a 16 KiB cap bounded the whole transfer at single-digit MB/s.
 const MAX_READ: usize = 256 * 1024;
 
-// block2 erases these bounds from its block type. Check them before handing a
-// closure to the native dispatch queue, which can invoke and dispose it there.
-fn queue_callback<F: Send + Sync + 'static>(callback: F) -> F { callback }
+// block2 erases these bounds from its block type. The native dispatch queue can
+// invoke and dispose a block on another thread, so every block in this module is
+// built through this constructor; that checked bound is the whole safety
+// argument for the `safe fn` bridge declarations above.
+fn resilient_block<F: Send + Sync + 'static>(callback: F) -> F { callback }
 
 enum Operation {
     Ready,
@@ -144,7 +151,7 @@ type CompletionReply = oneshot::Receiver<Result<usize, String>>;
 fn completion(operation: Operation) -> (CompletionBlock, CompletionReply) {
     let (reply, received) = oneshot::channel();
     let reply = std::sync::Mutex::new(Some(reply));
-    let block = RcBlock::new(queue_callback(move |status: i32, length: usize| {
+    let block = RcBlock::new(resilient_block(move |status: i32, length: usize| {
         let sender = reply.lock().unwrap_or_else(|e| e.into_inner()).take();
         let Some(sender) = sender else { return; };
         let result = if status != 0 {
@@ -178,7 +185,7 @@ impl Connection {
         let (callback, ready) = completion(Operation::Ready);
         // SAFETY: `raw` is the nonzero connection ID owned by the lease and
         // registered in the native table; `callback` is a live block whose
-        // `queue_callback` construction requires `Send + Sync + 'static`, and
+        // `resilient_block` construction requires `Send + Sync + 'static`, and
         // native retains its own reference before returning.
         unsafe { kiwix_swarm_start(raw.get(), &callback); }
         (connection, ready)
@@ -299,10 +306,11 @@ impl Connection {
             let length = input.len().min(super::network::UNLIMITED_PIECE);
             let data = DispatchData::from_bytes(&input[..length]);
             let (callback, sent) = completion(Operation::Write { bytes: length, stats: stats.clone() });
-            // SAFETY: `self.0.id` is a live connection ID. `DispatchData::from_bytes`
-            // made an owned copy before this call; the `queue_callback` block
-            // requires `Send + Sync + 'static`, and native retains that immutable
-            // object and the block across dispatch without recopying.
+            // SAFETY: `self.0.id` is a live connection ID.
+            // `DispatchData::from_bytes` made an owned copy before this call;
+            // the `resilient_block` block requires `Send + Sync + 'static`, and
+            // native retains that immutable object and the block across dispatch
+            // without recopying.
             unsafe { kiwix_swarm_write(self.0.id.get(), &data, &callback); }
             completions.push(sent);
             input = &input[length..];
@@ -336,14 +344,14 @@ impl Listener {
         identity()?;
         let (sender, incoming) = mpsc::channel(16);
         let (raw, ready) = {
-            let accept = RcBlock::new(queue_callback(move |raw: u64| {
+            let accept = RcBlock::new(resilient_block(move |raw: u64| {
                 if let Some(raw) = NonZeroU64::new(raw) {
                     // A full or closed channel drops the incoming connection and cancels it.
                     let _ = sender.try_send(Connection::start(raw));
                 }
             }));
             let (callback, ready) = completion(Operation::Ready);
-            // SAFETY: `accept` and `callback` are live `queue_callback` blocks
+            // SAFETY: `accept` and `callback` are live `resilient_block` blocks
             // requiring `Send + Sync + 'static`. On success native retains its
             // own references and returns a nonzero ID; on failure it calls
             // `ready(-1, 0)` synchronously and returns zero, which Rust handles

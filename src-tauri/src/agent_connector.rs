@@ -568,91 +568,13 @@ mod transport {
 
     use super::super::Service;
     use serde_json::json;
-    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
     use tokio_util::sync::CancellationToken;
-    use windows::core::{PCWSTR, PWSTR};
-    use windows::Win32::Foundation::{HANDLE, HLOCAL, LocalFree};
-    use windows::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW};
-    use windows::Win32::Security::{EqualSid, GetTokenInformation, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER, TokenUser};
-    use windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
-    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
-
-    struct User { storage: Vec<usize> }
-    impl User {
-        fn of(process: HANDLE) -> Result<Self, String> {
-            let mut raw = HANDLE::default();
-            // SAFETY: `process` is a borrowed or pseudo handle (startup passes
-            // GetCurrentProcess, which is never closed); only the token written
-            // into `raw` is newly owned and adopted below.
-            unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw).map_err(|error| error.to_string())?; }
-            // SAFETY: `raw` is the handle just opened, not copied anywhere else; `OwnedHandle`
-            // owns it and closes it exactly once.
-            let token = unsafe { OwnedHandle::from_raw_handle(raw.0) };
-            let mut required = 0;
-            // SAFETY: a null buffer with zero length only asks the API for the required size; the
-            // token handle is alive and `required` is a writable live local.
-            unsafe { let _ = GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, None, 0, &mut required); }
-            if required == 0 || required > 64 * 1024 { return Err("Cannot read a process identity".into()); }
-            let mut storage = vec![0usize; (required as usize).div_ceil(std::mem::size_of::<usize>())];
-            // SAFETY: `storage` is initialized to at least `required` zeroed bytes, `usize`-aligned,
-            // and stays put while the live token is queried; the API writes at most `required` bytes.
-            unsafe {
-                GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, Some(storage.as_mut_ptr().cast()), required, &mut required)
-                    .map_err(|error| error.to_string())?;
-            }
-            Ok(Self { storage })
-        }
-        // SAFETY: `storage` owns a `TOKEN_USER` written by `GetTokenInformation` above; it is
-        // `usize`-aligned and never reallocated, so the SID points into live owned memory.
-        fn sid(&self) -> PSID { unsafe { (*(self.storage.as_ptr().cast::<TOKEN_USER>())).User.Sid } }
-        fn text(&self) -> Result<String, String> {
-            let mut text = PWSTR::null();
-            // SAFETY: `sid` points into `self.storage`, which outlives this call; the API allocates
-            // a NUL-terminated string and returns it through the live local `text`.
-            unsafe { ConvertSidToStringSidW(self.sid(), &mut text).map_err(|error| error.to_string())?; }
-            // SAFETY: `text` is the NUL-terminated allocation just returned, still owned here and
-            // unmodified until `to_string` finishes reading it.
-            let value = unsafe { text.to_string() }.map_err(|error| error.to_string());
-            // SAFETY: `text` is the allocation from `ConvertSidToStringSidW`, freed exactly once
-            // here and never used afterwards.
-            unsafe { let _ = LocalFree(Some(HLOCAL(text.0.cast()))); }
-            value
-        }
-    }
-
-    struct Descriptor(PSECURITY_DESCRIPTOR);
-    impl Descriptor {
-        /// Owned by the current user, full access for the current user only,
-        /// with a protected DACL. Relays check the owner.
-        fn current_user_only(own: &User) -> Result<Self, String> {
-            let sid = own.text()?;
-            let sddl: Vec<u16> = format!("O:{sid}D:P(A;;GA;;;{sid})").encode_utf16().chain(Some(0)).collect();
-            let mut raw = PSECURITY_DESCRIPTOR::default();
-            // SAFETY: `sddl` is NUL-terminated and alive across the call; the API allocates a
-            // self-contained descriptor and stores it in the live local `raw`.
-            unsafe {
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(PCWSTR(sddl.as_ptr()), 1, &mut raw, None)
-                    .map_err(|error| error.to_string())?;
-            }
-            Ok(Self(raw))
-        }
-    }
-    impl Drop for Descriptor {
-        fn drop(&mut self) {
-            // SAFETY: `self.0` is the descriptor allocated by
-            // `ConvertStringSecurityDescriptorToSecurityDescriptorW`; it is freed exactly once here.
-            unsafe { let _ = LocalFree(Some(HLOCAL(self.0 .0))); }
-        }
-    }
-    // SAFETY: the descriptor is immutable after construction, has no thread affinity, and is only
-    // read during pipe creation, so sharing it across threads is sound.
-    unsafe impl Send for Descriptor {}
-    // SAFETY: shared reads of the same immutable descriptor are sound for the same reason.
-    unsafe impl Sync for Descriptor {}
+    use win_security::{peer_process_id, PipePeer, ProcessHandle, SecurityDescriptor, UserSid};
+    use windows::Win32::Security::SECURITY_ATTRIBUTES;
 
     pub(super) fn is_default_profile(profile: &std::path::Path) -> bool {
         if crate::portable::PortableProfile::detect().ok().flatten().is_some() {
@@ -662,8 +584,8 @@ mod transport {
         same_file::is_same_file(profile, default.data_dir()).unwrap_or(false)
     }
 
-    fn pipe_name(service: &Service, own: &User) -> Result<String, String> {
-        let base = format!(r"\\.\pipe\kiwix-mcp-{}", own.text()?);
+    fn pipe_name(service: &Service, own: &UserSid) -> Result<String, String> {
+        let base = format!(r"\\.\pipe\kiwix-mcp-{}", own.as_string().map_err(|error| error.to_string())?);
         let profile = service.store.data_dir();
         if is_default_profile(profile) {
             return Ok(base);
@@ -672,10 +594,10 @@ mod transport {
         Ok(format!("{base}-{suffix}"))
     }
 
-    fn create(name: &str, first: bool, descriptor: &Descriptor) -> std::io::Result<NamedPipeServer> {
+    fn create(name: &str, first: bool, descriptor: &SecurityDescriptor) -> std::io::Result<NamedPipeServer> {
         let mut attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: descriptor.0 .0,
+            lpSecurityDescriptor: descriptor.raw(),
             bInheritHandle: false.into(),
         };
         // SAFETY: `attributes` is a valid, live `SECURITY_ATTRIBUTES` whose
@@ -689,26 +611,13 @@ mod transport {
         }
     }
 
-    fn client_is_current_user(pipe: &NamedPipeServer, own: &User) -> bool {
-        let mut pid = 0u32;
-        // SAFETY: `pipe` is a live connected server handle and `pid` is a writable live local.
-        if unsafe { GetNamedPipeClientProcessId(HANDLE(pipe.as_raw_handle()), &mut pid) }.is_err() || pid == 0 {
-            return false;
-        }
-        // SAFETY: `pid` is an OS-provided value, and the returned process handle is adopted below.
-        let Ok(process) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else { return false; };
-        // SAFETY: `process` was just returned by `OpenProcess`; `OwnedHandle` takes ownership and
-        // closes it exactly once, and it is not used elsewhere.
-        let process = unsafe { OwnedHandle::from_raw_handle(process.0) };
-        match User::of(HANDLE(process.as_raw_handle())) {
-            // SAFETY: both SIDs point into `User` storage owned by `client` and `own`, which
-            // outlive the comparison and are not modified during it.
-            Ok(client) => unsafe { EqualSid(client.sid(), own.sid()) }.is_ok(),
-            Err(_) => false,
-        }
+    fn client_is_current_user(pipe: &NamedPipeServer, own: &UserSid) -> bool {
+        let Ok(pid) = peer_process_id(pipe, PipePeer::Client) else { return false; };
+        let Ok(process) = ProcessHandle::open_query(pid) else { return false; };
+        process.user().is_ok_and(|client| client.equals(own))
     }
 
-    async fn client(service: Arc<Service>, pipe: NamedPipeServer, own: Arc<User>, cancel: CancellationToken) -> Result<(), String> {
+    async fn client(service: Arc<Service>, pipe: NamedPipeServer, own: Arc<UserSid>, cancel: CancellationToken) -> Result<(), String> {
         if !client_is_current_user(&pipe, &own) {
             return Err("Refused an agent connector client from another account".into());
         }
@@ -717,7 +626,7 @@ mod transport {
 
 
     /// Create the next instance, retrying briefly; `None` once cancelled.
-    async fn next_instance(name: &str, descriptor: &Descriptor, cancel: &CancellationToken) -> Option<NamedPipeServer> {
+    async fn next_instance(name: &str, descriptor: &SecurityDescriptor, cancel: &CancellationToken) -> Option<NamedPipeServer> {
         loop {
             match create(name, false, descriptor) {
                 Ok(server) => return Some(server),
@@ -731,11 +640,9 @@ mod transport {
     }
 
     pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken, generation: u64) -> Result<(), String> {
-        // SAFETY: `GetCurrentProcess` returns a pseudo-handle valid for the process lifetime that
-        // must not be closed; it is only passed to `OpenProcessToken`.
-        let own = Arc::new(User::of(unsafe { GetCurrentProcess() })?);
+        let own = Arc::new(UserSid::current().map_err(|error| error.to_string())?);
         let name = pipe_name(&service, &own)?;
-        let descriptor = Descriptor::current_user_only(&own)?;
+        let descriptor = SecurityDescriptor::current_user_only(&own).map_err(|error| error.to_string())?;
         // Instances of a connector just turned off may still be closing:
         // retry the exclusive claim briefly before reporting a conflict.
         let mut claim = Err(std::io::Error::other("not attempted"));

@@ -57,7 +57,6 @@ pub fn install_native_tabbing() {
 /// Register a shell for native tabbing and session capture. Safe to repeat.
 #[cfg(target_os = "macos")]
 pub fn adopt_native_tabbing(window: &WebviewWindow) {
-    use objc2_app_kit::NSWindow;
     use objc2_foundation::NSString;
 
     if !native_tabs::shell_label(window.label()) {
@@ -65,11 +64,11 @@ pub fn adopt_native_tabbing(window: &WebviewWindow) {
     }
     let label = window.label().to_owned();
     let _ = window.with_webview(move |webview| {
-        // SAFETY: the pinned Wry dispatcher retains the NSWindow while this
-        // main-thread callback runs. Neither this borrow nor the pointer escapes.
-        if let Some(window) = unsafe { webview.ns_window().cast::<NSWindow>().as_ref() } {
-            tabbing::kiwix_tabbing_prepare_window(window, &NSString::from_str(&label));
-        }
+        // The main-thread callback lends only the live window pointer; AppKit
+        // supplies the retained NSWindow from its own window list.
+        let Some(mtm) = objc2::MainThreadMarker::new() else { return; };
+        let Some(window) = crate::apple_window::window_from_pointer(webview.ns_window(), mtm) else { return; };
+        tabbing::kiwix_tabbing_prepare_window(&window, &NSString::from_str(&label));
     });
 }
 
@@ -202,16 +201,15 @@ pub fn apply_under_page(window: &WebviewWindow, settings: &crate::store::Setting
         let reader_theme = settings.reader_theme.clone();
         let shell_theme = settings.theme.clone();
         let _ = window.with_webview(move |webview| {
-            // SAFETY: the pinned Wry dispatcher holds a retained WKWebView
-            // throughout this main-thread callback. The borrow stays here.
-            let Some(view) = (unsafe { webview.inner().cast::<objc2_web_kit::WKWebView>().as_ref() }) else {
-                return;
-            };
-            let colour = reader
-                .then(|| reader_paper(&reader_theme))
-                .flatten()
-                .unwrap_or_else(|| shell_paper(&shell_theme, webkit_backdrop::is_dark(view)));
-            webkit_backdrop::set_colour(view, colour);
+            // The main-thread callback lends only the live window pointer; the
+            // shell's WKWebView comes from AppKit's own view tree.
+            let _ = crate::apple_window::with_webkit_view(webview.ns_window(), |view| {
+                let colour = reader
+                    .then(|| reader_paper(&reader_theme))
+                    .flatten()
+                    .unwrap_or_else(|| shell_paper(&shell_theme, webkit_backdrop::is_dark(view)));
+                webkit_backdrop::set_colour(view, colour);
+            });
         });
     }
     #[cfg(not(target_os = "macos"))]

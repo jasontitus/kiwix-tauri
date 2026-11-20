@@ -485,21 +485,22 @@ mod native {
             autoreleasepool(|_| {
                 let data = NSData::with_bytes(bookmark);
                 let mut stale = Bool::NO;
-                // SAFETY: `stale` is a valid, writable Bool for the duration of the call.
+                // SAFETY: `stale` is a valid, writable Bool for the duration of
+                // the call, and the resolved NSURL stays in this pool.
                 let url = unsafe {
-                    NSURL::URLByResolvingBookmarkData_options_relativeToURL_bookmarkDataIsStale_error(
+                    let url = NSURL::URLByResolvingBookmarkData_options_relativeToURL_bookmarkDataIsStale_error(
                         &data,
                         NSURLBookmarkResolutionOptions::WithSecurityScope
                             | NSURLBookmarkResolutionOptions::WithoutUI,
                         None,
                         &mut stale,
                     )
-                }
-                .map_err(|error| error.localizedDescription().to_string())?;
-                // SAFETY: plain Objective-C message to a valid NSURL.
-                if !unsafe { url.startAccessingSecurityScopedResource() } {
-                    return Err("The system refused access".into());
-                }
+                    .map_err(|error| error.localizedDescription().to_string())?;
+                    if !url.startAccessingSecurityScopedResource() {
+                        return Err("The system refused access".into());
+                    }
+                    url
+                };
                 let path = url.path().ok_or("The bookmark does not name a file")?.to_string();
                 let refreshed = if stale.as_bool() {
                     url.bookmarkDataWithOptions_includingResourceValuesForKeys_relativeToURL_error(

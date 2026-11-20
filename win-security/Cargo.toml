@@ -1,0 +1,20 @@
+[package]
+name = "win-security"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Windows identity, security-descriptor and named-pipe checks shared by the
+# app and the `kiwix-mcp` relay. Deliberately free of tokio, cap-std, libzim
+# and the app package: both sides pass borrowed raw handles in.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+] }

@@ -18,80 +18,68 @@ impl Dialog {
 }
 thread_local! { static HOOKS: RefCell<HashMap<isize, *const Dialog>> = RefCell::new(HashMap::new()); }
 unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam: LPARAM) -> usize {
-    if message != WM_INITDIALOG && message != WM_NCDESTROY {
-        if let Some(dialog) = HOOKS.with(|hooks| hooks.borrow().get(&(hwnd.0 as isize)).copied()) {
-            // SAFETY: the entry is removed before `choose` returns, so the
-            // pointee is live while the modal dialog runs.
-            if unsafe { &*dialog }.abort_pending.swap(false, Ordering::SeqCst) {
-                // SAFETY: `hwnd` is the live modal dialog; IDABORT is the
-                // documented command for terminating PrintDlg from its hook.
-                unsafe {
-                    if PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(3), LPARAM(0)).is_err() {
-                        (&*dialog).abort_pending.store(true, Ordering::SeqCst);
-                    }
-                }
-            }
-        }
-    }
     if message == WM_INITDIALOG {
         // SAFETY: during WM_INITDIALOG `lParam` is the live PRINTDLGW that
-        // `choose` passed to PrintDlgW; only `lCustData` is read here, before
-        // the call writes its selection back into the structure.
-        let print = unsafe { &*(lparam.0 as *const PRINTDLGW) };
-        let dialog = print.lCustData.0 as *const Dialog;
-        if !dialog.is_null() {
-            HOOKS.with(|hooks| hooks.borrow_mut().insert(hwnd.0 as isize, dialog));
-            // SAFETY: `lCustData` holds the `&Dialog` owned by `choose`, which
-            // keeps it alive until PrintDlgW returns; the pointer was checked
-            // non-null and is used only while that reference is live.
-            unsafe { &*dialog }.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
-            // Poll the cancellation flag from inside the modal loop. Tao
-            // buffers other main-thread events until PrintDlgW returns.
-            // SAFETY: `hwnd` is the live dialog and `dialog` is the live
-            // `&Dialog` owned by `choose`; the timer is removed on destroy.
-            unsafe {
+        // `choose` passed to PrintDlgW, and its `lCustData` points at the
+        // `&Dialog` owned by `choose`, which outlives the modal call. `hwnd` is
+        // the live modal dialog on its own UI thread, so SetTimer/PostMessageW
+        // are valid for it; the timer is removed on destroy.
+        unsafe {
+            let print = &*(lparam.0 as *const PRINTDLGW);
+            let ptr = print.lCustData.0 as *const Dialog;
+            if !ptr.is_null() {
+                let dialog = &*ptr;
+                HOOKS.with(|hooks| hooks.borrow_mut().insert(hwnd.0 as isize, ptr));
+                dialog.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
+                // Poll the cancellation flag from inside the modal loop. Tao
+                // buffers other main-thread events until PrintDlgW returns.
                 if SetTimer(Some(hwnd), 1, 100, None) == 0 {
-                    (&*dialog).setup_error.store(true, Ordering::SeqCst);
-                    (&*dialog).abort_pending.store(true, Ordering::SeqCst);
+                    dialog.setup_error.store(true, Ordering::SeqCst);
+                    dialog.abort_pending.store(true, Ordering::SeqCst);
                     // PrintHookProc forbids EndDialog here. IDABORT terminates
                     // the common dialog; retry on a later hook message if this
                     // post could not be queued.
                     if PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(3), LPARAM(0)).is_ok() {
-                        (&*dialog).abort_pending.store(false, Ordering::SeqCst);
+                        dialog.abort_pending.store(false, Ordering::SeqCst);
                     }
                 }
-            }
-            // SAFETY: `dialog` is the live `&Dialog` owned by `choose`.
-            if unsafe { &*dialog }.cancelled.load(Ordering::SeqCst) {
-                // SAFETY: `hwnd` is the live modal dialog and this runs on its
-                // owning UI thread.
-                unsafe { let _ = PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(2), LPARAM(0)); }
+                if dialog.cancelled.load(Ordering::SeqCst) {
+                    let _ = PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(2), LPARAM(0));
+                }
             }
         }
-    } else if message == WM_TIMER {
-        if let Some(dialog) = HOOKS.with(|hooks| hooks.borrow().get(&(hwnd.0 as isize)).copied()) {
-            // SAFETY: the entry is removed before `choose` returns, so the
-            // pointee is live while the modal dialog runs.
-            if unsafe { &*dialog }.cancelled.load(Ordering::SeqCst) {
-                // SAFETY: `hwnd` is the live modal dialog; the timer is killed
-                // here so the cancellation is posted once.
-                // SAFETY: `hwnd` is the live modal dialog; stop polling only
-                // after the cancel command reached its queue.
-                unsafe {
+    } else if message == WM_NCDESTROY {
+        let removed = HOOKS.with(|hooks| hooks.borrow_mut().remove(&(hwnd.0 as isize)));
+        // SAFETY: `hwnd` is the dialog being destroyed; killing a timer that
+        // never started is a no-op, and `removed` (if any) still points at the
+        // `Dialog` owned by `choose` until PrintDlgW returns.
+        unsafe {
+            let _ = KillTimer(Some(hwnd), 1);
+            if let Some(ptr) = removed { (*ptr).hwnd.store(0, Ordering::SeqCst); }
+        }
+    } else {
+        let found = HOOKS.with(|hooks| hooks.borrow().get(&(hwnd.0 as isize)).copied());
+        if let Some(ptr) = found {
+            // SAFETY: entries are inserted with a non-null `&Dialog` owned by
+            // `choose` and removed before PrintDlgW returns, so `ptr` is live;
+            // `hwnd` is the live modal dialog on its own UI thread.
+            unsafe {
+                let dialog = &*ptr;
+                if dialog.abort_pending.swap(false, Ordering::SeqCst) {
+                    // IDABORT is the documented command for terminating
+                    // PrintDlg from its hook; retry on a later hook message if
+                    // this post could not be queued.
+                    if PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(3), LPARAM(0)).is_err() {
+                        dialog.abort_pending.store(true, Ordering::SeqCst);
+                    }
+                }
+                if message == WM_TIMER && dialog.cancelled.load(Ordering::SeqCst) {
+                    // Stop polling only after the cancel command reached its queue.
                     if PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(2), LPARAM(0)).is_ok() {
                         let _ = KillTimer(Some(hwnd), 1);
                     }
                 }
             }
-        }
-    } else if message == WM_NCDESTROY {
-        // SAFETY: `hwnd` is the dialog being destroyed; removing a timer that
-        // was installed for this dialog is a no-op if it never started.
-        unsafe { let _ = KillTimer(Some(hwnd), 1); }
-        if let Some(dialog) = HOOKS.with(|hooks| hooks.borrow_mut().remove(&(hwnd.0 as isize))) {
-            // SAFETY: entries are inserted with a non-null `&Dialog` and removed
-            // here before `choose` returns, so the pointee is still alive.
-            unsafe { &*dialog }.hwnd.store(0, Ordering::SeqCst);
         }
     }
     0
@@ -134,105 +122,116 @@ pub fn choose(core: &ICoreWebView2, owner: HWND, dialog: &Dialog, width: u32) ->
         let error = unsafe { CommDlgExtendedError() }.0;
         return if error == 0 { Ok(None) } else { Err(format!("The Windows print dialog failed ({error})")) };
     }
-    // SAFETY: `settings` reads the still-owned PRINTDLG handles, which
-    // `selection` frees only when it drops after this call returns.
-    unsafe { settings(core, &selection.0, width).map(Some).map_err(|error| format!("Cannot apply the selected printer settings: {error}")) }
+    // `Selected` proves PrintDlgW succeeded and keeps the dialog's handles
+    // alive until `settings` returns; they are freed when the temporary drops.
+    Selected(selection).settings(core, width).map(Some).map_err(|error| format!("Cannot apply the selected printer settings: {error}"))
 }
-// SAFETY: every handle in `print` came from PrintDlgW and is owned by the live
-// `selection`; each global block is sized by GlobalSize, locked and unlocked
-// once here, and its unaligned contents are read only inside those bounds.
-unsafe fn settings(core: &ICoreWebView2, print: &PRINTDLGW, width: u32) -> Result<ICoreWebView2PrintSettings, String> {
-    // SAFETY: the function contract above guarantees `print` and its handle
-    // blocks are live and bounded for this call; this block only reads them.
-    unsafe {
-        let flags = print.Flags;
-        // DEVNAMES offsets are UTF-16 units into the bounded global allocation,
-        // not pointers supplied by archive markup.
-        let size = GlobalSize(print.hDevNames) / 2;
-        if size < std::mem::size_of::<DEVNAMES>() / 2 { return Err("Missing printer identity".into()); }
-        let names = GlobalLock(print.hDevNames);
-        if names.is_null() { return Err("Missing printer identity".into()); }
-        let name_result = (|| {
-            let header = std::ptr::read_unaligned(names.cast::<DEVNAMES>());
-            let offset = header.wDeviceOffset as usize;
-            if offset >= size { return Err("Invalid printer identity".to_string()); }
-            let base = names.cast::<u16>();
-            let mut end = offset;
-            while end < size && std::ptr::read_unaligned(base.add(end)) != 0 { end += 1; }
-            if end == size { return Err("Invalid printer identity".into()); }
-            if end == offset { return Err("No printer was selected".into()); }
-            // Only the initialized name is exposed as a slice; the allocation's
-            // trailing padding is never read.
-            let text = std::slice::from_raw_parts(base.add(offset), end - offset);
-            String::from_utf16(text).map_err(|_| "Invalid printer name".into())
-        })();
-        let _ = GlobalUnlock(print.hDevNames);
-        let name = name_result?;
-        let mode_bytes = GlobalSize(print.hDevMode) as usize;
-        let fields_end = std::mem::offset_of!(DEVMODEW, dmFields) + std::mem::size_of::<u32>();
-        if mode_bytes < fields_end { return Err("Missing printer configuration".into()); }
-        let mode_ptr = GlobalLock(print.hDevMode);
-        if mode_ptr.is_null() { return Err("Missing printer configuration".into()); }
-        let dm_size = std::ptr::read_unaligned(
-            mode_ptr.cast::<u8>().add(std::mem::offset_of!(DEVMODEW, dmSize)).cast::<u16>(),
-        ) as usize;
-        let copy_len = dm_size.min(mode_bytes).min(std::mem::size_of::<DEVMODEW>());
-        if copy_len < fields_end {
+/// A `Selection` filled in by a successful PrintDlgW call. Constructing this
+/// type is the proof that the dialog returned nonzero, so its handles may be
+/// read without an unsafe obligation at the call site.
+struct Selected(Selection);
+
+impl Selected {
+    /// Reads the printer identity and capabilities PrintDlgW stored in the
+    /// dialog's handles. Safe only because `Selected` exists only after a
+    /// successful dialog: every handle is owned by `self.0` and freed by its
+    /// `Drop` after this call.
+    fn settings(&self, core: &ICoreWebView2, width: u32) -> Result<ICoreWebView2PrintSettings, String> {
+        let print = &self.0.0;
+        // SAFETY: `print` and its handle blocks are live and bounded for this
+        // call; each global block is sized by GlobalSize, locked and unlocked
+        // once here, and its unaligned contents are read only inside those
+        // bounds.
+        unsafe {
+            let flags = print.Flags;
+            // DEVNAMES offsets are UTF-16 units into the bounded global allocation,
+            // not pointers supplied by archive markup.
+            let size = GlobalSize(print.hDevNames) / 2;
+            if size < std::mem::size_of::<DEVNAMES>() / 2 { return Err("Missing printer identity".into()); }
+            let names = GlobalLock(print.hDevNames);
+            if names.is_null() { return Err("Missing printer identity".into()); }
+            let name_result = (|| {
+                let header = std::ptr::read_unaligned(names.cast::<DEVNAMES>());
+                let offset = header.wDeviceOffset as usize;
+                if offset >= size { return Err("Invalid printer identity".to_string()); }
+                let base = names.cast::<u16>();
+                let mut end = offset;
+                while end < size && std::ptr::read_unaligned(base.add(end)) != 0 { end += 1; }
+                if end == size { return Err("Invalid printer identity".into()); }
+                if end == offset { return Err("No printer was selected".into()); }
+                // Only the initialized name is exposed as a slice; the allocation's
+                // trailing padding is never read.
+                let text = std::slice::from_raw_parts(base.add(offset), end - offset);
+                String::from_utf16(text).map_err(|_| "Invalid printer name".into())
+            })();
+            let _ = GlobalUnlock(print.hDevNames);
+            let name = name_result?;
+            let mode_bytes = GlobalSize(print.hDevMode) as usize;
+            let fields_end = std::mem::offset_of!(DEVMODEW, dmFields) + std::mem::size_of::<u32>();
+            if mode_bytes < fields_end { return Err("Missing printer configuration".into()); }
+            let mode_ptr = GlobalLock(print.hDevMode);
+            if mode_ptr.is_null() { return Err("Missing printer configuration".into()); }
+            let dm_size = std::ptr::read_unaligned(
+                mode_ptr.cast::<u8>().add(std::mem::offset_of!(DEVMODEW, dmSize)).cast::<u16>(),
+            ) as usize;
+            let copy_len = dm_size.min(mode_bytes).min(std::mem::size_of::<DEVMODEW>());
+            if copy_len < fields_end {
+                let _ = GlobalUnlock(print.hDevMode);
+                return Err("Missing printer configuration".into());
+            }
+            let mut mode = DEVMODEW::default();
+            std::ptr::copy_nonoverlapping(
+                mode_ptr.cast::<u8>(),
+                (&mut mode as *mut DEVMODEW).cast::<u8>(),
+                copy_len,
+            );
             let _ = GlobalUnlock(print.hDevMode);
-            return Err("Missing printer configuration".into());
+            let present = |offset: usize, size: usize| copy_len >= offset.saturating_add(size);
+            let environment = core.cast::<ICoreWebView2_2>().map_err(|error| error.to_string())?.Environment().map_err(|error| error.to_string())?;
+            let settings = environment.cast::<ICoreWebView2Environment6>().map_err(|error| error.to_string())?.CreatePrintSettings().map_err(|error| error.to_string())?;
+            let extended = settings.cast::<ICoreWebView2PrintSettings2>().map_err(|error| error.to_string())?;
+            extended.SetPrinterName(&HSTRING::from(name)).map_err(|error| error.to_string())?;
+            extended.SetCopies(i32::from(print.nCopies.max(1))).map_err(|error| error.to_string())?;
+            extended.SetCollation(if flags.contains(PD_COLLATE) { COREWEBVIEW2_PRINT_COLLATION_COLLATED } else { COREWEBVIEW2_PRINT_COLLATION_UNCOLLATED }).map_err(|error| error.to_string())?;
+            if flags.contains(PD_PAGENUMS) {
+                let first = print.nFromPage; let last = print.nToPage;
+                if first == 0 || last < first { return Err("Invalid print page range".into()); }
+                extended.SetPageRanges(&HSTRING::from(format!("{first}-{last}"))).map_err(|error| error.to_string())?;
+            }
+            if mode.dmFields.contains(DM_COLOR) && present(std::mem::offset_of!(DEVMODEW, dmColor), std::mem::size_of::<u16>()) {
+                extended.SetColorMode(if mode.dmColor.0 == 1 { COREWEBVIEW2_PRINT_COLOR_MODE_GRAYSCALE } else { COREWEBVIEW2_PRINT_COLOR_MODE_COLOR }).map_err(|error| error.to_string())?;
+            }
+            if mode.dmFields.contains(DM_DUPLEX) && present(std::mem::offset_of!(DEVMODEW, dmDuplex), std::mem::size_of::<u16>()) {
+                let duplex = match mode.dmDuplex.0 { 1 => COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED, 2 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE, 3 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE, _ => return Err("Unsupported printer duplex setting".into()) };
+                extended.SetDuplex(duplex).map_err(|error| error.to_string())?;
+            }
+            let dpi_x = GetDeviceCaps(Some(print.hDC), LOGPIXELSX);
+            let dpi_y = GetDeviceCaps(Some(print.hDC), LOGPIXELSY);
+            if dpi_x <= 0 || dpi_y <= 0 { return Err("Invalid printer resolution".into()); }
+            let physical_width = f64::from(GetDeviceCaps(Some(print.hDC), PHYSICALWIDTH)) / f64::from(dpi_x);
+            let physical_height = f64::from(GetDeviceCaps(Some(print.hDC), PHYSICALHEIGHT)) / f64::from(dpi_y);
+            if physical_width <= 0.0 || physical_height <= 0.0 { return Err("Invalid printer paper dimensions".into()); }
+            let landscape = mode.dmFields.contains(DM_ORIENTATION)
+                && present(std::mem::offset_of!(DEVMODEW, Anonymous1), std::mem::size_of::<i16>())
+                && mode.Anonymous1.Anonymous1.dmOrientation as u32 == DMORIENT_LANDSCAPE;
+            settings.SetOrientation(if landscape { COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE } else { COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT }).map_err(|error| error.to_string())?;
+            extended.SetMediaSize(COREWEBVIEW2_PRINT_MEDIA_SIZE_CUSTOM).map_err(|error| error.to_string())?;
+            settings.SetPageWidth(if landscape { physical_height } else { physical_width }).map_err(|error| error.to_string())?;
+            settings.SetPageHeight(if landscape { physical_width } else { physical_height }).map_err(|error| error.to_string())?;
+            settings.SetMarginTop(0.5).map_err(|error| error.to_string())?;
+            settings.SetMarginBottom(0.5).map_err(|error| error.to_string())?;
+            settings.SetMarginLeft(0.5).map_err(|error| error.to_string())?;
+            settings.SetMarginRight(0.5).map_err(|error| error.to_string())?;
+            let fit = ((physical_width - 1.0) * 96.0 / f64::from(width)).min(1.0);
+            let scale = if mode.dmFields.contains(DM_SCALE)
+                && present(std::mem::offset_of!(DEVMODEW, Anonymous1) + 8, std::mem::size_of::<i16>()) {
+                f64::from(mode.Anonymous1.Anonymous1.dmScale) / 100.0
+            } else { 1.0 };
+            if !(0.1..=2.0).contains(&(scale * fit)) { return Err("The live article is too wide for the selected printer scale".into()); }
+            settings.SetScaleFactor(scale * fit).map_err(|error| error.to_string())?;
+            settings.SetShouldPrintBackgrounds(true).map_err(|error| error.to_string())?;
+            Ok(settings)
         }
-        let mut mode = DEVMODEW::default();
-        std::ptr::copy_nonoverlapping(
-            mode_ptr.cast::<u8>(),
-            (&mut mode as *mut DEVMODEW).cast::<u8>(),
-            copy_len,
-        );
-        let _ = GlobalUnlock(print.hDevMode);
-        let present = |offset: usize, size: usize| copy_len >= offset.saturating_add(size);
-        let environment = core.cast::<ICoreWebView2_2>().map_err(|error| error.to_string())?.Environment().map_err(|error| error.to_string())?;
-        let settings = environment.cast::<ICoreWebView2Environment6>().map_err(|error| error.to_string())?.CreatePrintSettings().map_err(|error| error.to_string())?;
-        let extended = settings.cast::<ICoreWebView2PrintSettings2>().map_err(|error| error.to_string())?;
-        extended.SetPrinterName(&HSTRING::from(name)).map_err(|error| error.to_string())?;
-        extended.SetCopies(i32::from(print.nCopies.max(1))).map_err(|error| error.to_string())?;
-        extended.SetCollation(if flags.contains(PD_COLLATE) { COREWEBVIEW2_PRINT_COLLATION_COLLATED } else { COREWEBVIEW2_PRINT_COLLATION_UNCOLLATED }).map_err(|error| error.to_string())?;
-        if flags.contains(PD_PAGENUMS) {
-            let first = print.nFromPage; let last = print.nToPage;
-            if first == 0 || last < first { return Err("Invalid print page range".into()); }
-            extended.SetPageRanges(&HSTRING::from(format!("{first}-{last}"))).map_err(|error| error.to_string())?;
-        }
-        if mode.dmFields.contains(DM_COLOR) && present(std::mem::offset_of!(DEVMODEW, dmColor), std::mem::size_of::<u16>()) {
-            extended.SetColorMode(if mode.dmColor.0 == 1 { COREWEBVIEW2_PRINT_COLOR_MODE_GRAYSCALE } else { COREWEBVIEW2_PRINT_COLOR_MODE_COLOR }).map_err(|error| error.to_string())?;
-        }
-        if mode.dmFields.contains(DM_DUPLEX) && present(std::mem::offset_of!(DEVMODEW, dmDuplex), std::mem::size_of::<u16>()) {
-            let duplex = match mode.dmDuplex.0 { 1 => COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED, 2 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE, 3 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE, _ => return Err("Unsupported printer duplex setting".into()) };
-            extended.SetDuplex(duplex).map_err(|error| error.to_string())?;
-        }
-        let dpi_x = GetDeviceCaps(Some(print.hDC), LOGPIXELSX);
-        let dpi_y = GetDeviceCaps(Some(print.hDC), LOGPIXELSY);
-        if dpi_x <= 0 || dpi_y <= 0 { return Err("Invalid printer resolution".into()); }
-        let physical_width = f64::from(GetDeviceCaps(Some(print.hDC), PHYSICALWIDTH)) / f64::from(dpi_x);
-        let physical_height = f64::from(GetDeviceCaps(Some(print.hDC), PHYSICALHEIGHT)) / f64::from(dpi_y);
-        if physical_width <= 0.0 || physical_height <= 0.0 { return Err("Invalid printer paper dimensions".into()); }
-        let landscape = mode.dmFields.contains(DM_ORIENTATION)
-            && present(std::mem::offset_of!(DEVMODEW, Anonymous1), std::mem::size_of::<i16>())
-            && mode.Anonymous1.Anonymous1.dmOrientation as u32 == DMORIENT_LANDSCAPE;
-        settings.SetOrientation(if landscape { COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE } else { COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT }).map_err(|error| error.to_string())?;
-        extended.SetMediaSize(COREWEBVIEW2_PRINT_MEDIA_SIZE_CUSTOM).map_err(|error| error.to_string())?;
-        settings.SetPageWidth(if landscape { physical_height } else { physical_width }).map_err(|error| error.to_string())?;
-        settings.SetPageHeight(if landscape { physical_width } else { physical_height }).map_err(|error| error.to_string())?;
-        settings.SetMarginTop(0.5).map_err(|error| error.to_string())?;
-        settings.SetMarginBottom(0.5).map_err(|error| error.to_string())?;
-        settings.SetMarginLeft(0.5).map_err(|error| error.to_string())?;
-        settings.SetMarginRight(0.5).map_err(|error| error.to_string())?;
-        let fit = ((physical_width - 1.0) * 96.0 / f64::from(width)).min(1.0);
-        let scale = if mode.dmFields.contains(DM_SCALE)
-            && present(std::mem::offset_of!(DEVMODEW, Anonymous1) + 8, std::mem::size_of::<i16>()) {
-            f64::from(mode.Anonymous1.Anonymous1.dmScale) / 100.0
-        } else { 1.0 };
-        if !(0.1..=2.0).contains(&(scale * fit)) { return Err("The live article is too wide for the selected printer scale".into()); }
-        settings.SetScaleFactor(scale * fit).map_err(|error| error.to_string())?;
-        settings.SetShouldPrintBackgrounds(true).map_err(|error| error.to_string())?;
-        Ok(settings)
     }
 }
 

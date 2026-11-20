@@ -137,27 +137,6 @@ fn open_existing(path: &Path) -> io::Result<std::fs::File> {
     std::fs::OpenOptions::new().access_mode(0x0000_0080).custom_flags(0x0200_0000).open(path)
 }
 
-#[cfg(windows)]
-fn final_path(file: &std::fs::File) -> io::Result<Vec<u16>> {
-    use std::os::windows::io::AsRawHandle;
-    use windows::Win32::{
-        Foundation::HANDLE,
-        Storage::FileSystem::{GetFinalPathNameByHandleW, GETFINALPATHNAMEBYHANDLE_FLAGS},
-    };
-    let mut path = vec![0u16; 32768];
-    // SAFETY: `file` owns a live handle and `path` is a writable buffer whose
-    // capacity is passed; both outlive the call.
-    let length = unsafe {
-        GetFinalPathNameByHandleW(HANDLE(file.as_raw_handle()), &mut path,
-            GETFINALPATHNAMEBYHANDLE_FLAGS(0))
-    };
-    if length == 0 { return Err(io::Error::last_os_error()); }
-    let length = length as usize;
-    if length >= path.len() { return Err(io::Error::new(io::ErrorKind::InvalidData, "volume path is too long")); }
-    path.truncate(length);
-    Ok(path)
-}
-
 /// Filesystem name from the destination's own handle, so mounted folders and
 /// junctions report the volume that actually holds the path.
 #[cfg(windows)]
@@ -177,8 +156,14 @@ pub(crate) fn filesystem_name(path: &Path) -> io::Result<String> {
 #[cfg(windows)]
 fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
     use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::AsRawHandle;
     use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    use windows::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{
+            GetDiskFreeSpaceExW, GetFinalPathNameByHandleW, GETFINALPATHNAMEBYHANDLE_FLAGS,
+        },
+    };
 
     if path.as_os_str().encode_wide().any(|unit| unit == 0) {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
@@ -196,25 +181,37 @@ fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
             Err(error) => return Err(error),
         }
     };
-    let mut final_path = if file.metadata()?.is_dir() {
-        final_path(&file)?
-    } else {
-        // Follow a file symlink to its final target, then use that target's
-        // directory for the capacity query.
-        let mut path = final_path(&file)?;
-        while path.last().copied() != Some(0x5c) { if path.pop().is_none() { break; } }
-        path
-    };
-    // GetDiskFreeSpaceExW requires a directory and a trailing separator for
-    // UNC names.
-    if final_path.last().copied() != Some(0x5c) { final_path.push(0x5c); }
-    final_path.push(0);
+    let mut path_buffer = vec![0u16; 32768];
     let (mut available, mut total) = (0u64, 0u64);
-    // SAFETY: `final_path` is NUL-terminated and the file handle keeps the
-    // destination volume live for this synchronous query.
-    unsafe { GetDiskFreeSpaceExW(PCWSTR(final_path.as_ptr()), Some(&mut available), Some(&mut total), None) }
-        .map_err(win32_error)?;
-    Ok(VolumeSpace { available, total })
+    // SAFETY: `file` owns a live handle and `path_buffer` is a 32768-unit
+    // writable buffer whose length the binding passes; the final path is
+    // NUL-terminated before the capacity query, `available`/`total` are
+    // writable locals, and the handle keeps the destination volume live.
+    let space = unsafe {
+        let length = GetFinalPathNameByHandleW(HANDLE(file.as_raw_handle()), &mut path_buffer,
+            GETFINALPATHNAMEBYHANDLE_FLAGS(0));
+        if length == 0 { return Err(io::Error::last_os_error()); }
+        let length = length as usize;
+        if length >= path_buffer.len() { return Err(io::Error::new(io::ErrorKind::InvalidData, "volume path is too long")); }
+        path_buffer.truncate(length);
+        let mut final_path = if file.metadata()?.is_dir() {
+            path_buffer
+        } else {
+            // Follow a file symlink to its final target, then use that target's
+            // directory for the capacity query.
+            let mut path = path_buffer;
+            while path.last().copied() != Some(0x5c) { if path.pop().is_none() { break; } }
+            path
+        };
+        // GetDiskFreeSpaceExW requires a directory and a trailing separator for
+        // UNC names.
+        if final_path.last().copied() != Some(0x5c) { final_path.push(0x5c); }
+        final_path.push(0);
+        GetDiskFreeSpaceExW(PCWSTR(final_path.as_ptr()), Some(&mut available), Some(&mut total), None)
+            .map_err(win32_error)?;
+        VolumeSpace { available, total }
+    };
+    Ok(space)
 }
 
 /// Recovers the raw Win32 code so callers see the same `raw_os_error()` that

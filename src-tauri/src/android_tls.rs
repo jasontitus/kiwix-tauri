@@ -74,29 +74,31 @@ fn initialize() -> Result<(), String> {
     if android.vm().is_null() || android.context().is_null() {
         return Err("the Android application context is unavailable".into());
     }
-    // SAFETY: the pointer is the live process JavaVM published by Tao.
-    let vm = unsafe { JavaVM::from_raw(android.vm().cast::<sys::JavaVM>()) };
-    // Scoped attach: a Tokio worker is not left permanently attached.
-    vm.attach_current_thread_for_scope(|env| -> Result<(), Failure> {
-        let result = (|| -> Result<(), Failure> {
-            let raw = android.context().cast::<sys::jobject>();
-            // SAFETY: Tao owns a global reference to the application Context for
-            // the life of the process. Cast borrows that global reference without
-            // adopting or deleting it; only the frame-local reference below is new.
-            let global = unsafe { Cast::<JObject>::from_raw(env, &raw) }
-                .map_err(|error| Failure(format!("Android application context is invalid: {error}")))?;
-            let context = env.new_local_ref(&*global)?;
-            require_verifier_class(env, &context)?;
-            rustls_platform_verifier::android::init_with_env(env, context)?;
-            Ok(())
-        })();
-        // A pending Java exception must never leak onto a reused worker thread.
-        if env.exception_check() {
-            env.exception_clear();
-        }
-        result
-    })
-    .map_err(|Failure(message)| message)
+    // SAFETY: `android.vm()` is the live process JavaVM published by Tao and
+    // `android.context()` is Tao's process-lifetime global reference, borrowed
+    // here and never adopted or deleted (`Cast` has no Drop). Both are used
+    // only inside the scoped attach below.
+    unsafe {
+        let vm = JavaVM::from_raw(android.vm().cast::<sys::JavaVM>());
+        // Scoped attach: a Tokio worker is not left permanently attached.
+        vm.attach_current_thread_for_scope(|env| -> Result<(), Failure> {
+            let result = (|| -> Result<(), Failure> {
+                let raw = android.context().cast::<sys::_jobject>();
+                let global = Cast::<JObject>::from_raw(env, &raw)
+                    .map_err(|error| Failure(format!("Android application context is invalid: {error}")))?;
+                let context = env.new_local_ref(&*global)?;
+                require_verifier_class(env, &context)?;
+                rustls_platform_verifier::android::init_with_env(env, context)?;
+                Ok(())
+            })();
+            // A pending Java exception must never leak onto a reused worker thread.
+            if env.exception_check() {
+                env.exception_clear();
+            }
+            result
+        })
+        .map_err(|Failure(message)| message)
+    }
 }
 
 /// Loads the JVM component through the same loader the verifier will use and

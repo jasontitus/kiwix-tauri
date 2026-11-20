@@ -43,6 +43,23 @@ const UNIX_EPOCH_TICKS: i64 = 116_444_736_000_000_000;
 
 const OFF_IN_SETTINGS: &str = "Location is turned off for Kiwix in Windows. Turn on Location in Settings › Privacy & security › Location, including “Let desktop apps access your location”.";
 
+/// Runs `body` in a fresh MTA apartment on the calling thread.
+///
+/// `body` must drop every WinRT reference it owns before returning, because
+/// `CoUninitialize` runs on the same thread immediately afterwards.
+fn with_mta<T>(body: impl FnOnce() -> T) -> Result<T, windows::core::HRESULT> {
+    // SAFETY: this thread has no prior apartment, so CoInitializeEx decides its
+    // mode; the matching CoUninitialize runs on the same thread after `body`
+    // has released its WinRT references.
+    unsafe {
+        let com = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if com.is_err() { return Err(com); }
+        let value = body();
+        CoUninitialize();
+        Ok(value)
+    }
+}
+
 pub(crate) fn start(token: u64, high_accuracy: bool, timeout_ms: u64, sender: Sender<Result<Position, LocationError>>) {
     if let Ok(mut pending) = PENDING.lock() {
         pending.insert(token, Entry { reply: Some(sender), ..Entry::default() });
@@ -54,25 +71,22 @@ pub(crate) fn start(token: u64, high_accuracy: bool, timeout_ms: u64, sender: Se
         .name("kiwix-location".into())
         .spawn(move || {
             // WinRT activation needs an apartment; this thread owns its own MTA.
-            // SAFETY: this fresh thread has no COM apartment yet, so the MTA
-            // result is authoritative; the matching CoUninitialize below runs on
-            // this same thread after its WinRT objects are gone.
-            let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-            let initialized = com.is_ok();
-            let result = if initialized {
-                locate(token, high_accuracy, timeout_ms)
-            } else {
-                Err(LocationError::unavailable(&format!("Windows COM initialization failed: 0x{:08x}", com.0)))
+            let outcome = with_mta(|| {
+                let result = locate(token, high_accuracy, timeout_ms);
+                // Removing the entry drops its WinRT reference (the abort
+                // closure) while COM is still initialized.
+                let reply = PENDING.lock().ok().and_then(|mut pending| pending.remove(&token)).and_then(|entry| entry.reply);
+                (result, reply)
+            });
+            let (result, reply) = match outcome {
+                Ok(pair) => pair,
+                Err(com) => {
+                    // No apartment was entered, so there is nothing to uninitialize.
+                    let reply = PENDING.lock().ok().and_then(|mut pending| pending.remove(&token)).and_then(|entry| entry.reply);
+                    (Err(LocationError::unavailable(&format!("Windows COM initialization failed: 0x{:08x}", com.0))), reply)
+                }
             };
-            // Removing the entry drops its WinRT reference while COM is alive.
-            let entry = PENDING.lock().ok().and_then(|mut pending| pending.remove(&token));
-            if initialized {
-                // SAFETY: pairs with the successful CoInitializeEx above on the
-                // same thread, after every WinRT reference this thread held has
-                // been dropped.
-                unsafe { CoUninitialize() };
-            }
-            if let Some(reply) = entry.and_then(|entry| entry.reply) {
+            if let Some(reply) = reply {
                 let _ = reply.send(result);
             }
         });

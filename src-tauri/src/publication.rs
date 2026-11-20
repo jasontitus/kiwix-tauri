@@ -501,12 +501,7 @@ fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
 
 #[cfg(windows)]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
-    }
-    fn wide(path: &Path) -> io::Result<Vec<u16>> {
+    fn resolved(path: &Path) -> io::Result<std::path::PathBuf> {
         // Canonicalize only the parent: destination need not exist, and the
         // final component must not be followed if it is a symlink. Canonical
         // parents also give the Win32 extended-length path form for long names.
@@ -520,28 +515,12 @@ fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
                 "Publication path has no filename",
             )
         })?;
-        let path = std::fs::canonicalize(parent)?.join(name);
-        let mut value: Vec<u16> = path.as_os_str().encode_wide().collect();
-        if value.contains(&0) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Publication path contains NUL",
-            ));
-        }
-        value.push(0);
-        Ok(value)
+        Ok(std::fs::canonicalize(parent)?.join(name))
     }
-    let from = wide(source)?;
-    let to = wide(destination)?;
-    // Flags zero forbids replacement and cross-volume copy/delete emulation.
-    // SAFETY: `wide` rejects embedded NULs and appends a terminator, so both
-    // buffers are NUL-terminated and outlive this synchronous call.
-    let result = unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) };
-    if result != 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    // Flags zero forbid replacement and cross-volume copy/delete emulation.
+    let from = resolved(source)?;
+    let to = resolved(destination)?;
+    crate::storage::move_file(&from, &to, crate::storage::MoveKind::NoReplace)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android", windows)))]
