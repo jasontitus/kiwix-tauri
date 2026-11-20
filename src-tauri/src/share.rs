@@ -15,7 +15,7 @@ mod macos {
         native_pdf::{Authority, Commit, OwnedPdf, Phase},
     };
     use std::{
-        ffi::{c_char, c_void, CString},
+        ffi::CString,
         fs::File,
         os::unix::fs::MetadataExt,
         path::PathBuf,
@@ -26,8 +26,8 @@ mod macos {
     use tokio_util::sync::CancellationToken;
 
     unsafe extern "C" {
-        fn kiwix_share_present(
-            id: u64, host: *mut c_void, path: *const c_char,
+        safe fn kiwix_share_present(
+            id: u64, host: &objc2_app_kit::NSWindow, path: crate::ffi::CPath<'_>,
             admit: extern "C" fn(u64) -> bool, live: extern "C" fn(u64) -> bool,
             complete: extern "C" fn(u64, u8, i64),
         ) -> bool;
@@ -105,13 +105,13 @@ mod macos {
                 complete(id, 4, 0);
                 return;
             }
-            let Ok(host) = origin.ns_window() else {
+            let Ok(host) = crate::apple_window::WindowRef::new(&origin) else {
                 complete(id, 3, 0);
                 return;
             };
-            // SAFETY: the originating NSWindow is live on the AppKit thread.
-            // The bridge retains it and copies the path before returning.
-            if unsafe { kiwix_share_present(id, host, path.as_ptr(), admitted, is_live, complete) } {
+            // The bridge retains the live window and copies the path before
+            // returning; both proof-carrying values are borrowed for the call.
+            if kiwix_share_present(id, host.window(), crate::ffi::CPath::new(&path), admitted, is_live, complete) {
                 self.0 = None;
             } else {
                 complete(id, 8, 0);

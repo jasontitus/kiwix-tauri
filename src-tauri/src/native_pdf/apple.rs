@@ -5,9 +5,8 @@ use super::Phase;
 use crate::apple_requests::Registry;
 use std::{ffi::CString, path::PathBuf, sync::{Arc, LazyLock, atomic::AtomicBool}};
 #[cfg(target_os = "macos")]
-use std::ffi::c_char;
 #[cfg(target_os = "macos")]
-use {super::OwnedPdf, crate::apple_requests::ResultReceiver, std::{ffi::c_void, time::Duration}};
+use {super::OwnedPdf, crate::apple_requests::ResultReceiver, std::time::Duration};
 use tokio_util::sync::CancellationToken;
 static CALLBACKS: LazyLock<Registry<Files>> = LazyLock::new(Registry::default);
 type Admit = extern "C" fn(u64) -> bool;
@@ -18,7 +17,7 @@ unsafe extern "C" {
 }
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    fn kiwix_pdf_print_start(id: u64, host: *mut c_void, path: *const c_char, title: *const c_char, authority: Admit, complete: extern "C" fn(u64, u8, i32)) -> bool;
+    safe fn kiwix_pdf_print_start(id: u64, host: &objc2_app_kit::NSWindow, path: crate::ffi::CPath<'_>, title: crate::ffi::CPath<'_>, authority: Admit, complete: extern "C" fn(u64, u8, i32)) -> bool;
     safe fn kiwix_pdf_print_cancel(id: u64);
 }
 extern "C" fn admitted(id: u64) -> bool { CALLBACKS.admitted(id) }
@@ -124,14 +123,13 @@ impl ScheduledPrint {
             print_complete(id, 1, 0);
             return;
         }
-        let Ok(host) = origin.ns_window() else {
+        let Ok(host) = crate::apple_window::WindowRef::new(&origin) else {
             print_complete(id, 4, 0);
             return;
         };
-        // SAFETY: this runs on the AppKit thread with the originating window
-        // live. The bridge takes a strong window reference and copies the
-        // strings. It accepts only a registered ID and the matching callbacks.
-        if unsafe { kiwix_pdf_print_start(id, host, path.as_ptr(), title.as_ptr(), admitted, print_complete) } {
+        // The bridge takes a strong window reference and copies both strings.
+        // It accepts only a registered ID and the matching callbacks.
+        if kiwix_pdf_print_start(id, host.window(), crate::ffi::CPath::new(&path), crate::ffi::CPath::new(&title), admitted, print_complete) {
             self.0 = None;
         } else {
             print_complete(id, 9, 0);

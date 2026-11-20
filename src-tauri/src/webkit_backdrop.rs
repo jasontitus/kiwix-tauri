@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Change only the colour WebKit paints underneath the page.
 
-use objc2_app_kit::{
-    NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSColor,
-};
-use objc2_foundation::NSArray;
+use objc2_app_kit::{NSAppearanceCustomization, NSColor};
+use objc2_foundation::{NSArray, NSString};
 use objc2_web_kit::WKWebView;
 
 pub(super) fn is_dark(view: &WKWebView) -> bool {
-    // SAFETY: both constants are immutable AppKit-owned appearance names
-    // provided on the app's supported macOS versions (13.3 and later).
-    let (aqua, dark) = unsafe { (NSAppearanceNameAqua, NSAppearanceNameDarkAqua) };
+    // These are the stable AppKit appearance-name values; constructing them
+    // as strings avoids reading the framework's unsafe static pointers.
+    let aqua = NSString::from_str("NSAppearanceNameAqua");
+    let dark = NSString::from_str("NSAppearanceNameDarkAqua");
     view.effectiveAppearance()
-        .bestMatchFromAppearancesWithNames(&NSArray::from_slice(&[aqua, dark]))
-        .is_some_and(|name| name.isEqualToString(dark))
+        .bestMatchFromAppearancesWithNames(&NSArray::from_slice(&[&*aqua, &*dark]))
+        .is_some_and(|name| name.isEqualToString(&dark))
 }
 
 pub(super) fn set_colour(view: &WKWebView, (red, green, blue): (u8, u8, u8)) {

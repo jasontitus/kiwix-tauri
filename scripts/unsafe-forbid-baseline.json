@@ -81,7 +81,6 @@
   "src-tauri/src/mobile_speech.rs",
   "src-tauri/src/native_pdf/android.rs",
   "src-tauri/src/native_pdf/cleanup.rs",
-  "src-tauri/src/native_pdf/desktop.rs",
   "src-tauri/src/native_pdf/live.rs",
   "src-tauri/src/native_pdf/origin_tests.rs",
   "src-tauri/src/native_pdf/presentation.rs",

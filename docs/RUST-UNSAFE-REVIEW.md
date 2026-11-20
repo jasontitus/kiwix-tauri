@@ -409,33 +409,36 @@ This pass removed blocks that had a safe alternative available on this host:
 - `kiwix_swarm_read` is `safe fn`: it takes a static callback and lends dispatch data only for the call, and the
   Rust callback copies the bytes before returning. `start`, `write` and `listen` stay `unsafe` because their
   blocks can capture non-`Send` data and native invokes them on another queue.
+- `WindowRef` retains and main-thread-checks the AppKit window; the share and print bridges borrow it and
+  native takes its own reference. `webkit_backdrop` builds the appearance-name strings instead of reading
+  AppKit's unsafe static pointers. `winapi-util::file::information` replaces the Windows file-identity call.
+- The Windows lib now type-checks with mingw after removing the parent `forbid` that covered native print
+  children and fixing the deletion path's spelling cancellation. It is a cross-check, not a Windows run.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **121** |
-| Files containing them | 30 | **24** |
+| `unsafe { … }` matches (app + relay) | 136 | **117** |
+| Files containing them | 30 | **23** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 121 remaining code blocks now names its pointer, handle, lifetime or exactly-once
-invariant. The audit was completed file by file against the native counterparts; Windows and Linux comments
-were source-reviewed but not compiled on this host.
+Every one of the 117 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+invariant. The audit was completed file by file against the native counterparts; the Windows lib now
+cross-checks with mingw, while Linux comments remain source-reviewed but not compiled on this host.
 
 The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
 small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
-gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
-boundaries; the known remaining candidate is
-`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
-safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
-verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
-outstanding.
+gates; `provider_reference.rs` has one block under the shared mobile gate. All are native ABI boundaries.
+`acquisition::file_identity` now uses the already-locked `winapi-util::file::information`, and the Windows lib
+type-checks with mingw. Windows runtime behavior, Linux compilation/runtime and physical devices remain
+unverified.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(121 blocks in 24 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(117 blocks in 23 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
-`#![forbid(unsafe_code)]` is now on 141 safe modules, including archive source and search, map
+`#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map
 composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
 reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
 add the attribute; the census gate covers the remaining native-boundary modules.

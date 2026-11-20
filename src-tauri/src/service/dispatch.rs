@@ -698,10 +698,10 @@ impl Service {
                         return Err("Stop the integrity check before deleting this archive".into());
                     }
                     let spelling = self.spelling.clone();
-                    let spelling_id = id.clone();
+                    let spelling_installation = installation_id.clone();
                     // No job (or an uncancellable cache load) is not an error
                     // here; a handle that stays open is reported below.
-                    let _ = blocking(move || spelling.cancel(&spelling_id)).await;
+                    let _ = blocking(move || spelling.retire_installation(&spelling_installation)).await;
                     retire_readers(&mut readers, Some(&installation_id)).await?;
                     self.invalidate(&id);
                     if let Some(server) = sharing.as_ref() {

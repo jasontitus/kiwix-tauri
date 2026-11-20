@@ -5,7 +5,7 @@ use super::Commit;
 use std::{collections::HashMap, ffi::{c_char, c_void, CStr}, sync::{LazyLock, Mutex}};
 static EXPORTS: LazyLock<Mutex<HashMap<String, Commit>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 unsafe extern "C" {
-    fn kiwix_pdf_export_install(commit: extern "C" fn(*const c_char, *mut c_void, extern "C" fn(*mut c_void)) -> bool);
+    safe fn kiwix_pdf_export_install(commit: extern "C" fn(*const c_char, *mut c_void, extern "C" fn(*mut c_void)) -> bool);
 }
 pub struct ExportAdmission(String);
 impl ExportAdmission { pub fn token(&self) -> &str { &self.0 } }
@@ -15,9 +15,9 @@ impl Drop for ExportAdmission {
 pub fn admit_export(commit: Commit) -> Result<ExportAdmission, String> {
     // Install through the imported C module, rather than leaving that module
     // with an unresolved Rust symbol in standalone Swift package policy tests.
-    // SAFETY: the bridge stores only this static C-ABI function pointer,
-    // synchronized by its lock. It invokes the callback synchronously.
-    unsafe { kiwix_pdf_export_install(kiwix_pdf_commit_action); }
+    // The bridge stores only this static C-ABI function pointer, synchronized
+    // by its lock; it invokes the callback synchronously.
+    kiwix_pdf_export_install(kiwix_pdf_commit_action);
     let token = uuid::Uuid::new_v4().to_string();
     EXPORTS.lock().map_err(|_| "PDF export could not start. Try again")?.insert(token.clone(), commit);
     Ok(ExportAdmission(token))

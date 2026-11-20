@@ -799,7 +799,7 @@ Windows ARM64 (`aarch64-pc-windows-msvc`) is cross-compiled on an x64 Windows ho
 
 **Prerequisites** (Visual Studio Build Tools 2022 components):
 - `Microsoft.VisualStudio.Component.VC.Tools.ARM64`: the MSVC ARM64 compiler and libraries.
-- `Microsoft.VisualStudio.Component.VC.Llvm.Clang`: `ring` and `aws-lc-sys` compile their ARM64 Windows sources with clang.
+- `Microsoft.VisualStudio.Component.VC.Llvm.Clang`: `ring` compiles its ARM64 Windows sources with clang. AWS-LC was removed from the TLS graph.
 - The Rust target: `rustup target add aarch64-pc-windows-msvc`.
 
 **App and installer** (`build-nsis-arm64.ps1`):

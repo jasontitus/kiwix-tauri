@@ -709,6 +709,7 @@ fn open_directory(path: &Path, create: bool) -> io::Result<Dir> {
     let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
     let profile = crate::storage::open_directory_nofollow(parent)?;
     if create {
+        #[cfg_attr(windows, allow(unused_mut))]
         let mut builder = cap_std::fs::DirBuilder::new();
         #[cfg(unix)]
         cap_std::fs::DirBuilderExt::mode(&mut builder, 0o700);

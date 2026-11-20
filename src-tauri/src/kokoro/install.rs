@@ -131,6 +131,7 @@ fn checked_dir(parent: &Dir, name: impl AsRef<Path>) -> Result<Dir> {
 }
 
 fn new_directory(dir: &Dir, name: &OsStr) -> Result<Dir> {
+    #[cfg_attr(windows, allow(unused_mut))]
     let mut options = cap_std::fs::DirBuilder::new();
     #[cfg(unix)]
     {

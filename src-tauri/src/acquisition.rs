@@ -468,27 +468,19 @@ fn part_identity(_metadata: &fs::Metadata) -> Option<PartIdentity> {
 /// and differ for any replacement file, so a receipt still proves "this exact
 /// file" exactly as the Unix inode pair does.
 #[cfg(windows)]
-fn handle_identity(handle: std::os::windows::io::BorrowedHandle<'_>) -> std::io::Result<PartIdentity> {
-    use std::os::windows::io::AsRawHandle;
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
-    let mut info = BY_HANDLE_FILE_INFORMATION::default();
-    // SAFETY: the borrowed handle stays open for this synchronous call and
-    // `info` is a valid, writable output structure.
-    unsafe { GetFileInformationByHandle(HANDLE(handle.as_raw_handle()), &mut info) }
-        .map_err(crate::fs_ext::win32_error)?;
+fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
+    let info = winapi_util::file::information(file)?;
     // FILETIME counts 100 ns intervals since 1601-01-01 (UTC).
-    let ticks = (u64::from(info.ftLastWriteTime.dwHighDateTime) << 32)
-        | u64::from(info.ftLastWriteTime.dwLowDateTime);
+    let ticks = info.last_write_time().unwrap_or(0);
     let unix_ticks = i128::from(ticks) - 116_444_736_000_000_000;
     Ok(PartIdentity {
-        size: (u64::from(info.nFileSizeHigh) << 32) | u64::from(info.nFileSizeLow),
-        device: u64::from(info.dwVolumeSerialNumber),
-        inode: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        size: info.file_size(),
+        device: info.volume_serial_number(),
+        inode: info.file_index(),
         mtime_seconds: i64::try_from(unix_ticks.div_euclid(10_000_000))
             .map_err(|_| std::io::Error::other("File time is out of range"))?,
         mtime_nanos: (unix_ticks.rem_euclid(10_000_000) * 100) as u32,
-        links: u64::from(info.nNumberOfLinks),
+        links: info.number_of_links(),
     })
 }
 
@@ -497,8 +489,7 @@ fn handle_identity(handle: std::os::windows::io::BorrowedHandle<'_>) -> std::io:
 fn file_identity(file: &File) -> Result<Option<PartIdentity>, String> {
     #[cfg(windows)]
     {
-        use std::os::windows::io::AsHandle;
-        handle_identity(file.as_handle()).map(Some).map_err(|e| e.to_string())
+        handle_identity(file).map(Some).map_err(|e| e.to_string())
     }
     #[cfg(not(windows))]
     {
@@ -510,12 +501,11 @@ fn file_identity(file: &File) -> Result<Option<PartIdentity>, String> {
 async fn tokio_file_identity(file: &tokio::fs::File) -> Result<Option<PartIdentity>, String> {
     #[cfg(windows)]
     {
-        use std::os::windows::io::AsHandle;
         // A handle query can block on network volumes; keep it off the async
         // worker, as tokio's own metadata() does. The duplicate refers to the
         // same file object, so the identity is that of `file`.
         let duplicate = file.try_clone().await.map_err(|e| e.to_string())?.into_std().await;
-        tokio::task::spawn_blocking(move || handle_identity(duplicate.as_handle()))
+        tokio::task::spawn_blocking(move || handle_identity(&duplicate))
             .await
             .map_err(|e| e.to_string())?
             .map(Some)
