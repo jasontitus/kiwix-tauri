@@ -1,6 +1,6 @@
 {
-  "matches": 130,
-  "blocks": 130,
+  "matches": 129,
+  "blocks": 129,
   "impls": 2,
   "implsByFile": {
     "src-tauri/src/agent_connector.rs": 2
@@ -31,7 +31,6 @@
     "src-tauri/src/share.rs": 1,
     "src-tauri/src/storage.rs": 7,
     "src-tauri/src/store.rs": 1,
-    "src-tauri/src/transfer_policy.rs": 1,
     "src-tauri/src/webkit_backdrop.rs": 2,
     "src-tauri/src/windows.rs": 2
   }

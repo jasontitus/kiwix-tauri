@@ -79,7 +79,7 @@ pub(crate) fn install(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg(target_os = "ios")]
 unsafe extern "C" {
-    fn kiwix_mobile_bind_local_socket(fd: std::ffi::c_int) -> i64;
+    safe fn kiwix_mobile_bind_local_socket(fd: std::ffi::c_int) -> i64;
     // The Swift receiver validates the route and the address tag. The ABI
     // carries only integers, with no borrowed address storage.
     safe fn kiwix_mobile_is_local_peer_address(route: u32, version: u8, high: u64, low: u64) -> i32;
@@ -226,7 +226,7 @@ fn bind_local_fd(fd: std::os::fd::RawFd) -> Result<LocalBinding, String> {
         // SAFETY: `fd` is a live descriptor borrowed for the call; native binds
         // the route and retains no descriptor or pointer. The return is an
         // integer route ID, not a handle.
-        let route = unsafe { kiwix_mobile_bind_local_socket(fd) };
+        let route = kiwix_mobile_bind_local_socket(fd);
         if route <= 0 {
             return Err("A confirmed Wi-Fi or Ethernet route is required for local sharing".into());
         }

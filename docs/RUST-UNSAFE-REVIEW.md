@@ -389,8 +389,8 @@ were not exercised against a live share sheet, print panel or notification cente
 
 ## Final first-party pass — 2026-11-20
 
-The merged branch plus this pass leaves **131 `unsafe` matches in 29 files** (136/30 before this pass).
-This pass removed five blocks that had a safe alternative available on this host:
+The merged branch plus this pass leaves **129 `unsafe` matches in 27 files** (136/30 before this pass).
+This pass removed blocks that had a safe alternative available on this host:
 
 - `sandbox::real_downloads_dir` uses `nix::unistd::User::from_uid` instead of a raw `getpwuid_r` record and
   buffer.
@@ -398,22 +398,25 @@ This pass removed five blocks that had a safe alternative available on this host
 - `kiwix_pdf_cancel`, `kiwix_pdf_print_cancel` and `kiwix_share_cancel` are declared `safe fn` in their
   `unsafe extern` blocks: each native implementation only looks up an opaque integer ID and is a no-op once
   the request has finished. The calls no longer need an `unsafe` block; the ABI and native code are unchanged.
+- `kiwix_mobile_bind_local_socket` is declared `safe fn`: it takes an integer descriptor, rejects invalid
+  descriptors through checked socket calls, binds under its own lock and retains nothing. Pointer-taking
+  bridges stay `unsafe` because a safe caller could pass a dangling or unterminated pointer.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **131** |
-| Files containing them | 30 | **29** |
+| `unsafe { … }` matches (app + relay) | 136 | **129** |
+| Files containing them | 30 | **27** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 130 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 129 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; Windows and Linux comments
 were source-reviewed but not compiled on this host.
 
-The remaining matches fall on these gates: **72 Windows**, **15 Linux**, **39 Apple-only**, **3
-Android-only**, **1 shared iOS/Android**, and **1 prose `unsafe {}`** in `lib.rs`. `storage.rs` spans the
-Windows and Apple gates; `provider_reference.rs` has one block under the shared mobile gate. The buckets are
-disjoint counts, not file counts. All but one are native ABI boundaries; the known remaining candidate is
+The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
+small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
+gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
+boundaries; the known remaining candidate is
 `acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
 safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
 verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
@@ -421,7 +424,7 @@ outstanding.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(130 blocks in 28 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(129 blocks in 27 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 139 safe modules, including archive source and search, map
