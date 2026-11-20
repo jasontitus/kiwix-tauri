@@ -404,15 +404,20 @@ This pass removed blocks that had a safe alternative available on this host:
 - The iOS PDF scratch exclusion and three archive-policy imports now take a private `ffi::CPath` that borrows
   a live `CStr`. The native bodies read the path synchronously and retain no pointer, so the imports are
   `safe fn`; this removes four call-site blocks. Independent review confirmed the transparent ABI and lifetimes.
+- The Apple PDF start paths, the iOS incoming URI check and the Android logcat tag/message also take `CPath`.
+  Their native bodies copy or read the strings synchronously; independent review confirmed the ABI and lifetimes.
+- `kiwix_swarm_read` is `safe fn`: it takes a static callback and lends dispatch data only for the call, and the
+  Rust callback copies the bytes before returning. `start`, `write` and `listen` stay `unsafe` because their
+  blocks can capture non-`Send` data and native invokes them on another queue.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **125** |
-| Files containing them | 30 | **25** |
+| `unsafe { … }` matches (app + relay) | 136 | **121** |
+| Files containing them | 30 | **24** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 125 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 121 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; Windows and Linux comments
 were source-reviewed but not compiled on this host.
 
@@ -427,88 +432,10 @@ outstanding.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(125 blocks in 25 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(121 blocks in 24 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 141 safe modules, including archive source and search, map
-composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
-reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
-add the attribute; the census gate covers the remaining native-boundary modules.
-
-The current build's paired reader comparison at the app's 32 MiB cache is recorded in
-[the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
-24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
-the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
-
-Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under Rust 1.99.1 with
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
-Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
-CommandLineTools, so the developer directory is required. This is a type check, not a device run.
-The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
-small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
-gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
-boundaries; the known remaining candidate is
-`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
-safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
-verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
-outstanding.
-
-`npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
-`unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-update it in the same change when reducing to keep the ceiling tight.
-
-composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
-reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
-add the attribute; the census gate covers the remaining native-boundary modules.
-
-The current build's paired reader comparison at the app's 32 MiB cache is recorded in
-[the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
-24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
-the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
-
-Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under Rust 1.99.1 with
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
-Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
-CommandLineTools, so the developer directory is required. This is a type check, not a device run.
-The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
-small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
-gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
-boundaries; the known remaining candidate is
-`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
-safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
-verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
-outstanding.
-
-`npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
-`unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-update it in the same change when reducing to keep the ceiling tight.
-
-composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
-reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
-add the attribute; the census gate covers the remaining native-boundary modules.
-
-The current build's paired reader comparison at the app's 32 MiB cache is recorded in
-[the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
-24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
-the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
-
-Cross-target check: `cargo check --lib --target aarch64-apple-ios` passes under Rust 1.99.1 with
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. This compiles the iOS-only DNS-SD discovery,
-Apple transport, provider-descriptor and mobile-backup modules. The host `xcode-select` points at
-CommandLineTools, so the developer directory is required. This is a type check, not a device run.
-The remaining matches are concentrated in the Windows, Linux and Apple native ABI boundaries, with a
-small Android-only set and one prose `unsafe {}` in `lib.rs`. `storage.rs` spans the Windows and Apple
-gates; `provider_reference.rs` has one block under the shared mobile gate. All but one are native ABI
-boundaries; the known remaining candidate is
-`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
-safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
-verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
-outstanding.
-
-`npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
-`unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-update it in the same change when reducing to keep the ceiling tight.
-
 composition/manager/recipe, LocalSwarm protocol/network/library/import, acquisition HTTP metadata, updates,
 reading data, catalog indexing, connector sockets, command dispatch and timestamps. New safe modules should
 add the attribute; the census gate covers the remaining native-boundary modules.
