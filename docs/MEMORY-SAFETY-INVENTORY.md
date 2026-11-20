@@ -73,6 +73,8 @@ The torrent engine now finishes reading each frame before returning a decoded me
 
 The HTTP/1 parser now uses checked byte slices and initialized header storage. Httparse and Hyper's production HTTP/1 role module forbid unsafe Rust. Hyper checks that borrowed header fields fit inside the parsed head before separating it from the body. The rest of Hyper, HTTP/2, Tokio, TLS and shared byte buffers remain in scope. [HTTP/1 verification and timings](audit/2026-11-19-checked-http1.md)
 
+Both Android JNI bindings now use checked CESU-8 and modified UTF-8 codecs. The ARM64 Android compiler reported zero unsafe-code locations in the two checked codecs, down from 72 across the published codecs and their UTF-8 validator. Both bindings preserve Android runtime strings that contain NUL and supplementary characters together. JNI handle ownership, borrowed Java string buffers and the bindings' unchecked CString constructors remain in scope. [Java string codec verification and timings](audit/2026-11-19-checked-java-codecs.md)
+
 ## Performance follow-up
 
 Prefer the memory-safe implementation when a user operation already takes less than 50 ms and the added latency is acceptable. Record the absolute time on each side and what the timer includes. A fast inner loop can run many times during an import, export or search, so apply this preference to the complete operation on the platform being measured.

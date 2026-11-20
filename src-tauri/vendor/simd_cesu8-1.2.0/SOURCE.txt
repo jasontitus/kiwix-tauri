@@ -1,0 +1,13 @@
+simd_cesu8 1.2.0
+Upstream: https://github.com/seancroach/simd_cesu8
+Upstream revision: b7977cfbebc962b6fa68969bac9c863ae55a8233
+Published crate SHA-256: 11031e251abf8611c80f460e19dbdeb54a66db918e49c65a7065b46ac7aec520
+License: Apache-2.0 OR MIT (LICENSE-APACHE and LICENSE-MIT)
+
+Kiwix uses checked byte slices and the standard UTF-8 validator.
+The default word scan and optional portable SIMD scan use safe array
+reads. The crate forbids unsafe code and omits the simdutf8 dependency.
+
+The lenient Java decoders accept Android's four-byte UTF-8 sequences
+alongside modified NUL bytes and encoded surrogate pairs. Strict
+decoding still requires the standard modified UTF-8 representation.

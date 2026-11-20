@@ -1,0 +1,15 @@
+cesu8 1.1.0
+Upstream: https://github.com/emk/cesu8-rs
+Matching upstream source and notice: 2d17a5c847760b3ea8ea732a2dfc9b330ac0f2bd
+Published crate SHA-256: 6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c
+Upstream license: Apache-2.0 OR MIT
+
+The publisher includes COPYRIGHT-RUST.txt and refers to the Apache-2.0
+and MIT licenses. Kiwix distributes this copy under Apache-2.0 and
+includes the license text from https://www.apache.org/licenses/LICENSE-2.0.txt
+alongside the original copyright notice.
+
+The codec validates converted UTF-8 through safe Rust APIs and forbids
+unsafe code. Encoding and standard CESU-8 behavior are unchanged. The
+Java decoder also accepts checked four-byte UTF-8 characters alongside
+modified NUL bytes or encoded surrogate pairs.
