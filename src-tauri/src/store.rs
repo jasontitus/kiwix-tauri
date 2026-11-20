@@ -3281,6 +3281,8 @@ pub(crate) fn replace_file(source: &Path, destination: &Path) -> std::io::Result
         .chain(Some(0))
         .collect();
     // REPLACE_EXISTING | WRITE_THROUGH: no remove-then-rename data-loss window.
+    // SAFETY: both vectors are NUL-terminated by the pushes above and outlive
+    // this synchronous call; the flags value is the documented DWORD bitmask.
     if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0x1 | 0x8) } == 0 {
         Err(std::io::Error::last_os_error())
     } else {

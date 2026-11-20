@@ -13,7 +13,14 @@ fn finish(reply: &Reply, result: Result<(), String>) { if let Some(sender) = rep
 fn retire(id: &str) {
     let job = JOBS.with(|jobs| jobs.borrow_mut().remove(id));
     if let Some(job) = job {
+        // SAFETY: retire runs on the GTK main thread; removing the job prevents
+        // this map from retiring it twice, but a title-bar close may already
+        // have destroyed the dialog. The response/destroy is best-effort and no
+        // Rust reference to the widget is kept afterwards.
         if let Some(dialog) = job.dialog { dialog.response(gtk::ResponseType::Cancel); unsafe { dialog.destroy(); } }
+        // SAFETY: the removed job owns this offscreen window, and destruction
+        // runs on the GTK main thread before the job's fields drop; the call is
+        // the job's single explicit destroy attempt.
         job.view.stop_loading(); unsafe { job.window.destroy(); }
         finish(&job.reply, Err("Article PDF export was cancelled".into()));
     }
@@ -32,18 +39,32 @@ unsafe extern "C" {
 }
 fn file_printer() -> Result<String, String> {
     unsafe extern "C" fn select(printer: *mut c_void, data: *mut c_void) -> i32 {
+        // SAFETY: GTK passes a live printer that owns this backend for the
+        // duration of the synchronous enumeration; the callback runs on the
+        // thread that called gtk_enumerate_printers.
         let backend = unsafe { gtk_printer_get_backend(printer) };
         if backend.is_null() { return 0; }
+        // SAFETY: backend is a non-null live GTypeInstance owned by the
+        // printer, and GLib returns an interned type name with process lifetime.
         let name = unsafe { gtk::glib::gobject_ffi::g_type_name_from_instance(backend) };
         if name.is_null() { return 0; }
+        // SAFETY: name is a non-null NUL-terminated interned string owned by
+        // GLib; the bytes are borrowed only for this comparison.
         let kind = unsafe { CStr::from_ptr(name) }.to_bytes();
         if kind != b"GtkPrintBackendFile" && kind != b"GtkPrintBackendFileBuiltin" { return 0; }
+        // SAFETY: printer is the live object GTK supplied to this callback, so
+        // its name stays valid at least until the callback returns.
         let name = unsafe { gtk_printer_get_name(printer) };
         if name.is_null() { return 0; }
+        // SAFETY: data is the caller's &mut Option<String>, kept alive for the
+        // synchronous enumeration; only this callback writes it, on this thread.
         unsafe { *(data as *mut Option<String>) = Some(CStr::from_ptr(name).to_string_lossy().into_owned()); }
         1
     }
     let mut printer: Option<String> = None;
+    // SAFETY: `printer` outlives the call because `wait` is nonzero and
+    // enumeration completes before returning; GTK may retain `data` in its
+    // state, but no destructor is registered and `select` runs on this thread.
     unsafe { gtk_enumerate_printers(select, (&mut printer as *mut Option<String>).cast(), None, 1); }
     printer.ok_or_else(|| "GTK's native PDF file-print backend is unavailable; no printer was selected".into())
 }
@@ -115,10 +136,19 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
             JOBS.with(|jobs| { if let Some(job) = jobs.borrow_mut().get_mut(&print_id) { job.operation = Some(operation.clone()); } });
             if destination == Destination::Print {
                 let title = match CString::new(name.as_str()) { Ok(title) => title, Err(_) => { finish(&loaded_reply, Err("Invalid print title".into())); return; } };
+                // SAFETY: this runs on the GTK main thread; title is NUL-
+                // terminated and outlives the call (GTK copies it); a null
+                // parent is permitted, and the result is checked before use.
                 let widget = unsafe { gtk_print_unix_dialog_new(title.as_ptr(), std::ptr::null_mut()) };
                 if widget.is_null() { finish(&loaded_reply, Err("GTK could not open the system print dialog".into())); return; }
+                // SAFETY: widget is the non-null, newly created dialog;
+                // from_glib_none takes its own strong reference so the dialog
+                // owns the widget from here on.
                 let dialog: gtk::Dialog = unsafe { from_glib_none(widget.cast()) };
                 let pointer = widget.cast::<c_void>();
+                // SAFETY: `pointer` is the live dialog owned by `dialog`; GTK
+                // takes its own strong reference to the same page setup, so the
+                // Rust wrapper may drop without freeing it while the dialog lives.
                 unsafe { gtk_print_unix_dialog_set_page_setup(pointer, page.to_glib_none().0); }
                 let print_operation = operation.clone(); let print_reply = loaded_reply.clone();
                 let print_commit = commit.clone(); let print_handed_off = handed_off.clone();
@@ -126,11 +156,21 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
                     dialog.hide();
                     if response != gtk::ResponseType::Ok { finish(&print_reply, Ok(())); return; }
                     let pointer = dialog.as_ptr().cast::<c_void>();
+                    // SAFETY: the response handler runs on the GTK main thread
+                    // while the dialog is alive; the getter returns a new
+                    // settings reference that the caller owns.
                     let settings = unsafe { gtk_print_unix_dialog_get_settings(pointer) };
+                    // SAFETY: the dialog is alive for this callback, and the
+                    // returned page setup is borrowed from it, so it stays
+                    // valid while the dialog lives.
                     let page = unsafe { gtk_print_unix_dialog_get_page_setup(pointer) };
                     if settings.is_null() || page.is_null() { finish(&print_reply, Err("The system print settings are unavailable".into())); return; }
+                    // SAFETY: settings was checked non-null and is a full
+                    // reference from the getter, so from_glib_full adopts it.
                     let settings: gtk::PrintSettings = unsafe { from_glib_full(settings) };
                     if settings.printer().is_none_or(|printer| printer.is_empty()) { finish(&print_reply, Err("No system printer was selected".into())); return; }
+                    // SAFETY: page was checked non-null and is borrowed from
+                    // the live dialog; from_glib_none adds its own reference.
                     let page: gtk::PageSetup = unsafe { from_glib_none(page) };
                     let fit = (page.page_width(gtk::Unit::Points) * 96.0 / 72.0 / f64::from(width)).min(1.0);
                     if !fit.is_finite() || fit <= 0.0 { finish(&print_reply, Err("Invalid printer page dimensions".into())); return; }

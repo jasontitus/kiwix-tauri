@@ -35,6 +35,8 @@ pub(crate) fn incoming_summary(request: &IncomingRequest) -> Value {
         }
         // Advisory UI state, not admission. The native action rechecks the
         // original handoff and privacy policy after the user confirms.
+        // SAFETY: `uri` is a live byte slice for the call; native reads it
+        // synchronously and retains no pointer.
         unsafe { kiwix_mobile_incoming_can_open_in_place(uri.as_ptr(), uri.len()) == 1 }
     });
     #[cfg(not(target_os = "ios"))]

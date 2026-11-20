@@ -585,23 +585,40 @@ mod transport {
     impl User {
         fn of(process: HANDLE) -> Result<Self, String> {
             let mut raw = HANDLE::default();
+            // SAFETY: `process` is a borrowed or pseudo handle (startup passes
+            // GetCurrentProcess, which is never closed); only the token written
+            // into `raw` is newly owned and adopted below.
             unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw).map_err(|error| error.to_string())?; }
+            // SAFETY: `raw` is the handle just opened, not copied anywhere else; `OwnedHandle`
+            // owns it and closes it exactly once.
             let token = unsafe { OwnedHandle::from_raw_handle(raw.0) };
             let mut required = 0;
+            // SAFETY: a null buffer with zero length only asks the API for the required size; the
+            // token handle is alive and `required` is a writable live local.
             unsafe { let _ = GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, None, 0, &mut required); }
             if required == 0 || required > 64 * 1024 { return Err("Cannot read a process identity".into()); }
             let mut storage = vec![0usize; (required as usize).div_ceil(std::mem::size_of::<usize>())];
+            // SAFETY: `storage` is initialized to at least `required` zeroed bytes, `usize`-aligned,
+            // and stays put while the live token is queried; the API writes at most `required` bytes.
             unsafe {
                 GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, Some(storage.as_mut_ptr().cast()), required, &mut required)
                     .map_err(|error| error.to_string())?;
             }
             Ok(Self { storage })
         }
+        // SAFETY: `storage` owns a `TOKEN_USER` written by `GetTokenInformation` above; it is
+        // `usize`-aligned and never reallocated, so the SID points into live owned memory.
         fn sid(&self) -> PSID { unsafe { (*(self.storage.as_ptr().cast::<TOKEN_USER>())).User.Sid } }
         fn text(&self) -> Result<String, String> {
             let mut text = PWSTR::null();
+            // SAFETY: `sid` points into `self.storage`, which outlives this call; the API allocates
+            // a NUL-terminated string and returns it through the live local `text`.
             unsafe { ConvertSidToStringSidW(self.sid(), &mut text).map_err(|error| error.to_string())?; }
+            // SAFETY: `text` is the NUL-terminated allocation just returned, still owned here and
+            // unmodified until `to_string` finishes reading it.
             let value = unsafe { text.to_string() }.map_err(|error| error.to_string());
+            // SAFETY: `text` is the allocation from `ConvertSidToStringSidW`, freed exactly once
+            // here and never used afterwards.
             unsafe { let _ = LocalFree(Some(HLOCAL(text.0.cast()))); }
             value
         }
@@ -615,6 +632,8 @@ mod transport {
             let sid = own.text()?;
             let sddl: Vec<u16> = format!("O:{sid}D:P(A;;GA;;;{sid})").encode_utf16().chain(Some(0)).collect();
             let mut raw = PSECURITY_DESCRIPTOR::default();
+            // SAFETY: `sddl` is NUL-terminated and alive across the call; the API allocates a
+            // self-contained descriptor and stores it in the live local `raw`.
             unsafe {
                 ConvertStringSecurityDescriptorToSecurityDescriptorW(PCWSTR(sddl.as_ptr()), 1, &mut raw, None)
                     .map_err(|error| error.to_string())?;
@@ -624,10 +643,13 @@ mod transport {
     }
     impl Drop for Descriptor {
         fn drop(&mut self) {
+            // SAFETY: `self.0` is the descriptor allocated by
+            // `ConvertStringSecurityDescriptorToSecurityDescriptorW`; it is freed exactly once here.
             unsafe { let _ = LocalFree(Some(HLOCAL(self.0 .0))); }
         }
     }
-    // The descriptor is immutable after creation and only read by CreateNamedPipe.
+    // SAFETY: the descriptor is immutable after construction, has no thread affinity, and is only
+    // read during pipe creation, so sharing it across threads is sound.
     unsafe impl Send for Descriptor {}
     unsafe impl Sync for Descriptor {}
 
@@ -655,6 +677,9 @@ mod transport {
             lpSecurityDescriptor: descriptor.0 .0,
             bInheritHandle: false.into(),
         };
+        // SAFETY: `attributes` is a valid, live `SECURITY_ATTRIBUTES` whose
+        // `lpSecurityDescriptor` borrows `descriptor`; both outlive this synchronous call, and
+        // the returned server keeps no pointer to either.
         unsafe {
             ServerOptions::new()
                 .first_pipe_instance(first)
@@ -665,12 +690,18 @@ mod transport {
 
     fn client_is_current_user(pipe: &NamedPipeServer, own: &User) -> bool {
         let mut pid = 0u32;
+        // SAFETY: `pipe` is a live connected server handle and `pid` is a writable live local.
         if unsafe { GetNamedPipeClientProcessId(HANDLE(pipe.as_raw_handle()), &mut pid) }.is_err() || pid == 0 {
             return false;
         }
+        // SAFETY: `pid` is an OS-provided value, and the returned process handle is adopted below.
         let Ok(process) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else { return false; };
+        // SAFETY: `process` was just returned by `OpenProcess`; `OwnedHandle` takes ownership and
+        // closes it exactly once, and it is not used elsewhere.
         let process = unsafe { OwnedHandle::from_raw_handle(process.0) };
         match User::of(HANDLE(process.as_raw_handle())) {
+            // SAFETY: both SIDs point into `User` storage owned by `client` and `own`, which
+            // outlive the comparison and are not modified during it.
             Ok(client) => unsafe { EqualSid(client.sid(), own.sid()) }.is_ok(),
             Err(_) => false,
         }
@@ -699,6 +730,8 @@ mod transport {
     }
 
     pub(super) async fn serve(service: Arc<Service>, cancel: CancellationToken, generation: u64) -> Result<(), String> {
+        // SAFETY: `GetCurrentProcess` returns a pseudo-handle valid for the process lifetime that
+        // must not be closed; it is only passed to `OpenProcessToken`.
         let own = Arc::new(User::of(unsafe { GetCurrentProcess() })?);
         let name = pipe_name(&service, &own)?;
         let descriptor = Descriptor::current_user_only(&own)?;

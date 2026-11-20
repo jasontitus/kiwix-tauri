@@ -534,6 +534,8 @@ fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
     let from = wide(source)?;
     let to = wide(destination)?;
     // Flags zero forbids replacement and cross-volume copy/delete emulation.
+    // SAFETY: `wide` rejects embedded NULs and appends a terminator, so both
+    // buffers are NUL-terminated and outlive this synchronous call.
     let result = unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) };
     if result != 0 {
         Ok(())

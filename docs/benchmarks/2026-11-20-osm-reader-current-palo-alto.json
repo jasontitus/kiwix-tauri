@@ -1,0 +1,1030 @@
+{
+ "cache_bytes": "33554432",
+ "native_xapian_preload": false,
+ "host": "macOS-27.2.1-arm64-arm-64bit",
+ "rounds": 6,
+ "driver_sha256": {
+  "libzim": "4ae37fcb27babda39e3a435e284f89ea4558db43f5e9d7ec72fed0de4f762e1b",
+  "zimru": "42c4d117253a157f5ba6b5a9a741b85921c5b3505858e7efb74e8a87f37e2453"
+ },
+ "archives": [
+  {
+   "file": "osm-palo-alto-overture.zim",
+   "size": 11372846,
+   "sha256": "bf4bea35f544012be39cec18bf177bf5168bf9e83bb707df49f30f057550979d",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 1394,
+     "path": "search/duck-pond-142.html",
+     "title": "Duck Pond"
+    },
+    {
+     "kind": "html",
+     "size": 1403,
+     "path": "search/barron-creek-101.html",
+     "title": "Barron Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1392,
+     "path": "search/henderson-9.html",
+     "title": "Henderson"
+    },
+    {
+     "kind": "html",
+     "size": 1397,
+     "path": "search/hale-creek-148.html",
+     "title": "Hale Creek"
+    },
+    {
+     "kind": "media",
+     "size": 10845,
+     "path": "satellite/12/657/1588.avif",
+     "title": "Satellite 12/657/1588.avif"
+    },
+    {
+     "kind": "html",
+     "size": 1411,
+     "path": "search/matadero-creek-178.html",
+     "title": "Matadero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1435,
+     "path": "search/matadero-bypass-channel-154.html",
+     "title": "Matadero Bypass Channel"
+    },
+    {
+     "kind": "html",
+     "size": 1405,
+     "path": "search/barron-creek-92.html",
+     "title": "Barron Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1418,
+     "path": "search/arastradero-creek-55.html",
+     "title": "Arastradero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1396,
+     "path": "search/dry-creek-138.html",
+     "title": "Dry Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1399,
+     "path": "search/hale-creek-145.html",
+     "title": "Hale Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1415,
+     "path": "search/permanente-creek-205.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1415,
+     "path": "search/permanente-creek-228.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1420,
+     "path": "search/arastradero-creek-60.html",
+     "title": "Arastradero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1415,
+     "path": "search/permanente-creek-201.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1402,
+     "path": "search/adobe-creek-51.html",
+     "title": "Adobe Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1407,
+     "path": "search/matadero-creek-157.html",
+     "title": "Matadero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1435,
+     "path": "search/san-francisquito-creek-248.html",
+     "title": "San Francisquito Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1404,
+     "path": "search/lake-lagunita-153.html",
+     "title": "Lake Lagunita"
+    },
+    {
+     "kind": "html",
+     "size": 1400,
+     "path": "search/coyote-hill-26.html",
+     "title": "Coyote Hill"
+    },
+    {
+     "kind": "html",
+     "size": 1409,
+     "path": "search/matadero-creek-193.html",
+     "title": "Matadero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1400,
+     "path": "search/adobe-creek-39.html",
+     "title": "Adobe Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1415,
+     "path": "search/permanente-creek-211.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1403,
+     "path": "search/barron-creek-71.html",
+     "title": "Barron Creek"
+    },
+    {
+     "kind": "html",
+     "size": 1415,
+     "path": "search/permanente-creek-207.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "media",
+     "size": 10334,
+     "path": "satellite/13/1316/3175.avif",
+     "title": "Satellite 13/1316/3175.avif"
+    },
+    {
+     "kind": "media",
+     "size": 13386,
+     "path": "satellite/5/5/12.avif",
+     "title": "Satellite 5/5/12.avif"
+    },
+    {
+     "kind": "media",
+     "size": 9354,
+     "path": "satellite/11/328/793.avif",
+     "title": "Satellite 11/328/793.avif"
+    },
+    {
+     "kind": "media",
+     "size": 27754,
+     "path": "terrain/10/164/397.webp",
+     "title": "Terrain 10/164/397.webp"
+    },
+    {
+     "kind": "media",
+     "size": 28734,
+     "path": "terrain/9/82/198.webp",
+     "title": "Terrain 9/82/198.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9753,
+     "path": "satellite/6/10/24.avif",
+     "title": "Satellite 6/10/24.avif"
+    },
+    {
+     "kind": "media",
+     "size": 11774,
+     "path": "terrain/11/329/794.webp",
+     "title": "Terrain 11/329/794.webp"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1022666,
+        "api_open_plus_work_ns": 1022666,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 1022666,
+        "process_ns": 5463292,
+        "cpu_ns": 4584000,
+        "peak_rss_bytes": 3817472
+       },
+       {
+        "open_ns": 988167,
+        "api_open_plus_work_ns": 988167,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 988167,
+        "process_ns": 5232917,
+        "cpu_ns": 4379000,
+        "peak_rss_bytes": 3801088
+       },
+       {
+        "open_ns": 976542,
+        "api_open_plus_work_ns": 976542,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 976542,
+        "process_ns": 5125833,
+        "cpu_ns": 4275000,
+        "peak_rss_bytes": 3751936
+       },
+       {
+        "open_ns": 995750,
+        "api_open_plus_work_ns": 995750,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 995750,
+        "process_ns": 5105208,
+        "cpu_ns": 4321000,
+        "peak_rss_bytes": 3768320
+       },
+       {
+        "open_ns": 976083,
+        "api_open_plus_work_ns": 976083,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 976083,
+        "process_ns": 5215375,
+        "cpu_ns": 4341000,
+        "peak_rss_bytes": 3817472
+       },
+       {
+        "open_ns": 1095041,
+        "api_open_plus_work_ns": 1095041,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 816,
+        "api_ns": 1095041,
+        "process_ns": 5755125,
+        "cpu_ns": 4875000,
+        "peak_rss_bytes": 3817472
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 20917,
+        "api_open_plus_work_ns": 20917,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 20917,
+        "process_ns": 2200667,
+        "cpu_ns": 1339000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 21625,
+        "api_open_plus_work_ns": 21625,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 21625,
+        "process_ns": 2068666,
+        "cpu_ns": 1223000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 20958,
+        "api_open_plus_work_ns": 20958,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 20958,
+        "process_ns": 2179417,
+        "cpu_ns": 1304000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 21750,
+        "api_open_plus_work_ns": 21750,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 21750,
+        "process_ns": 1961208,
+        "cpu_ns": 1195000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 20916,
+        "api_open_plus_work_ns": 20916,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 20916,
+        "process_ns": 1880291,
+        "cpu_ns": 1157000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 21958,
+        "api_open_plus_work_ns": 21958,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 21958,
+        "process_ns": 2247625,
+        "cpu_ns": 1389000,
+        "peak_rss_bytes": 2277376
+       }
+      ]
+     },
+     "response_sha256": "59ad2d4ed6725544fecc40a42009477fba8ec12da97fcc9e6ea32d6dca213ab5",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1009417,
+        "api_open_plus_work_ns": 1983917,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 974500,
+        "process_ns": 6203083,
+        "cpu_ns": 5396000,
+        "peak_rss_bytes": 7225344
+       },
+       {
+        "open_ns": 994958,
+        "api_open_plus_work_ns": 2015041,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1020083,
+        "process_ns": 6359500,
+        "cpu_ns": 5469000,
+        "peak_rss_bytes": 7241728
+       },
+       {
+        "open_ns": 1009875,
+        "api_open_plus_work_ns": 2005042,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 995167,
+        "process_ns": 6512250,
+        "cpu_ns": 5570000,
+        "peak_rss_bytes": 7258112
+       },
+       {
+        "open_ns": 991459,
+        "api_open_plus_work_ns": 1973834,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 982375,
+        "process_ns": 6398333,
+        "cpu_ns": 5470000,
+        "peak_rss_bytes": 7258112
+       },
+       {
+        "open_ns": 1018833,
+        "api_open_plus_work_ns": 2054041,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1035208,
+        "process_ns": 6798875,
+        "cpu_ns": 5770000,
+        "peak_rss_bytes": 7208960
+       },
+       {
+        "open_ns": 994791,
+        "api_open_plus_work_ns": 2018541,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1023750,
+        "process_ns": 6665709,
+        "cpu_ns": 5686000,
+        "peak_rss_bytes": 7225344
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 19167,
+        "api_open_plus_work_ns": 874917,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 855750,
+        "process_ns": 2890917,
+        "cpu_ns": 2088000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 21792,
+        "api_open_plus_work_ns": 898917,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 877125,
+        "process_ns": 3070042,
+        "cpu_ns": 2190000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 21042,
+        "api_open_plus_work_ns": 914375,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 893333,
+        "process_ns": 3002041,
+        "cpu_ns": 2174000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 20958,
+        "api_open_plus_work_ns": 899375,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 878417,
+        "process_ns": 3003875,
+        "cpu_ns": 2166000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 19541,
+        "api_open_plus_work_ns": 898082,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 878541,
+        "process_ns": 2981375,
+        "cpu_ns": 2123000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 22917,
+        "api_open_plus_work_ns": 899917,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 877000,
+        "process_ns": 3064208,
+        "cpu_ns": 2195000,
+        "peak_rss_bytes": 6144000
+       }
+      ]
+     },
+     "response_sha256": "a681aac08a87500607ffb9cdac470bbb572337788f6b75533917f2a1fcefb758",
+     "response_bytes": 1402
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 999084,
+        "api_open_plus_work_ns": 1009374,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 10290,
+        "process_ns": 6350917,
+        "cpu_ns": 5514000,
+        "peak_rss_bytes": 7241728
+       },
+       {
+        "open_ns": 999709,
+        "api_open_plus_work_ns": 1011626,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 11917,
+        "process_ns": 6267375,
+        "cpu_ns": 5442000,
+        "peak_rss_bytes": 7274496
+       },
+       {
+        "open_ns": 1022917,
+        "api_open_plus_work_ns": 1034585,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 11668,
+        "process_ns": 6542208,
+        "cpu_ns": 5659000,
+        "peak_rss_bytes": 7241728
+       },
+       {
+        "open_ns": 959417,
+        "api_open_plus_work_ns": 969957,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 10540,
+        "process_ns": 6340667,
+        "cpu_ns": 5496000,
+        "peak_rss_bytes": 7258112
+       },
+       {
+        "open_ns": 1035750,
+        "api_open_plus_work_ns": 1046837,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 11087,
+        "process_ns": 6544417,
+        "cpu_ns": 5622000,
+        "peak_rss_bytes": 7274496
+       },
+       {
+        "open_ns": 1064125,
+        "api_open_plus_work_ns": 1075792,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 11667,
+        "process_ns": 6914916,
+        "cpu_ns": 5938000,
+        "peak_rss_bytes": 7225344
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 20000,
+        "api_open_plus_work_ns": 38000,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 18000,
+        "process_ns": 2972166,
+        "cpu_ns": 2181000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 19500,
+        "api_open_plus_work_ns": 37461,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 17961,
+        "process_ns": 3061667,
+        "cpu_ns": 2218000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 19792,
+        "api_open_plus_work_ns": 40377,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 20585,
+        "process_ns": 3014667,
+        "cpu_ns": 2222000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 20916,
+        "api_open_plus_work_ns": 43543,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 22627,
+        "process_ns": 3391875,
+        "cpu_ns": 2235000,
+        "peak_rss_bytes": 6160384
+       },
+       {
+        "open_ns": 21458,
+        "api_open_plus_work_ns": 39333,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 17875,
+        "process_ns": 3184250,
+        "cpu_ns": 2282000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 23417,
+        "api_open_plus_work_ns": 42793,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 19376,
+        "process_ns": 3274000,
+        "cpu_ns": 2339000,
+        "peak_rss_bytes": 6127616
+       }
+      ]
+     },
+     "response_sha256": "a54e25d3f25cafaad48e8488452c700607a725f4c22aaf7371283da67832f046",
+     "response_bytes": 44864
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       1394,
+       "search/duck-pond-142.html"
+      ],
+      [
+       0,
+       1403,
+       "search/barron-creek-101.html"
+      ],
+      [
+       0,
+       1392,
+       "search/henderson-9.html"
+      ],
+      [
+       0,
+       1397,
+       "search/hale-creek-148.html"
+      ],
+      [
+       0,
+       1411,
+       "search/matadero-creek-178.html"
+      ],
+      [
+       0,
+       1435,
+       "search/matadero-bypass-channel-154.html"
+      ],
+      [
+       0,
+       1405,
+       "search/barron-creek-92.html"
+      ],
+      [
+       0,
+       1418,
+       "search/arastradero-creek-55.html"
+      ],
+      [
+       0,
+       1396,
+       "search/dry-creek-138.html"
+      ],
+      [
+       0,
+       1399,
+       "search/hale-creek-145.html"
+      ],
+      [
+       0,
+       1415,
+       "search/permanente-creek-205.html"
+      ],
+      [
+       0,
+       1415,
+       "search/permanente-creek-228.html"
+      ],
+      [
+       0,
+       1420,
+       "search/arastradero-creek-60.html"
+      ],
+      [
+       0,
+       1415,
+       "search/permanente-creek-201.html"
+      ],
+      [
+       0,
+       1402,
+       "search/adobe-creek-51.html"
+      ],
+      [
+       0,
+       1407,
+       "search/matadero-creek-157.html"
+      ],
+      [
+       0,
+       1435,
+       "search/san-francisquito-creek-248.html"
+      ],
+      [
+       0,
+       1404,
+       "search/lake-lagunita-153.html"
+      ],
+      [
+       0,
+       1400,
+       "search/coyote-hill-26.html"
+      ],
+      [
+       0,
+       1409,
+       "search/matadero-creek-193.html"
+      ],
+      [
+       0,
+       1400,
+       "search/adobe-creek-39.html"
+      ],
+      [
+       0,
+       1415,
+       "search/permanente-creek-211.html"
+      ],
+      [
+       0,
+       1403,
+       "search/barron-creek-71.html"
+      ],
+      [
+       0,
+       1415,
+       "search/permanente-creek-207.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 991292,
+        "api_open_plus_work_ns": 2035126,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1043834,
+        "process_ns": 6397250,
+        "cpu_ns": 5586000,
+        "peak_rss_bytes": 7536640
+       },
+       {
+        "open_ns": 1039583,
+        "api_open_plus_work_ns": 2078834,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1039251,
+        "process_ns": 6351541,
+        "cpu_ns": 5536000,
+        "peak_rss_bytes": 7520256
+       },
+       {
+        "open_ns": 984958,
+        "api_open_plus_work_ns": 2025834,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1040876,
+        "process_ns": 6448750,
+        "cpu_ns": 5595000,
+        "peak_rss_bytes": 7520256
+       },
+       {
+        "open_ns": 981667,
+        "api_open_plus_work_ns": 2040208,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1058541,
+        "process_ns": 6418958,
+        "cpu_ns": 5575000,
+        "peak_rss_bytes": 7503872
+       },
+       {
+        "open_ns": 985166,
+        "api_open_plus_work_ns": 2000875,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1015709,
+        "process_ns": 6402167,
+        "cpu_ns": 5522000,
+        "peak_rss_bytes": 7520256
+       },
+       {
+        "open_ns": 975166,
+        "api_open_plus_work_ns": 1995921,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 829420,
+        "api_ns": 1020755,
+        "process_ns": 6458833,
+        "cpu_ns": 5571000,
+        "peak_rss_bytes": 7503872
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 18709,
+        "api_open_plus_work_ns": 898545,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 879836,
+        "process_ns": 2932250,
+        "cpu_ns": 2145000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 21583,
+        "api_open_plus_work_ns": 876544,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 854961,
+        "process_ns": 3102625,
+        "cpu_ns": 2190000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 19875,
+        "api_open_plus_work_ns": 952498,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 932623,
+        "process_ns": 3204750,
+        "cpu_ns": 2347000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 23791,
+        "api_open_plus_work_ns": 938832,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 915041,
+        "process_ns": 3063083,
+        "cpu_ns": 2221000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 18000,
+        "api_open_plus_work_ns": 867290,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 849290,
+        "process_ns": 2911625,
+        "cpu_ns": 2142000,
+        "peak_rss_bytes": 6144000
+       },
+       {
+        "open_ns": 20167,
+        "api_open_plus_work_ns": 931708,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1650825,
+        "api_ns": 911541,
+        "process_ns": 3135166,
+        "cpu_ns": 2274000,
+        "peak_rss_bytes": 6144000
+       }
+      ]
+     },
+     "response_sha256": "1263c8532c1d7e6565fcc267000b10fd68481aabbb42c2bd105e614d04bb248c",
+     "response_bytes": 33997
+    }
+   }
+  }
+ ]
+}

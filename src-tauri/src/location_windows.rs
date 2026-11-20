@@ -54,11 +54,17 @@ pub(crate) fn start(token: u64, high_accuracy: bool, timeout_ms: u64, sender: Se
         .name("kiwix-location".into())
         .spawn(move || {
             // WinRT activation needs an apartment; this thread owns its own MTA.
+            // SAFETY: this fresh thread has no COM apartment yet, so the MTA
+            // result is authoritative; the matching CoUninitialize below runs on
+            // this same thread after its WinRT objects are gone.
             let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             let result = locate(token, high_accuracy, timeout_ms);
             // Removing the entry drops its WinRT reference while COM is alive.
             let entry = PENDING.lock().ok().and_then(|mut pending| pending.remove(&token));
             if com.is_ok() {
+                // SAFETY: pairs with the successful CoInitializeEx above on the
+                // same thread, after every WinRT reference this thread held has
+                // been dropped.
                 unsafe { CoUninitialize() };
             }
             if let Some(reply) = entry.and_then(|entry| entry.reply) {

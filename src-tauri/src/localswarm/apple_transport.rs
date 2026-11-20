@@ -176,6 +176,9 @@ impl Connection {
     fn start(raw: NonZeroU64) -> (Self, oneshot::Receiver<Result<usize, String>>) {
         let connection = Self(Arc::new(ConnectionLease { id: raw }));
         let (callback, ready) = completion(Operation::Ready);
+        // SAFETY: `raw` is the nonzero connection ID owned by the lease and
+        // registered in the native table; `callback` is a live block for this
+        // call and native retains its own reference before returning.
         unsafe { kiwix_swarm_start(raw.get(), &callback); }
         (connection, ready)
     }
@@ -268,7 +271,10 @@ impl Connection {
         let maximum = output.len().min(MAX_READ);
         let bytes = loop {
             let (ticket, received) = read_request::register(maximum)?;
-            // The native operation retains the connection and only echoes the ID.
+            // SAFETY: `self.0.id` is a live connection ID; `ticket` is the
+            // registered request. Native invokes the static callback with the
+            // ID, status and a borrowed dispatch_data_t; `read_request::complete`
+            // copies the bytes before returning, so no payload escapes it.
             unsafe { kiwix_swarm_read(self.0.id.get(), maximum, ticket.id(), read_request::complete); }
             match received.await.map_err(|_| "Apple QUIC receive callback lost")?? {
                 read_request::Received::Bytes(bytes) => break bytes,
@@ -293,6 +299,9 @@ impl Connection {
             let length = input.len().min(super::network::UNLIMITED_PIECE);
             let data = DispatchData::from_bytes(&input[..length]);
             let (callback, sent) = completion(Operation::Write { bytes: length, stats: stats.clone() });
+            // SAFETY: `self.0.id` is a live connection ID. `DispatchData::from_bytes`
+            // made an owned copy before this call; native retains that immutable
+            // object and the completion block across dispatch without recopying.
             unsafe { kiwix_swarm_write(self.0.id.get(), &data, &callback); }
             completions.push(sent);
             input = &input[length..];
@@ -333,6 +342,9 @@ impl Listener {
                 }
             }));
             let (callback, ready) = completion(Operation::Ready);
+            // SAFETY: `accept` and `callback` are live blocks for this call;
+            // native retains its own references and returns a nonzero listener
+            // ID that this function checks before storing.
             (unsafe { kiwix_swarm_listen(&accept, &callback, one_request) }, ready)
         };
         let raw = NonZeroU64::new(raw).ok_or("Cannot create Apple QUIC listener")?;

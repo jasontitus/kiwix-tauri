@@ -223,6 +223,9 @@ pub(crate) fn bind_local_tcp_socket(socket: &tokio::net::TcpSocket) -> Result<Lo
 fn bind_local_fd(fd: std::os::fd::RawFd) -> Result<LocalBinding, String> {
     #[cfg(target_os = "ios")]
     {
+        // SAFETY: `fd` is a live descriptor borrowed for the call; native binds
+        // the route and retains no descriptor or pointer. The return is an
+        // integer route ID, not a handle.
         let route = unsafe { kiwix_mobile_bind_local_socket(fd) };
         if route <= 0 {
             return Err("A confirmed Wi-Fi or Ethernet route is required for local sharing".into());

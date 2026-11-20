@@ -38,6 +38,10 @@ impl Drop for NativeJob {
             let _ = window.with_webview(move |platform| {
                 // Force controller closure, not a cancellable window-close
                 // event. The process-exit callback owns profile cleanup.
+                // SAFETY: `platform` is the live platform handle provided to this
+                // UI-thread `with_webview` callback; the controller is live here.
+                // This is an explicit best-effort close attempt, and the vendored
+                // WebView drop may call Close again harmlessly before destroy.
                 unsafe { let _ = platform.controller().Close(); }
                 let _ = destroy.destroy();
                 drop(files);
@@ -76,6 +80,10 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
                 .build().map_err(|e| format!("Creating the native PDF view: {e}"))?;
             let native_reply = setup_reply.clone();
             window.with_webview(move |platform| {
+                // SAFETY: `platform` is the live webview platform handle delivered
+                // to this UI-thread callback; each WebView2 interface below is
+                // borrowed only within this closure, and the handler closures are
+                // owned by the COM handlers registered here.
                 let start = (|| -> windows::core::Result<()> { unsafe {
                     let core = platform.controller().CoreWebView2()?;
                     let mut owner = HWND::default();

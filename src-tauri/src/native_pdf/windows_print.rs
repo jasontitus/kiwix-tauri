@@ -15,21 +15,35 @@ impl Dialog {
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
         let hwnd = self.hwnd.load(Ordering::SeqCst);
+        // SAFETY: `hwnd` was published by `hook` and cleared on WM_NCDESTROY,
+        // but a concurrent teardown can recycle the value. The post is
+        // best-effort and carries no borrowed Rust pointer, so a stale handle
+        // cannot reach our data.
         if hwnd != 0 { unsafe { let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_COMMAND, WPARAM(2), LPARAM(0)); } }
     }
 }
 thread_local! { static HOOKS: RefCell<HashMap<isize, *const Dialog>> = RefCell::new(HashMap::new()); }
 unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam: LPARAM) -> usize {
     if message == WM_INITDIALOG {
+        // SAFETY: during WM_INITDIALOG `lParam` is the live PRINTDLGW that
+        // `choose` passed to PrintDlgW; only `lCustData` is read here, before
+        // the call writes its selection back into the structure.
         let print = unsafe { &*(lparam.0 as *const PRINTDLGW) };
         let dialog = print.lCustData.0 as *const Dialog;
         if !dialog.is_null() {
             HOOKS.with(|hooks| hooks.borrow_mut().insert(hwnd.0 as isize, dialog));
+            // SAFETY: `lCustData` holds the `&Dialog` owned by `choose`, which
+            // keeps it alive until PrintDlgW returns; the pointer was checked
+            // non-null and is used only while that reference is live.
             unsafe { &*dialog }.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
+            // SAFETY: same live `&Dialog`; `cancel` only posts to the HWND just
+            // stored above and never outlives `choose`.
             if unsafe { &*dialog }.cancelled.load(Ordering::SeqCst) { unsafe { &*dialog }.cancel(); }
         }
     } else if message == WM_NCDESTROY {
         if let Some(dialog) = HOOKS.with(|hooks| hooks.borrow_mut().remove(&(hwnd.0 as isize))) {
+            // SAFETY: entries are inserted with a non-null `&Dialog` and removed
+            // here before `choose` returns, so the pointee is still alive.
             unsafe { &*dialog }.hwnd.store(0, Ordering::SeqCst);
         }
     }
@@ -37,6 +51,9 @@ unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam
 }
 struct Selection(PRINTDLGW);
 impl Drop for Selection {
+    // SAFETY: the handles were allocated by PrintDlgW for this Selection and
+    // are freed exactly once here after the dialog has returned; invalid
+    // handles are skipped and nothing reads them afterwards.
     fn drop(&mut self) { unsafe {
         let mode = self.0.hDevMode; let names = self.0.hDevNames; let dc = self.0.hDC;
         if !mode.is_invalid() { let _ = GlobalFree(Some(mode)); }
@@ -54,15 +71,26 @@ pub fn choose(core: &ICoreWebView2, owner: HWND, dialog: &Dialog, width: u32) ->
         lCustData: LPARAM(dialog as *const Dialog as isize), lpfnPrintHook: Some(hook),
         ..Default::default()
     });
+    // SAFETY: `selection.0` is a fully initialized PRINTDLGW (size and owner
+    // window set) on this stack frame and outlives the modal call; PrintDlgW
+    // invokes `hook` on this same thread.
     let selected = unsafe { PrintDlgW(&mut selection.0) }.as_bool();
     dialog.hwnd.store(0, Ordering::SeqCst);
     if dialog.cancelled.load(Ordering::SeqCst) { return Err("Article printing was cancelled".into()); }
     if !selected {
+        // SAFETY: reads the thread-local dialog error state left by the
+        // PrintDlgW call that just returned on this thread; no pointer is
+        // involved.
         let error = unsafe { CommDlgExtendedError() }.0;
         return if error == 0 { Ok(None) } else { Err(format!("The Windows print dialog failed ({error})")) };
     }
+    // SAFETY: `settings` reads the still-owned PRINTDLG handles, which
+    // `selection` frees only when it drops after this call returns.
     unsafe { settings(core, &selection.0, width).map(Some).map_err(|error| format!("Cannot apply the selected printer settings: {error}")) }
 }
+// SAFETY: every handle in `print` came from PrintDlgW and is owned by the live
+// `selection`; each global block is sized by GlobalSize, locked and unlocked
+// once here, and its unaligned contents are read only inside those bounds.
 unsafe fn settings(core: &ICoreWebView2, print: &PRINTDLGW, width: u32) -> Result<ICoreWebView2PrintSettings, String> {
     unsafe {
         let flags = print.Flags;
@@ -133,6 +161,9 @@ unsafe fn settings(core: &ICoreWebView2, print: &PRINTDLGW, width: u32) -> Resul
 pub fn pdf_settings(core: &ICoreWebView2, width: u32) -> Result<ICoreWebView2PrintSettings, String> {
     let scale = (((595.28 - 72.0) / 72.0 * 96.0) / f64::from(width)).min(1.0);
     if scale < 0.1 { return Err("The live article is too wide for WebView2 PDF capture".into()); }
+    // SAFETY: `core` is a live WebView2 interface borrowed from the caller for
+    // this call; `CreatePrintSettings` returns a reference-counted interface
+    // that the caller then owns.
     (|| -> windows::core::Result<ICoreWebView2PrintSettings> { unsafe {
         let environment = core.cast::<ICoreWebView2_2>()?.Environment()?;
         let settings = environment.cast::<ICoreWebView2Environment6>()?.CreatePrintSettings()?;

@@ -277,6 +277,10 @@ mod windows_acl {
     struct Allocation(*mut c_void);
     impl Drop for Allocation {
         fn drop(&mut self) {
+            // SAFETY: `self.0` is a non-null allocation that each constructor's API
+            // requires `LocalFree` for: ConvertStringSecurityDescriptorToSecurityDescriptorW,
+            // GetSecurityInfo and ConvertSidToStringSidW. It is freed exactly once
+            // here and never used afterwards.
             if !self.0.is_null() { unsafe { let _ = LocalFree(Some(HLOCAL(self.0))); } }
         }
     }
@@ -284,23 +288,37 @@ mod windows_acl {
     impl User {
         fn current() -> Result<Self, String> {
             let mut raw = HANDLE::default();
+            // SAFETY: `GetCurrentProcess` returns a process-lifetime pseudo-handle that must not be
+            // closed and is only read; the token handle is written to the live local `raw`.
             unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw).map_err(err)?; }
+            // SAFETY: `raw` is the handle just opened and is not copied elsewhere; `OwnedHandle`
+            // owns it and closes it exactly once.
             let token = unsafe { OwnedHandle::from_raw_handle(raw.0) };
             let mut required = 0;
+            // SAFETY: a null buffer with zero length only asks for the required size; the token
+            // handle is alive and `required` is a writable live local.
             unsafe { let _ = GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser, None, 0, &mut required); }
             if required == 0 || required > 64 * 1024 { return Err(err("could not determine the Windows user SID")); }
             let mut storage = vec![0usize; (required as usize).div_ceil(std::mem::size_of::<usize>())];
+            // SAFETY: `storage` holds at least `required` zeroed bytes, is `usize`-aligned, and
+            // stays put while the live token is queried; the API writes at most `required` bytes.
             unsafe {
                 GetTokenInformation(HANDLE(token.as_raw_handle()), TokenUser,
                     Some(storage.as_mut_ptr().cast()), required, &mut required).map_err(err)?;
             }
             Ok(Self { storage })
         }
+        // SAFETY: `storage` owns a `TOKEN_USER` written by `GetTokenInformation` above; it is
+        // `usize`-aligned and never reallocated, so the SID points into live owned memory.
         fn sid(&self) -> PSID { unsafe { (*(self.storage.as_ptr().cast::<TOKEN_USER>())).User.Sid } }
         fn text(&self) -> Result<String, String> {
             let mut text = PWSTR::null();
+            // SAFETY: `sid` points into `self.storage`, which outlives this call; the API allocates
+            // a NUL-terminated string and returns it through the live local `text`.
             unsafe { ConvertSidToStringSidW(self.sid(), &mut text).map_err(err)?; }
             let _allocation = Allocation(text.0.cast());
+            // SAFETY: `_allocation` owns the NUL-terminated string returned above and keeps it
+            // alive until after this read, which does not modify it.
             unsafe { text.to_string().map_err(err) }
         }
     }
@@ -317,6 +335,8 @@ mod windows_acl {
         let sddl: Vec<u16> = format!("D:P(A;{inheritance};FA;;;{})", user.text()?)
             .encode_utf16().chain(Some(0)).collect();
         let mut descriptor = PSECURITY_DESCRIPTOR::default();
+        // SAFETY: `sddl` is NUL-terminated and alive across the call; the API allocates a
+        // self-contained descriptor and stores it in the live local `descriptor`.
         unsafe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(PCWSTR(sddl.as_ptr()), 1, &mut descriptor, None).map_err(err)?;
         }
@@ -324,6 +344,8 @@ mod windows_acl {
         let mut present = BOOL::default();
         let mut defaulted = BOOL::default();
         let mut dacl = std::ptr::null_mut();
+        // SAFETY: `descriptor` is the live owned allocation above; `dacl` points into it and
+        // `present`/`defaulted` are writable locals, so the DACL stays valid for `SetSecurityInfo`.
         unsafe {
             GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted).map_err(err)?;
             if !present.as_bool() || dacl.is_null() { return Err(err("Windows private DACL is unavailable")); }
@@ -347,12 +369,16 @@ mod windows_acl {
         let mut owner = PSID::default();
         let mut dacl: *mut ACL = std::ptr::null_mut();
         let mut descriptor = PSECURITY_DESCRIPTOR::default();
+        // SAFETY: `file` is a live handle owned by the caller; `owner`, `dacl` and `descriptor`
+        // are writable live locals, and the API allocates the descriptor recorded there.
         unsafe {
             GetSecurityInfo(HANDLE(file.as_raw_handle()), SE_FILE_OBJECT,
                 OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
                 Some(&mut owner), None, Some(&mut dacl), None, Some(&mut descriptor)).ok().map_err(err)?;
         }
         let _allocation = Allocation(descriptor.0);
+        // SAFETY: `_allocation` keeps the descriptor allocation alive; `owner`, `dacl` and every
+        // `GetAce` result point inside it and are only read, and `user` outlives the comparisons.
         unsafe {
             if owner.0.is_null() || EqualSid(owner, user.sid()).is_err() || dacl.is_null() || (*dacl).AceCount == 0 {
                 return Err(err("Windows identity storage must be owned by this user with a restrictive DACL"));
@@ -640,6 +666,9 @@ mod tests {
             let mut present = windows::core::BOOL::default();
             let mut defaulted = windows::core::BOOL::default();
             let mut dacl: *mut ACL = std::ptr::null_mut();
+            // SAFETY: the descriptor is allocated by `ConvertString...` and freed exactly once in
+            // both branches below; `present`, `defaulted` and `dacl` are writable locals, the DACL
+            // pointer stays inside the live allocation, and `file` is a live handle.
             unsafe {
                 ConvertStringSecurityDescriptorToSecurityDescriptorW(
                     windows::core::w!("D:P(A;;FA;;;WD)"), 1, &mut descriptor, None).unwrap();

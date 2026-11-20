@@ -178,12 +178,17 @@ mod windows {
     struct Handle(HANDLE);
     impl Drop for Handle {
         fn drop(&mut self) {
+            // SAFETY: `Handle` owns exactly this non-null handle; it is closed once here and never
+            // used after `Drop` returns.
             unsafe { CloseHandle(self.0) };
         }
     }
 
     /// The process token's user, as an owned TOKEN_USER buffer.
     fn token_user(process: HANDLE) -> Result<Vec<u64>, String> {
+        // SAFETY: the token handle written to the live local `token` is adopted by `Handle` and
+        // closed exactly once; `buffer` is an initialized `u64` vec sized to `length`, which the
+        // API writes at most `length` bytes into, leaving it aligned for `TOKEN_USER`.
         unsafe {
             let mut token: HANDLE = std::ptr::null_mut();
             if OpenProcessToken(process, TOKEN_QUERY, &mut token) == 0 {
@@ -204,11 +209,17 @@ mod windows {
     }
 
     fn sid(buffer: &[u64]) -> PSID {
+        // SAFETY: `buffer` owns a `TOKEN_USER` written by `token_user`; it is `u64`-aligned and
+        // lives for this borrow, so the SID points into initialized owned memory.
         unsafe { (*(buffer.as_ptr() as *const TOKEN_USER)).User.Sid }
     }
 
     pub fn current_user_sid() -> Result<String, String> {
+        // SAFETY: `GetCurrentProcess` returns a process-lifetime pseudo-handle that must not be
+        // closed; it is only passed to `OpenProcessToken`.
         let user = token_user(unsafe { GetCurrentProcess() })?;
+        // SAFETY: `sid(&user)` points into the live `user` buffer; the API allocates a
+        // NUL-terminated string in the live local `text`, which is read below and freed once.
         unsafe {
             let mut text: *mut u16 = std::ptr::null_mut();
             if ConvertSidToStringSidW(sid(&user), &mut text) == 0 {
@@ -239,6 +250,8 @@ mod windows {
     fn image_path(process: HANDLE) -> Result<PathBuf, String> {
         let mut buffer = vec![0u16; 32768];
         let mut length = buffer.len() as u32;
+        // SAFETY: `buffer` is a live initialized `u16` array and `length` its capacity in
+        // characters; the call writes at most that many and updates `length` to the prefix written.
         if unsafe { QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, buffer.as_mut_ptr(), &mut length) } == 0 {
             return Err("Cannot identify the Kiwix process".into());
         }
@@ -247,6 +260,8 @@ mod windows {
 
     /// The pipe object's owner must be this user.
     fn owned_by(pipe: HANDLE, own: &[u64]) -> bool {
+        // SAFETY: the descriptor and its `owner` SID are written to live locals; the descriptor
+        // allocation is freed exactly once after its last use, and `own` outlives the comparison.
         unsafe {
             let mut owner: PSID = std::ptr::null_mut();
             let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
@@ -271,20 +286,27 @@ mod windows {
     /// Refuse any server that is not this user's Kiwix from this installation.
     fn verify_server(pipe: &std::fs::File) -> Result<(), String> {
         let handle = pipe.as_raw_handle() as HANDLE;
+        // SAFETY: `GetCurrentProcess` returns a process-lifetime pseudo-handle that must not be
+        // closed; it is only passed to `OpenProcessToken`.
         let own = token_user(unsafe { GetCurrentProcess() })?;
         if !owned_by(handle, &own) {
             return Err(REFUSED.into());
         }
         let mut pid = 0u32;
+        // SAFETY: `handle` is a live handle borrowed from `pipe` and `pid` is a writable local.
         if unsafe { GetNamedPipeServerProcessId(handle, &mut pid) } == 0 || pid == 0 {
             return Err(REFUSED.into());
         }
+        // SAFETY: the returned process handle is checked for null, then owned by `Handle`, which
+        // closes it exactly once; `pid` was read from the live pipe above.
         let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
         if process.is_null() {
             return Err(REFUSED.into());
         }
         let process = Handle(process);
         let server = token_user(process.0).map_err(|_| REFUSED.to_string())?;
+        // SAFETY: both SIDs point into live `u64` buffers owned by `server` and `own`, which
+        // outlive the comparison and are not modified during it.
         if unsafe { EqualSid(sid(&server), sid(&own)) } == 0 {
             return Err(REFUSED.into());
         }
@@ -338,6 +360,8 @@ mod windows {
             match opened {
                 Ok(pipe) => {
                     verify_server(&pipe)?;
+                    // SAFETY: `pipe` is a live connected handle; the mode is a constant and both
+                    // optional timeout/collect-data pointers are null, which the API allows.
                     if unsafe { SetNamedPipeHandleState(pipe.as_raw_handle().cast(), &PIPE_NOWAIT,
                         std::ptr::null(), std::ptr::null()) } == 0 {
                         return Err("Cannot configure the Kiwix connection".into());
@@ -345,6 +369,8 @@ mod windows {
                     return Ok(Pipe(pipe));
                 }
                 Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
+                    // SAFETY: `wide(&name)` is a temporary NUL-terminated `u16` buffer that stays
+                    // alive for the duration of the call.
                     unsafe { WaitNamedPipeW(wide(&name).as_ptr(), 2000) };
                 }
                 Err(error) if error.raw_os_error() == Some(ERROR_FILE_NOT_FOUND as i32) => {

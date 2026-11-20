@@ -86,6 +86,8 @@ impl OwnedPdf {
             use std::os::unix::ffi::OsStrExt;
             unsafe extern "C" { fn kiwix_pdf_exclude_scratch(path: *const std::ffi::c_char) -> bool; }
             let path = std::ffi::CString::new(directory.as_os_str().as_bytes()).map_err(|_| "Invalid PDF scratch directory")?;
+            // SAFETY: `path` is a live NUL-terminated C string for the call;
+            // native reads it synchronously and retains no pointer.
             if !unsafe { kiwix_pdf_exclude_scratch(path.as_ptr()) } {
                 return Err("iOS could not exclude PDF temporary storage from backup".into());
             }

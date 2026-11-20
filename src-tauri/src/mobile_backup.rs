@@ -54,6 +54,9 @@ pub(crate) fn exclude_payload(file: &(impl BackupFile + ?Sized), path: &Path) ->
 #[cfg(target_os = "ios")]
 pub(crate) fn exclude_unadmitted_payload(file: &(impl BackupFile + ?Sized), path: &Path) -> Result<(), String> {
     let path = native_path(path)?;
+    // SAFETY: the caller keeps this descriptor open through the synchronous
+    // Swift call; `file` may be borrowed, so this code does not claim ownership.
+    // `path` is a live NUL-terminated C string read synchronously.
     if unsafe { kiwix_mobile_exclude_unadmitted_payload(file.as_raw_fd(), path.as_ptr()) } != 0 {
         return Err("iOS could not conditionally exclude the owned payload".into());
     }
@@ -78,6 +81,9 @@ pub(crate) fn archive_policy(file: &(impl BackupFile + ?Sized), path: &Path) -> 
 #[cfg(target_os = "ios")]
 pub(crate) fn admitted(file: &(impl BackupFile + ?Sized), path: &Path) -> Result<bool, String> {
     let path = native_path(path)?;
+    // SAFETY: the caller keeps this descriptor open through the synchronous
+    // Swift call; `file` may be borrowed, so this code does not claim ownership.
+    // `path` is a live NUL-terminated C string read synchronously.
     match unsafe { kiwix_mobile_archive_admitted(file.as_raw_fd(), path.as_ptr()) } {
         0 => Ok(false),
         1 => Ok(true),
@@ -98,6 +104,9 @@ fn apply(
     #[cfg(target_os = "ios")]
     {
         let path = native_path(path)?;
+        // SAFETY: the caller keeps this descriptor open through the synchronous
+        // Swift call; `file` may be borrowed, so this code does not claim ownership.
+        // `path` is a live NUL-terminated C string read synchronously.
         if unsafe {
             kiwix_mobile_archive_backup(file.as_raw_fd(), path.as_ptr(), i32::from(include), i32::from(admit))
         } != 0 {

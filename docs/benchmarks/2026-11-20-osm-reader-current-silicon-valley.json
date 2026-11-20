@@ -1,0 +1,1030 @@
+{
+ "cache_bytes": "33554432",
+ "native_xapian_preload": false,
+ "host": "macOS-27.2.1-arm64-arm-64bit",
+ "rounds": 6,
+ "driver_sha256": {
+  "libzim": "4ae37fcb27babda39e3a435e284f89ea4558db43f5e9d7ec72fed0de4f762e1b",
+  "zimru": "42c4d117253a157f5ba6b5a9a741b85921c5b3505858e7efb74e8a87f37e2453"
+ },
+ "archives": [
+  {
+   "file": "osm-silicon-valley-overture.zim",
+   "size": 203804316,
+   "sha256": "ca0f5f3efc7f956fee116e6b21f6a2377b8ee211280e4e8354143619ef9cf442",
+   "selected": [
+    {
+     "kind": "html",
+     "size": 326,
+     "path": "search/regnart-creek-7748.html",
+     "title": "Regnart Creek"
+    },
+    {
+     "kind": "html",
+     "size": 326,
+     "path": "search/boulder-creek-3077.html",
+     "title": "Boulder Creek"
+    },
+    {
+     "kind": "html",
+     "size": 328,
+     "path": "search/waterman-gap-539.html",
+     "title": "Waterman Gap"
+    },
+    {
+     "kind": "html",
+     "size": 324,
+     "path": "search/quimby-creek-7569.html",
+     "title": "Quimby Creek"
+    },
+    {
+     "kind": "html",
+     "size": 329,
+     "path": "search/the-bluffs-505.html",
+     "title": "The Bluffs"
+    },
+    {
+     "kind": "html",
+     "size": 326,
+     "path": "search/harwood-creek-5179.html",
+     "title": "Harwood Creek"
+    },
+    {
+     "kind": "html",
+     "size": 322,
+     "path": "search/sulphur-creek-9149.html",
+     "title": "Sulphur Creek"
+    },
+    {
+     "kind": "html",
+     "size": 324,
+     "path": "search/sausal-creek-8509.html",
+     "title": "Sausal Creek"
+    },
+    {
+     "kind": "html",
+     "size": 324,
+     "path": "search/butano-creek-3179.html",
+     "title": "Butano Creek"
+    },
+    {
+     "kind": "html",
+     "size": 330,
+     "path": "search/gold-mine-creek-4881.html",
+     "title": "Gold Mine Creek"
+    },
+    {
+     "kind": "html",
+     "size": 328,
+     "path": "search/cottonwood-creek-3812.html",
+     "title": "Cottonwood Creek"
+    },
+    {
+     "kind": "html",
+     "size": 332,
+     "path": "search/moss-beach-creek-6561.html",
+     "title": "Moss Beach Creek"
+    },
+    {
+     "kind": "html",
+     "size": 320,
+     "path": "search/deer-creek-4279.html",
+     "title": "Deer Creek"
+    },
+    {
+     "kind": "html",
+     "size": 330,
+     "path": "search/kottinger-creek-5530.html",
+     "title": "Kottinger Creek"
+    },
+    {
+     "kind": "html",
+     "size": 332,
+     "path": "search/greenwood-creek-4939.html",
+     "title": "Greenwood Creek"
+    },
+    {
+     "kind": "html",
+     "size": 322,
+     "path": "search/alamo-creek-2139.html",
+     "title": "Alamo Creek"
+    },
+    {
+     "kind": "html",
+     "size": 324,
+     "path": "search/belmont-hill-587.html",
+     "title": "Belmont Hill"
+    },
+    {
+     "kind": "html",
+     "size": 324,
+     "path": "search/laguna-creek-5668.html",
+     "title": "Laguna Creek"
+    },
+    {
+     "kind": "html",
+     "size": 328,
+     "path": "search/bolinas-creek-3014.html",
+     "title": "Bolinas Creek"
+    },
+    {
+     "kind": "html",
+     "size": 330,
+     "path": "search/mccormick-creek-6318.html",
+     "title": "McCormick Creek"
+    },
+    {
+     "kind": "html",
+     "size": 360,
+     "path": "search/dublin-hills-regional-park-977.html",
+     "title": "Dublin Hills Regional Park"
+    },
+    {
+     "kind": "html",
+     "size": 336,
+     "path": "search/trestle-glen-creek-9688.html",
+     "title": "Trestle Glen Creek"
+    },
+    {
+     "kind": "html",
+     "size": 332,
+     "path": "search/pescadero-creek-7209.html",
+     "title": "Pescadero Creek"
+    },
+    {
+     "kind": "html",
+     "size": 330,
+     "path": "search/permanente-creek-7144.html",
+     "title": "Permanente Creek"
+    },
+    {
+     "kind": "media",
+     "size": 11220,
+     "path": "satellite/11/331/794.avif",
+     "title": "Satellite 11/331/794.avif"
+    },
+    {
+     "kind": "media",
+     "size": 19748,
+     "path": "terrain/12/662/1587.webp",
+     "title": "Terrain 12/662/1587.webp"
+    },
+    {
+     "kind": "media",
+     "size": 20790,
+     "path": "terrain/12/658/1590.webp",
+     "title": "Terrain 12/658/1590.webp"
+    },
+    {
+     "kind": "media",
+     "size": 9548,
+     "path": "satellite/12/663/1589.avif",
+     "title": "Satellite 12/663/1589.avif"
+    },
+    {
+     "kind": "media",
+     "size": 9112,
+     "path": "satellite/13/1309/3169.avif",
+     "title": "Satellite 13/1309/3169.avif"
+    },
+    {
+     "kind": "media",
+     "size": 11651,
+     "path": "satellite/13/1318/3177.avif",
+     "title": "Satellite 13/1318/3177.avif"
+    },
+    {
+     "kind": "media",
+     "size": 11184,
+     "path": "satellite/12/660/1584.avif",
+     "title": "Satellite 12/660/1584.avif"
+    },
+    {
+     "kind": "media",
+     "size": 20452,
+     "path": "terrain/8/40/98.webp",
+     "title": "Terrain 8/40/98.webp"
+    }
+   ],
+   "phases": {
+    "open": {
+     "requested": [],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1669042,
+        "api_open_plus_work_ns": 1669042,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1669042,
+        "process_ns": 6273125,
+        "cpu_ns": 5126000,
+        "peak_rss_bytes": 3964928
+       },
+       {
+        "open_ns": 1640125,
+        "api_open_plus_work_ns": 1640125,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1640125,
+        "process_ns": 6199667,
+        "cpu_ns": 5000000,
+        "peak_rss_bytes": 3915776
+       },
+       {
+        "open_ns": 1654750,
+        "api_open_plus_work_ns": 1654750,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1654750,
+        "process_ns": 6143208,
+        "cpu_ns": 5111000,
+        "peak_rss_bytes": 3948544
+       },
+       {
+        "open_ns": 1522583,
+        "api_open_plus_work_ns": 1522583,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1522583,
+        "process_ns": 5890834,
+        "cpu_ns": 4798000,
+        "peak_rss_bytes": 3948544
+       },
+       {
+        "open_ns": 1753125,
+        "api_open_plus_work_ns": 1753125,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1753125,
+        "process_ns": 6225917,
+        "cpu_ns": 5147000,
+        "peak_rss_bytes": 3948544
+       },
+       {
+        "open_ns": 1525083,
+        "api_open_plus_work_ns": 1525083,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 120,
+        "api_ns": 1525083,
+        "process_ns": 5981959,
+        "cpu_ns": 4915000,
+        "peak_rss_bytes": 3981312
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 28125,
+        "api_open_plus_work_ns": 28125,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 28125,
+        "process_ns": 2388292,
+        "cpu_ns": 1367000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 22291,
+        "api_open_plus_work_ns": 22291,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 22291,
+        "process_ns": 2489208,
+        "cpu_ns": 1346000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 23500,
+        "api_open_plus_work_ns": 23500,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 23500,
+        "process_ns": 2280250,
+        "cpu_ns": 1225000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 21125,
+        "api_open_plus_work_ns": 21125,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 21125,
+        "process_ns": 2376209,
+        "cpu_ns": 1273000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 23834,
+        "api_open_plus_work_ns": 23834,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 23834,
+        "process_ns": 2282417,
+        "cpu_ns": 1277000,
+        "peak_rss_bytes": 2277376
+       },
+       {
+        "open_ns": 26167,
+        "api_open_plus_work_ns": 26167,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 0,
+        "api_ns": 26167,
+        "process_ns": 2206292,
+        "cpu_ns": 1216000,
+        "peak_rss_bytes": 2277376
+       }
+      ]
+     },
+     "response_sha256": "c2b4670b699f6639ecef93a0ce51ba9292c71e1f9f1d3a8698d842ac3291c3d7",
+     "response_bytes": 8
+    },
+    "first_article": {
+     "requested": [
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1636333,
+        "api_open_plus_work_ns": 2504541,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 868208,
+        "process_ns": 6950583,
+        "cpu_ns": 5946000,
+        "peak_rss_bytes": 8077312
+       },
+       {
+        "open_ns": 1632292,
+        "api_open_plus_work_ns": 2484292,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 852000,
+        "process_ns": 7170000,
+        "cpu_ns": 6011000,
+        "peak_rss_bytes": 8044544
+       },
+       {
+        "open_ns": 1709833,
+        "api_open_plus_work_ns": 2598875,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 889042,
+        "process_ns": 7242625,
+        "cpu_ns": 6143000,
+        "peak_rss_bytes": 8044544
+       },
+       {
+        "open_ns": 1579875,
+        "api_open_plus_work_ns": 2438375,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 858500,
+        "process_ns": 6982375,
+        "cpu_ns": 5848000,
+        "peak_rss_bytes": 8093696
+       },
+       {
+        "open_ns": 1716708,
+        "api_open_plus_work_ns": 2567500,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 850792,
+        "process_ns": 7314208,
+        "cpu_ns": 6163000,
+        "peak_rss_bytes": 8077312
+       },
+       {
+        "open_ns": 1586292,
+        "api_open_plus_work_ns": 2431626,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 845334,
+        "process_ns": 7027167,
+        "cpu_ns": 5908000,
+        "peak_rss_bytes": 8044544
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 18333,
+        "api_open_plus_work_ns": 830208,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 811875,
+        "process_ns": 3105833,
+        "cpu_ns": 2104000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 20375,
+        "api_open_plus_work_ns": 825708,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 805333,
+        "process_ns": 3164292,
+        "cpu_ns": 2037000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 19208,
+        "api_open_plus_work_ns": 834833,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 815625,
+        "process_ns": 3146708,
+        "cpu_ns": 2102000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 22084,
+        "api_open_plus_work_ns": 820251,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 798167,
+        "process_ns": 3032083,
+        "cpu_ns": 2022000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 20250,
+        "api_open_plus_work_ns": 818584,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 798334,
+        "process_ns": 3136542,
+        "cpu_ns": 2103000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 19958,
+        "api_open_plus_work_ns": 843042,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 823084,
+        "process_ns": 3172292,
+        "cpu_ns": 2083000,
+        "peak_rss_bytes": 6815744
+       }
+      ]
+     },
+     "response_sha256": "99c36255d4a48c143c82fc55685ae6a52ecea431c43c054158072424b53ec2a2",
+     "response_bytes": 334
+    },
+    "repeat_article_32": {
+     "requested": [
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1652292,
+        "api_open_plus_work_ns": 1666498,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 14206,
+        "process_ns": 7467459,
+        "cpu_ns": 6287000,
+        "peak_rss_bytes": 8126464
+       },
+       {
+        "open_ns": 1718416,
+        "api_open_plus_work_ns": 1732539,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 14123,
+        "process_ns": 7483833,
+        "cpu_ns": 6266000,
+        "peak_rss_bytes": 8077312
+       },
+       {
+        "open_ns": 1670334,
+        "api_open_plus_work_ns": 1681252,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 10918,
+        "process_ns": 7204084,
+        "cpu_ns": 6128000,
+        "peak_rss_bytes": 8142848
+       },
+       {
+        "open_ns": 1552208,
+        "api_open_plus_work_ns": 1563125,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 10917,
+        "process_ns": 7032250,
+        "cpu_ns": 5947000,
+        "peak_rss_bytes": 8142848
+       },
+       {
+        "open_ns": 1729333,
+        "api_open_plus_work_ns": 1743792,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 14459,
+        "process_ns": 7369250,
+        "cpu_ns": 6255000,
+        "peak_rss_bytes": 8060928
+       },
+       {
+        "open_ns": 1602666,
+        "api_open_plus_work_ns": 1613833,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 1099832,
+        "api_ns": 11167,
+        "process_ns": 7170541,
+        "cpu_ns": 6041000,
+        "peak_rss_bytes": 8093696
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 21833,
+        "api_open_plus_work_ns": 42998,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 21165,
+        "process_ns": 3068125,
+        "cpu_ns": 2050000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 20708,
+        "api_open_plus_work_ns": 44000,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 23292,
+        "process_ns": 3216750,
+        "cpu_ns": 2088000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 18625,
+        "api_open_plus_work_ns": 41126,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 22501,
+        "process_ns": 3091000,
+        "cpu_ns": 2040000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 22834,
+        "api_open_plus_work_ns": 44002,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 21168,
+        "process_ns": 3391083,
+        "cpu_ns": 2259000,
+        "peak_rss_bytes": 6799360
+       },
+       {
+        "open_ns": 19417,
+        "api_open_plus_work_ns": 40334,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 20917,
+        "process_ns": 3178958,
+        "cpu_ns": 2157000,
+        "peak_rss_bytes": 6815744
+       },
+       {
+        "open_ns": 20875,
+        "api_open_plus_work_ns": 42541,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2096865,
+        "api_ns": 21666,
+        "process_ns": 3137500,
+        "cpu_ns": 2034000,
+        "peak_rss_bytes": 6815744
+       }
+      ]
+     },
+     "response_sha256": "36b2cbdda6b01eb79422ce1129389490ea31c061b249ebcaa48514d6545aa950",
+     "response_bytes": 10688
+    },
+    "random_articles": {
+     "requested": [
+      [
+       0,
+       326,
+       "search/regnart-creek-7748.html"
+      ],
+      [
+       0,
+       326,
+       "search/boulder-creek-3077.html"
+      ],
+      [
+       0,
+       328,
+       "search/waterman-gap-539.html"
+      ],
+      [
+       0,
+       324,
+       "search/quimby-creek-7569.html"
+      ],
+      [
+       0,
+       329,
+       "search/the-bluffs-505.html"
+      ],
+      [
+       0,
+       326,
+       "search/harwood-creek-5179.html"
+      ],
+      [
+       0,
+       322,
+       "search/sulphur-creek-9149.html"
+      ],
+      [
+       0,
+       324,
+       "search/sausal-creek-8509.html"
+      ],
+      [
+       0,
+       324,
+       "search/butano-creek-3179.html"
+      ],
+      [
+       0,
+       330,
+       "search/gold-mine-creek-4881.html"
+      ],
+      [
+       0,
+       328,
+       "search/cottonwood-creek-3812.html"
+      ],
+      [
+       0,
+       332,
+       "search/moss-beach-creek-6561.html"
+      ],
+      [
+       0,
+       320,
+       "search/deer-creek-4279.html"
+      ],
+      [
+       0,
+       330,
+       "search/kottinger-creek-5530.html"
+      ],
+      [
+       0,
+       332,
+       "search/greenwood-creek-4939.html"
+      ],
+      [
+       0,
+       322,
+       "search/alamo-creek-2139.html"
+      ],
+      [
+       0,
+       324,
+       "search/belmont-hill-587.html"
+      ],
+      [
+       0,
+       324,
+       "search/laguna-creek-5668.html"
+      ],
+      [
+       0,
+       328,
+       "search/bolinas-creek-3014.html"
+      ],
+      [
+       0,
+       330,
+       "search/mccormick-creek-6318.html"
+      ],
+      [
+       0,
+       360,
+       "search/dublin-hills-regional-park-977.html"
+      ],
+      [
+       0,
+       336,
+       "search/trestle-glen-creek-9688.html"
+      ],
+      [
+       0,
+       332,
+       "search/pescadero-creek-7209.html"
+      ],
+      [
+       0,
+       330,
+       "search/permanente-creek-7144.html"
+      ]
+     ],
+     "samples": {
+      "libzim": [
+       {
+        "open_ns": 1692708,
+        "api_open_plus_work_ns": 4149085,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2456377,
+        "process_ns": 9096834,
+        "cpu_ns": 7913000,
+        "peak_rss_bytes": 14024704
+       },
+       {
+        "open_ns": 1564042,
+        "api_open_plus_work_ns": 3959961,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2395919,
+        "process_ns": 8693083,
+        "cpu_ns": 7548000,
+        "peak_rss_bytes": 14008320
+       },
+       {
+        "open_ns": 1789292,
+        "api_open_plus_work_ns": 4274416,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2485124,
+        "process_ns": 9277625,
+        "cpu_ns": 8092000,
+        "peak_rss_bytes": 14041088
+       },
+       {
+        "open_ns": 1630459,
+        "api_open_plus_work_ns": 4168126,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2537667,
+        "process_ns": 9068458,
+        "cpu_ns": 7859000,
+        "peak_rss_bytes": 14024704
+       },
+       {
+        "open_ns": 1868583,
+        "api_open_plus_work_ns": 4343249,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2474666,
+        "process_ns": 9369666,
+        "cpu_ns": 8094000,
+        "peak_rss_bytes": 14008320
+       },
+       {
+        "open_ns": 1574708,
+        "api_open_plus_work_ns": 4005960,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 2311167,
+        "api_ns": 2431252,
+        "process_ns": 8908125,
+        "cpu_ns": 7700000,
+        "peak_rss_bytes": 14041088
+       }
+      ],
+      "zimru": [
+       {
+        "open_ns": 20125,
+        "api_open_plus_work_ns": 2075207,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 2055082,
+        "process_ns": 4387375,
+        "cpu_ns": 3297000,
+        "peak_rss_bytes": 11386880
+       },
+       {
+        "open_ns": 19667,
+        "api_open_plus_work_ns": 2067375,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 2047708,
+        "process_ns": 4349709,
+        "cpu_ns": 3264000,
+        "peak_rss_bytes": 11370496
+       },
+       {
+        "open_ns": 20917,
+        "api_open_plus_work_ns": 2063791,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 2042874,
+        "process_ns": 4646125,
+        "cpu_ns": 3450000,
+        "peak_rss_bytes": 11370496
+       },
+       {
+        "open_ns": 22875,
+        "api_open_plus_work_ns": 2005251,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 1982376,
+        "process_ns": 4558500,
+        "cpu_ns": 3317000,
+        "peak_rss_bytes": 11386880
+       },
+       {
+        "open_ns": 21917,
+        "api_open_plus_work_ns": 2247836,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 2225919,
+        "process_ns": 4593791,
+        "cpu_ns": 3488000,
+        "peak_rss_bytes": 11370496
+       },
+       {
+        "open_ns": 21917,
+        "api_open_plus_work_ns": 2009500,
+        "cache_budget_bytes": 33554432,
+        "cache_retained_bytes": 4450624,
+        "api_ns": 1987583,
+        "process_ns": 4465917,
+        "cpu_ns": 3313000,
+        "peak_rss_bytes": 11370496
+       }
+      ]
+     },
+     "response_sha256": "d60ed4866a2b0a9696077f4d23cdf5e7cf01c255b4b2afc2e3b9ad95bb71c352",
+     "response_bytes": 8079
+    }
+   }
+  }
+ ]
+}

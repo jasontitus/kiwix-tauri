@@ -523,7 +523,12 @@ fn fat_filesystem(directory: &Path) -> Result<bool, String> {
     let path: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut root = [0u16; 32768];
     let mut filesystem = [0u16; 64];
+    // SAFETY: `path` is NUL-terminated by the chain above and `root` is a
+    // writable 32768-unit buffer whose capacity is passed; both outlive the call.
     if unsafe { GetVolumePathNameW(path.as_ptr(), root.as_mut_ptr(), root.len() as u32) } == 0
+        // SAFETY: reached only when the call above succeeded, so `root` is
+        // NUL-terminated; `filesystem` has the reported capacity and the
+        // optional outputs are null with zero lengths, as the API allows.
         || unsafe {
             GetVolumeInformationW(
                 root.as_ptr(),

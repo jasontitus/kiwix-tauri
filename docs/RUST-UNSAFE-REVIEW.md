@@ -404,7 +404,11 @@ This pass removed five blocks that had a safe alternative available on this host
 | `unsafe { … }` matches (app + relay) | 136 | **131** |
 | Files containing them | 30 | **29** |
 | `unsafe impl` items | 2 | **2** |
-| Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **96** (on 95 lines) |
+| Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
+
+Every one of the 130 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+invariant. The audit was completed file by file against the native counterparts; Windows and Linux comments
+were source-reviewed but not compiled on this host.
 
 The remaining matches fall on these gates: **72 Windows**, **15 Linux**, **39 Apple-only**, **3
 Android-only**, **1 shared iOS/Android**, and **1 prose `unsafe {}`** in `lib.rs`. `storage.rs` spans the
@@ -414,6 +418,11 @@ disjoint counts, not file counts. All but one are native ABI boundaries; the kno
 safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
 verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
 outstanding.
+
+The current build's paired reader comparison at the app's 32 MiB cache is recorded in
+[the 2026-11-20 OSM runs](benchmarks/2026-11-20-osm-reader-current.md): open plus first article and the
+24-article random batch were faster than libzim on all three archives, with sub-millisecond differences in
+the two tiny-read phases. That is three macOS archives, not the full corpus or mobile targets.
 
 ### Thread-safety assertion sign-off
 

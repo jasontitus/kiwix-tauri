@@ -278,6 +278,8 @@ impl Drop for Operation {
     fn drop(&mut self) {
         // Only the worker calls ProcessResult, and it has returned before any
         // operation is removed. Deallocate synchronously stops future callbacks.
+        // SAFETY: `self.raw` is the initialized DNSServiceRef this Operation
+        // owns; it is deallocated exactly once here and no callback is running.
         unsafe { DNSServiceRefDeallocate(self.raw); }
     }
 }
@@ -386,6 +388,10 @@ impl Engine {
                 let started = self.browse.is_none();
                 let result = if self.failed { Err("Stop the failed discovery session before restarting".into()) }
                     else if self.browse.is_some() { Ok(()) } else {
+                    // SAFETY: `raw` points at a live null Ref for this call;
+                    // REGTYPE and DOMAIN are static NUL-terminated strings and
+                    // DNS-SD copies them. The callback is a 'static extern fn
+                    // and the cookie is only compared by address.
                     self.operation(Kind::Browse, |raw, context| unsafe {
                         DNSServiceBrowse(raw, INCLUDE_PEERS, 0, REGTYPE.as_ptr().cast(), DOMAIN.as_ptr().cast(), browse_callback, context)
                     }).map(|tag| {
@@ -434,6 +440,11 @@ impl Engine {
             .transpose().map_err(|_| "Invalid library hostname")?;
         let mut tags = Vec::new();
         if let Some(addresses) = &addresses {
+            // SAFETY: `raw` points at a live null Ref for this call; hostname
+            // and each address slice live through the calls and DNS-SD copies
+            // them. The callback is a 'static extern fn and the cookie is only
+            // compared by address. On failure this block deallocates its own
+            // partially built connection before returning.
             let tag = self.operation(Kind::Advertisement(id.clone()), |raw, context| unsafe {
                 let code = DNSServiceCreateConnection(raw);
                 if code != 0 { return code; }
@@ -448,6 +459,10 @@ impl Engine {
             })?;
             tags.push(tag);
         }
+        // SAFETY: `raw` points at a live null Ref for this call; instance,
+        // hostname and TXT live through the call and DNS-SD copies them. The
+        // callback is a 'static extern fn and the cookie is only compared by
+        // address.
         let service = self.operation(Kind::Advertisement(id.clone()), |raw, context| unsafe {
             DNSServiceRegister(raw, 8 | if addresses.is_some() { 0 } else { INCLUDE_PEERS }, 0,
                 instance.as_ptr(), REGTYPE.as_ptr().cast(), DOMAIN.as_ptr().cast(),
@@ -507,6 +522,10 @@ impl Engine {
                 } else if events.is_some_and(|events| events.contains(PollFlags::IN)) {
                     // No Rust reference into the operations map or callback queue
                     // is borrowed while native code invokes the callback.
+                    // SAFETY: `raw` belongs to the operations map entry for
+                    // `tag`, which is not removed while borrowed; `with_callbacks`
+                    // installs the matching tag and queue, and ProcessResult
+                    // invokes callbacks synchronously before returning.
                     let code = with_callbacks(tag, &self.queue, || unsafe { DNSServiceProcessResult(raw) });
                     if code != 0 { self.event(tag, Event::Error(code)); }
                     self.drain_events();
@@ -569,6 +588,10 @@ impl Engine {
                 let mut watches = [0; 2];
                 for (index, rrtype) in [16, 33].into_iter().enumerate() {
                     let Ok(full) = CString::new(key.id.clone()) else { return; };
+                    // SAFETY: `raw` points at a live null Ref; `full` is a
+                    // NUL-terminated string that lives through the call and
+                    // DNS-SD copies it; query_callback is a 'static extern fn
+                    // and the cookie is only compared by address.
                     match self.operation(Kind::Watch(key.clone(), index), |raw, context| unsafe {
                         DNSServiceQueryRecord(raw, INCLUDE_PEERS, interface, full.as_ptr(), rrtype, 1, query_callback, context)
                     }) {
@@ -615,6 +638,10 @@ impl Engine {
         let Some(source) = self.sources.get(key) else { return Ok(()); };
         if source.present != [true; 2] { return Ok(()); }
         let name = source.name.clone(); let ty = source.ty.clone(); let domain = source.domain.clone();
+        // SAFETY: `raw` points at a live null Ref; name, ty and domain are
+        // NUL-terminated strings that live through the call and DNS-SD copies
+        // them; resolve_callback is a 'static extern fn and the cookie is only
+        // compared by address.
         let tag = self.operation(Kind::Resolve(key.clone()), |raw, context| unsafe {
             DNSServiceResolve(raw, INCLUDE_PEERS, key.interface, name.as_ptr(), ty.as_ptr(), domain.as_ptr(), resolve_callback, context)
         })?;
@@ -941,6 +968,9 @@ mod tests {
             let result = engine.operation(Kind::Browse, |_, cookie| {
                 assert!(cookie.addr() > previous);
                 previous = cookie.addr();
+                // SAFETY: the test passes null C strings and the cookie that
+                // `operation` just registered; the callback returns the error
+                // before reading any pointer, with `with_callbacks` active.
                 unsafe { browse_callback(ptr::null_mut(), 0, 0, -65570, ptr::null(), ptr::null(), ptr::null(), cookie) };
                 -65570
             });
