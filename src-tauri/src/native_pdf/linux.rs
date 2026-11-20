@@ -3,12 +3,12 @@ use crate::native_pdf::{Authority, Commit, Destination, Files, Phase, Presentati
 use gtk::prelude::*;
 use gtk::glib::translate::{from_glib_full, from_glib_none, ToGlibPtr};
 use webkit2gtk::{NavigationPolicyDecisionExt, PolicyDecisionExt, PrintOperationExt, SettingsExt, URIRequestExt, WebViewExt};
-use std::{cell::{Cell, RefCell}, collections::HashMap, ffi::{c_char, c_void, CStr, CString}, path::PathBuf, rc::Rc, sync::{Arc, atomic::{AtomicBool, Ordering}}};
+use std::{cell::{Cell, RefCell}, collections::HashMap, ffi::{c_char, c_void, CStr, CString}, path::PathBuf, rc::Rc, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 type Reply = Rc<RefCell<Option<oneshot::Sender<Result<(), String>>>>>;
 struct Job { window: gtk::OffscreenWindow, view: webkit2gtk::WebView, operation: Option<webkit2gtk::PrintOperation>, dialog: Option<gtk::Dialog>, reply: Reply }
-thread_local! { static JOBS: RefCell<HashMap<String, Job>> = RefCell::new(HashMap::new()); }
+thread_local! { static JOBS: RefCell<HashMap<String, Job>> = RefCell::new(HashMap::new()); static PRINTER_PROBE_ACTIVE: Cell<bool> = const { Cell::new(false) }; }
 fn finish(reply: &Reply, result: Result<(), String>) { if let Some(sender) = reply.borrow_mut().take() { let _ = sender.send(result); } }
 fn retire(id: &str) {
     let job = JOBS.with(|jobs| jobs.borrow_mut().remove(id));
@@ -41,13 +41,32 @@ unsafe extern "C" {
     fn gtk_print_unix_dialog_get_page_setup(dialog: *mut c_void) -> *mut gtk::ffi::GtkPageSetup;
     fn gtk_print_unix_dialog_set_page_setup(dialog: *mut c_void, setup: *mut gtk::ffi::GtkPageSetup);
 }
-fn file_printer() -> Result<String, String> {
+fn start_printer_discovery(sender: oneshot::Sender<Result<String, String>>, cancel: CancellationToken) {
+    if PRINTER_PROBE_ACTIVE.with(|active| active.replace(true)) {
+        let _ = sender.send(Err("GTK printer discovery is already in progress".into()));
+        return;
+    }
     #[derive(Default)]
-    struct Printers { file: Option<String>, names: HashMap<String, usize> }
+    struct Printers { file: Option<String>, names: HashMap<String, usize>, done: bool, sender: Option<oneshot::Sender<Result<String, String>>> }
+    fn finish(printers: &mut Printers) {
+        let result = if !printers.done {
+            Err("GTK printer enumeration did not finish in time; refusing to use a partial list".into())
+        } else if let Some(file) = printers.file.clone() {
+            if printers.names.get(&file).copied().unwrap_or(0) != 1 {
+                Err("GTK reports an ambiguous file-printer name; refusing to choose a print backend".into())
+            } else {
+                Ok(file)
+            }
+        } else {
+            Err("GTK's native PDF file-print backend is unavailable; no printer was selected".into())
+        };
+        if let Some(sender) = printers.sender.take() {
+            let _ = sender.send(result);
+        }
+    }
     unsafe extern "C" fn select(printer: *mut c_void, data: *mut c_void) -> i32 {
         // SAFETY: GTK passes a live printer that owns this backend for the
-        // duration of the synchronous enumeration; the callback runs on the
-        // thread that called gtk_enumerate_printers.
+        // duration of the enumeration; the callback runs on the GTK main thread.
         let backend = unsafe { gtk_printer_get_backend(printer) };
         if backend.is_null() { return 0; }
         // SAFETY: backend is a non-null live GTypeInstance owned by the
@@ -61,9 +80,9 @@ fn file_printer() -> Result<String, String> {
         // its name stays valid at least until the callback returns.
         let name = unsafe { gtk_printer_get_name(printer) };
         if name.is_null() { return 0; }
-        // SAFETY: data is the caller's live Printers, kept alive for the
-        // synchronous enumeration; only this callback writes it, on this thread.
-        let printers = unsafe { &mut *(data as *mut Printers) };
+        // SAFETY: data is the caller's live Rc<RefCell<Printers>>; the
+        // enumeration keeps it alive until `destroy`.
+        let mut printers = unsafe { &*(data as *const RefCell<Printers>) }.borrow_mut();
         // SAFETY: `name` is the non-null NUL-terminated string checked above;
         // the bytes are borrowed only for this copy.
         let name = unsafe { CStr::from_ptr(name) }.to_string_lossy().into_owned();
@@ -73,18 +92,33 @@ fn file_printer() -> Result<String, String> {
         }
         0
     }
-    let mut printers = Printers::default();
-    // SAFETY: `printers` outlives the call because `wait` is nonzero and
-    // enumeration completes before returning; GTK may retain `data` in its
-    // state, but no destructor is registered and `select` runs on this thread.
-    unsafe { gtk_enumerate_printers(select, (&mut printers as *mut Printers).cast(), None, 1); }
-    let file = printers.file.ok_or_else(|| "GTK's native PDF file-print backend is unavailable; no printer was selected".to_string())?;
-    // WebKit re-enumerates by display name and does not check the backend type.
-    // A name shared with another backend could silently print on paper.
-    if printers.names.get(&file).copied().unwrap_or(0) != 1 {
-        return Err("GTK reports an ambiguous file-printer name; refusing to choose a print backend".into());
+    unsafe extern "C" fn destroy(data: *mut c_void) {
+        // SAFETY: `data` is the Rc::into_raw value passed to the enumeration.
+        let printers = unsafe { Rc::from_raw(data.cast::<RefCell<Printers>>()) };
+        let mut printers = printers.borrow_mut();
+        printers.done = true;
+        finish(&mut printers);
+        PRINTER_PROBE_ACTIVE.with(|active| active.set(false));
     }
-    Ok(file)
+    let printers = Rc::new(RefCell::new(Printers { sender: Some(sender), ..Printers::default() }));
+    // SAFETY: `Rc::into_raw` keeps the state alive until GTK calls `destroy`;
+    // the timeout keeps its own clone.
+    let raw = Rc::into_raw(printers.clone());
+    // SAFETY: `raw` is the live Rc allocation; GTK takes ownership for the
+    // asynchronous enumeration and calls `destroy` when it is finished.
+    unsafe { gtk_enumerate_printers(select, raw.cast_mut().cast(), Some(destroy), 0); }
+    let timeout_printers = printers.clone();
+    gtk::glib::timeout_add_local(Duration::from_millis(500), move || {
+        let mut printers = timeout_printers.borrow_mut();
+        if cancel.is_cancelled() {
+            if let Some(sender) = printers.sender.take() {
+                let _ = sender.send(Err("Article PDF export was cancelled".into()));
+            }
+        } else {
+            finish(&mut printers);
+        }
+        gtk::glib::ControlFlow::Break
+    });
 }
 
 struct NativeJob { app: tauri::AppHandle, id: String, files: Files }
@@ -96,13 +130,26 @@ pub async fn render(app: tauri::AppHandle, bootstrap: String, article: String, _
     let name = presentation.name;
     let id = uuid::Uuid::new_v4().to_string();
     let _job = NativeJob { app: app.clone(), id: id.clone(), files: files.clone() };
+    let printer = if destination == Destination::Print { None } else {
+        let (printer_sender, printer_receiver) = oneshot::channel();
+        let discovery_app = app.clone();
+        let discovery_cancel = cancel.clone();
+        discovery_app.run_on_main_thread(move || start_printer_discovery(printer_sender, discovery_cancel))
+            .map_err(|error| error.to_string())?;
+        let printer = tokio::select! {
+            result = printer_receiver => result.map_err(|_| "GTK printer discovery stopped".to_string())??,
+            _ = cancel.cancelled() => return Err("Article PDF export was cancelled".into()),
+            _ = tokio::time::sleep(Duration::from_secs(2)) => {
+                return Err("GTK printer discovery timed out".into())
+            }
+        };
+        Some(printer)
+    };
     let (sender, receiver) = oneshot::channel();
     app.run_on_main_thread(move || {
         let reply = Rc::new(RefCell::new(Some(sender)));
         if let Err(error) = authority(Phase::BeforeHandoff) { finish(&reply, Err(error)); return; }
-        let printer = if destination == Destination::Print { None } else {
-            match file_printer() { Ok(printer) => Some(printer), Err(error) => { finish(&reply, Err(error)); return; } }
-        };
+        let printer = printer;
         let context = webkit2gtk::WebContext::new_ephemeral();
         let view = webkit2gtk::WebView::with_context(&context);
         let settings = webkit2gtk::Settings::new();

@@ -417,7 +417,7 @@ This pass removed blocks that had a safe alternative available on this host:
 - Windows audit fixes: ACE header/type/size/SID bounds before the typed borrow, explicit owner alongside the DACL,
   NUL-bounded printer names, dmSize-prefixed DEVMODEW reads, deferred print dialog after the WebView2 callback,
   UI-thread cancellation, documented NT rename length, COM-init failure propagation and absolute volume paths.
-  The remote-share/mounted-folder capacity query and synchronous GTK file-printer enumeration remain open; the latter can delay the export deadline if a print backend never completes enumeration.
+  GTK backend initialization inside `gtk_enumerate_printers` remains synchronous on the main thread; discovery completion/timeout is raced outside it and fails closed. The Windows capacity/filesystem queries now use the destination handle.
 
 | Metric | Before | After |
 |---|---:|---:|

@@ -47,7 +47,9 @@ ACE/SID extent, printer-name padding, DEVMODEW prefix, WebView2 reentrancy, dial
 NT rename length, COM initialization, relative-volume and JNI-reference defects. The GTK
 file-printer name is now rejected when another backend shares it.
 
-Two non-memory-safety residuals remain documented: GTK printer enumeration is still synchronous
-and can delay an export deadline if a backend never completes, and the Windows volume-capacity
-query still classifies remote mounted folders by the share root. Device runtime, sanitizer and
+One non-memory-safety residual remains documented: GTK's `gtk_enumerate_printers` still
+initializes print backends synchronously on the GTK main thread before returning. The discovery
+callback/timeout race runs outside that call and fails closed after 500 ms; upstream GTK would be
+needed to remove the initialization wait. The Windows capacity/filesystem queries now use the
+destination's open handle and no longer substitute the share root. Device runtime, sanitizer and
 binary-level certification are not claimed.

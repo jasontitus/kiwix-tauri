@@ -450,9 +450,23 @@ pub fn check_file_size(directory: &Path, size: u64) -> Result<(), String> {
 /// creating or modifying anything. `None` means the platform or sandbox does
 /// not report capacity; callers must present that honestly, not as zero.
 pub fn volume_space(path: &Path) -> Option<(u64, u64)> {
-    let existing = path.ancestors().find(|candidate| candidate.is_dir())?;
-    let free = crate::fs_ext::available_space(existing).ok()?;
-    let total = crate::fs_ext::total_space(existing).ok()?;
+    // Unix statvfs needs an existing directory; Windows resolves missing paths
+    // through an open handle. Do not substitute a parent on Windows.
+    #[cfg(not(windows))]
+    let path = {
+        let mut candidate = path;
+        loop {
+            match std::fs::metadata(candidate) {
+                Ok(metadata) if metadata.is_dir() => break candidate,
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return None,
+            }
+            candidate = candidate.parent()?;
+        }
+    };
+    let free = crate::fs_ext::available_space(path).ok()?;
+    let total = crate::fs_ext::total_space(path).ok()?;
     Some((free, total))
 }
 
@@ -504,53 +518,12 @@ fn fat_apple_name(field: &[u8]) -> Result<bool, String> {
 
 #[cfg(windows)]
 fn fat_filesystem(directory: &Path) -> Result<bool, String> {
-    use std::{os::windows::ffi::OsStrExt, ptr};
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetVolumePathNameW(path: *const u16, volume: *mut u16, length: u32) -> i32;
-        fn GetVolumeInformationW(
-            root: *const u16,
-            name: *mut u16,
-            name_length: u32,
-            serial: *mut u32,
-            component: *mut u32,
-            flags: *mut u32,
-            filesystem: *mut u16,
-            filesystem_length: u32,
-        ) -> i32;
-    }
-    let path: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
-    let mut root = [0u16; 32768];
-    let mut filesystem = [0u16; 64];
-    // SAFETY: `path` is NUL-terminated by the chain above and `root` is a
-    // writable 32768-unit buffer whose capacity is passed; both outlive the call.
-    if unsafe { GetVolumePathNameW(path.as_ptr(), root.as_mut_ptr(), root.len() as u32) } == 0
-        // SAFETY: reached only when the call above succeeded, so `root` is
-        // NUL-terminated; `filesystem` has the reported capacity and the
-        // optional outputs are null with zero lengths, as the API allows.
-        || unsafe {
-            GetVolumeInformationW(
-                root.as_ptr(),
-                ptr::null_mut(),
-                0,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                filesystem.as_mut_ptr(),
-                filesystem.len() as u32,
-            )
-        } == 0
-    {
-        return Err(format!(
-            "Inspecting download filesystem: {}",
-            std::io::Error::last_os_error()
-        ));
-    }
-    let end = filesystem
-        .iter()
-        .position(|c| *c == 0)
-        .unwrap_or(filesystem.len());
-    Ok(fat_windows_name(&filesystem[..end]))
+    // Query the filesystem through the destination's own handle, so a remote
+    // mounted folder or junction reports the volume that holds the download.
+    let name = crate::fs_ext::filesystem_name(directory)
+        .map_err(|error| format!("Inspecting download filesystem: {error}"))?;
+    let name: Vec<u16> = name.encode_utf16().collect();
+    Ok(fat_windows_name(&name))
 }
 
 #[cfg(any(windows, test))]

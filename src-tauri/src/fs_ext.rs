@@ -130,34 +130,89 @@ fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
 }
 
 #[cfg(windows)]
+fn open_existing(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    // READ_CONTROL | FILE_READ_ATTRIBUTES is enough for the handle queries;
+    // GENERIC_READ would also require unrelated read rights.
+    std::fs::OpenOptions::new().access_mode(0x0000_0080).custom_flags(0x0200_0000).open(path)
+}
+
+#[cfg(windows)]
+fn final_path(file: &std::fs::File) -> io::Result<Vec<u16>> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{GetFinalPathNameByHandleW, GETFINALPATHNAMEBYHANDLE_FLAGS},
+    };
+    let mut path = vec![0u16; 32768];
+    // SAFETY: `file` owns a live handle and `path` is a writable buffer whose
+    // capacity is passed; both outlive the call.
+    let length = unsafe {
+        GetFinalPathNameByHandleW(HANDLE(file.as_raw_handle()), &mut path,
+            GETFINALPATHNAMEBYHANDLE_FLAGS(0))
+    };
+    if length == 0 { return Err(io::Error::last_os_error()); }
+    let length = length as usize;
+    if length >= path.len() { return Err(io::Error::new(io::ErrorKind::InvalidData, "volume path is too long")); }
+    path.truncate(length);
+    Ok(path)
+}
+
+/// Filesystem name from the destination's own handle, so mounted folders and
+/// junctions report the volume that actually holds the path.
+#[cfg(windows)]
+pub(crate) fn filesystem_name(path: &Path) -> io::Result<String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::GetVolumeInformationByHandleW};
+    let file = open_existing(path)?;
+    let mut name = [0u16; 64];
+    // SAFETY: `file` owns a live handle and `name` is a writable buffer whose
+    // capacity the binding passes; both outlive the call.
+    unsafe { GetVolumeInformationByHandleW(HANDLE(file.as_raw_handle()), None, None, None, None, Some(&mut name)) }
+        .map_err(win32_error)?;
+    let end = name.iter().position(|unit| *unit == 0).unwrap_or(name.len());
+    String::from_utf16(&name[..end]).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "filesystem name is not UTF-16"))
+}
+
+#[cfg(windows)]
 fn volume_space(path: &Path) -> io::Result<VolumeSpace> {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetVolumePathNameW};
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
     if path.as_os_str().encode_wide().any(|unit| unit == 0) {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
     }
-    // An unqualified relative path makes GetVolumePathNameW report the boot
-    // volume; resolve it against the current directory first.
     let path = std::path::absolute(path)?;
-    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    if wide.contains(&0) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"));
-    }
-    wide.push(0);
-    // As fs2 did, query the volume root: it accepts file paths and yields UNC
-    // share roots with the trailing separator GetDiskFreeSpaceExW requires. The
-    // root is at most the input plus that separator (`wide` already counts the
-    // NUL); fs2 used a fixed 261.
-    let mut root = vec![0u16; (wide.len() + 1).max(261)];
-    // SAFETY: `wide` is NUL-terminated and `root` is a writable buffer whose
-    // length the binding passes to the call; both outlive it.
-    unsafe { GetVolumePathNameW(PCWSTR(wide.as_ptr()), &mut root) }.map_err(win32_error)?;
+    let mut existing = path;
+    let file = loop {
+        match open_existing(&existing) {
+            Ok(file) => break file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if !existing.pop() {
+                    return Err(io::Error::new(io::ErrorKind::NotFound, "volume path has no existing ancestor"));
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    };
+    let mut final_path = if file.metadata()?.is_dir() {
+        final_path(&file)?
+    } else {
+        // Follow a file symlink to its final target, then use that target's
+        // directory for the capacity query.
+        let mut path = final_path(&file)?;
+        while path.last().copied() != Some(0x5c) { if path.pop().is_none() { break; } }
+        path
+    };
+    // GetDiskFreeSpaceExW requires a directory and a trailing separator for
+    // UNC names.
+    if final_path.last().copied() != Some(0x5c) { final_path.push(0x5c); }
+    final_path.push(0);
     let (mut available, mut total) = (0u64, 0u64);
-    // SAFETY: `root` was NUL-terminated by the call above and outlives this
-    // call; the out pointers refer to live locals.
-    unsafe { GetDiskFreeSpaceExW(PCWSTR(root.as_ptr()), Some(&mut available), Some(&mut total), None) }
+    // SAFETY: `final_path` is NUL-terminated and the file handle keeps the
+    // destination volume live for this synchronous query.
+    unsafe { GetDiskFreeSpaceExW(PCWSTR(final_path.as_ptr()), Some(&mut available), Some(&mut total), None) }
         .map_err(win32_error)?;
     Ok(VolumeSpace { available, total })
 }
