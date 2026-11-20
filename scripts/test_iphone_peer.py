@@ -14,6 +14,10 @@ from unittest.mock import Mock, patch
 
 import iphone_peer as peer
 
+# The peer tool runs on a macOS host. Process groups and select() on pipes do
+# not exist on Windows, so the tests that reach them are skipped there.
+posix_host = unittest.skipUnless(os.name == "posix", "requires a POSIX host (process groups, select on pipes)")
+
 
 class ReceiverBoundaryTests(unittest.TestCase):
     def setUp(self):
@@ -67,6 +71,7 @@ class ReceiverBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "manifest bytes changed"):
             peer.validate_request(self.request)
 
+    @posix_host
     def test_one_shot_control_pins_actual_discovery_and_opaque_offer_before_ui(self):
         controller, writer = self.controller()
         raw = (json.dumps(self.control(controller)) + "\n").encode()
@@ -82,6 +87,7 @@ class ReceiverBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "duplicate"):
             controller.poll()
 
+    @posix_host
     def test_coalesced_duplicate_is_rejected_before_receiver_ui_release(self):
         controller, writer = self.controller()
         raw = (json.dumps(self.control(controller)) + "\n").encode()
@@ -89,6 +95,7 @@ class ReceiverBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "duplicate"):
             controller.poll()
 
+    @posix_host
     def test_rebound_nonce_device_artifact_and_deadline_never_release_receiver(self):
         for field in ("nonce", "device", "app_manifest_sha256", "runner_manifest_sha256", "deadline", "request_sha256"):
             controller, writer = self.controller()
@@ -117,6 +124,7 @@ class ReceiverBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "opaque offer"):
             peer.validate_observation(observation, self.source)
 
+    @posix_host
     def test_controller_eof_and_shared_deadline_cancel_instead_of_selecting_receiver(self):
         controller, writer = self.controller()
         with patch.object(peer.time, "time", return_value=self.request["deadline"]):
@@ -147,6 +155,7 @@ class ReceiverBoundaryTests(unittest.TestCase):
         with patch.object(peer.time, "time", return_value=1000):
             self.assertEqual(controller.begin_cleanup(), 1100 - peer.RECEIVER_OWNER_RESERVE_SECONDS)
 
+    @posix_host
     def test_observer_settles_while_source_live_then_cached_receipt_survives_withdrawal(self):
         spec = peer.importlib.util.spec_from_file_location("pair_window_boundary", Path(__file__).with_name("iphone-window.py"))
         driver = peer.importlib.util.module_from_spec(spec)
@@ -214,6 +223,7 @@ class ReceiverCleanupBoundaryTests(unittest.TestCase):
         host.output = root
         return host
 
+    @posix_host
     def test_cancellation_gives_remote_cleanup_interval_before_exact_host_group_reap(self):
         with tempfile.TemporaryDirectory() as directory:
             receipt = dict(cleanup_complete=True, remote_runner_stopped=True, host_processes_stopped=True,
@@ -227,6 +237,7 @@ class ReceiverCleanupBoundaryTests(unittest.TestCase):
             self.assertEqual(sequence, [("signal", signal.SIGTERM), ("wait", 70), ("reap", 4321, signal.SIGKILL)])
             host.observer.stop.assert_called_once_with(complete=False)
 
+    @posix_host
     def test_host_exit_without_remote_receipt_cannot_release_phone(self):
         with tempfile.TemporaryDirectory() as directory:
             host = self.host(Path(directory), dict(cleanup_complete=True, host_processes_stopped=True))
@@ -244,6 +255,7 @@ class ReceiverCleanupBoundaryTests(unittest.TestCase):
             host.wait_ready()
         host.observer.wait_ready.assert_not_called()
 
+    @posix_host
     def test_remote_runner_exit_without_application_work_retirement_cannot_release(self):
         host = self.host(Path("/host-only"), dict(cleanup_complete=True, remote_runner_stopped=True,
                                                 host_processes_stopped=True, receiver_work_retired=False))

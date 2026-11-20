@@ -482,6 +482,10 @@ fn deletion_and_listing_prove_identity_without_reading_archive_bytes() {
     assert_eq!(archive_files(&book).unwrap(), vec![path.clone()]);
     // The library-relocation gate keeps its full integrity requirement.
     assert!(verified_archive_files(&book).is_err());
+    // Windows refuses to move a part that an open reader still leases, so the
+    // service retires every reader there first. Unix deletes under the reader.
+    #[cfg(windows)]
+    drop(damaged);
     delete_book(&book, false).unwrap();
     assert!(!path.exists());
 }

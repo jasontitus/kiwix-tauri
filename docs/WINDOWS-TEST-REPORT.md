@@ -79,10 +79,11 @@ The scripts that drove this work are in `docs/windows-agent-tools/`. They assume
 
 | Script | Purpose |
 |---|---|
-| `env.ps1` | MSVC environment, `RUSTUP_HOME`/`CARGO_HOME`, private `TEMP`, `KIWIX_SDK_OVERRIDE` |
-| `build-sdk.ps1` + `assemble-sdk.py` | kiwix-build dependencies, then libzim with meson, then a schema-2 `kiwix-sdk.json` |
+| `env.ps1` | MSVC environment, `RUSTUP_HOME`/`CARGO_HOME`, private `TEMP` |
+| `build-sdk.ps1` + `assemble-sdk.py` | kiwix-build dependencies, then libzim with meson, then a schema-2 `kiwix-sdk.json`. Only for the native comparison tools: the app no longer links libzim |
 | `regen_patch.py` | Regenerates `libzim-retained-fd.patch` from HEAD's patch plus ordered edits. Verifies that pre-image + patch equals post-image |
-| `run-gate.ps1` (uses `run-cargo.ps1`) | clippy with `-D warnings`, then `cargo test --lib`, on `x86_64-pc-windows-msvc` |
+| `run-gate.ps1` | The full gate for one checkout (`-Source`, default: the checkout holding the script): frontend build, unsafe census, JS and Python tests, clippy with `-D warnings` and the Rust tests for the app, `kiwix-mcp` and `win-security`, on `x86_64-pc-windows-msvc`. One log per step |
+| `run-cargo.ps1` | One cargo command in the `lf-check` worktree, logged |
 | `build-nsis.ps1`, `launch-app.ps1` | Build the installer. Launch the installed app with `--data-dir` and CDP on port 9222 |
 | `ui/*.mjs`, `ui/save-dialog.ps1` | Drive the app's WebView2 over CDP (puppeteer-core), and native dialogs over UI Automation |
 | `linux/*.sh` | WSL Ubuntu SDK build and libzim tests, without sudo |
@@ -193,3 +194,47 @@ Observed, not changed: download.kiwix.org's `.magnet` files carry doubled-scheme
 Still to test:
 1. Owner-only: the SmartScreen first run of a browser-downloaded installer; the camera unplugged or blocked in Windows privacy settings; sharing from this PC to the iPhone/Mac.
 2. The ARM64 installer on real ARM64 hardware.
+
+## Follow-up — 2026-11-20 (public history, SDK-free build)
+Same machine and toolchain (Rust 1.99.1, MSVC 19.44, Node 22.22.0, Python 3.13.9). Base: `8bc3758` on the rewritten public `main`. Work branch: `fix/windows-test-gate`. This pass built the app and ran every test suite; it did not repeat the installed-app runtime matrix.
+
+The app now reads archives with its Rust reader. No libzim SDK was built, set or linked, and the installer carries no SDK DLL.
+
+### What failed at `8bc3758`
+| # | Was | Cause | Fix |
+|---|---|---|---|
+| G1 | **Removing a voice model could fail with "Access is denied" (os error 5)**, and then keep failing. `two_records_with_missing_members_do_not_block_explicit_repair_or_delete` failed | A product bug. `mark` reopened an existing marker read-only and flushed it; Windows flushes only through a handle with write access. Markers are never deleted, so any second write of one failed: a second preserved install record (then every later install or removal failed too); a repeated removal with the legacy model folder present; resuming an interrupted removal; clearing voice audio twice with foreign files left behind. A plain remove, reinstall, remove did not reach it: the bundled-voice marker is written only on Android | `kokoro/install.rs`: on Windows an existing marker is reopened with append access, bound by file identity to the checked handle, then flushed. Nothing is written. New test `a_repeated_marker_is_accepted_and_a_changed_one_is_refused`; both tests fail without the fix |
+| G2 | Three tests failed with os error 32: `deletion_and_listing_prove_identity_without_reading_archive_bytes`, `library_archive_identity_is_rechecked_for_every_request`, `library_server_serves_index_opds_and_articles_then_closes_every_port` | Test only. Each deleted an archive while it still held a reader open. The Rust reader leases every part without delete sharing on Windows, and on Windows the service releases its holders before it removes a book | Under `cfg(windows)` the tests release the handle first: the first drops its own reader, the other two use the same cache eviction as the service. The sharing test first proves, with the entry still cached, that a relinked record is refused. Other hosts run the tests unchanged |
+| G3 | `failed_install_preserves_same_inode_edits_and_removes_unchanged_live_writes` failed with os error 32 | Test only. It rewrote a staging file while its own handle, which denies other writers on Windows, was still open | The handle is closed before the rewrite; the file edited is the same one |
+| G4 | `desktop_entries_accept_a_bare_file_or_search_url` failed | Test only. `file:///tmp/…` has no drive letter, so it is not a local path on Windows | The test uses `file:///C:/tmp/…` on Windows |
+| G5 | 53 of 182 Python host-tool tests failed or errored (68 results, counting subtests), and left child processes that kept the run's output pipe open. Four more passed without testing anything: the POSIX-only failure was the error they expected, or was swallowed as a logging failure | The iPhone, Mac–Android, pairing and timing tools are written for macOS and Linux hosts: process groups, POSIX signals, signal masks, `O_NOFOLLOW` directory opens, `select` on pipes, unprivileged symlinks, POSIX container paths | Those 57 tests are skipped unless `os.name == "posix"`. A trace of the remaining Windows passes found no other swallowed POSIX-only failure that decides a result. On WSL Ubuntu the six edited modules apply none of these skips: 110 tests run, 108 pass and 2 need macOS. Editing `test_android_pair.py` changes an input that `android-pair.py` pins, so a prepared Android pairing window must be prepared again |
+| G6 | One JS test (`vendored upstream files are byte-identical…`) failed in the existing checkout | Not a repository defect. 628 files in a working tree older than `.gitattributes` still had CRLF | The files were checked out again. `WINDOWS-BUILD-PROVISIONING.md` now says how to spot this |
+| G7 | clippy failed once in `rust_embed` ("File should be readable") | Not a repository defect. An installer build ran `vite build` at the same time and emptied `dist/` | Run the frontend build first and nothing concurrently; `run-gate.ps1` does |
+
+### Gate after the fixes (`docs/windows-agent-tools/run-gate.ps1`, all steps exit 0)
+- `npm ci`, `tsc --noEmit` and `vite build`: clean.
+- Unsafe census: 73 blocks in 18 files, every one documented.
+- JS: **384 passed, 0 failed, 3 skipped** (387).
+- Python: **123 passed, 0 failed, 59 skipped** (182): the 57 above and 2 that need macOS.
+- clippy `--all-targets -D warnings` on `x86_64-pc-windows-msvc`: clean for the app, `kiwix-mcp` and `win-security`.
+- `cargo test` for the app (lib, binary and doc tests): **1169 passed, 0 failed, 16 ignored** (1185). Before the fixes: 1162 passed, 6 failed.
+- `kiwix-mcp`: 8 passed. `win-security`: no tests.
+
+### Independent review
+One independent, read-only adversarial review covered the whole change set against `8bc3758`, followed by a check of the fixes. It found nothing of high severity.
+- G1 was judged sound by source trace: the Windows reopen cannot create, truncate or overwrite; a swapped symlink or directory fails; the identity comparison is by handle; other hosts compile the previous code. Every other `sync_all`/`sync_data` site flushes a handle opened for writing, or is a directory sync compiled only on Unix.
+- Fixed after the review:
+  - `run-gate.ps1` recorded a tool that could not be started as a pass, because it read the previous command's exit code. It now fails that step.
+  - Four Python tests passed on Windows without testing anything; they are now skipped (part of G5).
+  - One G2 edit had dropped the reader on every host; it now applies only on Windows, and the sharing test gained its cached-relink proof.
+  - The G1 triggers were described too widely.
+  - Stale SDK text in the Windows documents.
+- Open, low:
+  - Present before this pass: a whole-library web share keeps its cached reader after a book is relinked, or removed without deleting its file. On Windows that file then cannot be deleted or renamed until the share stops or the entry leaves the cache.
+  - On Windows, `library_server_serves_index_opds_and_articles_then_closes_every_port` evicts before it deletes, so "refused while still cached" is proven for a deleted archive only on other hosts. Windows cannot delete a leased archive at all.
+
+### Not covered in this pass
+- The installed-app runtime matrix above was not repeated on the Rust reader build. G1 was verified by tests, not by removing a voice in the installed app.
+- The fuzz targets and the native sanitizer script need Unix tooling and were not run.
+- No macOS, Linux, Android or iOS build was run, and no Rust test ran on another host: WSL here lacks the WebKitGTK development packages. The G1 reopen is compiled only on Windows; other hosts compile a wrapper with the previous behaviour. Of the test edits, the new marker test, the reordered close in G3 and the URL test in G4 also compile on other hosts and were not executed there.
+- ARM64 has no test run: an x64 host cannot execute ARM64 binaries.

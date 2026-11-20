@@ -1,4 +1,4 @@
-# Run cargo in the LF worktree with the MSVC + SDK environment; logs to E:\kiwix-win\<Name>.log(.exit)
+# Run cargo in the LF worktree with the MSVC environment; logs to E:\kiwix-win\<Name>.log(.exit)
 # -CargoArgs is a single '|'-separated string (powershell -File passes strings, not arrays).
 param([string]$Name, [string]$CargoArgs)
 . E:\kiwix-win\env.ps1

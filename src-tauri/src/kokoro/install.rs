@@ -961,10 +961,34 @@ pub(super) fn bundled_record(path: &Path) -> bool {
     get().unwrap_or(false)
 }
 
+fn existing_marker(dir: &Dir, name: &OsStr) -> Result<File> {
+    let checked = file(dir, name, false)?;
+    // Windows flushes only through a handle with write access, and `file`
+    // opens an existing entry read-only. Rebind the checked marker by identity
+    // while it is still open; append access cannot alter bytes already present.
+    #[cfg(windows)]
+    let checked = {
+        use cap_std::fs::OpenOptionsExt;
+        let mut options = OpenOptions::new();
+        options
+            .read(true)
+            .append(true)
+            .follow(FollowSymlinks::No)
+            .custom_flags(0x0020_0000)
+            .share_mode(1 | 2 | 4);
+        let flushable = dir.open_with(name, &options)?.into_std();
+        if id(&Metadata::from_file(&flushable)?) != id(&Metadata::from_file(&checked)?) {
+            return Err(changed());
+        }
+        flushable
+    };
+    Ok(checked)
+}
+
 fn mark(dir: &Dir, marker_name: &str) -> Result<()> {
     let name = marker_name.as_ref();
     let marker = match file(dir, name, true) {
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => file(dir, name, false)?,
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => existing_marker(dir, name)?,
         result => result?,
     };
     if marker.metadata()?.len() != 0 {
@@ -1843,10 +1867,12 @@ mod tests {
                 hash,
             });
             let path = root.join(&journal.header.directory).join("tokens.txt");
+            // Close the member first: the open staging handle denies other
+            // writers on Windows. The edit below still rewrites the same file.
+            drop((dir, file));
             if changed {
                 fs::write(&path, b"other").unwrap();
             }
-            drop((dir, file));
             let result = discard_draft(
                 &lease.parent,
                 &journal.pending_name(),
@@ -1886,6 +1912,22 @@ mod tests {
             b"previous"
         );
         assert!(!root.join(INSTALLED).exists());
+    }
+
+    #[test]
+    fn a_repeated_marker_is_accepted_and_a_changed_one_is_refused() {
+        let profile = fixtures::profile().unwrap();
+        let root = profile.path().canonicalize().unwrap().join("models");
+        let lease = Lease::admit(&root).unwrap();
+        mark(&lease.parent, DETACHED).unwrap();
+        // A marker is never deleted, so a later operation records it again.
+        // Windows flushes only through a writable handle, so the second mark
+        // must not fail on the marker the first one made.
+        mark(&lease.parent, DETACHED).unwrap();
+        assert_eq!(fs::read(root.join(DETACHED)).unwrap(), b"");
+        fs::write(root.join(DETACHED), b"other").unwrap();
+        assert!(mark(&lease.parent, DETACHED).is_err());
+        assert_eq!(fs::read(root.join(DETACHED)).unwrap(), b"other");
     }
 
     #[test]

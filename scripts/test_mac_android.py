@@ -22,6 +22,10 @@ ARCHIVE = "11111111-2222-4333-8444-555555555555"
 PUBLISHER = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 INSTALLATION = "55555555-6666-4777-8888-999999999999"
 JOB = "01234567-89ab-4cde-8fab-0123456789ab"
+# The controller runs on a macOS host. No-follow opens, unprivileged symlinks,
+# process groups and deleting an open file do not exist on Windows, so the
+# tests that reach them are skipped there.
+posix_host = unittest.skipUnless(os.name == "posix", "requires a POSIX host (O_NOFOLLOW, symlinks, process groups)")
 
 
 class FrozenHandoffTests(unittest.TestCase):
@@ -36,6 +40,7 @@ class FrozenHandoffTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "prepare bytes changed"):
                         controller.load_frozen(path, expected, "R5TESTSER01")
 
+    @posix_host
     def test_changed_frozen_dependency_is_rejected_before_helper_or_device_start(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -54,6 +59,7 @@ class FrozenHandoffTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Frozen input changed"):
                     controller.load_frozen(path, expected, "R5TESTSER01")
 
+    @posix_host
     def test_missing_timing_source_fails_before_helper_import(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory).resolve() / "prepare.json"
@@ -65,6 +71,7 @@ class FrozenHandoffTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "timing dependency missing"):
                     controller.load_frozen(path, controller.pin(path)["sha256"], "R5TESTSER01")
 
+    @posix_host
     def test_explicit_serial_mismatch_wins_before_reading_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory).resolve() / "prepare.json"
@@ -73,6 +80,7 @@ class FrozenHandoffTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "serial differs"):
                 controller.load_frozen(path, controller.pin(path)["sha256"], "other-phone")
 
+    @posix_host
     def test_symlinked_source_and_directories_cannot_be_hashed_as_authority(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -85,6 +93,7 @@ class FrozenHandoffTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not a regular file"):
                 controller.pin(root)
 
+    @posix_host
     def test_matching_hash_cannot_substitute_for_real_zim_header_uuid(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory).resolve() / "source.zim"
@@ -99,6 +108,7 @@ class FrozenHandoffTests(unittest.TestCase):
                 controller.validate_fixture(source)
 
 
+@posix_host
 class TimingIterationTests(unittest.TestCase):
     def test_generated_iteration_reaches_real_child_and_nonzero_stays_failed(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ):
@@ -124,6 +134,7 @@ class TimingIterationTests(unittest.TestCase):
                     self.assertNotIn("KIWIX_TIMING_ITERATION", os.environ)
 
 
+@posix_host
 class ReviewedCrashPreparationTests(unittest.TestCase):
     def receipt(self, root, reviewed):
         # Byte-artifact admission only; these files are not runnable APKs or
@@ -241,6 +252,7 @@ class CleanupAuthorityTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Android receive failed: .*Shared library did not respond"):
                 peer.result()
 
+    @posix_host
     def test_exited_host_without_bound_native_cleanup_receipt_cannot_release_device(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

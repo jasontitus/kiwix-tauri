@@ -23,6 +23,9 @@ ARCHIVE = '02b6d195-2785-f9cc-9c03-29d44dfbaa36'
 PUBLISHER = '342cb0c8-2b7c-41d0-aea4-d8b479f9622a'
 INSTALLATION = '07a60905-bf91-42ce-a8c8-60ae069288d9'
 JOB = '0de6d420-fdcb-4dd2-9779-10fe50c9379c'
+# The pairing tool runs on a macOS/Linux host. Process groups, POSIX signals
+# and no-follow opens do not exist on Windows, so those tests are skipped there.
+posix_host = unittest.skipUnless(os.name == 'posix', 'requires a POSIX host (process groups, signals, O_NOFOLLOW)')
 
 
 class PairAuthorityTests(unittest.TestCase):
@@ -136,6 +139,7 @@ class PairAuthorityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             nearby.parse_legacy_radio('history: ' + dump.replace('\n', '\nhistory: '), 'publishing')
 
+    @posix_host
     def test_sdk_parent_link_retarget_is_rejected_before_tool_execution(self):
         sdk = self.root / 'sdk'
         build = sdk / 'build-tools/36.0.0'
@@ -177,6 +181,7 @@ class PairAuthorityTests(unittest.TestCase):
             peer.release_route('b' * 64)
         self.assertEqual(json.loads(peer.gate.read_text())['sender_network_sha256'], 'a' * 64)
 
+    @posix_host
     def test_source_uuid_comes_from_actual_header_not_config_label(self):
         import uuid
         path = Path(self.config['source'])
@@ -190,6 +195,7 @@ class PairAuthorityTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'source bytes changed'):
             pair.validate_fixture(self.config, source)
 
+    @posix_host
     def test_runtime_tree_detects_added_import_and_changed_link_target(self):
         runtime = self.root / 'runtime'
         runtime.mkdir()
@@ -208,6 +214,7 @@ class PairAuthorityTests(unittest.TestCase):
         target.write_text('VALUE = 3\n')
         self.assertNotEqual(frozen, pair.tree_pin(runtime, python=True))
 
+    @posix_host
     def test_frozen_drift_is_rejected_before_any_helper_import_or_spawn(self):
         dependency = self.root / 'dependency.py'
         dependency.write_text('VALUE = "reviewed"\n')
@@ -227,6 +234,7 @@ class PairAuthorityTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'preparation bytes changed'):
             pair.load_frozen(prepared, digest, self.config['sender_device'], self.config['receiver_device'])
 
+    @posix_host
     def test_missing_timing_dependency_is_rejected_before_runtime_imports(self):
         value = dict(schema=1, status='ready', config=self.config,
                      python={'executable': str(Path(sys.executable).resolve()), 'version': sys.version},
@@ -253,6 +261,7 @@ class PairAuthorityTests(unittest.TestCase):
                 peer.receipt('result.json')
 
 
+@posix_host
 class OwnedCancellationTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

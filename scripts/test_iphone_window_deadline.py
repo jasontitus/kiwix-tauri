@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Host-only process cancellation regression; never contacts an Apple device."""
 import json
+import os
 from pathlib import Path
 import signal
 import subprocess
@@ -14,7 +15,12 @@ import iphone
 from testing_timing import TimingLog
 from iphone import REPO, TOOL_FILES, cleanup_confirmed, run_window, sha256, validate_prepared
 
+# The phone window runs on a macOS host. Process groups, signal masks and
+# POSIX signals do not exist on Windows, so these tests are skipped there.
+posix_host = unittest.skipUnless(os.name == "posix", "requires a POSIX host (process groups, signal masks)")
 
+
+@posix_host
 class PhoneWindowDeadlineTests(unittest.TestCase):
     def test_deadline_kills_descendant_that_ignores_term_after_leader_exits(self):
         with tempfile.TemporaryDirectory() as directory:

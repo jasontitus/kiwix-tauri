@@ -2,6 +2,7 @@
 """Host-only subprocess diagnostics and simulator ownership boundaries."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -14,8 +15,14 @@ SPEC = importlib.util.spec_from_file_location("iphone_window", Path(__file__).wi
 window_module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(window_module)
 
+# The phone window runs on a macOS host. Process groups, separate command
+# sessions and POSIX container paths do not exist on Windows, so the tests
+# that reach them are skipped there.
+posix_host = unittest.skipUnless(os.name == "posix", "requires a POSIX host (process groups, POSIX paths)")
+
 
 class TimeoutDiagnosticsTests(unittest.TestCase):
+    @posix_host
     def test_timeout_retains_both_partial_streams_and_reaps_child(self):
         child = (
             "import sys,time;"
@@ -321,10 +328,12 @@ class MacPublicationAuthorityTests(unittest.TestCase):
         with patch.object(window, "ctl", side_effect=ctl):
             return window_module.iphone_publication(window, "source", bundle, {"device_receipt": apps})
 
+    @posix_host
     def test_source_capture_is_persisted_generation_not_invented_session(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(self.capture(Path(directory)), {"publisher_id": self.publisher, "library_generation": 3})
 
+    @posix_host
     def test_replaced_container_noncanonical_generation_and_symlinks_fail(self):
         for options in ({"changed_app": True}, {"generation": b"03"}, {"generation": b"0"},
                         {"generation": b"9007199254740992"}, {"symlink": True},
@@ -467,6 +476,7 @@ class ReceiverWorkRetirementTests(unittest.TestCase):
             self.proof(self.job, output=self.retired.replace(self.nonce.encode(), b"d" * 32))
 
 
+@posix_host
 class ReceiverCleanupDeadlineTests(unittest.TestCase):
     def test_early_cancellation_reaps_distinct_command_session_before_remote_confirmation_and_parent_escalation(self):
         elapsed = [0.0]

@@ -1,7 +1,7 @@
 # Windows agent handoff — build and acceptance
 
 Date: 2026-11-10
-Status: **completed on native Windows**. The build/runtime report and residual list are in [`WINDOWS-TEST-REPORT.md`](WINDOWS-TEST-REPORT.md); this handoff is retained for reproduction and evidence.
+Status: **completed on native Windows**. The build/runtime report and residual list are in [`WINDOWS-TEST-REPORT.md`](WINDOWS-TEST-REPORT.md); this handoff is retained for reproduction and evidence. It records the native-SDK baseline: the app now reads archives with its Rust reader, so the libzim SDK and `KIWIX_DESKTOP_SDK_ROOT` steps below no longer apply. Use the current [build and test commands](WINDOWS-BUILD-PROVISIONING.md#build-and-test).
 
 Repository: `https://github.com/jasontitus/kiwix-tauri`
 Checkout: `main` at the current public commit (record the exact commit; this handoff is historical)

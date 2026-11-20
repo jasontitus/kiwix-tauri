@@ -4476,6 +4476,11 @@ async fn accepted_map_replacement_survives_reader_retirement_but_not_privacy_pol
         // Removing one archive must refuse it at request time while the other
         // archive keeps working.
         let removed = books[0].clone();
+        // Windows refuses to delete an archive that the share still holds
+        // open, so removal there first evicts its cached handles, as
+        // `remove_book` does.
+        #[cfg(windows)]
+        server.evict_library_archive(&removed.metadata.id);
         std::fs::remove_file(&removed.path).unwrap();
         let refused = client
             .get(format!("{}download/{}", index_url, removed.metadata.id))

@@ -18,6 +18,10 @@ from unittest import mock
 import testing_timing as timing
 
 SCRIPT = Path(timing.__file__).resolve()
+# The timing ledger opens its files through a no-follow directory descriptor and
+# cancels commands through process groups. Neither exists on Windows, so the
+# tests that write a ledger or run a command are skipped there.
+posix_host = unittest.skipUnless(os.name == "posix", "requires a POSIX host (O_NOFOLLOW dir_fd opens, process groups)")
 
 
 @contextmanager
@@ -29,6 +33,7 @@ def measured_clock(now):
         yield
 
 
+@posix_host
 class TimingLogTests(unittest.TestCase):
     def test_overlapping_spans_use_union_not_sum_and_repeated_summary_is_stable(self):
         with tempfile.TemporaryDirectory() as temporary, redirect_stderr(io.StringIO()):
@@ -191,6 +196,7 @@ class TimingLogTests(unittest.TestCase):
             self.assertGreater(log.summary()["logging_errors"], 0)
 
 
+@posix_host
 class CommandTimingTests(unittest.TestCase):
     def command(self, output, code):
         return [sys.executable, str(SCRIPT), "command", "--output", str(output),
@@ -313,6 +319,7 @@ class CommandTimingTests(unittest.TestCase):
                 log.close()
 
 
+@posix_host
 class WholeIterationTests(unittest.TestCase):
     def marker(self, mode, output, iteration="whole-pass"):
         return timing.main([mode, "--output", str(output), "--iteration", iteration])

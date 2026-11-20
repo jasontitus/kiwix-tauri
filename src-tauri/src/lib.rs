@@ -1879,13 +1879,19 @@ mod launch_tests {
             options(&["kiwix://search?q=Manama"]).search.as_deref(),
             Some("Manama")
         );
+        // A file URL names a local path in the host's own form: Windows needs
+        // a drive letter and yields backslashes.
+        #[cfg(not(windows))]
+        let (url, path) = ("file:///tmp/", "/tmp/");
+        #[cfg(windows)]
+        let (url, path) = ("file:///C:/tmp/", "C:\\tmp\\");
         assert_eq!(
-            options(&["file:///tmp/My%20Archive.zim"]).paths,
-            vec!["/tmp/My Archive.zim".to_string()]
+            options(&[&format!("{url}My%20Archive.zim")]).paths,
+            vec![format!("{path}My Archive.zim")]
         );
         assert_eq!(
-            options(&["file:///tmp/One.zim", "file:///tmp/Two.zim"]).paths,
-            vec!["/tmp/One.zim".to_string(), "/tmp/Two.zim".to_string()]
+            options(&[&format!("{url}One.zim"), &format!("{url}Two.zim")]).paths,
+            vec![format!("{path}One.zim"), format!("{path}Two.zim")]
         );
         assert!(parse(&["kiwix://library"]).is_err());
         assert!(parse(&["kiwix://search?q=a&open=b"]).is_err());

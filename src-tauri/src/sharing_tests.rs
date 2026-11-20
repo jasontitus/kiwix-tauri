@@ -605,6 +605,33 @@ async fn library_archive_identity_is_rechecked_for_every_request() {
     assert!(Arc::ptr_eq(&first, &second), "unchanged archive stays cached");
     assert_eq!(state.archives.opens(), 1);
 
+    // Windows refuses to delete an archive that an open reader still leases,
+    // so a cached archive can only go stale there by being relinked. Prove the
+    // live record is checked before the cache while the entry is still cached;
+    // then release the handles, as the service does before it removes a book.
+    #[cfg(windows)]
+    {
+        store
+            .update(|state| {
+                state.books[0].path = "C:\\elsewhere.zim".into();
+                Ok(())
+            })
+            .unwrap();
+        let relinked = library_archive(&state).unwrap_err();
+        assert_eq!(relinked.status, StatusCode::GONE);
+        assert!(relinked.message.contains("relinked"), "{}", relinked.message);
+        store
+            .update(|state| {
+                state.books[0].path = book.path.clone();
+                Ok(())
+            })
+            .unwrap();
+        let cached = library_archive(&state).unwrap();
+        assert!(Arc::ptr_eq(&first, &cached), "the cached entry survives");
+        assert_eq!(state.archives.opens(), 1);
+        drop((first, second, cached));
+        state.archives.cached.lock().unwrap().clear();
+    }
     std::fs::remove_file(&book.path).unwrap();
     let missing = library_archive(&state).unwrap_err();
     assert_eq!(missing.status, StatusCode::GONE);
