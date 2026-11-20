@@ -211,6 +211,14 @@ The Mac Downloads-folder lookup still reads the real user's account record with 
 | ☐ C4. Desktop and mobile runtime | Vendored Wry and tauri-runtime-wry contain native glue for WebKit, WebView2, GTK, JNI, window events and permission callbacks. The vendored Android Tauri and certificate-verifier sources interact with the platform. Dialogs, file watching/trash/opening, notifications, Bluetooth, location, system speech, audio and clipboard or sharing features can cross platform APIs from otherwise safe code. | Maintain an owner for each backend and its patches. Review updates against activity/window lifetime, permission revocation, dialog ownership and private browsing. Confirm externally opened attachments require the existing trusted handoff. [Forks and consumers](FORKS.md) |
 | ☐ C5. Final package and dependency coverage | Build scripts select native SDKs and platform libraries outside Cargo. Cargo lockfiles also contain build tools, optional packages and other targets. Optimized code, unsafe Rust inside registry crates, generated bindings and the OS itself remain outside a keyword census of this repository. | For each release target/profile, save its selected Cargo features and normal dependency edges, native SDK manifest, packaged libraries and executable imports. Check static archives or linker maps as well as dynamic imports. Record newly reached decoders, native libraries and unsafe dependencies with their consuming feature. |
 
+The 2026-11-20 macOS dependency pass records the normal, feature-selected graph for
+`aarch64-apple-darwin`: `aws-lc-rs`/`aws-lc-sys` and `ring` through Rustls/Quinn/reqwest/librqbit/updater,
+`sherpa-onnx`/`sherpa-onnx-sys` for offline speech, `zstd-rs`/`lzma-rust2` in the reader,
+`bzip2-turbo-rs` in Kokoro model installation, `wry`/`tao` for the shell and `rodio`/`cpal` for playback. The full graph is
+[checked in](audit/2026-11-20-macos-dependency-graph.txt) with a [boundary summary](audit/2026-11-20-macos-dependency-boundaries.md).
+This does not choose a TLS provider, isolate speech inference, or record packaged executable imports and
+native SDK manifests; those remain open for every release target.
+
 ## Refresh and closure
 
 Run these from the repository root. The first search includes tracked tests and vendored code. The second also catches older-style declarations and exports whose signatures lack the Rust keyword. Inspect cfg gates, comments, macro expansions and the matching native implementation before classifying a hit.
