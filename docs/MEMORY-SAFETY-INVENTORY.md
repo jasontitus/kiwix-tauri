@@ -2,6 +2,8 @@
 
 The [memory-safety plan](MEMORY-SAFETY-PLAN.md) sets the implementation order, acceptance checks and cross-platform verification for the work below.
 
+**Boundary decision (2026-11-20):** ring, the optional sherpa-onnx/ONNX Runtime voice engine, OS WebViews/media/audio and OS services are accepted as audited platform or optional boundaries. Every first-party unsafe block and every other dependency that parses untrusted bytes remains in scope. See [the boundary record](MEMORY-SAFETY-BOUNDARY.md).
+
 ## Whole-app target and current status
 
 The owner trusts the operating system and standard runtime. Application code and dependencies that process untrusted content must be memory safe. The application does **not yet meet this target**. A keyword scan, a safe API or a passing test covers only part of that claim. OS-provided WebViews fall within the platform boundary. The supported Ubuntu AppImage uses the host renderer. Its native package launcher, app-owned bridges and dependencies that process archive content remain in scope.
