@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! The single boundary between internal error text and what a person reads.
 //!
 //! Native plugins answer with machine codes (`SPEECH_SESSION_RETIRED`, iOS

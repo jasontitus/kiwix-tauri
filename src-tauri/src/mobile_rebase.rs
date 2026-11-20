@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Mobile profile relocation, admitted only while Store holds its process lock.
 //!
 //! Persisted filesystem-path inventory (do not recursively rewrite arbitrary JSON):

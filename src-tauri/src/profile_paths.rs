@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Pure schema inventory shared by mobile relocation and desktop portability.
 //! Archive-content paths, provider URIs, identity evidence and relative SDK names
 //! are deliberately not filesystem paths and must never be recursively rewritten.

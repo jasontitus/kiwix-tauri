@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Explicit, cancellable spelling dictionaries built from public archive titles.
 //! Existing caches load single-flight in read-only workers; `building` covers
 //! loading as well as explicit indexing. Interactive calls never scan a cache.

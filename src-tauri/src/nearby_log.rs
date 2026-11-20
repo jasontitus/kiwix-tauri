@@ -1,4 +1,4 @@
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Bounded Nearby diagnostics that survive the iOS console boundary.
 //!
 //! stderr reaches logcat on Android, but a UI-test-launched iOS app has no

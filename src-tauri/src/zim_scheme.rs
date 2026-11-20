@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Strict intake for external `zim://<archive-uuid>/<article>` links.
 //!
 //! The link names a library archive by its ZIM UUID (the same identifier the

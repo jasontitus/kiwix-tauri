@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Shared exclusion between publishing new transfer/migration work and an
 //! updater's final active-work check. Acquire admission before privacy and
 //! transfer locks, never recursively. Hold a read lease until worker/status

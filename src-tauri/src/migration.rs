@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Explicit interchange only: never scans/deletes old profiles or overwrites source files.
 //! libkiwix XML book descriptors use child elements (src/bookmark.cpp); attribute variants
 //! are accepted as well. XML exports retain notes/tags/creation time and text highlights in

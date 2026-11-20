@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Cross-transport reuse of partially downloaded archive bytes.
 //!
 //! A BitTorrent job and a LocalSwarm job can acquire the same archive. When one

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Display hints only. Publisher IDs, sessions and transfer authority are separate.
 use crate::store::Settings;
 

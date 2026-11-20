@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Original-article MHTML (not a snapshot of a running DOM), and byte-exact
 //! resource export. All reads are offline libzim ranges; archive names never
 //! become filesystem paths. Pre-publication failures leave the destination untouched;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Bounded, redacted local crash capture.
 //!
 //! A panic (or a native uncaught exception routed here) writes one small JSON

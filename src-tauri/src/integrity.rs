@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Local byte/structure verification, not publisher authentication. One retained
 //! worker survives view navigation; no queue, network, or diagnostic log writes.
 use crate::{library_files, store::{Book, Store}};

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Offline native-dialog and sharing-page localization with bundled CLDR data.
 use icu_decimal::{input::Decimal, DecimalFormatter};
 use icu_locale::{Locale, LocaleDirectionality, LocaleExpander};

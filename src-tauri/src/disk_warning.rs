@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 //! Advisory download admission, independent of every transport's hard space guards.
 use cap_fs_ext::MetadataExt;
 use serde::{Deserialize, Serialize};
