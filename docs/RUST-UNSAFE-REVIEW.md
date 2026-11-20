@@ -389,25 +389,31 @@ were not exercised against a live share sheet, print panel or notification cente
 
 ## Final first-party pass — 2026-11-20
 
-The merged branch plus this pass leaves **134 `unsafe` matches in 29 files** (136/30 before this commit).
-This pass removed the last two blocks that had a safe wrapper available on this host:
+The merged branch plus this pass leaves **131 `unsafe` matches in 29 files** (136/30 before this pass).
+This pass removed five blocks that had a safe alternative available on this host:
 
 - `sandbox::real_downloads_dir` uses `nix::unistd::User::from_uid` instead of a raw `getpwuid_r` record and
   buffer.
 - The torrent publication regression creates its FIFO with `nix::unistd::mkfifo` instead of `libc::mkfifo`.
+- `kiwix_pdf_cancel`, `kiwix_pdf_print_cancel` and `kiwix_share_cancel` are declared `safe fn` in their
+  `unsafe extern` blocks: each native implementation only looks up an opaque integer ID and is a no-op once
+  the request has finished. The calls no longer need an `unsafe` block; the ABI and native code are unchanged.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **134** |
+| `unsafe { … }` matches (app + relay) | 136 | **131** |
 | Files containing them | 30 | **29** |
 | `unsafe impl` items | 2 | **2** |
-| Blocks without a `SAFETY:` comment (eight-line lookback) | 96 | **95** |
+| Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **96** (on 95 lines) |
 
-Every remaining block is a native ABI boundary with no safe wrapper in the current dependency set:
-Windows connector/identity/pipe/print/storage calls (73), Linux GTK printing (15), Apple/iOS DNS-SD,
-PDF, sharing, sandbox, provider and mobile backup calls (41), Android JNI/TLS (3), and one prose `unsafe {}`
-in `lib.rs`. No further first-party reduction is available without replacing those platform APIs or adding
-a new native wrapper; verification on Windows, Linux and physical devices remains outstanding.
+The remaining matches fall on these gates: **72 Windows**, **15 Linux**, **39 Apple-only**, **3
+Android-only**, **1 shared iOS/Android**, and **1 prose `unsafe {}`** in `lib.rs`. `storage.rs` spans the
+Windows and Apple gates; `provider_reference.rs` has one block under the shared mobile gate. The buckets are
+disjoint counts, not file counts. All but one are native ABI boundaries; the known remaining candidate is
+`acquisition::file_identity`, where the already-locked `winapi-util` exposes `file::information(&File)` as a
+safe replacement for `GetFileInformationByHandle`. That requires a direct Windows dependency and cannot be
+verified on this host, so it stays open. Verification on Windows, Linux and physical devices also remains
+outstanding.
 
 ### Thread-safety assertion sign-off
 

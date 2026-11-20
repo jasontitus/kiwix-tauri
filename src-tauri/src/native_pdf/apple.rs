@@ -10,12 +10,12 @@ type Admit = extern "C" fn(u64) -> bool;
 type Complete = extern "C" fn(u64, u8);
 unsafe extern "C" {
     fn kiwix_pdf_start(id: u64, bootstrap: *const c_char, article: *const c_char, output: *const c_char, width: u32, height: u32, authority: Admit, complete: Complete);
-    fn kiwix_pdf_cancel(id: u64);
+    safe fn kiwix_pdf_cancel(id: u64);
 }
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn kiwix_pdf_print_start(id: u64, host: *mut c_void, path: *const c_char, title: *const c_char, authority: Admit, complete: extern "C" fn(u64, u8, i32)) -> bool;
-    fn kiwix_pdf_print_cancel(id: u64);
+    safe fn kiwix_pdf_print_cancel(id: u64);
 }
 extern "C" fn admitted(id: u64) -> bool { CALLBACKS.admitted(id) }
 extern "C" fn complete(id: u64, status: u8) {
@@ -50,8 +50,9 @@ struct NativeRequest(u64);
 impl Drop for NativeRequest {
     fn drop(&mut self) {
         if CALLBACKS.revoke(self.0) {
-            // SAFETY: this ID identifies the native renderer started below.
-            unsafe { kiwix_pdf_cancel(self.0); }
+            // The native cancel only looks up this ID and is a no-op once the
+            // renderer has finished, so it is declared safe at the ABI.
+            kiwix_pdf_cancel(self.0);
         }
     }
 }
@@ -167,9 +168,9 @@ struct PrintRequest(u64);
 impl PrintRequest {
     fn cancel(&self) {
         if CALLBACKS.revoke(self.0) {
-            // SAFETY: this ID is dedicated to this print request, whether its
-            // native start is pending, active, or already returning completion.
-            unsafe { kiwix_pdf_print_cancel(self.0); }
+            // The native cancel only looks up this ID and is a no-op once the
+            // print request has finished, so it is declared safe at the ABI.
+            kiwix_pdf_print_cancel(self.0);
         }
     }
 }

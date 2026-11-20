@@ -31,7 +31,7 @@ mod macos {
             admit: extern "C" fn(u64) -> bool, live: extern "C" fn(u64) -> bool,
             complete: extern "C" fn(u64, u8, i64),
         ) -> bool;
-        fn kiwix_share_cancel(id: u64);
+        safe fn kiwix_share_cancel(id: u64);
     }
 
     pub(super) enum Item {
@@ -90,8 +90,9 @@ mod macos {
     impl Drop for CancelOnDrop {
         fn drop(&mut self) {
             if SHARES.revoke(self.0) {
-                // SAFETY: this is the check-allocated ID for this share.
-                unsafe { kiwix_share_cancel(self.0) };
+                // The native cancel only looks up this ID and is a no-op once
+                // the sheet has finished, so it is declared safe at the ABI.
+                kiwix_share_cancel(self.0);
             }
         }
     }
