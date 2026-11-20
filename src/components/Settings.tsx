@@ -1091,14 +1091,14 @@ export default function Settings({
             )}
           </p>
           {[
-            { name: "Zimru · MIT", text: zimruLicense, revision: about?.zimruRevision },
-            { name: "zimfile-xapian · GPL-3.0-or-later", text: glassLicense, revision: about?.glassRevision },
-          ].map(({ name, text, revision }) => (
+            { name: "Zimru · MIT", text: zimruLicense, revision: about?.zimruRevision, repo: "https://github.com/jasontitus/zimru" },
+            { name: "zimfile-xapian · GPL-3.0-or-later", text: glassLicense, revision: about?.glassRevision, repo: "https://github.com/jasontitus/zimru-xapian" },
+          ].map(({ name, text, revision, repo }) => (
             <details key={name}>
               <summary>{name}</summary>
               <pre style={{ whiteSpace: "pre-wrap" }}>{text}</pre>
               {revision && (
-                <button onClick={() => external(`https://github.com/jasontitus/zimru-xapian/tree/${revision}`)}>
+                <button onClick={() => external(`${repo}/tree/${revision}`)}>
                   <ExternalLink size={16} />
                   {t("Source code & support")}
                 </button>
