@@ -2,6 +2,8 @@
 //! Compiles the app's exact `android_tls.rs` and drives real librqbit 9.1.0.
 #[path = "../../../../src-tauri/src/android_tls.rs"]
 mod android_tls;
+#[path = "../../../../src-tauri/src/ffi.rs"]
+mod ffi;
 
 use jni_0_22::{objects::{JObject, JString}, sys, EnvUnowned};
 use std::{sync::{Mutex, Once}, time::Duration};

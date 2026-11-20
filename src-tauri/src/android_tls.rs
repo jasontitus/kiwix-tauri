@@ -141,11 +141,11 @@ impl From<jni_0_22::errors::Error> for Failure {
 
 fn logcat_error(message: &str) {
     #[link(name = "log")]
-    extern "C" {
-        fn __android_log_write(priority: i32, tag: *const std::ffi::c_char, text: *const std::ffi::c_char) -> i32;
+    unsafe extern "C" {
+        safe fn __android_log_write(priority: i32, tag: crate::ffi::CPath<'_>, text: crate::ffi::CPath<'_>) -> i32;
     }
     const ANDROID_LOG_ERROR: i32 = 6;
     let Ok(text) = std::ffi::CString::new(message.replace('\0', " ")) else { return };
-    // SAFETY: both pointers are valid NUL-terminated strings for the call.
-    unsafe { __android_log_write(ANDROID_LOG_ERROR, c"Kiwix".as_ptr(), text.as_ptr()) };
+    // Both paths are live NUL-terminated strings for the synchronous call.
+    __android_log_write(ANDROID_LOG_ERROR, crate::ffi::CPath::new(c"Kiwix"), crate::ffi::CPath::new(&text));
 }

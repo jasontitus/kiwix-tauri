@@ -31,7 +31,7 @@ mod device_scan;
 mod diagnostics;
 mod disk_warning;
 mod exports;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 mod ffi;
 mod fs_ext;
 #[cfg(any(target_os = "android", test))]

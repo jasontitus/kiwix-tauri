@@ -4,6 +4,8 @@ use crate::service::mobile_policy::BACKGROUND_CHECKPOINT_WINDOW;
 use crate::service::Service;
 use serde_json::{json, Value};
 use std::{collections::VecDeque, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, time::Duration};
+#[cfg(target_os = "ios")]
+use std::ffi::CString;
 use tauri::{Emitter, Manager};
 use tauri_plugin_kiwix_mobile::MobileExt;
 
@@ -31,13 +33,12 @@ pub(crate) fn incoming_summary(request: &IncomingRequest) -> Value {
     #[cfg(target_os = "ios")]
     let can_read_originals = request.uris.iter().all(|uri| {
         unsafe extern "C" {
-            fn kiwix_mobile_incoming_can_open_in_place(bytes: *const u8, count: usize) -> i32;
+            safe fn kiwix_mobile_incoming_can_open_in_place(uri: crate::ffi::CPath<'_>) -> i32;
         }
         // Advisory UI state, not admission. The native action rechecks the
         // original handoff and privacy policy after the user confirms.
-        // SAFETY: `uri` is a live byte slice for the call; native reads it
-        // synchronously and retains no pointer.
-        unsafe { kiwix_mobile_incoming_can_open_in_place(uri.as_ptr(), uri.len()) == 1 }
+        let Ok(uri) = CString::new(uri.as_bytes()) else { return false; };
+        kiwix_mobile_incoming_can_open_in_place(crate::ffi::CPath::new(&uri)) == 1
     });
     #[cfg(not(target_os = "ios"))]
     let can_read_originals = false;

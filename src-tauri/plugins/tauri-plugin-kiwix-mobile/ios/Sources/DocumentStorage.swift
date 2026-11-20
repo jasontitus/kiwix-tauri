@@ -100,9 +100,8 @@ final class IncomingOriginalAuthority {
 // Presentation hint only. selectIncoming still revalidates the captured UIKit
 // handoff when the user acts; this does not mint or extend reading authority.
 @_cdecl("kiwix_mobile_incoming_can_open_in_place")
-public func kiwixMobileIncomingCanOpenInPlace(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> Int32 {
-  guard let bytes, count > 0, count <= 65536 else { return 0 }
-  let uri = String(decoding: UnsafeBufferPointer(start: bytes, count: count), as: UTF8.self)
+public func kiwixMobileIncomingCanOpenInPlace(_ path: UnsafePointer<CChar>?) -> Int32 {
+  guard let path, let uri = String(validatingUTF8: path), uri.utf8.count <= 65536 else { return 0 }
   return IncomingOriginalAuthority.canOpenInPlace(uri) ? 1 : 0
 }
 

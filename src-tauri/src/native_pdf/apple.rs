@@ -3,7 +3,9 @@ use super::{Authority, Commit, Destination, Files, Presentation};
 #[cfg(target_os = "macos")]
 use super::Phase;
 use crate::apple_requests::Registry;
-use std::{ffi::{c_char, CString}, path::PathBuf, sync::{Arc, LazyLock, atomic::AtomicBool}};
+use std::{ffi::CString, path::PathBuf, sync::{Arc, LazyLock, atomic::AtomicBool}};
+#[cfg(target_os = "macos")]
+use std::ffi::c_char;
 #[cfg(target_os = "macos")]
 use {super::OwnedPdf, crate::apple_requests::ResultReceiver, std::{ffi::c_void, time::Duration}};
 use tokio_util::sync::CancellationToken;
@@ -11,7 +13,7 @@ static CALLBACKS: LazyLock<Registry<Files>> = LazyLock::new(Registry::default);
 type Admit = extern "C" fn(u64) -> bool;
 type Complete = extern "C" fn(u64, u8);
 unsafe extern "C" {
-    fn kiwix_pdf_start(id: u64, bootstrap: *const c_char, article: *const c_char, output: *const c_char, width: u32, height: u32, authority: Admit, complete: Complete);
+    safe fn kiwix_pdf_start(id: u64, bootstrap: crate::ffi::CPath<'_>, article: crate::ffi::CPath<'_>, output: crate::ffi::CPath<'_>, width: u32, height: u32, authority: Admit, complete: Complete);
     safe fn kiwix_pdf_cancel(id: u64);
 }
 #[cfg(target_os = "macos")]
@@ -67,9 +69,9 @@ pub async fn render(_app: tauri::AppHandle, bootstrap: String, article: String, 
     let output = CString::new(output.to_str().ok_or("PDF output path is not UTF-8")?).map_err(|_| "Invalid PDF output path")?;
     let (id, receiver) = CALLBACKS.register(authority, files)?;
     let _request = NativeRequest(id);
-    // SAFETY: the bridge copies these C strings before returning. The request
-    // owns its registered ID and the callbacks have the declared C ABI.
-    unsafe { kiwix_pdf_start(id, bootstrap.as_ptr(), article.as_ptr(), output.as_ptr(), width, height, admitted, complete); }
+    // The bridge copies these C strings before returning. The request owns its
+    // registered ID and the callbacks have the declared C ABI.
+    kiwix_pdf_start(id, crate::ffi::CPath::new(&bootstrap), crate::ffi::CPath::new(&article), crate::ffi::CPath::new(&output), width, height, admitted, complete);
     tokio::select! {
         result = receiver => result.map_err(|_| "Native Apple PDF provider stopped")?,
         _ = cancel.cancelled() => Err("Article PDF export was cancelled".into()),
