@@ -1316,6 +1316,7 @@ impl TorrentManager {
             // that creates it. If this caller is abandoned, the startup guard
             // cancels whatever session the routed call still produces.
             let folder = self.inner.folder.clone();
+            crate::install_crypto_provider();
             let session = tokio::select! {
                 _ = self.inner.stop.cancelled() => Err("Torrent manager has shut down".to_string()),
                 result = on_torrent_runtime(Session::new_with_opts(folder, opts)) => result?.map_err(display),

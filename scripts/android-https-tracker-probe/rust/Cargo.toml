@@ -10,10 +10,19 @@ crate-type = ["cdylib"]
 # Same crate versions and features as kiwix-workbench: copy src-tauri/Cargo.lock
 # here before building (see ../README.md).
 [dependencies]
-librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+librqbit = { path = "../../../src-tauri/vendor/librqbit-9.1.0", default-features = false, features = ["rust-tls-no-provider"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 rustls-platform-verifier = "0.7.1"
 jni_0_22 = { package = "jni", version = "0.22.4" }
 ndk-context = "0.1.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
+
+# Match the app's checked torrent sources; the probe compiles the same path
+# dependency tree instead of registry copies.
+[patch.crates-io]
+librqbit-bencode = { path = "../../../src-tauri/vendor/librqbit-bencode-9.1.0" }
+librqbit-peer-protocol = { path = "../../../src-tauri/vendor/librqbit-peer-protocol-9.1.0" }
+librqbit-sha1-wrapper = { path = "../../../src-tauri/vendor/librqbit-sha1-wrapper-9.1.0" }
+librqbit-dualstack-sockets = { path = "../../../src-tauri/vendor/librqbit-dualstack-sockets" }

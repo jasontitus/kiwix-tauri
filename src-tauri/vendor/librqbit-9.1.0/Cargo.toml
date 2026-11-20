@@ -57,6 +57,11 @@ rust-tls = [
     "sha1w/sha1-ring",
     "librqbit-core/sha1-ring",
 ]
+rust-tls-no-provider = [
+    "reqwest/rustls-no-provider",
+    "sha1w/sha1-ring",
+    "librqbit-core/sha1-ring",
+]
 storage_examples = []
 storage_middleware = ["lru"]
 timed_existence = []

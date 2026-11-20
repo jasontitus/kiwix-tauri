@@ -1330,8 +1330,16 @@ fn run_application(options: Options) -> Result<(), String> {
     });
     Ok(())
 }
+/// Install the process-wide rustls provider before any reqwest 0.13 client is built.
+/// The updater and librqbit request `rustls-no-provider`; LocalSwarm and reqwest 0.12
+/// already use ring, so one provider serves every TLS client in the process.
+pub(crate) fn install_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 #[cfg(desktop)]
 pub fn run() {
+    install_crypto_provider();
     if let Err(error) = parse_options(std::env::args()).and_then(run_application) {
         eprintln!("Kiwix: {error}");
         std::process::exit(1);
@@ -1341,6 +1349,7 @@ pub fn run() {
 #[cfg(mobile)]
 #[tauri::mobile_entry_point]
 pub fn run() {
+    install_crypto_provider();
     #[cfg(target_os = "ios")]
     notifications::install_early();
     mobile::run();
@@ -1350,6 +1359,12 @@ pub fn run() {
 mod launch_tests {
     use super::*;
     use uuid::Uuid;
+
+    #[test]
+    fn reqwest_013_client_builds_with_the_installed_ring_provider() {
+        install_crypto_provider();
+        reqwest13::Client::builder().build().expect("reqwest 0.13 client needs the installed provider");
+    }
 
     #[test]
     fn shell_boot_script_carries_the_saved_theme_and_platform() {

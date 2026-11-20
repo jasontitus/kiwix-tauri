@@ -28,6 +28,8 @@ cc = "1"
 # The updater tests build a mock Tauri app so the real plugin state and
 # minisign verification run without launching a window.
 tauri = { version = "2.12", features = ["test"] }
+# Exercises the reqwest 0.13 provider contract used by librqbit and the updater.
+reqwest13 = { package = "reqwest", version = "0.13", default-features = false, features = ["rustls-no-provider", "stream", "json", "socks"] }
 
 [dependencies]
 tauri = { version = "2.12", features = [] }
@@ -64,9 +66,10 @@ html5ever = "0.39.0"
 # Already in the graph through dom_query; the PDF sanitizer tokenizes <style>
 # text with it to tell a CSS `<` delimiter from a `<` inside a string or URL.
 cssparser = "0.37.0"
-# The rust-tls feature enables reqwest's existing TLS and selects the patched
-# SHA wrapper through the upstream sha1-ring feature. Recheck both on upgrade.
-librqbit = { version = "=9.1.0", default-features = false, features = ["rust-tls"] }
+# The rust-tls-no-provider feature selects reqwest 0.13's rustls backend without
+# AWS-LC; the app installs ring once at startup. It also selects the patched SHA
+# wrapper through the upstream sha1-ring feature. Recheck both on upgrade.
+librqbit = { version = "=9.1.0", default-features = false, features = ["rust-tls-no-provider"] }
 zimfile-xapian = { git = "https://github.com/jasontitus/zimru-xapian.git", rev = "da3221d79734dab7e7e3415af1bb3454f8608250" }
 zimru = { git = "https://github.com/jasontitus/zimru.git", rev = "cbafcb41da64c390c7889b122c677f23bcde8dc5", default-features = false }
 cap-std = "4"

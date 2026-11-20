@@ -20,7 +20,7 @@ Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), 
 | html5ever and markup5ever | Five Rust source and test files across two crates | Kiwix memory-safety hardening | Published 0.39.0 uses intrinsics and unchecked slices | Keep the original crates, token behavior, bounded consumer tests and platform measurements with the forks |
 | cssparser | Five changed Rust source files | Memory-safety hardening | Audited at 0.37.0 | Keep the source and fixtures with the app and compare CSS behavior on upgrades |
 | mdns-sd | ~1,900 lines | Hardening against hostile LAN packets | Partly fixed in 0.21 | Rebase onto 0.21.7, then offer the cache bounds upstream |
-| librqbit-sha1-wrapper 9.1.0 | Checked RustCrypto SHA-1 and SHA-256 | Application memory-safety hardening | Published 9.1.0 selects AWS-LC with `sha1-ring` | Preserve both torrent hash parity and TLS algorithm coverage on upgrades |
+| librqbit-sha1-wrapper 9.1.0 | Checked RustCrypto SHA-1 and SHA-256 | Application memory-safety hardening | Published 9.1.0 selects AWS-LC with `sha1-ring`; the vendored librqbit manifest selects `rustls-no-provider` and the app installs ring | Preserve torrent hash parity, the startup provider install and TLS algorithm coverage on upgrades |
 | librqbit-dualstack-sockets | iOS binding and checked interface handling | Yes: does not build for iOS | Yes, in 0.7.0 | Upstream PR; trivial |
 | rustls-platform-verifier (Android Kotlin) | Unchanged source; build files only | No: vendored instead of upstream's GitHub-hosted Maven archive | n/a | Keep pinned to Cargo.lock; re-vendor on every crate update |
 

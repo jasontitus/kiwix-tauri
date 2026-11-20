@@ -3,8 +3,9 @@
 Runtime check that BitTorrent HTTPS tracker announces work on Android. It is a
 test harness, not part of the app build or CI.
 
-librqbit 9 (`rust-tls`) builds a reqwest 0.13 client without custom roots, so
-reqwest verifies through `rustls-platform-verifier`. On Android that verifier
+librqbit 9.1.0 (`rust-tls-no-provider`) builds a reqwest 0.13 client without custom
+roots, so reqwest verifies through `rustls-platform-verifier`. The probe installs
+ring before building either client, matching the app startup path. On Android that verifier
 needs a one-time JNI initialisation, supplied by `src-tauri/src/android_tls.rs`,
 and the Kotlin class from `src-tauri/vendor/rustls-platform-verifier-android-0.2.0`.
 
@@ -47,13 +48,16 @@ builds one, plus a real librqbit magnet `add_torrent` whose only tracker is
    To see the effect of an HTTPS-only policy, remove the CA host block from a
    copy of the app's `network_security_config.xml`; this step is manual.
 
-On a kernel without `getrandom` (the API 24 emulator's 3.10 kernel), aws-lc
-blocks until the kernel reports 256 bits of entropy, and the idle software
-emulator stayed below that. Build `tools/credit.c` with the NDK, push it, and
-run it as root in a loop during probe runs. aws-lc is also the app's TLS
-provider; real devices on kernels without `getrandom` were not checked.
+On a kernel without `getrandom` (the API 24 emulator's 3.10 kernel), ring
+blocks until the kernel reports enough entropy, and the idle software emulator
+stayed below that. Build `tools/credit.c` with the NDK, push it, and run it as
+root in a loop during probe runs. Ring is the app's TLS provider; real devices on
+kernels without `getrandom` were not checked.
 
 ## Result, 2026-11-05 (API 24 x86_64 emulator, software CPU, release APK)
+
+The table predates the ring-only provider change; re-run it before treating the
+results as evidence for the current graph.
 
 | Case | `noinit` | `init` |
 |---|---|---|

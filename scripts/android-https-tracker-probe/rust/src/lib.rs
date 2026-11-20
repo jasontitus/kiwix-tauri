@@ -1,5 +1,5 @@
 //! Android runtime probe for kiwix-tauri's HTTPS tracker path.
-//! Compiles the app's exact `android_tls.rs` and drives real librqbit 9.0.1.
+//! Compiles the app's exact `android_tls.rs` and drives real librqbit 9.1.0.
 #[path = "../../../../src-tauri/src/android_tls.rs"]
 mod android_tls;
 
@@ -104,6 +104,7 @@ pub extern "system" fn Java_org_kiwix_probe_MainActivity_run<'local>(
         std::mem::forget(global);
 
         let mut out = vec![format!("mode={mode}")];
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
         if mode == "init" {
             // As in the app's TorrentManager::engine(): a Tokio worker that is
