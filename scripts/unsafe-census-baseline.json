@@ -1,6 +1,6 @@
 {
-  "matches": 126,
-  "blocks": 126,
+  "matches": 127,
+  "blocks": 127,
   "impls": 2,
   "implsByFile": {
     "src-tauri/src/agent_connector.rs": 2
@@ -18,7 +18,7 @@
     "src-tauri/src/location_windows.rs": 2,
     "src-tauri/src/menus.rs": 1,
     "src-tauri/src/native_pdf/handoff.rs": 3,
-    "src-tauri/src/native_pdf/linux.rs": 15,
+    "src-tauri/src/native_pdf/linux.rs": 16,
     "src-tauri/src/native_pdf/windows.rs": 2,
     "src-tauri/src/native_pdf/windows_print.rs": 17,
     "src-tauri/src/private_sync_identity.rs": 15,

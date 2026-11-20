@@ -42,6 +42,8 @@ unsafe extern "C" {
     fn gtk_print_unix_dialog_set_page_setup(dialog: *mut c_void, setup: *mut gtk::ffi::GtkPageSetup);
 }
 fn file_printer() -> Result<String, String> {
+    #[derive(Default)]
+    struct Printers { file: Option<String>, names: HashMap<String, usize> }
     unsafe extern "C" fn select(printer: *mut c_void, data: *mut c_void) -> i32 {
         // SAFETY: GTK passes a live printer that owns this backend for the
         // duration of the synchronous enumeration; the callback runs on the
@@ -50,28 +52,41 @@ fn file_printer() -> Result<String, String> {
         if backend.is_null() { return 0; }
         // SAFETY: backend is a non-null live GTypeInstance owned by the
         // printer, and GLib returns an interned type name with process lifetime.
-        let name = unsafe { gtk::glib::gobject_ffi::g_type_name_from_instance(backend) };
-        if name.is_null() { return 0; }
-        // SAFETY: name is a non-null NUL-terminated interned string owned by
+        let kind = unsafe { gtk::glib::gobject_ffi::g_type_name_from_instance(backend) };
+        if kind.is_null() { return 0; }
+        // SAFETY: kind is a non-null NUL-terminated interned string owned by
         // GLib; the bytes are borrowed only for this comparison.
-        let kind = unsafe { CStr::from_ptr(name) }.to_bytes();
-        if kind != b"GtkPrintBackendFile" && kind != b"GtkPrintBackendFileBuiltin" { return 0; }
+        let kind = unsafe { CStr::from_ptr(kind) }.to_bytes();
         // SAFETY: printer is the live object GTK supplied to this callback, so
         // its name stays valid at least until the callback returns.
         let name = unsafe { gtk_printer_get_name(printer) };
         if name.is_null() { return 0; }
-        // SAFETY: data is the caller's &mut Option<String>, kept alive for the
+        // SAFETY: data is the caller's live Printers, kept alive for the
         // synchronous enumeration; only this callback writes it, on this thread.
-        unsafe { *(data as *mut Option<String>) = Some(CStr::from_ptr(name).to_string_lossy().into_owned()); }
-        1
+        let printers = unsafe { &mut *(data as *mut Printers) };
+        // SAFETY: `name` is the non-null NUL-terminated string checked above;
+        // the bytes are borrowed only for this copy.
+        let name = unsafe { CStr::from_ptr(name) }.to_string_lossy().into_owned();
+        *printers.names.entry(name.clone()).or_default() += 1;
+        if kind == b"GtkPrintBackendFile" || kind == b"GtkPrintBackendFileBuiltin" {
+            printers.file = Some(name);
+        }
+        0
     }
-    let mut printer: Option<String> = None;
-    // SAFETY: `printer` outlives the call because `wait` is nonzero and
+    let mut printers = Printers::default();
+    // SAFETY: `printers` outlives the call because `wait` is nonzero and
     // enumeration completes before returning; GTK may retain `data` in its
     // state, but no destructor is registered and `select` runs on this thread.
-    unsafe { gtk_enumerate_printers(select, (&mut printer as *mut Option<String>).cast(), None, 1); }
-    printer.ok_or_else(|| "GTK's native PDF file-print backend is unavailable; no printer was selected".into())
+    unsafe { gtk_enumerate_printers(select, (&mut printers as *mut Printers).cast(), None, 1); }
+    let file = printers.file.ok_or_else(|| "GTK's native PDF file-print backend is unavailable; no printer was selected".to_string())?;
+    // WebKit re-enumerates by display name and does not check the backend type.
+    // A name shared with another backend could silently print on paper.
+    if printers.names.get(&file).copied().unwrap_or(0) != 1 {
+        return Err("GTK reports an ambiguous file-printer name; refusing to choose a print backend".into());
+    }
+    Ok(file)
 }
+
 struct NativeJob { app: tauri::AppHandle, id: String, files: Files }
 impl Drop for NativeJob { fn drop(&mut self) { let id = self.id.clone(); let files = self.files.clone(); let _ = self.app.run_on_main_thread(move || { retire(&id); drop(files); }); } }
 // Shared platform-provider boundary; authority, commit, retained files and

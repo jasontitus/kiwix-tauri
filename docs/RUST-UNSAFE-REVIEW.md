@@ -417,16 +417,16 @@ This pass removed blocks that had a safe alternative available on this host:
 - Windows audit fixes: ACE header/type/size/SID bounds before the typed borrow, explicit owner alongside the DACL,
   NUL-bounded printer names, dmSize-prefixed DEVMODEW reads, deferred print dialog after the WebView2 callback,
   UI-thread cancellation, documented NT rename length, COM-init failure propagation and absolute volume paths.
-  The remote-share/mounted-folder capacity query remains open.
+  The remote-share/mounted-folder capacity query and synchronous GTK file-printer enumeration remain open; the latter can delay the export deadline if a print backend never completes enumeration.
 
 | Metric | Before | After |
 |---|---:|---:|
-| `unsafe { … }` matches (app + relay) | 136 | **126** |
+| `unsafe { … }` matches (app + relay) | 136 | **127** |
 | Files containing them | 30 | **23** |
 | `unsafe impl` items | 2 | **2** |
 | Code blocks without a `SAFETY:` comment (eight-line lookback) | 97 | **0** |
 
-Every one of the 126 remaining code blocks now names its pointer, handle, lifetime or exactly-once
+Every one of the 127 remaining code blocks now names its pointer, handle, lifetime or exactly-once
 invariant. The audit was completed file by file against the native counterparts; the Windows lib now
 cross-checks with mingw, while Linux comments remain source-reviewed but not compiled on this host.
 
@@ -439,7 +439,7 @@ unverified.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(126 blocks in 23 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(127 blocks in 23 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map
