@@ -1041,7 +1041,7 @@
   function reportReadingPan() {
     if (!readingControlsEnabled) return;
     if (readingInteractionBlocked()) {
-      resetReadingPan();
+      cancelReadingPan();
       return;
     }
     // Native scrolling can lag the first touchmove at the top. Reveal there,
@@ -1114,7 +1114,7 @@
     });
   }, { passive: true, capture: true });
   window.addEventListener("touchcancel", (event) => {
-    if (event.isTrusted) resetReadingPan();
+    if (event.isTrusted) cancelReadingPan();
   }, { passive: true, capture: true });
   function geoError(code, message, cancelled = false) {
     return Object.freeze({
