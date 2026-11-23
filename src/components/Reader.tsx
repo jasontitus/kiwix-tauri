@@ -767,6 +767,7 @@ export default function Reader(props: ReaderProps) {
   const freshOrigin = useRef(false);
   const openSequence = useRef(0);
   const searchSequence = useRef(0);
+  const searchDebounce = useRef<number | undefined>(undefined);
   const searchRequest = useRef<SearchRequest | null>(null);
   const navigationSequence = useRef(0);
   const previewSequence = useRef(0);
@@ -3960,6 +3961,20 @@ export default function Reader(props: ReaderProps) {
       if (isCurrent()) setSearchBusy(false);
     }
   };
+  // Search while typing, without a submit key. The 300 ms delay coalesces
+  // keystrokes; an unchanged completed query is not searched twice.
+  useEffect(() => {
+    if (panel !== "search" && tab.bookId) return;
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    window.clearTimeout(searchDebounce.current);
+    searchDebounce.current = window.setTimeout(() => {
+      const state = latest.current.workspace;
+      if (state.searchedQuery === trimmed && state.searchResults) return;
+      if (!latest.current.suspended && alive.current) void runSearch(0, trimmed);
+    }, 300);
+    return () => window.clearTimeout(searchDebounce.current);
+  }, [query, panel, searchBooks, searchMode, tab.bookId]);
   const updateSpellingStatus = useCallback((status: SpellingIndexStatus) => {
     latest.current.onWorkspaceChange((previous) => {
       if (!previous.searchResults) return previous;
@@ -4738,6 +4753,9 @@ export default function Reader(props: ReaderProps) {
   })();
   // The panel is rendered in the search aside, and inline on the empty page.
   // Anywhere else the whole tree is dead weight on every render.
+  const scopedBook = searchBooks.length === 1 && searchBooks[0] === tab.bookId
+    ? books.find((book) => book.id === tab.bookId)?.title || tab.bookId
+    : null;
   const searchContent =
     panel === "search" || (!tab.bookId && availableBooks.length > 0) ? (
     <div className="rw-search-content">
@@ -4894,6 +4912,9 @@ export default function Reader(props: ReaderProps) {
           aria-label={t("Search results")}
           aria-busy={searchBusy}
         >
+          {scopedBook && (
+            <p className="rw-search-scope">{t("Searching {book}", { book: scopedBook })}</p>
+          )}
           <div className="rw-result-count">
             {t("About {count} results", { count: searchResults.total })}
           </div>
@@ -4996,10 +5017,12 @@ export default function Reader(props: ReaderProps) {
                 >
                   {hit.title}
                 </button>
-                <span className="rw-result-book">
-                  {books.find((item) => item.id === hit.bookId)?.title ||
-                    hit.bookId}
-                </span>
+                {!scopedBook && (
+                  <span className="rw-result-book">
+                    {books.find((item) => item.id === hit.bookId)?.title ||
+                      hit.bookId}
+                  </span>
+                )}
                 {hit.snippet && <p>{hit.snippet}</p>}
               </div>
               <IconButton
