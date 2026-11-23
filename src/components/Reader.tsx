@@ -2137,13 +2137,35 @@ export default function Reader(props: ReaderProps) {
           // A checkpoint can begin while this operation waits its queue turn.
           // No native activation has run; defer admission, not the request.
           if (!canNavigateReaderStorage()) return undefined;
+          const activate = () => api<SensorStatus>("sensor_activate", {
+            sessionId, archiveId: location.bookId, origin: location.origin,
+          });
           try {
-            return await api<SensorStatus>("sensor_activate", {
-              sessionId, archiveId: location.bookId, origin: location.origin,
-            });
+            return await activate();
           } catch (value) {
             if (cancelled || !alive.current || openSequence.current !== sequence ||
                 latest.current.privacyGeneration !== requestedPrivacy) throw value;
+            // Opening a fresh origin can briefly replace the native listener
+            // while the previous reader is retiring. Retry that handoff once;
+            // if it still fails, keep reading and let the next explicit sensor
+            // request report the real error instead of showing a loading banner.
+            if (String(value).includes("Sensor origin is not an active archive listener")) {
+              await new Promise((resolve) => setTimeout(resolve, 120));
+              if (cancelled || !alive.current || openSequence.current !== sequence ||
+                  latest.current.privacyGeneration !== requestedPrivacy) throw value;
+              try {
+                return await activate();
+              } catch (retry) {
+                if (String(retry).includes("Sensor origin is not an active archive listener"))
+                  return {
+                    camera: "notAsked", location: "notAsked", nativeLocation: false,
+                  } satisfies SensorStatus;
+                report(retry, ERROR_SITES["reader.sensor-activate"]);
+                return {
+                  camera: "notAsked", location: "notAsked", nativeLocation: false,
+                } satisfies SensorStatus;
+              }
+            }
             report(value, ERROR_SITES["reader.sensor-activate"]);
             return {
               camera: "notAsked", location: "notAsked", nativeLocation: false,
