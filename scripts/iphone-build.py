@@ -220,6 +220,7 @@ class Build:
 
     def inputs(self):
         self.commit = self.capture(['/usr/bin/git', 'rev-parse', '--verify', self.args.revision + '^{commit}'])
+        self.env['KIWIX_BUILD_COMMIT'] = self.commit[:12]
         archive_lock = self.run(['/usr/bin/git', 'show', self.commit + ':src-tauri/Cargo.lock'])
         tooling = {name: self.capture(command) for name, command in {
             'rustc': ['rustc', '-Vv'], 'cargo': ['cargo', '-V'], 'node': ['node', '--version'],

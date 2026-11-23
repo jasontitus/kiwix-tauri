@@ -2,6 +2,7 @@
 use std::env;
 fn main() {
     emit_archive_versions();
+    emit_build_identity();
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
         println!("cargo:rustc-link-arg=-Wl,-z,max-page-size=16384");
         // Oboe selects the static C++ runtime. The NDK's API-level libc++.a
@@ -110,6 +111,59 @@ fn main() {
     }
 
     tauri_build_with_windows_manifest();
+}
+
+/// Expose the source revision in Settings so a test build is identifiable.
+fn emit_build_identity() {
+    let from_env = env::var("KIWIX_BUILD_COMMIT").ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    let manifest_dir = env::var_os("CARGO_MANIFEST_DIR");
+    let commit = from_env.or_else(|| {
+        let manifest_dir = manifest_dir.as_ref()?;
+        let root = std::path::Path::new(manifest_dir).parent()?.to_path_buf();
+        // Do not bind a source archive nested inside an unrelated checkout to
+        // that enclosing repository's HEAD. A real checkout always has .git
+        // (a directory, or a file for a linked worktree).
+        if !root.join(".git").exists() {
+            return None;
+        }
+        let output = std::process::Command::new("git")
+            .args(["-C", root.to_str()?, "rev-parse", "--short=12", "HEAD"])
+            .output().ok()?;
+        if !output.status.success() { return None; }
+        let value = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+        (!value.is_empty()).then_some(value)
+    }).unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=KIWIX_BUILD_COMMIT={commit}");
+    println!("cargo:rerun-if-env-changed=KIWIX_BUILD_COMMIT");
+    if let Some(manifest_dir) = manifest_dir {
+        if let Some(root) = std::path::Path::new(&manifest_dir)
+            .parent()
+            .filter(|root| root.join(".git").exists())
+        {
+            let git_path = |name: &str| {
+                std::process::Command::new("git")
+                    .args([
+                        "-C",
+                        root.to_string_lossy().as_ref(),
+                        "rev-parse",
+                        "--path-format=absolute",
+                        "--git-path",
+                        name,
+                    ])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+                    .filter(|path| !path.is_empty())
+            };
+            if let (Some(head), Some(refs)) = (git_path("HEAD"), git_path("refs")) {
+                println!("cargo:rerun-if-changed={head}");
+                println!("cargo:rerun-if-changed={refs}");
+            }
+        }
+    }
 }
 
 /// Report the two reader dependencies selected by the application's lockfile.

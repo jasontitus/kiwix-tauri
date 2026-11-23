@@ -75,6 +75,7 @@ interface LibraryRootResult {
 }
 interface AboutInfo {
   appVersion: string;
+  buildNumber: string;
   tauriVersion: string;
   zimruVersion: string;
   glassVersion: string;
@@ -943,6 +944,11 @@ export default function Settings({
         onError={onError}
       />
       <h2 className="settings-group-heading">{t("Advanced & diagnostics")}</h2>
+      {about && (
+        <p className="muted">
+          {t("Build")}: {about.appVersion} · {about.buildNumber}
+        </p>
+      )}
       <AdvancedSettings
         settings={settings}
         books={books}
@@ -985,6 +991,10 @@ export default function Settings({
                 <dd>
                   {about.appVersion} · {about.platform}/{about.architecture}
                 </dd>
+              </div>
+              <div>
+                <dt>{t("Build")}</dt>
+                <dd>{about.buildNumber}</dd>
               </div>
               <div>
                 <dt>{t("Tauri runtime")}</dt>

@@ -1908,6 +1908,7 @@ impl Service {
             }
             "about_info" => Ok(json!({
                 "appVersion": env!("CARGO_PKG_VERSION"),
+                "buildNumber": env!("KIWIX_BUILD_COMMIT"),
                 "tauriVersion": tauri::VERSION,
                 "zimruVersion": env!("KIWIX_ZIMRU"),
                 "glassVersion": env!("KIWIX_GLASS"),
