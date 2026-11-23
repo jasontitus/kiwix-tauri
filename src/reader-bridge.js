@@ -1024,8 +1024,11 @@
     post("reading-pan", { token: readingPanToken, sequence: ++readingPanSequence,
       url: location.href, hidden });
   }
-  function resetReadingPan() {
+  function cancelReadingPan() {
     readingTouch = null;
+  }
+  function resetReadingPan() {
+    cancelReadingPan();
     readingControls(false);
   }
   function readingInteractionBlocked(target) {
@@ -1067,7 +1070,8 @@
     const point = readingTouchPoint(touches);
     readingTouch = { id: readingTouchIdentifier(point),
       anchorX: readingTouchX(point), anchorY: readingTouchY(point),
-      x: readingTouchX(point), y: readingTouchY(point), scrollY: readingScrollY(), direction: 0 };
+      x: readingTouchX(point), y: readingTouchY(point), scrollY: readingScrollY(), direction: 0,
+      startedAt: performance.now(), moved: false };
   }, { passive: true, capture: true });
   window.addEventListener("touchmove", (event) => {
     if (!readingControlsEnabled || !event.isTrusted || !readingTouch) return;
@@ -1088,6 +1092,8 @@
     touch.direction = direction;
     touch.x = readingTouchX(point);
     touch.y = readingTouchY(point);
+    if (Math.abs(touch.x - touch.anchorX) > 8 || Math.abs(touch.y - touch.anchorY) > 8)
+      touch.moved = true;
     if (Math.abs(touch.x - touch.anchorX) > 16 &&
         Math.abs(touch.x - touch.anchorX) > Math.abs(touch.y - touch.anchorY) * 1.5)
       resetReadingPan();
@@ -1096,7 +1102,9 @@
   window.addEventListener("touchend", (event) => {
     if (!readingControlsEnabled || !event.isTrusted || !readingTouch) return;
     const ended = readingTouch;
+    const tapped = !ended.moved && performance.now() - ended.startedAt < 500;
     reportReadingPan();
+    if (tapped) resetReadingPan();
     // Native scrolling can settle just after touchend. Consume that one frame,
     // never unrelated later momentum or a subsequent programmatic restore.
     scheduleReadingFrame(() => {
@@ -1108,7 +1116,6 @@
   window.addEventListener("touchcancel", (event) => {
     if (event.isTrusted) resetReadingPan();
   }, { passive: true, capture: true });
-  document.addEventListener("focusin", resetReadingPan, true);
   function geoError(code, message, cancelled = false) {
     return Object.freeze({
       code,
@@ -3489,12 +3496,14 @@
   function command(message) {
     if (["scroll", "toc", "find", "zoom", "appearance", "expand-sections",
         "highlight-jump", "history-traverse"].includes(message.command))
-      resetReadingPan();
+      cancelReadingPan();
     switch (message.command) {
       case "reading-controls":
         readingControlsEnabled = message.enabled === true;
         if (Number.isFinite(message.minimumScroll) && message.minimumScroll >= 2 && message.minimumScroll <= 4096)
           readingControlsMinimumScroll = message.minimumScroll;
+        // Host-side reveal must clear the bridge's hidden flag too; otherwise
+        // the next downward pan is ignored as a duplicate hide.
         resetReadingPan();
         break;
       case "reading-viewport": {

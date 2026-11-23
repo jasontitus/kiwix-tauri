@@ -1166,7 +1166,7 @@ export default function Reader(props: ReaderProps) {
     setPanHidden(false);
   }, [compact, tab.id, tab.bookId, tab.path, frame?.sessionId, frame?.location.url,
     props.suspended, props.interactive, props.interactionRevision, props.mobileTabs?.expanded,
-    canHideReadingControls, fullscreen]);
+    canHideReadingControls]);
   useLayoutEffect(() => {
     latest.current.onReaderChromeHiddenChange?.(readingControlsHidden);
   }, [readingControlsHidden]);
@@ -1191,16 +1191,8 @@ export default function Reader(props: ReaderProps) {
   useEffect(() => {
     if (!compact || isDesktop) return;
     document.addEventListener("keydown", revealReadingControls, true);
-    document.addEventListener("focusin", revealReadingControls, true);
-    document.addEventListener("visibilitychange", revealReadingControls);
-    window.addEventListener("blur", revealReadingControls);
-    window.visualViewport?.addEventListener("resize", revealReadingControls);
     return () => {
       document.removeEventListener("keydown", revealReadingControls, true);
-      document.removeEventListener("focusin", revealReadingControls, true);
-      document.removeEventListener("visibilitychange", revealReadingControls);
-      window.removeEventListener("blur", revealReadingControls);
-      window.visualViewport?.removeEventListener("resize", revealReadingControls);
     };
   }, [compact, revealReadingControls]);
   useEffect(() => {
@@ -4489,6 +4481,10 @@ export default function Reader(props: ReaderProps) {
   const openSearch = useCallback(() => {
     const ownerTab = tabRef.current.id;
     const revision = latest.current.interactionRevision;
+    if (tabRef.current.bookId && latest.current.workspace.panel !== "search") {
+      setSearchBooks([tabRef.current.bookId]);
+      invalidateSearch();
+    }
     setPanel("search");
     requestAnimationFrame(() => {
       if (!alive.current || latest.current.suspended || !latest.current.interactive ||
@@ -4758,7 +4754,9 @@ export default function Reader(props: ReaderProps) {
         }}
       >
         <label htmlFor={`reader-search-${tab.id}`}>
-          {t("Search your offline library")}
+          {searchBooks.length === 1 && searchBooks[0] === tab.bookId
+            ? t("Search this book")
+            : t("Search your offline library")}
         </label>
         <div className="rw-search-input">
           <Search size={18} aria-hidden="true" />
@@ -4783,6 +4781,25 @@ export default function Reader(props: ReaderProps) {
             </button>
           )}
         </div>
+        {tab.bookId && (
+          <button
+            type="button"
+            onClick={() => {
+              const bookId = tab.bookId;
+              if (!bookId) return;
+              setSearchBooks(
+                searchBooks.length === 1 && searchBooks[0] === bookId
+                  ? []
+                  : [bookId],
+              );
+              invalidateSearch();
+            }}
+          >
+            {searchBooks.length === 1 && searchBooks[0] === tab.bookId
+              ? t("Search all books")
+              : t("Search this book")}
+          </button>
+        )}
         <details className="rw-secondary-controls rw-search-settings">
           <summary>
             <span>{t("Search options")}</span>
