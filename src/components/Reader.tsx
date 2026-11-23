@@ -1164,10 +1164,11 @@ export default function Reader(props: ReaderProps) {
   panCanHide.current = canHideReadingControls;
   const readingControlsHidden = panHidden && canHideReadingControls;
   useLayoutEffect(() => {
+    // Only a new document resets the compact reader's pan state. Do not reset
+    // it for lifecycle, focus or unrelated interaction updates: those arrive
+    // after scrolling settles and must not pull the controls back into view.
     setPanHidden(false);
-  }, [compact, tab.id, tab.bookId, tab.path, frame?.sessionId, frame?.location.url,
-    props.suspended, props.interactive, props.interactionRevision, props.mobileTabs?.expanded,
-    canHideReadingControls]);
+  }, [compact, tab.id, tab.bookId, tab.path, frame?.sessionId, frame?.location.url]);
   useLayoutEffect(() => {
     latest.current.onReaderChromeHiddenChange?.(readingControlsHidden);
   }, [readingControlsHidden]);

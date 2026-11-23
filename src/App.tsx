@@ -2894,7 +2894,9 @@ export default function App() {
   const currentBook = current?.bookId
     ? bookIndex.byId.get(current.bookId)
     : undefined;
-  const readerChromeOwner = `${current?.id || ""}:${currentBook?.installationId || ""}:${workspaceEpoch}:${mobileInteraction.revision}`;
+  // Keep hidden chrome bound to the document, not to lifecycle revisions:
+  // a foreground/interaction reconcile after a scroll must not pull it back.
+  const readerChromeOwner = `${current?.id || ""}:${currentBook?.installationId || ""}:${workspaceEpoch}`;
   const readerChromeHidden = !isDesktop && narrowReaderChrome.matches &&
     pane === "reader" && !quitting &&
     !mobileSuspended && mobileInteraction.interactive && !mobileTabsOpen &&
