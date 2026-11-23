@@ -292,6 +292,9 @@ class Build:
                 require(not path.is_absolute() and '..' not in path.parts and (member.isfile() or member.isdir()), f'Unsafe archive entry: {member.name}')
             # All members were checked above; remain compatible with Python 3.9.
             tar.extractall(self.source, members=members)
+        # Xcode's script phase does not reliably inherit the custom build env,
+        # so carry the exact archived revision in the source tree as well.
+        (self.source / 'src-tauri' / 'BUILD_COMMIT').write_text(self.commit + '\n')
         (self.source / 'node_modules').symlink_to(self.modules, target_is_directory=True)
         source_files = [[p.relative_to(self.source).as_posix(), digest(p)] for p in sorted(self.source.rglob('*')) if p.is_file() and not p.is_symlink() and 'node_modules' not in p.relative_to(self.source).parts]
         manifest = {**self.identity, 'status': 'prepared', 'fingerprint': self.fingerprint,

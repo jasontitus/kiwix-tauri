@@ -1110,7 +1110,9 @@ export default function App() {
       } catch (cause) {
         if (!cancelled && isPrivacyContextCurrent(privacy) &&
             document.visibilityState === "visible" && document.hasFocus() &&
-            !isSuspendedError(cause)) onError(cause, "recoverable");
+            !isSuspendedError(cause) &&
+            !String(cause).includes("Return to the app before syncing private reading data"))
+          onError(cause, "recoverable");
       } finally { reading = false; }
     }
     void reconcilePrivateSync();

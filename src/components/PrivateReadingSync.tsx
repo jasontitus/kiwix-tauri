@@ -148,7 +148,9 @@ export default function PrivateReadingSync({
           setStatusError("");
         }
       } catch (cause) {
-        if (active && current(privacy, operation)) setStatusError(errorText(cause));
+        if (active && current(privacy, operation) &&
+            !String(cause).includes("Return to the app before syncing private reading data"))
+          setStatusError(errorText(cause));
       } finally { reading = false; }
     }
     void refresh();

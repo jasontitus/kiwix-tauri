@@ -119,7 +119,17 @@ fn emit_build_identity() {
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
     let manifest_dir = env::var_os("CARGO_MANIFEST_DIR");
-    let commit = from_env.or_else(|| {
+    let file_commit = manifest_dir.as_ref()
+        .and_then(|dir| std::fs::read_to_string(std::path::Path::new(dir).join("BUILD_COMMIT")).ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    if let Some(dir) = manifest_dir.as_ref() {
+        let path = std::path::Path::new(dir).join("BUILD_COMMIT");
+        if path.is_file() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+    let commit = file_commit.or(from_env).or_else(|| {
         let manifest_dir = manifest_dir.as_ref()?;
         let root = std::path::Path::new(manifest_dir).parent()?.to_path_buf();
         // Do not bind a source archive nested inside an unrelated checkout to
