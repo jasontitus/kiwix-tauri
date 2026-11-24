@@ -405,9 +405,9 @@ struct PublicationIntent {
 /// receipt that proves nothing beyond `mtime` cannot authorize skipping a
 /// hash pass. Unix `ctime` is updated by the write itself and cannot be set
 /// back from userland; a zero or out-of-range change time is treated as
-/// unprovable and fails closed. Windows metadata available through the current
-/// dependency set (`winapi-util`) exposes creation/access/write times but not
-/// change time, so it records `None` and receipts fail closed there.
+/// unprovable and fails closed. Windows reads `ChangeTime` from the open handle
+/// as an additional signal, but receipts still fail closed there because a
+/// same-user writer can restore it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct ChangeTime {
     seconds: i64,
@@ -492,11 +492,10 @@ fn part_identity(_metadata: &fs::Metadata) -> Option<PartIdentity> {
 /// metadata accessors do not carry them. The volume serial and 64-bit file
 /// index are the NTFS equivalent of `dev`/`ino`: both are stable across rename
 /// and differ for any replacement file, so an identity proves "this exact
-/// file"; byte identity additionally needs a change time. `winapi-util`
-/// exposes creation/access/write times but not the change time, so `change`
-/// stays `None` and no verification receipt is issued or reused on Windows.
-/// Resume therefore rehashes there rather than claiming a proof this API set
-/// cannot provide.
+/// file"; byte identity additionally needs a change time. `ChangeTime` is read
+/// from the open handle, but `verification_receipt` still refuses Windows
+/// receipts because a same-user writer can restore it. Resume therefore
+/// rehashes there rather than trusting a restorable timestamp.
 #[cfg(windows)]
 fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
     let info = winapi_util::file::information(file)?;
@@ -510,7 +509,9 @@ fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
         mtime_seconds: i64::try_from(unix_ticks.div_euclid(10_000_000))
             .map_err(|_| std::io::Error::other("File time is out of range"))?,
         mtime_nanos: (unix_ticks.rem_euclid(10_000_000) * 100) as u32,
-        change: crate::publication::windows_change_time(file),
+        change: crate::publication::windows_change_time(file).and_then(|(seconds, nanos)| {
+            Some(ChangeTime { seconds, nanos: u32::try_from(nanos).ok()? })
+        }),
         links: info.number_of_links(),
     })
 }
@@ -561,7 +562,7 @@ fn verification_receipt(
     #[cfg(not(unix))]
     {
         let _ = (identity, digest, outcome, error);
-        return None;
+        None
     }
     #[cfg(unix)]
     {
@@ -580,9 +581,8 @@ fn verification_receipt(
 
 /// A receipt may only skip hashing while it proves this exact inode still holds
 /// the same bytes. A changed size, mtime, device, inode, link count or change
-/// time rehashes. An identity without a provable change time never matches, so
-/// platforms that cannot prove it (Windows with the current handle API) always
-/// rehash rather than trusting a restorable mtime.
+/// time rehashes. An identity without a provable change time never matches;
+/// Windows never issues a receipt because its change time is user-settable.
 fn matching_receipt<'a>(
     stored: &'a StoredJob,
     identity: Option<&PartIdentity>,

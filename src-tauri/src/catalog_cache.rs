@@ -772,7 +772,7 @@ fn read_records(directory: &Dir, loopback: bool) -> Result<(Stamp, Records<Arc<R
     Ok((stamp, Records { version: records.version, records: records.records.into_iter().map(Arc::new).collect() }))
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 fn atomic_write(cache: &CacheDirectory, bytes: &[u8]) -> Result<(), String> {
     atomic_write_with_hook(cache, bytes, |_| {})
 }
@@ -785,13 +785,12 @@ fn atomic_write_with_hook(cache: &CacheDirectory, bytes: &[u8], before_publish: 
 /// A scratch file is app-owned only if it is a private, single-link regular
 /// file created by this user.
 fn app_owned_scratch(metadata: &cap_std::fs::Metadata) -> bool {
-    if !metadata.is_file() || metadata.nlink() != 1 || metadata.len() > MAX_CACHE as u64 { return false; }
+    let owned = metadata.is_file() && metadata.nlink() == 1 && metadata.len() <= MAX_CACHE as u64;
     #[cfg(unix)]
-    if cap_std::fs::MetadataExt::uid(metadata) != crate::fs_ext::effective_uid()
-        || cap_std::fs::MetadataExt::mode(metadata) & 0o077 != 0 {
-        return false;
-    }
-    true
+    let owned = owned
+        && cap_std::fs::MetadataExt::uid(metadata) == crate::fs_ext::effective_uid()
+        && cap_std::fs::MetadataExt::mode(metadata) & 0o077 == 0;
+    owned
 }
 
 fn scratch_uuid(name: &str) -> bool {
