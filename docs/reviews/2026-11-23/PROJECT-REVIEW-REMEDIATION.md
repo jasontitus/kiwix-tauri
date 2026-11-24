@@ -23,12 +23,20 @@
 - **Android:** TTS binder calls run on one serial engine lane with generation/token/utterance gating; stop failure fails the live successor; intent parsing and SharedPreferences/AtomicFile/durable intake work run off main; malformed `EXTRA_STREAM` values are filtered; queued duplicates do not mark handled; transient marker commit failures stay retryable; transient batches and grant flags are bounded/keyed.
 - **Reader bridge/storage:** theme batches sort the entire pending queue ancestor-first; reads and writes are phased; static frames spend no shared credit; admitted-but-uncommitted bytes are bounded and retried in order; retirement discards blocked batches; BFCache pageshow keeps credit for synchronous writes and reconciles the snapshot; post failure rolls back and surfaces; idle streams are released on disconnect.
 
+## Third pass (remaining residuals)
+
+- **Torrent source identity:** `ConfinedStorage::init` derives the SHA-1 piece receipt from the torrent metadata (`piece_range`, `offset_in_torrent`, piece length/hashes) and attaches it to the engine-opened inode. Publication hashes the bytes it actually copies through `ReceiptReader`, refusing a same-inode rewrite/truncation after engine verification before any intent or rename. Archives must occupy whole pieces by themselves; a padded multi-file torrent whose archive tail shares a piece with padding, or any other shared-piece layout, is refused at init rather than downloaded unverifiably.
+- **Archive inline text:** text resources are rendered from at most 1 MiB with an explicit truncation notice, bounding archive-controlled escape amplification instead of building a multi-hundred-MiB document.
+- **Android intake bound:** the transient/in-flight cap is checked before a worker task is queued, so over-cap deliveries no longer allocate worker work; the worker still repeats the durable check.
+- **Updater admission handoff:** the artifact downloads under only the privacy read lease; the lease is dropped before waiting for `update_admission.install()`, then a fresh privacy read rechecks generation/mode/blocker before verify/install. This removes the download-length exclusion of other commands without inverting the documented admission→privacy order.
+- **Updater buffering:** remains an upstream plugin API limit (`download` returns `Vec<u8>`, `install(&[u8])`); no streaming install path is available in this dependency.
+
 ## Independent review and dispositions
 
 - Reader authority/header review: found a low cutover-window origin and preexisting Store-error retirement gaps; the MIME test teardown finding was fixed and re-reviewed.
 - Transport review: found host-dependent private-sync test endpoints and an unbounded partial-body retry; both fixed and re-reviewed. Sharing head/body framing and updater final-gate findings were fixed and rechecked; only the low pipelining residual remains.
 - Diagnostics review: found a nested-URL leak in all three redactors; fixed in Rust, Swift, and Kotlin; Rust regression added.
-- Acquisition review: found stale post-checksum receipt identity, torrent/LocalSwarm publication TOCTOU, and edition original-identity gaps. Unix receipt/identity, finalize binding, LocalSwarm seal, edition recheck, and torrent output digest are fixed and rechecked. Torrent source identity between engine verification and publication and Windows mtime-only identity remain documented residuals.
+- Acquisition review: found stale post-checksum receipt identity, torrent/LocalSwarm publication TOCTOU, and edition original-identity gaps. Unix receipt/identity, finalize binding, LocalSwarm seal, edition recheck, torrent output digest, and engine piece receipts are fixed and rechecked. Windows mtime-only identity remains a documented residual because Windows change time is user-settable and the safe fix requires a write-denying handle/redesign.
 - Caches review: found an unaccounted post-rename cache leaf, search hits dropped on late excerpt failure, and catalog scratch findings. All are fixed and rechecked; the catalog legacy-foreign-file fail-closed policy is intentional.
 - Shell/Store review: found the Reader error-suppression flag dropped, stale watched polling, private-cutover browsing loss, mobile background flush, and startup identity binding. All are fixed and rechecked.
 - Mobile review: found Android external Kokoro surviving window retirement, Android retention predicates diverging from Rust, a Live Activity compile/offset bug, and Android main-thread/input findings. All are fixed and rechecked; physical device proof is still required.
@@ -40,7 +48,7 @@
 - `KIWIX_TEST_CHROME=… node --test scripts/test-frontend-surfaces.mjs` — passed; isolated Chromium, local fake IPC, StrictMode dialog/tag/catalog/map surfaces.
 - `node --test scripts/test-reader-storage-admission.mjs scripts/test-reader-storage-bridge.mjs` — **15 passed**.
 - `node --test scripts/test-reader-video-capability.mjs` (Node 22) — **21 passed**, including batched theme reads and inverted mutation rescan.
-- `cargo test --offline --manifest-path src-tauri/Cargo.toml --lib` — **1353 passed, 0 failed, 25 ignored**.
+- `cargo test --offline --manifest-path src-tauri/Cargo.toml --lib` — **1358 passed, 0 failed, 25 ignored**.
 - `npm run build` (TypeScript + Vite production bundle) — passed, with the existing Node/Vite version warning and ineffective-dynamic-import warnings.
 - Android plugin host tests: `:tauri-plugin-kiwix-mobile:testDebugUnitTest` — **BUILD SUCCESSFUL** (Gradle, offline, rerun).
 - `xcrun swiftc -parse` on the changed iOS sources — passed (syntax only, not type-check or runtime).
@@ -48,10 +56,9 @@
 ## Not measured / residual limits
 
 - No physical iOS/Android device or instrumented native run; Kotlin/Swift changes are host-tested or syntax-checked only.
-- No Windows/Linux runtime; Windows receipt/publication identity remains mtime-only and same-user local rewrite cannot be fully excluded without a write-denying handle.
-- Torrent publication cannot yet bind the engine's internal piece-verification identity; a same-user rewrite between engine verification and the publication-time snapshot remains a documented local-write residual. Output bytes are now re-hashed and must match the copied source digest.
-- Archive inline text still builds the escaped document in memory; worst-case pre-sizing reduces reallocation but a 16 MiB quote-heavy text entry can still peak above 100 MiB.
+- No Windows/Linux runtime; Windows receipt/publication identity remains mtime-only and same-user local rewrite cannot be fully excluded without a write-denying handle/redesign. Receipt reuse remains disabled on Windows.
+- Torrent archives whose pieces are shared with other files without padding are refused at init; they cannot be verified per-file from metadata.
+- Archive inline text is intentionally capped at 1 MiB; larger text entries require opening/downloading the original.
 - Sharing HTTP/1 pipelining retains a narrow low-severity deadline interaction; browsers do not pipeline.
-- Updater still buffers the artifact and holds the exclusive admission writer across the download because the plugin API returns a `Vec<u8>` and changing the admission/privacy handoff would require a service-level split. Metadata checks remain bounded but non-cancellable.
-- Android intake over-cap deliveries still enqueue one worker task before the bound rejects them; transient/grant collections themselves are bounded.
+- Updater still buffers the artifact because the plugin API returns a `Vec<u8>`; admission handoff no longer holds the install writer during download. Metadata checks remain bounded but non-cancellable.
 - No long-running network, multi-GB transfer, memory-pressure, thermal, or battery measurement.

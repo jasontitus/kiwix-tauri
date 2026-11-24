@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #[allow(unused_imports)]
 use super::*;
+use sha1::{Digest, Sha1};
 
 // Capability-confined I/O prevents an intervening symlink from escaping the
 // owned directory even between validation and opening a file. Hard links are
@@ -28,6 +29,144 @@ pub(super) struct ConfinedFactory {
 pub(super) struct EngineSource {
     pub(super) file: Arc<File>,
     pub(super) size: u64,
+    /// The piece hashes the engine's verdict was based on. Publication checks
+    /// every copied byte against them, so a rewrite after verification cannot
+    /// be published under that verdict.
+    pub(super) receipt: Option<Arc<PieceReceipt>>,
+}
+
+/// SHA-1 piece hashes the engine verified for one staged archive.
+pub(super) struct PieceReceipt {
+    piece_length: u64,
+    length: u64,
+    pieces: Vec<[u8; 20]>,
+}
+
+impl PieceReceipt {
+    fn for_file(
+        metadata: &TorrentMetadata,
+        info: &librqbit::file_info::FileInfo,
+    ) -> anyhow::Result<Self> {
+        let lengths = metadata.lengths();
+        let piece_length = u64::from(lengths.default_piece_length());
+        let end = info
+            .offset_in_torrent
+            .checked_add(info.len)
+            .context("Torrent archive size overflow")?;
+        if piece_length == 0 || info.len == 0 || end > lengths.total_length() {
+            bail!("Torrent archive has no verifiable pieces");
+        }
+        if info.offset_in_torrent % piece_length != 0
+            || (end % piece_length != 0 && end != lengths.total_length())
+            || u64::from(info.piece_range.start) != info.offset_in_torrent / piece_length
+            || info.piece_range.len() as u64 != info.len.div_ceil(piece_length)
+        {
+            bail!("This torrent stores its archives in pieces shared with other files, so Kiwix cannot verify them. Download the archive directly instead");
+        }
+        let hashes = metadata.info.info().pieces.as_ref();
+        let start = info.piece_range.start as usize;
+        let count = info.piece_range.len();
+        let end_hash = start
+            .checked_add(count)
+            .context("Torrent piece range overflow")?;
+        if end_hash > hashes.len() / 20 {
+            bail!("Torrent metadata is missing a piece hash");
+        }
+        let mut pieces = Vec::with_capacity(count);
+        for index in info.piece_range.clone() {
+            let start = index as usize * 20;
+            let mut hash = [0u8; 20];
+            hash.copy_from_slice(&hashes[start..start + 20]);
+            pieces.push(hash);
+        }
+        Ok(Self { piece_length, length: info.len, pieces })
+    }
+
+    fn piece_len(&self, index: usize) -> u64 {
+        self.length
+            .saturating_sub(index as u64 * self.piece_length)
+            .min(self.piece_length)
+    }
+
+    #[cfg(test)]
+    pub(super) fn of_content(piece_length: u64, content: &[u8]) -> Self {
+        assert!(piece_length > 0);
+        Self {
+            piece_length,
+            length: content.len() as u64,
+            pieces: content
+                .chunks(piece_length as usize)
+                .map(|chunk| {
+                    let mut hash = [0u8; 20];
+                    hash.copy_from_slice(&Sha1::digest(chunk)[..]);
+                    hash
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Streaming check of the bytes a publication copy actually reads.
+pub(super) struct ReceiptReader<'a, R> {
+    inner: R,
+    receipt: &'a PieceReceipt,
+    hasher: Sha1,
+    filled: u64,
+    index: usize,
+    position: u64,
+}
+
+impl<'a, R: Read> ReceiptReader<'a, R> {
+    pub(super) fn new(inner: R, receipt: &'a PieceReceipt) -> Self {
+        Self { inner, receipt, hasher: Sha1::new(), filled: 0, index: 0, position: 0 }
+    }
+
+    fn changed() -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "The torrent archive changed after its pieces were verified; download it again",
+        )
+    }
+
+    fn consume(&mut self, mut bytes: &[u8]) -> std::io::Result<()> {
+        while !bytes.is_empty() {
+            if self.index >= self.receipt.pieces.len() {
+                return Err(Self::changed());
+            }
+            let expected = self.receipt.piece_len(self.index);
+            let take = expected
+                .saturating_sub(self.filled)
+                .min(bytes.len() as u64) as usize;
+            self.hasher.update(&bytes[..take]);
+            self.filled += take as u64;
+            self.position += take as u64;
+            bytes = &bytes[take..];
+            if self.filled >= expected {
+                let digest = self.hasher.finalize_reset();
+                if &digest[..] != self.receipt.pieces[self.index].as_slice() {
+                    return Err(Self::changed());
+                }
+                self.index += 1;
+                self.filled = 0;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn finish(&self) -> Result<(), String> {
+        if self.position != self.receipt.length || self.index != self.receipt.pieces.len() {
+            return Err("Torrent publication source was truncated".into());
+        }
+        Ok(())
+    }
+}
+
+impl<R: Read> Read for ReceiptReader<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        self.consume(&buf[..read])?;
+        Ok(read)
+    }
 }
 
 impl ConfinedFactory {
@@ -163,10 +302,38 @@ impl ConfinedFactory {
                     EngineSource {
                         file: file.clone(),
                         size,
+                        receipt: None,
                     },
                 );
+            #[cfg(test)]
+            {
+                // Fixtures open sources without a torrent metadata init. Bind
+                // the bytes present at open time so later rewrites are refused.
+                let bytes = std::fs::read(self.path.join(path))?;
+                if let Some(source) = self
+                    .sources
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("Torrent source lock poisoned"))?
+                    .get_mut(path)
+                {
+                    source.receipt = Some(Arc::new(PieceReceipt::of_content(5, &bytes)));
+                }
+            }
         }
         Ok(file)
+    }
+
+    /// Bind the metadata-derived piece receipt to the source the engine opened.
+    pub(super) fn attach_receipt(&self, path: &Path, receipt: PieceReceipt) -> anyhow::Result<()> {
+        let mut sources = self
+            .sources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Torrent source lock poisoned"))?;
+        sources
+            .get_mut(path)
+            .context("Torrent source is missing for its piece receipt")?
+            .receipt = Some(Arc::new(receipt));
+        Ok(())
     }
 }
 
@@ -219,7 +386,15 @@ impl TorrentStorage for ConfinedStorage {
                 files.push(None);
                 continue;
             }
-            files.push(Some(self.factory.open_file(path, info.len)?));
+            // Derive the engine's own piece receipt before opening the file.
+            let receipt = is_zim(path)
+                .then(|| PieceReceipt::for_file(metadata, info))
+                .transpose()?;
+            let file = self.factory.open_file(path, info.len)?;
+            if let Some(receipt) = receipt {
+                self.factory.attach_receipt(path, receipt)?;
+            }
+            files.push(Some(file));
         }
         *self
             .files

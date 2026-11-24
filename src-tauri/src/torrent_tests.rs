@@ -1942,6 +1942,27 @@ fn publication_copies_engine_opened_inode_after_valid_source_replacement() {
 }
 
 #[test]
+fn publication_refuses_source_rewritten_after_engine_verification() {
+    let (profile, manager, id) = publication_fixture();
+    let record = manager.record(&id).unwrap();
+    let factory = publication_factory(&record);
+    factory
+        .open_file(Path::new("archive.zim"), TEST_ARCHIVE.len() as u64)
+        .unwrap();
+    let mut substituted = TEST_ARCHIVE.to_vec();
+    substituted[4..8].copy_from_slice(b"EVIL");
+    fs::write(record.staging.join("archive.zim"), &substituted).unwrap();
+    let sources = factory.sources.lock().unwrap().clone();
+    let error = publish_fixture_with_sources(&manager, &id, &sources, false, false).unwrap_err();
+    assert!(error.contains("changed after its pieces were verified"), "{error}");
+    assert!(!profile.0.join("archive.zim").exists());
+    assert_eq!(
+        fs::read(record.staging.join("archive.zim")).unwrap(),
+        substituted
+    );
+}
+
+#[test]
 fn publication_requires_exact_advertised_length_of_engine_opened_source() {
     for delta in [-1i64, 1] {
         let (profile, manager, id) = publication_fixture();

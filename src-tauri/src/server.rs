@@ -2189,10 +2189,20 @@ fn resource_document(
                 "The archive could not read this entry.",
             );
         };
-        format!(
-            "<pre>{}</pre>",
-            escape_attribute(&String::from_utf8_lossy(&bytes))
-        )
+        // Inline rendering is a convenience, not a download path. Bound the
+        // archive-controlled text so one hostile quote-heavy entry cannot
+        // allocate hundreds of MiB in the WebView.
+        const MAX_INLINE_TEXT: usize = 1024 * 1024;
+        let truncated = bytes.len() > MAX_INLINE_TEXT;
+        let text = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_INLINE_TEXT)]);
+        let escaped = escape_attribute(&text);
+        if truncated {
+            format!(
+                "<pre>{escaped}</pre><p>This text is too large to display in full. Open the original file to read the rest.</p>"
+            )
+        } else {
+            format!("<pre>{escaped}</pre>")
+        }
     } else {
         // Sandboxed webviews cannot reliably host native PDF/EPUB plugins.
         // Keep navigation instrumented; trusted shell controls provide Save/Open.

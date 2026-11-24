@@ -153,6 +153,13 @@ pub(super) fn publish_archives(
         let retained = sources
             .get(path)
             .ok_or("Missing engine-verified torrent publication source")?;
+        // The engine's verdict covers the inode it hashed, not bytes a
+        // same-user rewrite can substitute afterwards. Every copied byte must
+        // still match the piece hashes that verdict was based on.
+        let receipt = retained
+            .receipt
+            .as_deref()
+            .ok_or("Missing engine-verified torrent piece receipt")?;
         let verified_source = crate::publication::VerifiedFile::new(
             retained.file.try_clone().map_err(display)?,
             retained.size,
@@ -196,12 +203,15 @@ pub(super) fn publish_archives(
         }
         let result = (|| -> Result<(), String> {
             publication_directory_unchanged(&record.directory, &destination, &temporary.directory)?;
-            let sha256 = publication_digest(&mut source, &mut output, retained.size, stop)?;
-            // The digest records copied-output identity for crash recovery. It
-            // is not a substitute for the engine's torrent piece verification.
-            // Re-bind the source handle to the identity captured before the
-            // copy, including its change clock, so a same-inode rewrite during
-            // the read cannot publish foreign bytes.
+            let mut checked = ReceiptReader::new(&mut source, receipt);
+            let sha256 = publication_digest(&mut checked, &mut output, retained.size, stop)?;
+            checked.finish()?;
+            drop(checked);
+            // The digest records copied-output identity for crash recovery.
+            // The receipt above already bound these bytes to the engine's piece
+            // verdict; re-bind the source handle too, so a same-inode rewrite
+            // during the read cannot publish foreign bytes on platforms whose
+            // change clock is weaker than the receipt.
             if !verified_source.matches_file(&source).map_err(display)? {
                 return Err(format!(
                     "Torrent publication source changed while copying: {}",

@@ -158,6 +158,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private var transientMarkerDirty = false
     /** Durable intake writes handed to the worker but not yet fsynced. */
     private val queuedIntakeBatches = mutableSetOf<String>()
+    /** Bounded main-thread cache of already-durable batch keys for dedupe. */
+    private val durableIntakeKeys = mutableSetOf<String>()
     /** Offered native intent flags are not themselves a persisted permission. */
     private val incomingGrantFlags = mutableMapOf<Uri, Int>()
     /** Reference count for transient batches sharing the same URI. */
@@ -1834,6 +1836,16 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             notifyIncomingDocuments()
             return
         }
+        // Bound the in-flight queue before paying for a worker task. The worker
+        // repeats the durable check after its prefs/grant read; a known durable
+        // duplicate still reaches that dedupe even at the cap.
+        if (!durableIntakeKeys.contains(urisKey) &&
+            (queuedIntakeBatches.size >= MAX_TRANSIENT_INTAKE_BATCHES ||
+             transientBatches.size + pendingTransientAdmissions >= MAX_TRANSIENT_INTAKE_BATCHES)) {
+            incomingFailure = "INCOMING_DOCUMENTS_LIMIT"
+            notifyIncomingDocuments()
+            return
+        }
         queuedIntakeBatches.add(urisKey)
         val batch = JSONObject().put("requestId", UUID.randomUUID().toString()).put("uris", batchUris)
         worker.execute { commitDocumentBatch(intent, parsed, urisKey, batch) }
@@ -1918,6 +1930,10 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             }
             if (duplicate || saved) {
                 queuedIntakeBatches.remove(urisKey)
+                durableIntakeKeys.add(urisKey)
+                if (durableIntakeKeys.size > MAX_TRANSIENT_INTAKE_BATCHES * 2) {
+                    durableIntakeKeys.remove(durableIntakeKeys.first())
+                }
                 incomingFailure = null
                 incomingNotice = null
                 intent.putExtra(INTAKE_HANDLED_EXTRA, true)
@@ -1947,6 +1963,10 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
                     val requestId = batch.getString("requestId")
                     transientBatches[requestId] = TransientBatch(batch, urisKey, parsed.uris)
                     transientBatchUris[urisKey] = requestId
+                    durableIntakeKeys.add(urisKey)
+                    if (durableIntakeKeys.size > MAX_TRANSIENT_INTAKE_BATCHES * 2) {
+                        durableIntakeKeys.remove(durableIntakeKeys.first())
+                    }
                     incomingFailure = null
                     incomingNotice = null
                     intent.putExtra(INTAKE_HANDLED_EXTRA, true)
@@ -2095,13 +2115,15 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
                         }
                         main.post {
                             try {
-                                incomingFailure?.let { throw NativeDocumentError(it) }
                                 for (batch in transientBatches.values) values.put(batch.json)
-                                // Surface a lost transient batch only after any durable batch
-                                // has been offered, so one expired grant cannot block import.
-                                if (values.length() == 0) incomingNotice?.let {
-                                    incomingNotice = null
-                                    throw NativeDocumentError(it)
+                                // Surface a limit/lost-batch failure only when no
+                                // already-admitted batch can be handed off.
+                                if (values.length() == 0) {
+                                    incomingFailure?.let { throw NativeDocumentError(it) }
+                                    incomingNotice?.let {
+                                        incomingNotice = null
+                                        throw NativeDocumentError(it)
+                                    }
                                 }
                                 invoke.resolve(JSObject().put("batches", values))
                             } catch (error: Exception) { reject(invoke, error) }
