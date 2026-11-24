@@ -450,6 +450,7 @@ enum VerificationOutcome {
     Failed,
 }
 
+#[cfg(any(unix, test))]
 const VERIFICATION_RECEIPT_VERSION: u32 = 1;
 
 /// A durable checksum receipt. Reuse is fail-closed: any unknown version,
@@ -587,16 +588,26 @@ fn matching_receipt<'a>(
     stored: &'a StoredJob,
     identity: Option<&PartIdentity>,
 ) -> Option<&'a VerificationReceipt> {
-    let receipt = stored.verification.as_ref()?;
-    if receipt.version != VERIFICATION_RECEIPT_VERSION {
-        return None;
+    // Windows `ChangeTime` is user-settable. Never trust a persisted receipt
+    // there, including one loaded from another platform or an older build.
+    #[cfg(not(unix))]
+    {
+        let _ = (stored, identity);
+        None
     }
-    hex::decode_to_slice(&receipt.sha256, &mut [0u8; 32]).ok()?;
-    let identity = identity?;
-    if identity.links != 1 || identity.change.is_none() || *identity != receipt.identity {
-        return None;
+    #[cfg(unix)]
+    {
+        let receipt = stored.verification.as_ref()?;
+        if receipt.version != VERIFICATION_RECEIPT_VERSION {
+            return None;
+        }
+        hex::decode_to_slice(&receipt.sha256, &mut [0u8; 32]).ok()?;
+        let identity = identity?;
+        if identity.links != 1 || identity.change.is_none() || *identity != receipt.identity {
+            return None;
+        }
+        Some(receipt)
     }
-    Some(receipt)
 }
 
 /// Privacy and read-only revocation are hard stops even for a purely local

@@ -1994,6 +1994,19 @@ export default function Reader(props: ReaderProps) {
         !latest.current.settings.privateMode && !latest.current.settings.readOnly &&
         latest.current.books.some((book) => book.id === retained.location.bookId &&
           book.installationId === retained.installationId) && canNavigateReaderStorage();
+      // A late reply can arrive after suspension/interactivity changes but
+      // while this exact document is still the retained owner. Deactivating
+      // that session would retire valid background media; only a replaced
+      // document or policy retirement releases it.
+      const retainedOwner = () => alive.current &&
+        retainedActivation.current === retained &&
+        activeFrame.current === retained &&
+        displayedFrame.current?.frameId === retained.frameId &&
+        frameRef.current === node && node.contentWindow === source &&
+        latest.current.privacyGeneration === retained.privacyGeneration &&
+        !latest.current.settings.privateMode && !latest.current.settings.readOnly &&
+        latest.current.books.some((book) => book.id === retained.location.bookId &&
+          book.installationId === retained.installationId);
       // Native background handling deactivates sensors even when media keeps
       // the DOM alive. Restore that exact owner, never a fresh reader session.
       void lifecycle(async () => {
@@ -2006,8 +2019,9 @@ export default function Reader(props: ReaderProps) {
         // Native restoration is fenced by the exact retained session. A late
         // reply cannot deactivate a newer foreground owner.
         if (!current()) {
-          void lifecycle(() => api("sensor_deactivate", { sessionId: retained.sessionId }))
-            .catch((value) => latest.current.onError(value, ERROR_SITES["reader.sensor-deactivate"]));
+          if (!retainedOwner())
+            void lifecycle(() => api("sensor_deactivate", { sessionId: retained.sessionId }))
+              .catch((value) => latest.current.onError(value, ERROR_SITES["reader.sensor-deactivate"]));
           return;
         }
         retained.status = status;
@@ -2019,7 +2033,7 @@ export default function Reader(props: ReaderProps) {
           // A failed restore after retirement/privacy still needs to release
           // any native owner the old session retained. A background media
           // handoff keeps that owner for the next foreground.
-          if (!latest.current.mediaRetained)
+          if (!retainedOwner())
             void lifecycle(() => api("sensor_deactivate", { sessionId: retained.sessionId }))
               .catch((error) => latest.current.onError(error, ERROR_SITES["reader.sensor-deactivate"]));
           return;

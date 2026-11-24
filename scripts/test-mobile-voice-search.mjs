@@ -99,6 +99,8 @@ function shell(mediaState, platform = "ios") {
   let nativeQueue = Promise.resolve();
   let activationGate;
   let releaseActivation;
+  let restoreReplyGate;
+  let releaseRestoreReply;
   let readerCleanup;
   let readerDependencies = "";
   let readerReady = true;
@@ -201,6 +203,7 @@ function shell(mediaState, platform = "ios") {
             throw new Error("SPEECH_SESSION_RETIRED");
         }
         nativeOwner = args.sessionId;
+        if (command === "mobile_speech_restore_reader" && restoreReplyGate) await restoreReplyGate;
         return { camera: "notAsked", location: "notAsked", nativeLocation: true };
       }
       if (command === "sensor_deactivate") {
@@ -244,6 +247,10 @@ function shell(mediaState, platform = "ios") {
     holdActivation() {
       activationGate = new Promise((resolve) => { releaseActivation = resolve; });
       return () => { releaseActivation(); activationGate = undefined; };
+    },
+    holdRestoreReply() {
+      restoreReplyGate = new Promise((resolve) => { releaseRestoreReply = resolve; });
+      return () => { releaseRestoreReply(); restoreReplyGate = undefined; };
     },
     changePrivacy() {
       policy.generation++;
@@ -509,6 +516,25 @@ test("another Android background transition beats delayed frontend confirmation 
   assert.equal(app.nativeOwner(), null, "obsolete confirmation cannot reactivate a background sensor owner");
   assert.equal(app.readerReady(), false);
   assert.equal(app.commands.includes("sensor_deactivate"), false, "cleanup must not retire retained read-aloud");
+  assert.equal(app.nativeStops(), 0);
+  assert.equal(app.speechCapability.phase, "started");
+  app.close();
+});
+
+test("a successful retained restore reply after another background keeps read-aloud", { timeout: 3000 }, async () => {
+  const app = shell({ audible: true, pictureInPicture: false }, "android");
+  app.wake();
+  await app.drain();
+  app.background({ retired: false });
+  await app.drain();
+  const release = app.holdRestoreReply();
+  app.foreground();
+  await app.drain({ native: false });
+  app.background({ retired: false });
+  await app.drain({ native: false });
+  release();
+  await app.drain();
+  assert.equal(app.commands.includes("sensor_deactivate"), false, "a still-retained owner is not retired");
   assert.equal(app.nativeStops(), 0);
   assert.equal(app.speechCapability.phase, "started");
   app.close();

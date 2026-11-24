@@ -3733,9 +3733,13 @@ fn handle_identity_is_stable_across_rename_and_distinct_for_another_file() {
     stored.verification = verification_receipt(
         Some(before.clone()), &"0".repeat(64), VerificationOutcome::Passed, None,
     );
-    if before.change.is_some() {
+    if cfg!(unix) {
+        assert!(stored.verification.is_some(), "Unix issues a ctime-bound receipt");
         assert!(matching_receipt(&stored, Some(&before)).is_some());
         assert!(matching_receipt(&stored, Some(&after)).is_none());
+    } else {
+        assert!(stored.verification.is_none(), "non-Unix receipts stay fail-closed");
+        assert!(matching_receipt(&stored, Some(&before)).is_none());
     }
     assert!(matching_receipt(&stored, Some(&other)).is_none());
     fs::remove_dir_all(root).unwrap();
@@ -3748,13 +3752,12 @@ fn a_restored_mtime_does_not_reuse_a_verification_receipt() {
     let stored = durable_stored(&root, &Uuid::new_v4().to_string(), &bytes, "paused");
     let (_, part) = paths(&stored.job).unwrap();
     let before = part_receipt_identity(&part).unwrap();
-    if verification_receipt(
-        Some(before.clone()), &hex::encode(Sha256::digest(&bytes)),
-        VerificationOutcome::Passed, None,
-    ).is_none() {
-        // Platforms without a provable change time never issue a receipt, so
-        // there is nothing to forge; the fail-closed path is covered below.
-        assert!(before.change.is_none());
+    if !cfg!(unix) {
+        // Windows now exposes ChangeTime, but still never issues a receipt.
+        assert!(verification_receipt(
+            Some(before.clone()), &hex::encode(Sha256::digest(&bytes)),
+            VerificationOutcome::Passed, None,
+        ).is_none(), "non-Unix receipts stay fail-closed");
         fs::remove_dir_all(root).unwrap();
         return;
     }
@@ -3784,7 +3787,7 @@ fn a_restored_mtime_does_not_reuse_a_verification_receipt() {
 }
 
 #[test]
-fn a_verification_receipt_requires_a_provable_change_time() {
+fn a_verification_receipt_requires_unix_ctime_authority() {
     let root = test_directory();
     let path = root.join("part");
     fs::write(&path, b"bytes").unwrap();
@@ -3796,14 +3799,38 @@ fn a_verification_receipt_requires_a_provable_change_time() {
         assert!(verification_receipt(Some(identity), &digest, VerificationOutcome::Passed, None).is_some());
     } else {
         assert!(
-            identity.as_ref().is_none_or(|identity| identity.change.is_none()),
-            "this platform has no change-time proof"
-        );
-        assert!(
             verification_receipt(identity, &digest, VerificationOutcome::Passed, None).is_none(),
-            "a receipt must not be issued without a change time"
+            "a receipt must not be issued without a Unix ctime proof"
         );
     }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_persisted_receipt_is_never_trusted_without_unix_ctime_authority() {
+    let root = test_directory();
+    let bytes = zim_bytes(b'k', 4096);
+    let stored = durable_stored(&root, &Uuid::new_v4().to_string(), &bytes, "paused");
+    let (_, part) = paths(&stored.job).unwrap();
+    let Some(identity) = part_receipt_identity(&part) else {
+        fs::remove_dir_all(root).unwrap();
+        return;
+    };
+    let mut stored = stored;
+    stored.verification = Some(VerificationReceipt {
+        version: VERIFICATION_RECEIPT_VERSION,
+        identity: identity.clone(),
+        sha256: "0".repeat(64),
+        outcome: VerificationOutcome::Passed,
+        error: None,
+    });
+    #[cfg(unix)]
+    assert!(matching_receipt(&stored, Some(&identity)).is_some());
+    #[cfg(not(unix))]
+    assert!(
+        matching_receipt(&stored, Some(&identity)).is_none(),
+        "non-Unix persisted receipts are never trusted"
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
