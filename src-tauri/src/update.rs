@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 use serde_json::json;
+use std::future::Future;
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -38,6 +39,12 @@ use url::Url;
 pub(crate) const CHANNEL: &str = "stable";
 const CHECK_INTERVAL_SECONDS: i64 = 24 * 60 * 60;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// How often a running artifact download checks whether the application is
+/// retiring. Quit waits for this command's privacy lease, so an unbounded
+/// download would stall shutdown behind it.
+const SHUTDOWN_POLL: Duration = Duration::from_millis(250);
+const DOWNLOAD_CANCELLED: &str =
+    "The update download stopped because Kiwix is shutting down. Check for updates again after it restarts.";
 const STATE_FILE: &str = "update-state.json";
 const PROGRESS_EVENT: &str = "kiwix-update-progress";
 const AVAILABLE_EVENT: &str = "kiwix-update-available";
@@ -703,9 +710,58 @@ pub(crate) fn start_daily_check(service: Arc<Service>) {
 // Install
 // ---------------------------------------------------------------------------
 
+/// Run `work` to completion, or drop it as soon as `cancelled` reports true.
+/// Dropping the updater's download future also releases the response stream
+/// and its in-memory buffer; the caller reports the cancellation as an error.
+async fn until_cancelled<T, F>(
+    work: F,
+    mut cancelled: impl FnMut() -> bool,
+    poll: Duration,
+) -> Result<T, String>
+where
+    F: Future<Output = T>,
+{
+    let mut work = std::pin::pin!(work);
+    loop {
+        tokio::select! {
+            result = &mut work => return Ok(result),
+            _ = tokio::time::sleep(poll) => {
+                if cancelled() {
+                    return Err(DOWNLOAD_CANCELLED.into());
+                }
+            }
+        }
+    }
+}
+
+/// Last gate before the installer takes over. Both checks await, so the
+/// process check is repeated after the blocker's yield point: a Quit that
+/// begins while transfers are being inspected must still refuse the install.
+/// Exclusive admission already refuses new transfer commands, but a background
+/// worker can still publish work, so the blocker is checked here as well.
+async fn final_install_gate(
+    running: impl Fn() -> Result<(), String>,
+    blocker: impl Future<Output = Result<Option<String>, String>>,
+) -> Result<(), String> {
+    running()?;
+    if let Some(reason) = blocker.await? {
+        return Err(reason);
+    }
+    running()
+}
+
 pub(crate) async fn install(
     service: &Arc<Service>,
     expected_version: Option<&str>,
+    // Exclusive update admission, acquired by dispatch before the privacy read
+    // lease. It is deliberately held across the whole artifact download:
+    // releasing it would mean re-acquiring the writer while the caller's
+    // privacy read is still held, which inverts the documented order (admission
+    // before privacy) and deadlocks against `save_settings` (admission read,
+    // then privacy write). A handoff therefore needs a service-side interface
+    // that drops the privacy lease first and re-checks the install blocker
+    // afterwards; until then this command fails closed by excluding transfers
+    // for its whole life.
     _installation: tokio::sync::OwnedRwLockWriteGuard<()>,
 ) -> Result<(), String> {
     let settings = service.store.settings()?;
@@ -750,8 +806,13 @@ pub(crate) async fn install(
         }),
     );
     let progress_app = app.clone();
-    let bytes = update
-        .download(
+    // The plugin returns the verified artifact as one buffer and `install`
+    // takes those bytes, so streaming to disk could not lower the peak here;
+    // a disk-backed install needs an upstream plugin API. What this boundary
+    // does own is cancellation: Quit waits for this command's privacy lease,
+    // so the download is dropped as soon as the service starts retiring.
+    let download = until_cancelled(
+        update.download(
             move |chunk, content_length| {
                 downloaded = downloaded.saturating_add(chunk as u64);
                 if content_length.is_some() {
@@ -770,12 +831,22 @@ pub(crate) async fn install(
                 }
             },
             || {},
-        )
-        .await
-        .map_err(|error| {
+        ),
+        || service.ensure_running().is_err(),
+        SHUTDOWN_POLL,
+    )
+    .await;
+    let bytes = match download {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(error)) => {
             set_progress(&app, None);
-            plain_update_error(&error)
-        })?;
+            return Err(plain_update_error(&error));
+        }
+        Err(cancelled) => {
+            set_progress(&app, None);
+            return Err(cancelled);
+        }
+    };
 
     set_progress(
         &app,
@@ -791,6 +862,18 @@ pub(crate) async fn install(
         set_progress(&app, None);
         plain_update_error(&error)
     })?;
+    // Quit may have begun while the artifact verified. Installing then would
+    // replace the bundle of a retiring process, so this is the last gate
+    // before the installer takes over (and, on Windows, exits).
+    if let Err(error) = final_install_gate(
+        || service.ensure_running(),
+        service.update_install_blocker(),
+    )
+    .await
+    {
+        set_progress(&app, None);
+        return Err(error);
+    }
     set_progress(
         &app,
         Some(Progress {
@@ -952,6 +1035,110 @@ mod tests {
         ] {
             assert!(!transfer_in_progress(status), "{status}");
         }
+    }
+
+    #[tokio::test]
+    async fn a_retiring_application_drops_the_artifact_download() {
+        struct Abort(Arc<AtomicBool>);
+        impl Drop for Abort {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let probe = dropped.clone();
+        let work = async move {
+            let _abort = Abort(probe);
+            std::future::pending::<Result<Vec<u8>, UpdaterError>>().await
+        };
+        let error = until_cancelled(work, || true, Duration::from_millis(20))
+            .await
+            .expect_err("a retiring application must not keep downloading");
+        assert_eq!(error, DOWNLOAD_CANCELLED);
+        assert!(
+            dropped.load(Ordering::SeqCst),
+            "the in-flight download future and its buffer must be dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_completed_download_is_not_turned_into_a_cancellation() {
+        let bytes = until_cancelled(
+            async { Ok::<_, UpdaterError>(b"artifact".to_vec()) },
+            || true,
+            Duration::from_secs(60),
+        )
+        .await
+        .expect("a ready download wins over the cancellation tick")
+        .expect("the plugin result passes through unchanged");
+        assert_eq!(bytes.as_slice(), b"artifact".as_slice());
+    }
+
+    #[tokio::test]
+    async fn cancellation_is_polled_while_a_download_is_still_running() {
+        let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let probe = checks.clone();
+        let value = until_cancelled(
+            async {
+                tokio::time::sleep(Duration::from_millis(60)).await;
+                7
+            },
+            move || {
+                probe.fetch_add(1, Ordering::SeqCst);
+                false
+            },
+            Duration::from_millis(10),
+        )
+        .await
+        .expect("a running download completes when nothing cancels it");
+        assert_eq!(value, 7);
+        assert!(
+            checks.load(Ordering::SeqCst) >= 2,
+            "the retirement check must keep running during the download"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_install_gate_rechecks_shutdown_after_the_blocker_check() {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let running = {
+            let stopped = stopped.clone();
+            move || {
+                if stopped.load(Ordering::SeqCst) {
+                    Err("The application is shutting down".to_string())
+                } else {
+                    Ok(())
+                }
+            }
+        };
+        let flip = stopped.clone();
+        let blocker = async move {
+            // A Quit starts while transfers are being inspected.
+            flip.store(true, Ordering::SeqCst);
+            Ok(None)
+        };
+        let error = final_install_gate(running, blocker)
+            .await
+            .expect_err("a retiring process must refuse the install");
+        assert!(error.contains("shutting down"));
+    }
+
+    #[tokio::test]
+    async fn the_install_gate_reports_a_transfer_that_is_still_writing() {
+        let error = final_install_gate(
+            || Ok(()),
+            async { Ok(Some("A download is still in progress.".to_string())) },
+        )
+        .await
+        .expect_err("a writing transfer must refuse the install");
+        assert_eq!(error, "A download is still in progress.");
+    }
+
+    #[tokio::test]
+    async fn the_install_gate_admits_a_quiet_profile() {
+        final_install_gate(|| Ok(()), async { Ok(None) })
+            .await
+            .expect("nothing is retiring or writing");
     }
 
     #[test]

@@ -180,11 +180,30 @@
   // Only the producer root mirrors the store; descendants forward operations.
   if (!upstream) loadLocal();
   const pending = new Map();
-  // The shell reserves this allowance synchronously before iframe navigation.
+  // Per-document allowance for unacknowledged mutations. It is local to this
+  // producer; the shell charges only batches that are actually admitted.
   let credit = 2 * 1024 * 1024;
   let closed = false;
   let failed = false;
   let awaitingCredit = false;
+  // Sequence at the ready that requested a credit snapshot. Batches posted
+  // after it are not reflected in that snapshot and must stay deducted.
+  let snapshotBoundary = 0;
+  // Mutations admitted in one task share a single bounded IPC batch. The
+  // reservation is computed synchronously (so setItem still throws
+  // QuotaExceededError before touching the mirror); only delivery is deferred.
+  let pendingOperations = [];
+  let pendingBody = 2; // bytes(JSON.stringify([]))
+  let pendingReserved = 0;
+  let flushScheduled = false;
+  // Native mirror restores for operations whose IPC batch has not been posted.
+  // A post failure rolls these back instead of losing the mutation silently.
+  let pendingRestores = [];
+  const batchSize = (bodyBytes, seq) =>
+    bytes(`{"id":"${"0".repeat(36)}","documentId":"${documentId}","sequence":${seq}`) +
+    bytes(',"operations":') +
+    1 +
+    bodyBytes;
   const writable = () => {
     if (readFreezes().size || closed || failed)
       throw new DOMException(
@@ -274,6 +293,71 @@
       }
     }
   };
+  const flushPending = () => {
+    flushScheduled = false;
+    if (!pendingOperations.length) return;
+    if (upstream || readOnly) {
+      pendingOperations = [];
+      pendingBody = 2;
+      pendingReserved = 0;
+      return;
+    }
+    const operations = pendingOperations;
+    const reserved = pendingReserved;
+    pendingOperations = [];
+    pendingBody = 2;
+    pendingReserved = 0;
+    const batch = {
+      id: crypto.randomUUID(),
+      documentId,
+      sequence: sequence + 1,
+      operations,
+    };
+    const size = bytes(JSON.stringify(batch));
+    try {
+      parent.postMessage(
+        {
+          type: "kiwix-storage-batch",
+          privacyGeneration,
+          batch,
+        },
+        parentOrigin,
+      );
+    } catch {
+      // The producer already returned success for these mutations. Restore the
+      // exact native values, rebuild the mirror, and surface the failure
+      // instead of silently losing the batch.
+      for (let index = pendingRestores.length - 1; index >= 0; index--) {
+        try {
+          pendingRestores[index]();
+        } catch {
+          // A restore failure cannot improve the already-failed session.
+        }
+      }
+      pendingRestores = [];
+      credit += reserved;
+      loadLocal();
+      refreshCookies();
+      failed = true;
+      closed = true;
+      window.dispatchEvent(
+        new CustomEvent("kiwix-reader-storage-error", {
+          detail: new Error("Archive storage could not reach the shell"),
+        }),
+      );
+      return;
+    }
+    // Replace the upper-bound reservation with the exact serialized size.
+    credit += reserved - size;
+    pendingRestores = [];
+    pending.set(batch.id, { sequence: batch.sequence, size });
+    sequence = batch.sequence;
+  };
+  const scheduleFlush = () => {
+    if (flushScheduled || upstream || readOnly) return;
+    flushScheduled = true;
+    queueMicrotask(flushPending);
+  };
   const changed = (operations, nextCookies) => {
     if (upstream) {
       upstream.commit(operations, nextCookies);
@@ -290,50 +374,51 @@
     // never larger than the synchronous compatibility view.
     if (framing + plan.size + cookieSize > 1024 * 1024)
       throw quotaError("Archive storage quota exceeded");
-    let batch;
-    let size = 0;
-    if (!readOnly) {
-      batch = {
-        id: crypto.randomUUID(),
-        documentId,
-        sequence: sequence + 1,
-        operations,
-      };
-      size = bytes(JSON.stringify(batch));
-      if (size > credit)
-        throw quotaError(
-          "Archive storage is waiting for persistence acknowledgement",
+    // The shell validates at most 10000 operations per batch.
+    if (operations.length > 10000)
+      throw quotaError("Archive storage rejected an invalid mutation");
+    if (!readOnly && pendingOperations.length + operations.length > 10000) {
+      // Deliver the full batch before starting another one.
+      flushPending();
+      if (failed)
+        throw new DOMException(
+          "Archive storage is closing its session",
+          "InvalidStateError",
         );
     }
+    // Measure the coalesced batch before mutating anything. A synchronous
+    // credit failure must not leave the compatibility mirror changed.
+    let nextBody = pendingBody;
+    let queued = pendingOperations.length;
+    for (const operation of operations) {
+      nextBody += (queued ? 1 : 0) + bytes(JSON.stringify(operation));
+      queued += 1;
+    }
+    const reserved = readOnly
+      ? pendingReserved
+      : batchSize(nextBody, sequence + 1);
+    if (reserved - pendingReserved > credit)
+      throw quotaError(
+        "Archive storage is waiting for persistence acknowledgement",
+      );
     const changes = nativeChanges(operations);
     if (cookieChanged) changes.push([cookieKey, cookieText]);
-    // Check quota and producer credit before touching browser memory. Native
-    // quota errors and a failed post both restore the exact previous values.
+    // Quota and credit are already checked; a native write failure still
+    // restores the exact previous values.
     const rollback = nativeTransaction(changes);
-    try {
-      if (batch)
-        parent.postMessage(
-          {
-            type: "kiwix-storage-batch",
-            privacyGeneration,
-            batch,
-          },
-          parentOrigin,
-        );
-    } catch (error) {
-      rollback();
-      throw error;
-    }
-    if (batch) {
-      credit -= size;
-      pending.set(batch.id, { sequence: batch.sequence, size });
-      sequence = batch.sequence;
+    if (!readOnly) {
+      pendingOperations.push(...operations);
+      pendingBody = nextBody;
+      credit -= reserved - pendingReserved;
+      pendingReserved = reserved;
+      pendingRestores.push(rollback);
     }
     applyLocal(operations, plan.sizes);
     if (cookieChanged) {
       cookies = nextCookies;
       cookiePayload = cookieSize;
     }
+    scheduleFlush();
   };
   if (!upstream)
     Object.defineProperty(window, producerKey, {
@@ -344,7 +429,8 @@
         },
       }),
     });
-  const ready = () =>
+  const ready = () => {
+    flushPending();
     parent.postMessage(
       {
         type: "kiwix-storage-ready",
@@ -352,13 +438,6 @@
         sequence,
         privacyGeneration,
       },
-      parentOrigin,
-    );
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    parent.postMessage(
-      { type: "kiwix-storage-closed", documentId, sequence },
       parentOrigin,
     );
   };
@@ -382,7 +461,12 @@
         // The credit snapshot already includes these committed mutations.
         for (const [id, item] of pending)
           if (item.sequence <= message.sequence) pending.delete(id);
-        credit = message.bytes;
+        // Preserve credit for batches posted after the ready that requested
+        // this snapshot; the shell had not processed them when it replied.
+        let afterSnapshot = 0;
+        for (const item of pending.values())
+          if (item.sequence > snapshotBoundary) afterSnapshot += item.size;
+        credit = Math.max(0, message.bytes - afterSnapshot);
         awaitingCredit = false;
       }
     } else if (
@@ -399,7 +483,21 @@
       message.type === "kiwix-storage-failed"
     ) {
       failed = true;
-      close();
+      closed = true;
+      pendingOperations = [];
+      pendingBody = 2;
+      pendingReserved = 0;
+      flushScheduled = false;
+      for (let index = pendingRestores.length - 1; index >= 0; index--) {
+        try {
+          pendingRestores[index]();
+        } catch {
+          // The shell already rejected this producer.
+        }
+      }
+      pendingRestores = [];
+      loadLocal();
+      refreshCookies();
     } else if (
       message?.type === "kiwix-storage-drain" &&
       typeof message.id === "string" &&
@@ -409,6 +507,7 @@
       if (typeof message.freeze === "string" && message.freeze.length <= 64)
         updateFreeze(message.freeze, true);
       // Every earlier mutation from this document precedes its own drain ack.
+      flushPending();
       parent.postMessage(
         { type: "kiwix-storage-drained", id: message.id, documentId },
         parentOrigin,
@@ -432,6 +531,8 @@
     "pagehide",
     () => {
       if (upstream) return;
+      // The advisory packet must not overtake mutations admitted in this task.
+      flushPending();
       parent.postMessage(
         {
           type: "kiwix-storage-hiding",
@@ -447,8 +548,13 @@
   addEventListener("pageshow", (event) => {
     if (upstream) return;
     if (event.persisted && !failed) {
+      // Settle any admitted-but-undelivered mutations before the snapshot.
+      flushPending();
       closed = false;
-      credit = 0;
+      // Keep the credit this document already had. A synchronous pageshow
+      // write must succeed; the asynchronous snapshot reconciles the exact
+      // value and restores acknowledgements missed while frozen.
+      snapshotBoundary = sequence;
       awaitingCredit = true;
       // The frozen document missed every storage event of its successor.
       loadLocal();

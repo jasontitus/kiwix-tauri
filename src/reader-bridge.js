@@ -2518,6 +2518,9 @@
       if (themeOpaque(node)) return true;
     return false;
   }
+  // Style recalculations are batched: a limit keeps a long article's scan
+  // responsive without paying a recalculation per element.
+  const themeBatchLimit = 256;
   const themeState = {
     theme: "original",
     style: null,
@@ -2527,6 +2530,8 @@
     index: 0,
     queued: new WeakSet(),
     backdrop: new WeakMap(),
+    batch: [],
+    readings: [],
   };
   function themeStyleText() {
     const blocks = themeNames
@@ -2625,24 +2630,64 @@
     }
     return "themed";
   }
-  function inspectThemeElement(element) {
-    if (themeState.theme === "original" || !element.isConnected) return;
-    if (insideThemeOpaque(element)) return;
-    if (element === document.body) {
-      themeState.backdrop.set(element, "themed");
-      return;
-    }
+  function themeReadCandidate(element) {
+    if (themeState.theme === "original" || !element.isConnected) return false;
+    if (insideThemeOpaque(element)) return false;
+    if (element === document.body) return true;
     const tag = element.tagName;
-    if (tag === "HTML" || themeExcluded.has(tag)) return;
+    return tag !== "HTML" && !themeExcluded.has(tag);
+  }
+  function themeDepth(element) {
+    let depth = 0;
+    for (let node = element; node; node = node.parentElement) depth++;
+    return depth;
+  }
+  function clearThemeElementMarks(element) {
     delete element.dataset.kiwixSurface;
     delete element.dataset.kiwixInk;
     delete element.dataset.kiwixEdge;
+  }
+  // `getComputedStyle` forces style resolution, so reading and then writing one
+  // element at a time invalidates style for every element in a long article.
+  // The scanner resolves a whole batch first, applies its paint/ink marks, then
+  // samples the batch's borders and applies edge marks. That costs a couple of
+  // recalculations per batch instead of one per node.
+  function themeReading(index) {
+    let reading = themeState.readings[index];
+    if (!reading) {
+      reading = themeState.readings[index] = {
+        element: null,
+        backgroundColor: "",
+        backgroundImage: "",
+        color: "",
+        surface: "",
+        ink: false,
+        borderTopColor: "",
+        borderRightColor: "",
+        borderBottomColor: "",
+        borderLeftColor: "",
+      };
+    }
+    return reading;
+  }
+  function readThemeElement(element, index) {
     const style = getComputedStyle(element);
+    const reading = themeReading(index);
+    reading.element = element;
+    reading.backgroundColor = style.backgroundColor;
+    reading.backgroundImage = style.backgroundImage;
+    reading.color = style.color;
+  }
+  // Classification only reads the snapshot above; it writes nothing to the DOM,
+  // so the whole batch can be decided before the first mark is applied.
+  function classifyThemeReading(reading) {
+    const element = reading.element;
     const dark = themeState.theme === "dark";
     let backdrop = inheritedThemeBackdrop(element);
-    const background = themeRgb(style.backgroundColor);
+    let surface = "";
+    const background = themeRgb(reading.backgroundColor);
     if (background && background[3] >= 0.99) {
-      if (style.backgroundImage === "none") {
+      if (reading.backgroundImage === "none") {
         const tone = themeTone(background);
         if (
           tone.chroma <= 16 &&
@@ -2650,7 +2695,7 @@
         ) {
           // Only opaque neutral surfaces are recoloured; a card's coloured
           // neighbours and artwork backgrounds keep their authored colours.
-          element.dataset.kiwixSurface = dark
+          surface = dark
             ? tone.luminance >= 0.96
               ? "page"
               : "raised"
@@ -2664,10 +2709,11 @@
       } else {
         backdrop = "preserved";
       }
-    } else if (style.backgroundImage !== "none") {
+    } else if (reading.backgroundImage !== "none") {
       backdrop = "preserved";
     }
-    const ink = themeRgb(style.color);
+    const ink = themeRgb(reading.color);
+    let inkMark = false;
     if (ink && backdrop === "themed") {
       const tone = themeTone(ink);
       // Text over a preserved (coloured or image) backdrop keeps its colour.
@@ -2675,14 +2721,39 @@
         tone.chroma <= 24 &&
         (dark ? tone.luminance <= 0.5 : tone.luminance >= 0.75)
       )
-        element.dataset.kiwixInk = "";
+        inkMark = true;
     }
-    if (element.dataset.kiwixSurface) {
-      const sides = ["Top", "Right", "Bottom", "Left"].map((side) =>
-        themeRgb(style[`border${side}Color`]),
-      );
+    reading.surface = surface;
+    reading.ink = inkMark;
+    themeState.backdrop.set(element, backdrop);
+  }
+  function writeThemeMarks(reading) {
+    if (reading.surface) reading.element.dataset.kiwixSurface = reading.surface;
+    if (reading.ink) reading.element.dataset.kiwixInk = "";
+  }
+  // A default border colour is `currentColor`, so the archive-authored border
+  // must be sampled after the ink mark has been applied, exactly as the
+  // per-element scanner did; only surface elements were ever checked.
+  function readThemeBorders(reading) {
+    if (!reading.surface) return;
+    const style = getComputedStyle(reading.element);
+    reading.borderTopColor = style.borderTopColor;
+    reading.borderRightColor = style.borderRightColor;
+    reading.borderBottomColor = style.borderBottomColor;
+    reading.borderLeftColor = style.borderLeftColor;
+  }
+  function writeThemeEdge(reading) {
+    const element = reading.element;
+    if (reading.surface) {
+      const sides = [
+        reading.borderTopColor,
+        reading.borderRightColor,
+        reading.borderBottomColor,
+        reading.borderLeftColor,
+      ].map(themeRgb);
       if (sides.every((side) => side && side[3] > 0.5)) {
         const tones = sides.map(themeTone);
+        const dark = themeState.theme === "dark";
         if (
           tones.every((tone) => tone.chroma <= 16) &&
           tones.every((tone) => (dark ? tone.luminance >= 0.55 : tone.luminance <= 0.45))
@@ -2690,7 +2761,7 @@
           element.dataset.kiwixEdge = "";
       }
     }
-    themeState.backdrop.set(element, backdrop);
+    reading.element = null;
   }
   function scheduleThemeScan() {
     if (themeState.timer || themeState.theme === "original") return;
@@ -2698,14 +2769,68 @@
   }
   function scanThemeChunk() {
     themeState.timer = 0;
-    const deadline = performance.now() + 8;
+    const batch = themeState.batch;
+    batch.length = 0;
+    // Order the entire pending queue, not only this chunk. A descendant can be
+    // enqueued by an earlier mutation callback while its ancestor arrives later;
+    // chunk-local sorting would still classify the descendant against a stale
+    // backdrop. Depth is strictly smaller for every proper ancestor.
+    if (themeState.index < themeState.queue.length) {
+      const pending = themeState.queue.slice(themeState.index);
+      const depths = new Map();
+      for (const element of pending) depths.set(element, themeDepth(element));
+      pending.sort((left, right) => depths.get(left) - depths.get(right));
+      themeState.queue.length = themeState.index;
+      themeState.queue.push(...pending);
+    }
+    // The batch is element-count bound rather than time bound: each batch pays
+    // a small, fixed number of style recalculations, and 256 elements keeps a
+    // single chunk's read/write work close to one frame on the slowest WebView.
     while (
       themeState.index < themeState.queue.length &&
-      performance.now() < deadline
+      batch.length < themeBatchLimit
     ) {
       const element = themeState.queue[themeState.index++];
       themeState.queued.delete(element);
-      inspectThemeElement(element);
+      if (themeReadCandidate(element)) batch.push(element);
+    }
+    if (batch.length > 1) {
+      // Mutation records can enqueue a descendant before its ancestor. Sort the
+      // batch ancestor-first so a child never classifies against a stale
+      // ancestor backdrop left by an earlier pass.
+      const depths = new Map();
+      for (const element of batch) depths.set(element, themeDepth(element));
+      batch.sort((left, right) => depths.get(left) - depths.get(right));
+    }
+    if (batch.length) {
+      // Write phase 1: drop the previous pass's marks before any style read, so
+      // every read below observes the archive's authored colours.
+      for (const element of batch)
+        if (element !== document.body) clearThemeElementMarks(element);
+      // Read phase 1: background, image and text colour, then classify in
+      // memory (no DOM writes) so a parent's backdrop is ready for its children.
+      for (let index = 0; index < batch.length; index++) {
+        const element = batch[index];
+        if (element === document.body) {
+          themeState.backdrop.set(element, "themed");
+          continue;
+        }
+        readThemeElement(element, index);
+        classifyThemeReading(themeState.readings[index]);
+      }
+      // Write phase 2: surface and ink marks.
+      for (let index = 0; index < batch.length; index++)
+        if (batch[index] !== document.body)
+          writeThemeMarks(themeState.readings[index]);
+      // Read phase 2: border colours, now that `currentColor` follows the ink.
+      for (let index = 0; index < batch.length; index++)
+        if (batch[index] !== document.body)
+          readThemeBorders(themeState.readings[index]);
+      // Write phase 3: edge marks.
+      for (let index = 0; index < batch.length; index++)
+        if (batch[index] !== document.body)
+          writeThemeEdge(themeState.readings[index]);
+      batch.length = 0;
     }
     if (themeState.index < themeState.queue.length) {
       scheduleThemeScan();
@@ -2739,20 +2864,31 @@
     themeState.timer = 0;
     themeState.queue.length = 0;
     themeState.index = 0;
+    themeState.batch.length = 0;
     themeState.queued = new WeakSet();
     themeState.backdrop = new WeakMap();
     for (const element of document.querySelectorAll(
       "[data-kiwix-surface],[data-kiwix-ink],[data-kiwix-edge]",
-    )) {
-      delete element.dataset.kiwixSurface;
-      delete element.dataset.kiwixInk;
-      delete element.dataset.kiwixEdge;
+    ))
+      clearThemeElementMarks(element);
+  }
+  function enqueueThemeTargets(targets) {
+    if (!targets.length) return;
+    if (targets.length > 1) {
+      // A class/style mutation can be observed on a descendant before its
+      // ancestor. Enqueue ancestors first so their fresh backdrop is already
+      // available when the descendant is classified.
+      const depths = new Map();
+      for (const target of targets) depths.set(target, themeDepth(target));
+      targets.sort((left, right) => depths.get(left) - depths.get(right));
     }
+    for (const target of targets) enqueueThemeSubtree(target);
   }
   function observeTheme() {
     if (themeState.observer || typeof MutationObserver !== "function") return;
     themeState.observer = new MutationObserver((records) => {
       if (themeState.theme === "original") return;
+      const targets = [];
       for (const record of records) {
         if (insideThemeOpaque(record.target)) continue;
         if (record.type === "childList") {
@@ -2761,11 +2897,12 @@
               node.nodeType === Node.ELEMENT_NODE &&
               !insideThemeOpaque(node)
             )
-              enqueueThemeSubtree(node);
+              targets.push(node);
         } else if (record.target.nodeType === Node.ELEMENT_NODE) {
-          enqueueThemeSubtree(record.target);
+          targets.push(record.target);
         }
       }
+      enqueueThemeTargets(targets);
     });
     themeState.observer.observe(document.documentElement, {
       subtree: true,

@@ -173,6 +173,12 @@ pub(super) fn publish_archives(
             return Err(format!("{} is not a ZIM archive", path.display()));
         }
         source.seek(SeekFrom::Start(0)).map_err(display)?;
+        if !verified_source.matches_file(&source).map_err(display)? {
+            return Err(format!(
+                "Torrent publication source changed before copying: {}",
+                path.display()
+            ));
+        }
         let temp = format!(".kiwix-publish-{}", Uuid::new_v4());
         let (temporary, mut output) =
             create_publication_temporary(&record.directory, &destination, temp)?;
@@ -193,16 +199,43 @@ pub(super) fn publish_archives(
             let sha256 = publication_digest(&mut source, &mut output, retained.size, stop)?;
             // The digest records copied-output identity for crash recovery. It
             // is not a substitute for the engine's torrent piece verification.
-            crate::publication::VerifiedFile::new(
-                source.try_clone().map_err(display)?,
-                retained.size,
-            )
-            .map_err(|e| format!("Torrent publication source changed while copying: {e}"))?;
-            output.sync_all().map_err(display)?;
+            // Re-bind the source handle to the identity captured before the
+            // copy, including its change clock, so a same-inode rewrite during
+            // the read cannot publish foreign bytes.
+            if !verified_source.matches_file(&source).map_err(display)? {
+                return Err(format!(
+                    "Torrent publication source changed while copying: {}",
+                    path.display()
+                ));
+            }
+            // Capture the copied output's identity before persisting its intent.
+            // On Unix the change stamp is taken before the sync so a same-inode
+            // rewrite during a long flush is detected; on Windows the sync runs
+            // first because flushing can touch the last-write timestamp there.
             let copied = output.metadata().map_err(display)?;
-            let verified_output =
+            #[cfg(unix)]
+            let verified_output = {
+                let verified =
+                    crate::publication::VerifiedFile::new(output.into_std(), retained.size)
+                        .map_err(display)?;
+                verified.file().sync_all().map_err(display)?;
+                verified
+            };
+            #[cfg(not(unix))]
+            let verified_output = {
+                output.sync_all().map_err(display)?;
                 crate::publication::VerifiedFile::new(output.into_std(), retained.size)
-                    .map_err(display)?;
+                    .map_err(display)?
+            };
+            // Hash the copied bytes too. A writer can modify the temporary
+            // after the source digest pass; the output identity alone would
+            // bind those foreign bytes.
+            if output_digest(verified_output.file(), retained.size)? != sha256 {
+                return Err(format!(
+                    "Torrent publication output changed while copying: {}",
+                    path.display()
+                ));
+            }
             // Sync the temporary directory entry as well as its contents before
             // recording the inode that recovery may later recognize.
             sync_publication_directory(&destination)?;
@@ -219,7 +252,7 @@ pub(super) fn publish_archives(
             }
             publication_directory_unchanged(&record.directory, &destination, &temporary.directory)?;
             store.with_acquisition_destination(&record.directory.join(name), || {
-                crate::publication::publish_verified_noreplace_in(
+                crate::publication::publish_verified_noreplace_bound_in(
                     &destination,
                     Path::new(&temporary.name),
                     Path::new(name),
@@ -633,6 +666,25 @@ pub(super) fn publication_digest(
     }
     if remaining != 0 {
         return Err("Torrent publication file was truncated".into());
+    }
+    Ok(hasher.finalize().into())
+}
+
+fn output_digest(file: &File, size: u64) -> Result<[u8; 32], String> {
+    let mut file = file.try_clone().map_err(display)?;
+    use std::io::{Read, Seek, SeekFrom};
+    file.seek(SeekFrom::Start(0)).map_err(display)?;
+    let mut remaining = size;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 128 * 1024];
+    while remaining != 0 {
+        let limit = remaining.saturating_add(1).min(buffer.len() as u64) as usize;
+        let n = file.read(&mut buffer[..limit]).map_err(display)?;
+        if n == 0 || n as u64 > remaining {
+            return Err("Torrent publication output changed while copying".into());
+        }
+        remaining -= n as u64;
+        hasher.update(&buffer[..n]);
     }
     Ok(hasher.finalize().into())
 }

@@ -636,7 +636,18 @@ fn map_work_pending(status: &Value) -> bool {
 async fn maintain(service: Arc<Service>) {
     let mut reconciliation = Reconciliation::new();
     loop {
-        tokio::time::sleep(Duration::from_secs(if cfg!(target_os = "ios") { 1 } else { 3 })).await;
+        // iOS stays at 1 Hz only while the app owns foreground work. An idle
+        // background loop does not need a bridge/lock pass every second; a
+        // lifecycle or transfer signal wakes it immediately.
+        let idle_seconds = if cfg!(target_os = "ios") {
+            if service.mobile_active() { 1 } else { 5 }
+        } else {
+            3
+        };
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(idle_seconds)) => {},
+            _ = service.mobile.wake.notified() => {},
+        }
         if service.mobile_terminal() { break; }
         let generation = service.mobile.state.lock().map(|state| state.generation).unwrap_or(0);
         #[cfg(target_os = "ios")]

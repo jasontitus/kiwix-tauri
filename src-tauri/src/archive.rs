@@ -576,6 +576,153 @@ pub(super) fn public_path(entry: &Entry, modern: bool) -> Result<String, String>
     })
 }
 
+/// How a serving caller asks for one archive entry.
+///
+/// Lookup policy is part of the serving contract: documents accept the exact
+/// path or its single trailing-slash variant, an empty document location opens
+/// the main page (or a random article when the archive has none), and raw
+/// resource fetches stay exact.
+#[derive(Clone, Copy)]
+pub(crate) enum EntryLookup<'a> {
+    Exact(&'a str),
+    ExactOrTrailingSlash(&'a str),
+    MainOrRandom,
+}
+
+/// The requested entry's decompressed bytes, retained from the resolution.
+///
+/// Compressed items decompress their cluster once, so the reported size and
+/// every selected byte range come from the same decompressed payload.
+pub(crate) struct RetainedItem<'a> {
+    archive: &'a Zim,
+    index: u32,
+    content: ItemContent,
+}
+
+enum ItemContent {
+    Direct { file_offset: u64, size: u64 },
+    Blob(zimru::Blob),
+}
+
+impl ItemContent {
+    fn load(item: &Item) -> Result<Self, String> {
+        let direct = item
+            .archive()
+            .blob_direct_access(item.cluster_index(), item.blob_index())
+            .map_err(archive_error)?;
+        if direct.is_direct {
+            return Ok(Self::Direct {
+                file_offset: direct.file_offset,
+                size: direct.size,
+            });
+        }
+        Ok(Self::Blob(item.get_data().map_err(archive_error)?))
+    }
+
+    fn size(&self) -> u64 {
+        match self {
+            Self::Direct { size, .. } => *size,
+            Self::Blob(blob) => blob.size() as u64,
+        }
+    }
+}
+
+impl RetainedItem<'_> {
+    /// Exact URL index of the resolved entry, stable for this archive's
+    /// retained files. Streaming must use this instead of re-resolving a
+    /// public path, which can name a different namespace entry.
+    pub(crate) fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// Read an item range from the already-resolved payload, preserving the
+    /// clamping and error semantics of [`item_range`].
+    pub(crate) fn read_range(&self, offset: u64, length: u64) -> Result<Vec<u8>, String> {
+        match &self.content {
+            ItemContent::Blob(blob) => {
+                let start = usize::try_from(offset)
+                    .ok()
+                    .filter(|n| *n <= blob.data().len())
+                    .ok_or("Invalid archive argument: Archive read offset exceeds item size")?;
+                let count = (length as usize).min(blob.data().len() - start);
+                let mut bytes = Vec::new();
+                bytes
+                    .try_reserve_exact(count)
+                    .map_err(|_| "Unable to allocate archive range")?;
+                bytes.extend_from_slice(&blob.data()[start..start + count]);
+                Ok(bytes)
+            }
+            ItemContent::Direct { file_offset, size } => {
+                let remaining = size.checked_sub(offset).ok_or(
+                    "Invalid archive argument: Archive read offset exceeds item size",
+                )?;
+                let count = remaining.min(length) as usize;
+                let mut bytes = Vec::new();
+                bytes
+                    .try_reserve_exact(count)
+                    .map_err(|_| "Unable to allocate archive range")?;
+                bytes.resize(count, 0);
+                let at = file_offset
+                    .checked_add(offset)
+                    .ok_or("Archive item offset overflow")?;
+                if self
+                    .archive
+                    .read_at(at, &mut bytes)
+                    .map_err(archive_error)?
+                    != count
+                {
+                    return Err(format!("{MALFORMED_ARCHIVE}: Truncated archive item range"));
+                }
+                Ok(bytes)
+            }
+        }
+    }
+}
+
+fn lookup_entry(z: &Zim, lookup: EntryLookup<'_>) -> Result<Entry, String> {
+    match lookup {
+        EntryLookup::Exact(path) => entry_by_path(z, path),
+        EntryLookup::ExactOrTrailingSlash(path) => {
+            let primary = entry_by_path(z, path);
+            match primary {
+                Ok(entry) => Ok(entry),
+                Err(error) if is_entry_not_found(&error) => {
+                    let alternate = if path.is_empty() {
+                        None
+                    } else if let Some(trimmed) = path.strip_suffix('/') {
+                        (!trimmed.is_empty()).then(|| trimmed.to_string())
+                    } else {
+                        Some(format!("{path}/"))
+                    };
+                    let Some(alternate) = alternate else { return Err(error); };
+                    match entry_by_path(z, &alternate) {
+                        Ok(entry) => Ok(entry),
+                        Err(alternate_error) if is_entry_not_found(&alternate_error) => Err(error),
+                        Err(alternate_error) => Err(alternate_error),
+                    }
+                }
+                Err(error) => Err(error),
+            }
+        }
+        EntryLookup::MainOrRandom => match crate::archive_metadata::main_entry(z) {
+            Ok(entry) => Ok(entry),
+            Err(error) if is_entry_not_found(&error) => {
+                // Index flags are irrelevant here; only the article count
+                // decides whether a random entry would be a real document.
+                if crate::archive_metadata::metadata(z, (false, false))?.article_count == 0 {
+                    return Err(error);
+                }
+                match crate::archive_metadata::random_entry(z) {
+                    Ok(entry) => Ok(entry),
+                    Err(random) if is_entry_not_found(&random) => Err(error),
+                    Err(random) => Err(random),
+                }
+            }
+            Err(error) => Err(error),
+        },
+    }
+}
+
 fn item_mime<'a>(z: &'a Zim, entry: &Entry) -> Result<&'a str, String> {
     let zimru::Dirent::Article(article) = entry.dirent() else {
         return Err(format!("{MALFORMED_ARCHIVE}: Expected an archive item"));
@@ -601,6 +748,18 @@ pub(super) fn entry_info(entry: Entry) -> Result<EntryInfo, String> {
         title: entry.title().to_owned(),
         mime: item_mime(item.archive(), &entry)?.to_owned(),
         size: item.size().map_err(archive_error)?,
+    })
+}
+
+fn entry_info_with_item(entry: &Entry, item: &Item, size: u64) -> Result<EntryInfo, String> {
+    if entry.title().len() > MAX_STRING {
+        return Err(RECORD_LIMIT.to_owned());
+    }
+    Ok(EntryInfo {
+        path: public_path(entry, item.archive().header().uses_new_namespaces())?,
+        title: entry.title().to_owned(),
+        mime: item_mime(item.archive(), entry)?.to_owned(),
+        size,
     })
 }
 
@@ -712,6 +871,8 @@ pub struct Archive {
     archive: Zim,
     parts: Arc<Parts>,
     read_lock: Arc<std::sync::Mutex<()>>,
+    #[cfg(test)]
+    lock_acquisitions: Arc<std::sync::atomic::AtomicU64>,
     #[cfg(windows)]
     _path_leases: Arc<Vec<std::fs::File>>,
     _scope: Option<Arc<dyn std::fmt::Debug + Send + Sync>>,
@@ -844,6 +1005,8 @@ impl Archive {
             archive,
             parts,
             read_lock: Arc::new(std::sync::Mutex::new(())),
+            #[cfg(test)]
+            lock_acquisitions: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             #[cfg(windows)]
             _path_leases: Arc::new(leases),
             _scope: scope,
@@ -857,7 +1020,17 @@ impl Archive {
         &self,
         cancel: Option<(&CancellationToken, &'static str)>,
     ) -> Result<std::sync::MutexGuard<'_, ()>, String> {
-        archive_lock(&self.read_lock, cancel)
+        let guard = archive_lock(&self.read_lock, cancel)?;
+        #[cfg(test)]
+        self.lock_acquisitions
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(guard)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lock_acquisitions(&self) -> u64 {
+        self.lock_acquisitions
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     fn with_unchanged<T>(
@@ -919,16 +1092,90 @@ impl Archive {
         self.with_unchanged(None, |z| entry_info(entry_by_path(z, path)?))
     }
 
+    /// Resolve one entry and run a serving decision against its retained bytes.
+    ///
+    /// The entry, its metadata and any selected bytes all come from one read
+    /// lock acquisition and one retained file identity check. A compressed
+    /// cluster is decompressed at most once: [`EntryInfo::size`] and every
+    /// [`RetainedItem::read_range`] call use the same payload. The lock wait
+    /// observes `cancel`, so reader retirement can withdraw queued resources
+    /// instead of stalling shutdown.
+    pub(crate) fn with_entry<T>(
+        &self,
+        lookup: EntryLookup<'_>,
+        cancel: &CancellationToken,
+        action: impl FnOnce(&EntryInfo, &RetainedItem<'_>) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.with_unchanged(
+            Some((cancel, "Reading stopped. Reload the article")),
+            |z| {
+                let entry = resolve(lookup_entry(z, lookup)?)?;
+                let item = entry.get_item(false).map_err(archive_error)?;
+                let content = ItemContent::load(&item)?;
+                let info = entry_info_with_item(&entry, &item, content.size())?;
+                let retained = RetainedItem {
+                    archive: z,
+                    index: entry.index(),
+                    content,
+                };
+                action(&info, &retained)
+            },
+        )
+    }
+
     pub fn read(&self, path: &str, offset: u64, length: u64) -> Result<Vec<u8>, String> {
+        self.read_range(path, offset, length, None)
+    }
+
+    /// Read a streamed range from the exact entry index resolved for the
+    /// response. Re-resolving the public path here could select a different
+    /// namespace entry that shares the same path and splice its bytes into a
+    /// response whose size and ETag describe the original entry.
+    ///
+    /// The lock wait observes `cancel`, so reader retirement can withdraw a
+    /// queued streaming read.
+    pub(crate) fn read_index_cancellable(
+        &self,
+        index: u32,
+        offset: u64,
+        length: u64,
+        cancel: &CancellationToken,
+    ) -> Result<Vec<u8>, String> {
         if length > MAX_READ_LENGTH {
             return Err("Archive read exceeds 16 MiB range limit; use successive ranges".into());
         }
-        self.with_unchanged(None, |z| {
-            let item = resolve(entry_by_path(z, path)?)?
-                .get_item(false)
-                .map_err(archive_error)?;
-            item_range(&item, offset, length)
-        })
+        self.with_unchanged(
+            Some((cancel, "Reading stopped. Reload the article")),
+            |z| {
+                let item = z
+                    .entry_by_url_index(index)
+                    .map_err(archive_error)?
+                    .get_item(false)
+                    .map_err(archive_error)?;
+                item_range(&item, offset, length)
+            },
+        )
+    }
+
+    fn read_range(
+        &self,
+        path: &str,
+        offset: u64,
+        length: u64,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<Vec<u8>, String> {
+        if length > MAX_READ_LENGTH {
+            return Err("Archive read exceeds 16 MiB range limit; use successive ranges".into());
+        }
+        self.with_unchanged(
+            cancel.map(|token| (token, "Reading stopped. Reload the article")),
+            |z| {
+                let item = resolve(entry_by_path(z, path)?)?
+                    .get_item(false)
+                    .map_err(archive_error)?;
+                item_range(&item, offset, length)
+            },
+        )
     }
 
     pub fn main_entry(&self) -> Result<EntryInfo, String> {
@@ -1255,6 +1502,139 @@ mod tests {
         assert!(archive.search("Test", false, 0, 50).is_ok());
         assert!(archive.metadata().is_ok());
         assert!(archive.check_integrity().unwrap());
+    }
+
+    #[test]
+    fn serving_entry_cancels_while_queued_for_the_reader() {
+        use std::sync::{mpsc, Barrier};
+        use std::time::Duration;
+
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
+        let archive = Archive::open(&fixture).unwrap();
+        let gate = archive.read_lock.lock().unwrap();
+        let token = CancellationToken::new();
+        let start = Barrier::new(2);
+        let (sent, received) = mpsc::channel();
+
+        std::thread::scope(|scope| {
+            let reader = &archive;
+            let start = &start;
+            let cancel = &token;
+            scope.spawn(move || {
+                start.wait();
+                let result = reader
+                    .with_entry(EntryLookup::MainOrRandom, cancel, |_, _| Ok(()))
+                    .map(|_| ());
+                sent.send(result).unwrap();
+            });
+            start.wait();
+            assert!(
+                received.recv_timeout(Duration::from_millis(40)).is_err(),
+                "serving must wait for the retained reader"
+            );
+            token.cancel();
+            let result = received.recv_timeout(Duration::from_secs(2));
+            drop(gate);
+            assert_eq!(
+                result.unwrap().unwrap_err(),
+                "Reading stopped. Reload the article"
+            );
+        });
+    }
+
+    /// A minimal modern-namespace ZIM with a `C/shared.txt` article and an
+    /// `I/shared.txt` media entry. Both have the public path `shared.txt`, so
+    /// path lookup selects the article; only the URL index names the media.
+    fn namespace_collision_archive(article: &[u8], media: &[u8]) -> std::path::PathBuf {
+        const MIME: &[u8] = b"text/plain\0\0";
+        let dirent = |namespace: u8, cluster: u32, title: &str| {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(&0u16.to_le_bytes());
+            bytes.extend_from_slice(&[0, namespace]);
+            bytes.extend_from_slice(&0u32.to_le_bytes());
+            bytes.extend_from_slice(&cluster.to_le_bytes());
+            bytes.extend_from_slice(&0u32.to_le_bytes());
+            bytes.extend_from_slice(b"shared.txt");
+            bytes.push(0);
+            bytes.extend_from_slice(title.as_bytes());
+            bytes.push(0);
+            bytes
+        };
+        let article_dirent = dirent(b'C', 0, "Article");
+        let media_dirent = dirent(b'I', 1, "Image");
+        let url_ptr_pos = 80 + MIME.len() as u64;
+        let title_ptr_pos = url_ptr_pos + 16;
+        let cluster_ptr_pos = title_ptr_pos + 8;
+        let dirent_start = cluster_ptr_pos + 16;
+        let article_offset = dirent_start;
+        let media_offset = article_offset + article_dirent.len() as u64;
+        let cluster0 = media_offset + media_dirent.len() as u64;
+        let cluster1 = cluster0 + 1 + 16 + article.len() as u64;
+        let checksum_pos = cluster1 + 1 + 16 + media.len() as u64;
+        let mut bytes = vec![0u8; 80];
+        bytes[..4].copy_from_slice(b"ZIM\x04");
+        bytes[4..6].copy_from_slice(&5u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&1u16.to_le_bytes());
+        bytes[24..28].copy_from_slice(&2u32.to_le_bytes());
+        bytes[28..32].copy_from_slice(&2u32.to_le_bytes());
+        bytes[32..40].copy_from_slice(&url_ptr_pos.to_le_bytes());
+        bytes[40..48].copy_from_slice(&title_ptr_pos.to_le_bytes());
+        bytes[48..56].copy_from_slice(&cluster_ptr_pos.to_le_bytes());
+        bytes[56..64].copy_from_slice(&80u64.to_le_bytes());
+        bytes[64..68].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes[68..72].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes[72..80].copy_from_slice(&checksum_pos.to_le_bytes());
+        bytes.extend_from_slice(MIME);
+        bytes.extend_from_slice(&article_offset.to_le_bytes());
+        bytes.extend_from_slice(&media_offset.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&cluster0.to_le_bytes());
+        bytes.extend_from_slice(&cluster1.to_le_bytes());
+        bytes.extend_from_slice(&article_dirent);
+        bytes.extend_from_slice(&media_dirent);
+        for data in [article, media] {
+            bytes.push(0x11);
+            bytes.extend_from_slice(&16u64.to_le_bytes());
+            bytes.extend_from_slice(&(16 + data.len() as u64).to_le_bytes());
+            bytes.extend_from_slice(data);
+        }
+        assert_eq!(bytes.len() as u64, checksum_pos);
+        bytes.extend_from_slice(&[0u8; 16]);
+        let directory =
+            std::env::temp_dir().join(format!("kiwix-collision-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("collision.zim");
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn index_pinned_range_read_keeps_the_resolved_namespace_entry() {
+        let media = vec![b'I'; 1024 * 1024 + 4096];
+        let article = b"ARTICLE";
+        let path = namespace_collision_archive(article, &media);
+        let archive = Archive::open(&path).unwrap();
+        assert_eq!(archive.entry("shared.txt").unwrap().size, article.len() as u64);
+        let resolved = archive.archive.entry_by_url_index(1).unwrap();
+        assert_eq!(resolved.namespace(), b'I');
+        assert_eq!(resolved.path(), "shared.txt");
+        assert_eq!(archive.read("shared.txt", 0, 4).unwrap(), b"ARTI");
+        let cancel = CancellationToken::new();
+        assert_eq!(
+            archive
+                .read_index_cancellable(resolved.index(), 0, 4, &cancel)
+                .unwrap(),
+            b"IIII"
+        );
+        assert_eq!(
+            archive
+                .read_index_cancellable(resolved.index(), 0, media.len() as u64, &cancel)
+                .unwrap(),
+            media
+        );
+        drop(archive);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[test]

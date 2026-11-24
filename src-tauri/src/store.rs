@@ -18,6 +18,7 @@ use std::io::{BufWriter, Read, Write};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
@@ -293,7 +294,7 @@ pub fn history_resource_identity(path: &str) -> (bool, std::borrow::Cow<'_, str>
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TabLocation {
     pub book_id: String,
@@ -302,7 +303,7 @@ pub struct TabLocation {
     pub scroll: f64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tab {
     pub id: String,
@@ -327,7 +328,7 @@ pub struct NativeWindowTab {
     pub focused: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowSession {
     pub tabs: Vec<Tab>,
@@ -1365,6 +1366,12 @@ struct Inner {
     runtime_private: bool,
     runtime_read_only: bool,
     durability_error: Option<String>,
+    /// A browsing-telemetry delta is applied in memory but not yet written.
+    /// `persisted` then holds the last durable content, so private rollback and
+    /// no-op detection keep comparing against the file.
+    browsing_pending: bool,
+    /// When the profile was last written, for the coalescing window.
+    last_persist: Option<Instant>,
     #[cfg(mobile)]
     mobile_relocation: Option<crate::mobile_rebase::Relocation>,
 }
@@ -1384,6 +1391,21 @@ impl Inner {
         }
         &mut self.state
     }
+}
+
+/// Browsing telemetry is written at most once per this window. A crash can
+/// therefore lose at most this much scroll position; a new history entry, a
+/// bookmark or any settings edit still writes through immediately, and the
+/// next transaction of any kind persists a pending delta with the rest.
+const BROWSING_COALESCE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Whether a transaction must be durable before it returns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Persist {
+    /// Explicit user edits, navigation and lifecycle captures.
+    Durable,
+    /// Repeatable browsing telemetry (reading-position refreshes).
+    Coalesced,
 }
 
 pub struct Store {
@@ -1899,6 +1921,7 @@ impl Store {
             crate::portable::PortableProfile::detect()?,
             #[cfg(desktop)]
             None,
+            None,
         )
     }
 
@@ -1909,6 +1932,7 @@ impl Store {
     pub(crate) fn new_with_mode_checked(
         data_dir: PathBuf,
         read_only: bool,
+        preloaded: Option<Vec<u8>>,
     ) -> Result<Self, StoreOpenError> {
         let portable = crate::portable::PortableProfile::detect().map_err(StoreOpenError::Fatal)?;
         // A saved read-only policy is a lock constraint too: claiming
@@ -1920,7 +1944,7 @@ impl Store {
             None => read_only || saved_desktop_read_only(&data_dir).map_err(StoreOpenError::Fatal)?,
         };
         let lock = claim_profile_lock(&data_dir, lock_read_only)?;
-        Self::open_profile(data_dir, read_only, portable, Some(lock))
+        Self::open_profile(data_dir, read_only, portable, Some(lock), preloaded)
             .map_err(StoreOpenError::Fatal)
     }
 
@@ -1934,8 +1958,9 @@ impl Store {
         read_only: bool,
         portable: Option<crate::portable::PortableProfile>,
         lock_file: File,
+        preloaded: Option<Vec<u8>>,
     ) -> Result<Self, StoreOpenError> {
-        Self::open_profile(data_dir, read_only, portable, Some(lock_file))
+        Self::open_profile(data_dir, read_only, portable, Some(lock_file), preloaded)
             .map_err(StoreOpenError::Fatal)
     }
 
@@ -1945,6 +1970,7 @@ impl Store {
         read_only: bool,
         #[cfg(desktop)] portable: Option<crate::portable::PortableProfile>,
         #[cfg(desktop)] lock_file: Option<File>,
+        preloaded: Option<Vec<u8>>,
     ) -> Result<Self, String> {
         #[cfg(desktop)]
         let saved_read_only = if let Some(profile) = &portable {
@@ -1986,50 +2012,58 @@ impl Store {
         #[cfg(not(desktop))]
         let portable_mode = false;
         let path = data_dir.join("state.json");
-        let (state, load_warnings) = match File::open(&path) {
-            Ok(file) => {
-                let mut bytes = Vec::new();
-                file.take(MAX_STATE_BYTES + 1)
-                    .read_to_end(&mut bytes)
-                    .map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
-                if bytes.len() as u64 > MAX_STATE_BYTES {
-                    return Err(format!("{} exceeds the 128 MiB state limit; preserve the file and export/reduce it with a compatible application", path.display()));
-                }
-                let decode_error = |error| format!("Cannot parse {}: {error}. The original is untouched; restore a known-good backup or select another profile, not an empty replacement.", path.display());
-                let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(decode_error)?;
-                #[cfg(desktop)]
-                let mut value = value;
-                #[cfg(desktop)]
-                if let Some(paths) = &portable_paths {
-                    paths.rebase_json(crate::profile_paths::RecordKind::State, &mut value)?;
-                }
-                let migrated = value.get("version").and_then(serde_json::Value::as_u64) == Some(1);
-                let (state, warnings, normalized) = state_from_value(value)
+        let decode = |bytes: &[u8]| -> Result<(State, Vec<String>), String> {
+            let decode_error = |error| format!("Cannot parse {}: {error}. The original is untouched; restore a known-good backup or select another profile, not an empty replacement.", path.display());
+            let value: serde_json::Value = serde_json::from_slice(bytes).map_err(decode_error)?;
+            #[cfg(desktop)]
+            let mut value = value;
+            #[cfg(desktop)]
+            if let Some(paths) = &portable_paths {
+                paths.rebase_json(crate::profile_paths::RecordKind::State, &mut value)?;
+            }
+            let migrated = value.get("version").and_then(serde_json::Value::as_u64) == Some(1);
+            let (state, warnings, normalized) = state_from_value(value)
+                .map_err(|error| format!("Invalid {}: {error}", path.display()))?;
+            #[cfg(desktop)]
+            let mut state = state;
+            #[cfg(desktop)]
+            if portable_paths.is_some() {
+                apply_portable_settings(&data_dir, &mut state.settings)?;
+                state
+                    .validate()
                     .map_err(|error| format!("Invalid {}: {error}", path.display()))?;
-                #[cfg(desktop)]
-                let mut state = state;
-                #[cfg(desktop)]
-                if portable_paths.is_some() {
-                    apply_portable_settings(&data_dir, &mut state.settings)?;
-                    state
-                        .validate()
-                        .map_err(|error| format!("Invalid {}: {error}", path.display()))?;
-                }
-                if (migrated || normalized) && !initialization_read_only && !state.settings.read_only {
-                    persist(&data_dir, &state, portable_mode).map_err(|e| e.message)?;
-                }
-                (state, warnings)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && !initialization_read_only => {
-                let state = State::default();
-                #[cfg(desktop)]
-                let mut state = state;
-                #[cfg(desktop)]
-                if portable_paths.is_some() { apply_portable_settings(&data_dir, &mut state.settings)?; }
+            if (migrated || normalized) && !initialization_read_only && !state.settings.read_only {
                 persist(&data_dir, &state, portable_mode).map_err(|e| e.message)?;
-                (state, Vec::new())
             }
-            Err(e) => return Err(format!("Cannot open {}: {e}", path.display())),
+            Ok((state, warnings))
+        };
+        // Desktop startup already inspected these bytes for the saved read-only
+        // policy and the first-paint theme, so the profile is read once.
+        let (state, load_warnings) = match preloaded {
+            Some(bytes) => decode(&bytes)?,
+            None => match File::open(&path) {
+                Ok(file) => {
+                    let mut bytes = Vec::new();
+                    file.take(MAX_STATE_BYTES + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
+                    if bytes.len() as u64 > MAX_STATE_BYTES {
+                        return Err(format!("{} exceeds the 128 MiB state limit; preserve the file and export/reduce it with a compatible application", path.display()));
+                    }
+                    decode(&bytes)?
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound && !initialization_read_only => {
+                    let state = State::default();
+                    #[cfg(desktop)]
+                    let mut state = state;
+                    #[cfg(desktop)]
+                    if portable_paths.is_some() { apply_portable_settings(&data_dir, &mut state.settings)?; }
+                    persist(&data_dir, &state, portable_mode).map_err(|e| e.message)?;
+                    (state, Vec::new())
+                }
+                Err(e) => return Err(format!("Cannot open {}: {e}", path.display())),
+            },
         };
         let persisted = state.settings.private_mode.then(|| state.clone());
         let mut visible = state;
@@ -2053,6 +2087,8 @@ impl Store {
                 runtime_private: false,
                 runtime_read_only: read_only,
                 durability_error: None,
+                browsing_pending: false,
+                last_persist: None,
                 #[cfg(mobile)]
                 mobile_relocation: None,
             }),
@@ -2107,6 +2143,8 @@ impl Store {
                 runtime_private: false,
                 runtime_read_only,
                 durability_error: None,
+                browsing_pending: false,
+                last_persist: None,
                 mobile_relocation: relocation,
             }),
         })
@@ -2702,6 +2740,23 @@ impl Store {
         let mut inner = self.lock()?;
         let was_private = inner.runtime_private || inner.state.settings.private_mode;
         let is_private = private || inner.state.settings.private_mode;
+        if !was_private && is_private && inner.browsing_pending {
+            // A coalesced pre-private scroll delta is acknowledged activity; make
+            // it durable before the private cutover clears live browsing.
+            let candidate = inner.state.clone();
+            if let Err(error) = persist(&self.data_dir, &candidate, self.portable_mode()) {
+                if error.committed {
+                    inner.persisted = Some(candidate);
+                    inner.browsing_pending = false;
+                    inner.last_persist = Some(Instant::now());
+                    inner.durability_error = Some(error.message.clone());
+                }
+                return Err(error.message);
+            }
+            inner.persisted = Some(candidate);
+            inner.browsing_pending = false;
+            inner.last_persist = Some(Instant::now());
+        }
         if !was_private && is_private {
             clear_browsing(inner.diverge());
         }
@@ -2739,11 +2794,15 @@ impl Store {
                 inner.state = candidate;
                 inner.persisted = None;
                 inner.durability_error = Some(error.message.clone());
+                inner.browsing_pending = false;
+                inner.last_persist = Some(Instant::now());
             }
             return Err(error.message);
         }
         inner.state = candidate;
         inner.persisted = None;
+        inner.browsing_pending = false;
+        inner.last_persist = Some(Instant::now());
         Ok(true)
     }
 
@@ -2754,7 +2813,59 @@ impl Store {
         &self,
         change: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, String> {
-        self.update_inner(true, |_, state| change(state))
+        self.update_inner(true, Persist::Durable, |_, state| change(state))
+    }
+
+    /// Browsing telemetry (a reading-position refresh for an already-recorded
+    /// visit) applies atomically in memory and writes at most once per
+    /// [`BROWSING_COALESCE_INTERVAL`]. A crash or a killed process can lose only
+    /// the scroll offsets recorded inside that window: every new history entry,
+    /// bookmark and settings edit still writes through, and every other
+    /// transaction persists the pending delta with the rest of the state.
+    ///
+    /// Only a change confined to `history`/`recent_searches` is deferred; any
+    /// other field writes through exactly as [`Store::update`] does. Profiles
+    /// that track reading positions materialize the new offset into
+    /// `reading_sync`, so they keep the write-through path.
+    pub(crate) fn update_browsing<T>(
+        &self,
+        change: impl FnOnce(&mut State) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.update_inner(true, Persist::Coalesced, |_, state| change(state))
+    }
+
+    /// Write a coalesced browsing delta at a lifecycle boundary that must not
+    /// leave the last scroll offset only in memory. Returns whether the profile
+    /// was written.
+    pub fn flush_browsing(&self) -> Result<bool, String> {
+        let mut inner = self.lock()?;
+        if !inner.browsing_pending {
+            return Ok(false);
+        }
+        // Private and read-only profiles never write browsing state. The delta
+        // stays in memory exactly as it would have before the coalescing window.
+        if inner.runtime_private || inner.runtime_read_only
+            || inner.state.settings.private_mode || inner.state.settings.read_only
+        {
+            return Ok(false);
+        }
+        if let Some(error) = &inner.durability_error {
+            return Err(error.clone());
+        }
+        ensure_provider_overlay_excluded(&inner.state, &inner.provider_books)?;
+        if let Err(error) = persist(&self.data_dir, &inner.state, self.portable_mode()) {
+            if error.committed {
+                inner.persisted = None;
+                inner.browsing_pending = false;
+                inner.last_persist = Some(Instant::now());
+                inner.durability_error = Some(error.message.clone());
+            }
+            return Err(error.message);
+        }
+        inner.persisted = None;
+        inner.browsing_pending = false;
+        inner.last_persist = Some(Instant::now());
+        Ok(true)
     }
 
     #[cfg(desktop)]
@@ -2762,7 +2873,7 @@ impl Store {
         &self,
         change: impl FnOnce(&HashSet<String>, &mut State) -> Result<(), String>,
     ) -> Result<(), String> {
-        self.update_inner(true, |inner, state| change(&inner.retired_window_captures, state))
+        self.update_inner(true, Persist::Durable, |inner, state| change(&inner.retired_window_captures, state))
     }
 
     /// Remote apply and explicit native resolution retain their own causal
@@ -2771,12 +2882,13 @@ impl Store {
         &self,
         change: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, String> {
-        self.update_inner(false, |_, state| change(state))
+        self.update_inner(false, Persist::Durable, |_, state| change(state))
     }
 
     fn update_inner<T>(
         &self,
         capture_local: bool,
+        mode: Persist,
         change: impl FnOnce(&Inner, &mut State) -> Result<T, String>,
     ) -> Result<T, String> {
         let mut inner = self.lock()?;
@@ -2799,6 +2911,11 @@ impl Store {
         }
         let was_private = inner.runtime_private || inner.state.settings.private_mode;
         let is_private = inner.runtime_private || candidate.settings.private_mode;
+        let pending_browsing = if !was_private && is_private && inner.browsing_pending {
+            Some(candidate.clone())
+        } else {
+            None
+        };
         if !was_private && is_private {
             clear_browsing(&mut candidate);
         }
@@ -2822,8 +2939,22 @@ impl Store {
             crate::portable::PortablePaths::initialize(&profile, false)?;
         }
         // Private navigation must not even rewrite the state file or its timestamps.
+        if mode == Persist::Coalesced && !is_private
+            && inner.last_persist.is_some_and(|at| at.elapsed() < BROWSING_COALESCE_INTERVAL)
+            && telemetry_only_change(&inner.state, &candidate)
+        {
+            // Keep the durable snapshot materialized: private rollback, no-op
+            // detection and `diverge` all compare against the last write.
+            if inner.persisted.is_none() {
+                inner.persisted = Some(inner.state.clone());
+            }
+            inner.state = candidate;
+            inner.browsing_pending = true;
+            return Ok(result);
+        }
         let persisted = inner.persisted();
         if is_private
+            && pending_browsing.is_none()
             && candidate.version == persisted.version
             && candidate.books == persisted.books
             && candidate.bookmarks == persisted.bookmarks
@@ -2846,7 +2977,10 @@ impl Store {
         // written by reference and stored once instead of cloned twice.
         let durable = if is_private {
             let mut durable = candidate.clone();
-            copy_browsing(persisted, &mut durable);
+            match &pending_browsing {
+                Some(pre_private) => copy_browsing(pre_private, &mut durable),
+                None => copy_browsing(persisted, &mut durable),
+            }
             Some(durable)
         } else {
             None
@@ -2858,11 +2992,16 @@ impl Store {
                 inner.state = candidate;
                 inner.persisted = durable;
                 inner.durability_error = Some(error.message.clone());
+                // The file was replaced, so no browsing delta is outstanding.
+                inner.browsing_pending = false;
+                inner.last_persist = Some(Instant::now());
             }
             return Err(error.message);
         }
         inner.state = candidate;
         inner.persisted = durable;
+        inner.browsing_pending = false;
+        inner.last_persist = Some(Instant::now());
         Ok(result)
     }
 }
@@ -2976,25 +3115,14 @@ fn saved_read_only(data_dir: &Path) -> Result<bool, String> {
     Ok(saved.settings.read_only)
 }
 
-/// The saved read-only policy of a desktop profile, read before the profile is
-/// claimed so a strict read-only profile never gains a writable lock or a
-/// rendezvous socket. It applies the same bounds as portable profile records:
-/// `state.json` must be a bounded regular file and never a symlink.
+/// Read `state.json` through a bounded, no-follow descriptor. `Ok(None)` means
+/// the profile has no state file yet. Shared by every pre-window inspection so
+/// they all see the same bytes and the same refusals.
 #[cfg(desktop)]
-pub(crate) fn saved_desktop_read_only(data_dir: &Path) -> Result<bool, String> {
-    #[derive(Default, Deserialize)]
-    #[serde(rename_all = "camelCase", default)]
-    struct Policy {
-        read_only: bool,
-    }
-    #[derive(Deserialize)]
-    struct SavedPolicy {
-        #[serde(default)]
-        settings: Policy,
-    }
+fn read_hardened_state(data_dir: &Path) -> Result<Option<(Vec<u8>, StateIdentity)>, String> {
     let path = data_dir.join("state.json");
     let metadata = match fs::symlink_metadata(&path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => {
             return Err(format!(
                 "Cannot inspect saved policy in {}: {error}",
@@ -3019,13 +3147,13 @@ pub(crate) fn saved_desktop_read_only(data_dir: &Path) -> Result<bool, String> {
     let file = options
         .open(&path)
         .map_err(|error| format!("Cannot read saved policy in {}: {error}", path.display()))?;
-    if !file
+    let opened_metadata = file
         .metadata()
-        .map_err(|error| format!("Cannot inspect saved policy in {}: {error}", path.display()))?
-        .is_file()
-    {
+        .map_err(|error| format!("Cannot inspect saved policy in {}: {error}", path.display()))?;
+    if !opened_metadata.is_file() {
         return Err(format!("{} must be a regular file", path.display()));
     }
+    let identity = StateIdentity::of(&opened_metadata);
     let mut bytes = Vec::new();
     file.take(MAX_STATE_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -3036,13 +3164,145 @@ pub(crate) fn saved_desktop_read_only(data_dir: &Path) -> Result<bool, String> {
             path.display()
         ));
     }
+    Ok(Some((bytes, identity)))
+}
+
+/// The saved read-only policy of a desktop profile, read before the profile is
+/// claimed so a strict read-only profile never gains a writable lock or a
+/// rendezvous socket. It applies the same bounds as portable profile records:
+/// `state.json` must be a bounded regular file and never a symlink.
+#[cfg(desktop)]
+pub(crate) fn saved_desktop_read_only(data_dir: &Path) -> Result<bool, String> {
+    #[derive(Default, Deserialize)]
+    #[serde(rename_all = "camelCase", default)]
+    struct Policy {
+        read_only: bool,
+    }
+    #[derive(Deserialize)]
+    struct SavedPolicy {
+        #[serde(default)]
+        settings: Policy,
+    }
+    let Some((bytes, _)) = read_hardened_state(data_dir)? else {
+        return Ok(false);
+    };
     let saved: SavedPolicy = serde_json::from_slice(&bytes).map_err(|error| {
         format!(
             "Cannot inspect saved policy in {}: {error}. The original is untouched.",
-            path.display()
+            data_dir.join("state.json").display()
         )
     })?;
     Ok(saved.settings.read_only)
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StateIdentity {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+#[cfg(desktop)]
+impl StateIdentity {
+    fn of(metadata: &std::fs::Metadata) -> Self {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Self {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            }
+        }
+        #[cfg(not(unix))]
+        Self { len: metadata.len(), modified: metadata.modified().ok() }
+    }
+}
+
+#[cfg(desktop)]
+pub(crate) fn state_identity(data_dir: &Path) -> Option<StateIdentity> {
+    let metadata = fs::symlink_metadata(data_dir.join("state.json")).ok()?;
+    if !metadata.is_file() || metadata.is_symlink() {
+        return None;
+    }
+    Some(StateIdentity::of(&metadata))
+}
+
+/// Everything desktop startup needs from the saved profile before any window
+/// exists: the first-paint theme, the read-only policy that must be honored
+/// before the profile lock is claimed, and the exact bytes the store reuses, so
+/// `state.json` is read once instead of once per inspection.
+#[cfg(desktop)]
+pub(crate) struct StartupHint {
+    /// Paint hint only; never authority over the settings the store validates.
+    pub theme: Option<String>,
+    /// Saved policy, or why it could not be inspected.
+    pub read_only: Result<bool, String>,
+    /// The inspected bytes; absent when nothing could be reused.
+    pub bytes: Option<Vec<u8>>,
+    /// Identity of the file those bytes came from; rechecked after the lock.
+    pub identity: Option<StateIdentity>,
+}
+
+#[cfg(desktop)]
+pub(crate) fn startup_hint(data_dir: &Path) -> StartupHint {
+    // Deliberately the same struct names and attributes as
+    // `saved_desktop_read_only`'s policy, so the read-only authority keeps its
+    // exact accept/reject behavior and its exact error text.
+    #[derive(Default, Deserialize)]
+    #[serde(rename_all = "camelCase", default)]
+    struct Policy {
+        read_only: bool,
+        theme: serde_json::Value,
+    }
+    #[derive(Deserialize)]
+    struct SavedPolicy {
+        #[serde(default)]
+        settings: Policy,
+    }
+    let (bytes, identity) = match read_hardened_state(data_dir) {
+        Ok(Some((bytes, identity))) => (bytes, Some(identity)),
+        Ok(None) => {
+            return StartupHint { theme: None, read_only: Ok(false), bytes: None, identity: None }
+        }
+        Err(error) => {
+            return StartupHint {
+                theme: saved_theme_hint(data_dir),
+                read_only: Err(error),
+                bytes: None,
+                identity: None,
+            }
+        }
+    };
+    let hint: SavedPolicy = match serde_json::from_slice(&bytes) {
+        Ok(hint) => hint,
+        Err(error) => {
+            // A malformed profile keeps the lenient theme reader and the
+            // store's own decode path, so its bytes are not handed over.
+            return StartupHint {
+                theme: saved_theme_hint(data_dir),
+                read_only: Err(format!(
+                    "Cannot inspect saved policy in {}: {error}. The original is untouched.",
+                    data_dir.join("state.json").display()
+                )),
+                bytes: None,
+                identity: None,
+            };
+        }
+    };
+    StartupHint {
+        theme: hint.settings.theme.as_str()
+            .filter(|theme| matches!(*theme, "light" | "dark" | "system"))
+            .map(|theme| theme.to_owned()),
+        read_only: Ok(hint.settings.read_only),
+        bytes: Some(bytes),
+        identity,
+    }
 }
 
 /// The version boundary is the only place archive UUID storage keys are interpreted.
@@ -3082,6 +3342,29 @@ fn copy_browsing(source: &State, target: &mut State) {
     target.active_tab.clone_from(&source.active_tab);
     target.windows.clone_from(&source.windows);
     target.reader_storage.clone_from(&source.reader_storage);
+}
+
+/// True when `after` differs from `before` only in the browsing telemetry that
+/// a repeatable position refresh may write later (history and search history).
+/// Every other field must still be durable before the command returns, so a
+/// deferred write can never hide a bookmark, tab, settings or sync edit.
+fn telemetry_only_change(before: &State, after: &State) -> bool {
+    after.version == before.version
+        && after.books == before.books
+        && after.bookmarks == before.bookmarks
+        && after.tabs == before.tabs
+        && after.active_tab == before.active_tab
+        && after.windows == before.windows
+        && after.reader_storage == before.reader_storage
+        && after.consumed_acquisitions == before.consumed_acquisitions
+        && after.edition_intents == before.edition_intents
+        && after.edition_transactions == before.edition_transactions
+        && after.edition_bindings == before.edition_bindings
+        && after.reference_transitions == before.reference_transitions
+        && after.reference_revision == before.reference_revision
+        && after.reading_sync == before.reading_sync
+        && after.private_sync == before.private_sync
+        && after.settings == before.settings
 }
 
 struct PersistError {
@@ -3289,7 +3572,7 @@ mod portable_policy_tests {
         fs::write(root.join(".portable"), b"").unwrap();
         let data = root.join("data");
         let profile = crate::portable::PortableProfile { data: data.clone() };
-        let store = Store::open_profile(data.clone(), false, Some(profile), None).unwrap();
+        let store = Store::open_profile(data.clone(), false, Some(profile), None, None).unwrap();
         assert!(store.settings().unwrap().portable_mode);
         let incoming: Settings = serde_json::from_value(serde_json::json!({"portableMode": true})).unwrap();
         assert!(!incoming.portable_mode);
@@ -3321,7 +3604,7 @@ mod portable_policy_tests {
     #[test]
     fn normal_profile_restart_consumes_but_never_trusts_runtime_portable_flag() {
         let root = std::env::temp_dir().join(format!("kiwix-normal-runtime-{}", Uuid::new_v4()));
-        let store = Store::open_profile(root.clone(), false, None, None).unwrap();
+        let store = Store::open_profile(root.clone(), false, None, None, None).unwrap();
         assert!(!store.settings().unwrap().portable_mode);
         let mut settings = serde_json::to_value(store.settings().unwrap()).unwrap();
         settings["portableMode"] = serde_json::Value::Bool(true);
@@ -3329,7 +3612,7 @@ mod portable_policy_tests {
         let settings: Settings = serde_json::from_value(settings).unwrap();
         store.update(|state| { state.settings = settings; Ok(()) }).unwrap();
         drop(store);
-        let store = Store::open_profile(root.clone(), false, None, None).unwrap();
+        let store = Store::open_profile(root.clone(), false, None, None, None).unwrap();
         assert_eq!(store.settings().unwrap().theme, "dark");
         assert!(!store.settings().unwrap().portable_mode);
         drop(store);
@@ -3349,7 +3632,7 @@ mod portable_policy_tests {
             fs::create_dir(&source).unwrap();
             fs::write(source.join(".portable"), b"").unwrap();
             let profile = crate::portable::PortableProfile { data: source.join("data") };
-            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None).unwrap();
+            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None, None).unwrap();
             let path = profile.data.join(name);
             fs::copy(&fixture, &path).unwrap();
             let book = crate::imports::load_book(path.to_str().unwrap(), false, false).unwrap();
@@ -3357,7 +3640,7 @@ mod portable_policy_tests {
             let installation = book.installation_id.clone();
             store.update(|state| { state.books.push(book); Ok(()) }).unwrap();
             drop(store);
-            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None).unwrap();
+            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None, None).unwrap();
             let book = store.book(&id).unwrap().unwrap();
             assert_eq!(Path::new(&book.path), path);
             assert_eq!(fs::read(&book.path).unwrap(), fixture_bytes);
@@ -3366,7 +3649,7 @@ mod portable_policy_tests {
             fs::rename(&source, &moved).unwrap();
             let profile = crate::portable::PortableProfile { data: moved.join("data") };
             let before = fs::read(profile.data.join("state.json")).unwrap();
-            let store = Store::open_profile(profile.data.clone(), true, Some(profile.clone()), None).unwrap();
+            let store = Store::open_profile(profile.data.clone(), true, Some(profile.clone()), None, None).unwrap();
             let book = store.book(&id).unwrap().unwrap();
             assert_eq!(Path::new(&book.path), profile.data.join(name));
             assert_eq!(book.installation_id, installation);
@@ -3374,10 +3657,10 @@ mod portable_policy_tests {
             assert_eq!(fs::read(&book.path).unwrap(), fixture_bytes);
             drop(store);
             assert_eq!(fs::read(profile.data.join("state.json")).unwrap(), before);
-            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None).unwrap();
+            let store = Store::open_profile(profile.data.clone(), false, Some(profile.clone()), None, None).unwrap();
             store.update(|state| { state.settings.theme = "dark".into(); Ok(()) }).unwrap();
             drop(store);
-            let store = Store::open_profile(profile.data.clone(), false, Some(profile), None).unwrap();
+            let store = Store::open_profile(profile.data.clone(), false, Some(profile), None, None).unwrap();
             assert_eq!(Path::new(&store.book(&id).unwrap().unwrap().path), moved.join("data").join(name));
             drop(store);
         }
@@ -3399,7 +3682,7 @@ mod portable_policy_tests {
             StoreOpenError::from(refused),
             StoreOpenError::Busy(_)
         ));
-        match Store::new_with_mode_checked(root.clone(), false) {
+        match Store::new_with_mode_checked(root.clone(), false, None) {
             Err(StoreOpenError::Busy(_)) => {}
             Err(StoreOpenError::Fatal(error)) => {
                 panic!("a live owner must not be a fatal startup error: {error}")
@@ -3413,7 +3696,7 @@ mod portable_policy_tests {
         drop(owner);
         let settle = std::time::Instant::now() + std::time::Duration::from_secs(2);
         let store = loop {
-            match Store::new_with_mode_checked(root.clone(), false) {
+            match Store::new_with_mode_checked(root.clone(), false, None) {
                 Ok(store) => break store,
                 Err(StoreOpenError::Busy(_)) if std::time::Instant::now() < settle => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
@@ -3424,7 +3707,7 @@ mod portable_policy_tests {
         drop(store);
         // A profile that cannot be opened at all still fails startup.
         assert!(matches!(
-            Store::new_with_mode_checked(root.join("absent"), true),
+            Store::new_with_mode_checked(root.join("absent"), true, None),
             Err(StoreOpenError::Fatal(_))
         ));
         fs::remove_dir_all(&root).unwrap();

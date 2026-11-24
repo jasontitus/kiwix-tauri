@@ -2611,17 +2611,30 @@ async fn failed_auto_resume_keeps_the_job_visible_and_never_retries_it() {
     let root = test_directory();
     let store = test_store(&root);
     let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let bytes = zim_bytes(b'a', 32);
     let id = seed_partial(
         &manager,
         &root,
         "https://example.org/fixture.zim".into(),
-        &zim_bytes(b'a', 32),
+        &bytes,
         128,
     );
     manager
         .inner
         .update(&id, |stored| stored.job.interrupted = true)
         .unwrap();
+    // Advertise a prior digest and ownership so a rejected publication cannot
+    // leave the row claiming the rejected attempt's digest or a new owner.
+    let previous_sha = hex::encode(Sha256::digest(&bytes));
+    let previous_ownership = {
+        let state = manager.inner.state().unwrap();
+        let stored = state.jobs.get(&id).unwrap();
+        stored.part_ownership.as_ref().map(|entry| entry.renamed(&stored.job.file_name))
+    };
+    manager.inner.update(&id, |stored| {
+        stored.job.sha256 = Some(previous_sha.clone());
+        stored.published_ownership = previous_ownership.clone();
+    }).unwrap();
     fs::write(root.join("fixture.zim"), b"user file").unwrap();
 
     let error = manager.resume_interrupted().await.unwrap_err();
@@ -2631,6 +2644,10 @@ async fn failed_auto_resume_keeps_the_job_visible_and_never_retries_it() {
     assert!(!job.interrupted);
     assert!(job.error.as_deref().unwrap().contains("already exists"));
     assert!(!manager.inner.state().unwrap().running.contains_key(&id));
+    let stored = manager.inner.state().unwrap().jobs.get(&id).cloned().unwrap();
+    assert_eq!(stored.job.sha256, Some(previous_sha));
+    assert_eq!(stored.published_ownership, previous_ownership);
+    assert!(stored.publication.is_none());
 
     // A later launch sees an ordinary manual pause: no retry, no rewrite.
     manager.resume_interrupted().await.unwrap();
@@ -3700,7 +3717,15 @@ fn handle_identity_is_stable_across_rename_and_distinct_for_another_file() {
     assert_eq!((before.links, before.size), (1, bytes.len() as u64));
     let renamed = root.join("renamed.part");
     fs::rename(&first, &renamed).unwrap();
-    assert_eq!(part_receipt_identity(&renamed).unwrap(), before);
+    let after = part_receipt_identity(&renamed).unwrap();
+    // The inode and its stable fields survive a rename, but the rename itself
+    // moves ctime, so a receipt taken before it is never reused afterwards.
+    assert_eq!(
+        (after.device, after.inode, after.size, after.links),
+        (before.device, before.inode, before.size, before.links)
+    );
+    #[cfg(unix)]
+    assert_ne!(after.change, before.change, "rename moves ctime");
     let other = part_receipt_identity(&second).unwrap();
     assert_ne!((other.device, other.inode), (before.device, before.inode));
     // A receipt for one file never matches another, even with equal bytes.
@@ -3708,9 +3733,93 @@ fn handle_identity_is_stable_across_rename_and_distinct_for_another_file() {
     stored.verification = verification_receipt(
         Some(before.clone()), &"0".repeat(64), VerificationOutcome::Passed, None,
     );
-    assert!(matching_receipt(&stored, Some(&before)).is_some());
+    if before.change.is_some() {
+        assert!(matching_receipt(&stored, Some(&before)).is_some());
+        assert!(matching_receipt(&stored, Some(&after)).is_none());
+    }
     assert!(matching_receipt(&stored, Some(&other)).is_none());
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_restored_mtime_does_not_reuse_a_verification_receipt() {
+    let root = test_directory();
+    let bytes = zim_bytes(b'j', 256 * 1024);
+    let stored = durable_stored(&root, &Uuid::new_v4().to_string(), &bytes, "paused");
+    let (_, part) = paths(&stored.job).unwrap();
+    let before = part_receipt_identity(&part).unwrap();
+    if verification_receipt(
+        Some(before.clone()), &hex::encode(Sha256::digest(&bytes)),
+        VerificationOutcome::Passed, None,
+    ).is_none() {
+        // Platforms without a provable change time never issue a receipt, so
+        // there is nothing to forge; the fail-closed path is covered below.
+        assert!(before.change.is_none());
+        fs::remove_dir_all(root).unwrap();
+        return;
+    }
+    let modified = fs::metadata(&part).unwrap().modified().unwrap();
+    let mut file = fs::OpenOptions::new().write(true).open(&part).unwrap();
+    file.write_all(&vec![0u8; bytes.len()]).unwrap();
+    file.sync_all().unwrap();
+    drop(file);
+    fs::OpenOptions::new().write(true).open(&part).unwrap()
+        .set_modified(modified).unwrap();
+    let after = part_receipt_identity(&part).unwrap();
+    assert_eq!(
+        (after.mtime_seconds, after.mtime_nanos),
+        (before.mtime_seconds, before.mtime_nanos),
+        "the regression restores mtime exactly"
+    );
+    assert_ne!(after.change, before.change, "the rewrite moves ctime");
+    let mut stored = stored;
+    stored.verification = verification_receipt(
+        Some(before), &hex::encode(Sha256::digest(&bytes)), VerificationOutcome::Passed, None,
+    );
+    assert!(
+        matching_receipt(&stored, Some(&after)).is_none(),
+        "a receipt must not skip hashing when only mtime was restored"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_verification_receipt_requires_a_provable_change_time() {
+    let root = test_directory();
+    let path = root.join("part");
+    fs::write(&path, b"bytes").unwrap();
+    let identity = file_identity(&File::open(&path).unwrap()).unwrap();
+    let digest = "0".repeat(64);
+    if cfg!(unix) {
+        let identity = identity.expect("Unix must prove part identity from the handle");
+        assert!(identity.change.is_some(), "Unix exposes ctime");
+        assert!(verification_receipt(Some(identity), &digest, VerificationOutcome::Passed, None).is_some());
+    } else {
+        assert!(
+            identity.as_ref().is_none_or(|identity| identity.change.is_none()),
+            "this platform has no change-time proof"
+        );
+        assert!(
+            verification_receipt(identity, &digest, VerificationOutcome::Passed, None).is_none(),
+            "a receipt must not be issued without a change time"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn degenerate_change_times_never_authorize_a_receipt() {
+    assert!(change_time(0, 0).is_none());
+    assert!(change_time(1, 1_000_000_000).is_none());
+    assert!(change_time(1, 0).is_some());
+    let identity = PartIdentity {
+        size: 1, device: 1, inode: 1, mtime_seconds: 1, mtime_nanos: 0,
+        change: None, links: 1,
+    };
+    assert!(verification_receipt(
+        Some(identity), &"0".repeat(64), VerificationOutcome::Passed, None,
+    ).is_none());
 }
 
 #[cfg(unix)]
@@ -4172,11 +4281,13 @@ async fn manually_paused_durable_downloads_stay_paused_until_explicit_resume() {
         let id = Uuid::new_v4().to_string();
         let mut stored = durable_stored(&root, &id, &bytes, "paused");
         let (destination, part) = paths(&stored.job).unwrap();
+        let mut receipt_issued = false;
         if with_receipt {
             let digest = hex::encode(Sha256::digest(&bytes));
             stored.verification = verification_receipt(
                 part_receipt_identity(&part), &digest, VerificationOutcome::Passed, None,
             );
+            receipt_issued = stored.verification.is_some();
             stored.job.sha256 = Some(digest);
         }
         write_state(&data_dir, stored);
@@ -4202,7 +4313,7 @@ async fn manually_paused_durable_downloads_stay_paused_until_explicit_resume() {
         assert_eq!(fs::read(&destination).unwrap(), bytes);
         assert_eq!(
             manager.inner.hash_passes.load(Ordering::SeqCst),
-            if with_receipt { 0 } else { 1 },
+            if receipt_issued { 0 } else { 1 },
         );
         drop(manager);
         drop(store);
@@ -4223,7 +4334,7 @@ fn a_matching_verification_receipt_skips_the_hash_pass_on_load() {
     let (_, part) = paths(&stored.job).unwrap();
     stored.verification =
         verification_receipt(part_receipt_identity(&part), &digest, VerificationOutcome::Passed, None);
-    assert!(stored.verification.is_some());
+    let receipt_issued = stored.verification.is_some();
     stored.job.sha256 = Some(digest);
     write_state(&data_dir, stored);
     let manager = DownloadManager::new(data_dir, store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
@@ -4232,8 +4343,8 @@ fn a_matching_verification_receipt_skips_the_hash_pass_on_load() {
     assert_eq!(fs::read(&loaded.job.destination).unwrap(), bytes);
     assert_eq!(
         manager.inner.hash_passes.load(Ordering::SeqCst),
-        0,
-        "a receipt for the same inode must skip rehashing"
+        if receipt_issued { 0 } else { 1 },
+        "only a receipt with a provable change time may skip hashing"
     );
     drop(manager);
     drop(store);
@@ -4251,8 +4362,15 @@ fn a_changed_part_identity_forces_a_fresh_hash_pass() {
     stored.job.interrupted = true;
     let digest = hex::encode(Sha256::digest(&bytes));
     let (_, part) = paths(&stored.job).unwrap();
-    let mut receipt =
-        verification_receipt(part_receipt_identity(&part), &digest, VerificationOutcome::Passed, None).unwrap();
+    let Some(mut receipt) =
+        verification_receipt(part_receipt_identity(&part), &digest, VerificationOutcome::Passed, None)
+    else {
+        // Windows has no change-time proof, so no receipt is issued there and
+        // every load hashes; the changed-identity case is Unix-only.
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+        return;
+    };
     receipt.identity.inode = receipt.identity.inode.wrapping_add(1);
     stored.verification = Some(receipt);
     stored.job.sha256 = Some(digest);
@@ -4282,6 +4400,7 @@ async fn a_matching_receipt_skips_hashing_on_resume() {
     let (_, part) = paths(&stored.job).unwrap();
     stored.verification =
         verification_receipt(part_receipt_identity(&part), &digest, VerificationOutcome::Passed, None);
+    let receipt_issued = stored.verification.is_some();
     stored.job.sha256 = Some(digest);
     {
         let mut state = manager.inner.state().unwrap();
@@ -4294,8 +4413,8 @@ async fn a_matching_receipt_skips_hashing_on_resume() {
     assert_eq!(fs::read(&job.destination).unwrap(), bytes);
     assert_eq!(
         manager.inner.hash_passes.load(Ordering::SeqCst),
-        0,
-        "resume must reuse the receipt for the same inode"
+        if receipt_issued { 0 } else { 1 },
+        "resume reuses only a receipt that proves the change time"
     );
     drop(manager);
     drop(store);

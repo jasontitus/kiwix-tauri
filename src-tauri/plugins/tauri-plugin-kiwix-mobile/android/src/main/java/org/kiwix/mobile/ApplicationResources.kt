@@ -79,6 +79,15 @@ internal class ApplicationResources(
         return task.get()
     }
 
+    /**
+     * These calls commit SharedPreferences/AtomicFile state and return a
+     * synchronous result to Rust. They are safe only on the worker that owns
+     * the blocking transport; failing closed here is better than an ANR.
+     */
+    private fun requireWorker() {
+        check(Looper.myLooper() != Looper.getMainLooper()) { "NATIVE_OPERATION_REQUIRES_WORKER" }
+    }
+
     /** Already-serialized JSON from an Invoke callback; never re-parsed. */
     private class RawJson(val json: String)
 
@@ -112,11 +121,16 @@ internal class ApplicationResources(
                 // The Rust async endpoint already owns a blocking worker.
                 // Notification authority needs a durable commit, not the UI queue.
                 "downloadNotifications" -> {
+                    requireWorker()
                     DownloadNotifications.update(context, JSONObject(payload))
                     JSONObject()
                 }
-                "takeTransferEvents" -> JSONObject().put("events", TransferEvents.peek(context))
+                "takeTransferEvents" -> {
+                    requireWorker()
+                    JSONObject().put("events", TransferEvents.peek(context))
+                }
                 "acknowledgeTransferEvent" -> {
+                    requireWorker()
                     val args = JSONObject(payload)
                     TransferEvents.acknowledge(context, args.getString("event"), args.getString("requestId"))
                     JSONObject()

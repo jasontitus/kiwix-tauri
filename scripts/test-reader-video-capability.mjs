@@ -98,6 +98,7 @@ function reader({ nested = false, origin = archiveOrigin, path = "/index.html" }
   const windowListeners = new Map();
   const observers = [];
   const computed = [];
+  const events = [];
   const videos = [];
   const childFrames = [];
   const messages = [];
@@ -202,17 +203,25 @@ function reader({ nested = false, origin = archiveOrigin, path = "/index.html" }
     WeakMap,
     getComputedStyle(node) {
       computed.push(node);
+      events.push({ op: "read", node });
+      // A default border is `currentColor`: once the theme marks the element's
+      // ink, its border colour follows the themed text colour.
+      const borderColor =
+        node.dataset?.kiwixInk !== undefined
+          ? "rgb(232, 235, 239)"
+          : "rgb(0, 0, 0)";
       return {
         backgroundColor:
-          node.getAttribute?.("data-neutral") !== null
+          node.getAttribute?.("data-bg") ??
+          (node.getAttribute?.("data-neutral") !== null
             ? "rgb(255, 255, 255)"
-            : "rgba(0, 0, 0, 0)",
+            : "rgba(0, 0, 0, 0)"),
         backgroundImage: "none",
-        color: "rgb(0, 0, 0)",
-        borderTopColor: "rgba(0, 0, 0, 0)",
-        borderRightColor: "rgba(0, 0, 0, 0)",
-        borderBottomColor: "rgba(0, 0, 0, 0)",
-        borderLeftColor: "rgba(0, 0, 0, 0)",
+        color: node.getAttribute?.("data-color") ?? "rgb(0, 0, 0)",
+        borderTopColor: borderColor,
+        borderRightColor: borderColor,
+        borderBottomColor: borderColor,
+        borderLeftColor: borderColor,
         display: "block",
         visibility: "visible",
         contentVisibility: "visible",
@@ -239,6 +248,7 @@ function reader({ nested = false, origin = archiveOrigin, path = "/index.html" }
     videos,
     observers,
     computed,
+    events,
     documentListeners,
     windowListeners,
     mediaObserver,
@@ -630,6 +640,139 @@ test("the theme pass never visits the player's decoder nodes", async () => {
     "page",
     "ordinary article surfaces are still themed",
   );
+});
+
+function watchThemeWrites(frame, node) {
+  node.dataset = new Proxy(node.dataset, {
+    set(target, key, value) {
+      frame.events.push({ op: "write", kind: "set", node });
+      target[key] = value;
+      return true;
+    },
+    deleteProperty(target, key) {
+      frame.events.push({ op: "write", kind: "delete", node });
+      delete target[key];
+      return true;
+    },
+  });
+}
+
+test("the theme scan batches style reads instead of alternating per element", async () => {
+  const frame = reader();
+  frame.init();
+  const article = element("DIV", { parent: frame.body });
+  frame.body.insertBefore(article, null);
+  const nodes = [];
+  const watch = (node) => {
+    node.setAttribute("data-neutral", "");
+    watchThemeWrites(frame, node);
+    nodes.push(node);
+  };
+  watch(article);
+  for (let index = 0; index < 300; index++) {
+    const child = element("DIV", { parent: article });
+    article.insertBefore(child, null);
+    watch(child);
+  }
+  frame.events.length = 0;
+  frame.theme("dark");
+  await sleep(100);
+
+  const tree = new Set(nodes);
+  const ops = frame.events
+    .filter((event) => tree.has(event.node))
+    .map((event) => event.op);
+  assert.equal(
+    ops.filter((op) => op === "read").length,
+    nodes.length * 2,
+    "each surface is sampled once for its paint and once for its borders",
+  );
+  let readRun = 0;
+  let readRuns = 0;
+  let maxReadRun = 0;
+  for (const op of ops) {
+    if (op === "read") {
+      readRun++;
+      maxReadRun = Math.max(maxReadRun, readRun);
+    } else if (readRun) {
+      readRuns++;
+      readRun = 0;
+    }
+  }
+  if (readRun) readRuns++;
+  // Batching means many consecutive getComputedStyle calls with no dataset
+  // write between them. Per-element scanning would never exceed a run of one.
+  assert.ok(
+    maxReadRun >= 32,
+    `style reads must be batched, not interleaved per element (longest run ${maxReadRun})`,
+  );
+  assert.ok(
+    readRuns <= Math.ceil(nodes.length / 32),
+    `reads must be grouped into batches (${readRuns} runs)`,
+  );
+  for (const node of nodes) {
+    assert.equal(node.dataset.kiwixSurface, "page");
+    assert.equal(node.dataset.kiwixInk, "");
+    assert.equal(
+      node.dataset.kiwixEdge,
+      "",
+      "borders are sampled after ink, matching the per-element scan",
+    );
+  }
+});
+
+test("an inverted mutation rescan classifies an ancestor before its descendant", async () => {
+  const frame = reader();
+  frame.init();
+  const ancestor = element("DIV", { parent: frame.body });
+  frame.body.insertBefore(ancestor, null);
+  const descendant = element("DIV", { parent: ancestor });
+  ancestor.insertBefore(descendant, null);
+  const nodes = [ancestor, descendant];
+  for (const node of nodes) watchThemeWrites(frame, node);
+  // A coloured backdrop is preserved, so the child inherits a preserved
+  // backdrop and its neutral text keeps its colour.
+  ancestor.setAttribute("data-bg", "rgb(0, 0, 255)");
+  const themeObserver = frame.theme("dark");
+  assert.ok(themeObserver, "theme observer is running");
+  await sleep(40);
+  assert.equal(ancestor.dataset.kiwixSurface, undefined, "coloured backdrop stays authored");
+  assert.equal(descendant.dataset.kiwixInk, undefined, "text over a preserved backdrop keeps its colour");
+
+  // Flip the ancestor to a neutral surface and deliver the mutation records
+  // descendant-first in separate callbacks, so only the batch reorder can
+  // protect the descendant from the stale preserved backdrop.
+  ancestor.setAttribute("data-bg", "rgb(255, 255, 255)");
+  frame.events.length = 0;
+  themeObserver.callback([
+    { type: "attributes", target: descendant, attributeName: "class" },
+  ]);
+  themeObserver.callback([
+    { type: "attributes", target: ancestor, attributeName: "class" },
+  ]);
+  await sleep(40);
+
+  assert.equal(ancestor.dataset.kiwixSurface, "page");
+  assert.equal(
+    descendant.dataset.kiwixInk,
+    "",
+    "the descendant uses the ancestor's fresh backdrop",
+  );
+  const firstRead = new Map();
+  for (let index = 0; index < frame.events.length; index++) {
+    const event = frame.events[index];
+    if (event.op === "read" && nodes.includes(event.node) && !firstRead.has(event.node))
+      firstRead.set(event.node, index);
+  }
+  assert.ok(
+    firstRead.get(ancestor) < firstRead.get(descendant),
+    "the ancestor is classified before the descendant",
+  );
+  for (const node of nodes) {
+    const first = frame.events.find((event) => event.node === node);
+    assert.equal(first.op, "write", "marks are cleared before the style read");
+    assert.equal(first.kind, "delete");
+  }
 });
 
 const lastMedia = (frame) => frame.messages.findLast((message) =>

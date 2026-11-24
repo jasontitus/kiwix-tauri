@@ -205,8 +205,10 @@ impl CatalogIndex {
             store.with_catalog_cache_policy(|private, read_only| {
                 if private { return Ok(()); }
                 if !read_only {
-                    if let Err(error) = cache.save_refresh(cache_updates) {
-                        append_error(&mut snapshot, &error);
+                    match cache.save_refresh(cache_updates) {
+                        Ok(Some(warning)) => append_error(&mut snapshot, &warning),
+                        Ok(None) => {}
+                        Err(error) => append_error(&mut snapshot, &error),
                     }
                     let mut saved = match load(&cache) {
                         Ok(saved) => saved,

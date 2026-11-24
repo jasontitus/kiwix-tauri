@@ -23,6 +23,45 @@ pub fn publish_noreplace(source: &Path, destination: &Path) -> io::Result<()> {
 pub struct VerifiedFile {
     file: File,
     metadata: Metadata,
+    change: ChangeStamp,
+}
+
+/// The clocks that move when the bytes of an inode are rewritten. Device,
+/// inode and length alone cannot tell a same-inode rewrite apart, and `mtime`
+/// can be restored with `utimes`; Unix `ctime` cannot be set from userland.
+/// `rename` itself updates `ctime`, so this identity is only meaningful before
+/// a rename. A zero/degenerate Unix change time is treated as unprovable and
+/// fails closed. Windows exposes no change time through the current dependency
+/// set (`winapi-util`); file publication there relies on the modification time
+/// plus a verified handle that denies writers, while directory publication
+/// must release handles and only has the modification-time snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ChangeStamp {
+    modified: Option<std::time::SystemTime>,
+    #[cfg(unix)]
+    changed: Option<(i64, i64)>,
+}
+
+#[cfg(unix)]
+fn change_time(seconds: i64, nanos: i64) -> Option<(i64, i64)> {
+    let nanos = u32::try_from(nanos).ok()?;
+    if nanos >= 1_000_000_000 || (seconds == 0 && nanos == 0) {
+        return None;
+    }
+    Some((seconds, i64::from(nanos)))
+}
+
+impl ChangeStamp {
+    fn of(metadata: &std::fs::Metadata) -> Self {
+        Self {
+            modified: metadata.modified().ok(),
+            #[cfg(unix)]
+            changed: {
+                use std::os::unix::fs::MetadataExt;
+                change_time(metadata.ctime(), metadata.ctime_nsec())
+            },
+        }
+    }
 }
 
 impl VerifiedFile {
@@ -38,7 +77,8 @@ impl VerifiedFile {
                 "Verified publication requires a regular file of the expected size without hard links",
             ));
         }
-        Ok(Self { file, metadata })
+        let change = ChangeStamp::of(&file.metadata()?);
+        Ok(Self { file, metadata, change })
     }
 
     pub fn file(&self) -> &File {
@@ -96,6 +136,53 @@ impl VerifiedFile {
         let directory = Dir::open_ambient_dir(parent, cap_std::ambient_authority())?;
         self.matches_in(&directory, name)
     }
+
+    /// Compare another open handle to the identity this file was verified
+    /// under, including the change clock. Used for a digest source that is
+    /// copied by pathname: the source handle itself must still describe the
+    /// bytes that were hashed. Degenerate Unix change times fail closed.
+    pub fn matches_file(&self, file: &File) -> io::Result<bool> {
+        let metadata = Metadata::from_file(file)?;
+        if !self.matches_metadata(&metadata) || metadata.nlink() != self.metadata.nlink() {
+            return Ok(false);
+        }
+        #[cfg(unix)]
+        if self.change.changed.is_none() {
+            return Ok(false);
+        }
+        Ok(ChangeStamp::of(&file.metadata()?) == self.change)
+    }
+
+    /// Bind a rename to the identity whose bytes were verified: the same
+    /// device/inode/length as [`Self::matches_in`] plus the modification and
+    /// (Unix) change clocks captured when this handle was verified. A
+    /// same-inode rewrite that preserves the name, inode and length therefore
+    /// fails closed where a usable change time exists. Do not use this after a
+    /// rename: `rename` moves `ctime`. On Windows this is a modification-time
+    /// check; the retained handle's sharing mode is the writer exclusion.
+    pub fn matches_in_before_rename(&self, directory: &Dir, name: &Path) -> io::Result<bool> {
+        #[cfg(unix)]
+        if self.change.changed.is_none() {
+            return Ok(false);
+        }
+        if !self.matches_in(directory, name)? {
+            return Ok(false);
+        }
+        basename(name)?;
+        let mut options = OpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        #[cfg(windows)]
+        {
+            use cap_std::fs::OpenOptionsExt;
+            options.custom_flags(0x0020_0000).share_mode(1 | 2 | 4);
+        }
+        let opened = match directory.open_with(name, &options) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        Ok(ChangeStamp::of(&opened.into_std().metadata()?) == self.change)
+    }
 }
 
 fn parent_and_name(path: &Path) -> io::Result<(&Path, &Path)> {
@@ -136,6 +223,31 @@ pub fn publish_verified_noreplace(
     Ok(())
 }
 
+/// [`publish_verified_noreplace`] with the digest-time change clocks checked
+/// immediately before the rename. Acquisition finalization persists a journal
+/// between hashing and this commit, so the file must still be the exact inode
+/// state whose bytes were hashed.
+pub fn publish_verified_noreplace_bound(
+    source: &Path,
+    destination: &Path,
+    verified: &VerifiedFile,
+) -> io::Result<()> {
+    let (parent, source_name) = parent_and_name(source)?;
+    let (destination_parent, destination_name) = parent_and_name(destination)?;
+    if parent != destination_parent {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Verified publication requires sibling filenames",
+        ));
+    }
+    let directory = Dir::open_ambient_dir(parent, cap_std::ambient_authority())?;
+    publish_verified_noreplace_bound_in(&directory, source_name, destination_name, verified)?;
+    if !verified.matches_path(destination)? {
+        return Err(publication_changed());
+    }
+    Ok(())
+}
+
 pub fn publish_verified_noreplace_in(
     directory: &Dir,
     source: &Path,
@@ -143,6 +255,43 @@ pub fn publish_verified_noreplace_in(
     verified: &VerifiedFile,
 ) -> io::Result<()> {
     publish_verified_with_hook_in(directory, source, destination, verified, || {})
+}
+
+/// Commit a file whose bytes were accepted by a caller that needs the rename
+/// bound to the exact identity present when the digest pass finished. The
+/// pre-rename check includes the modification and (Unix) change clocks, so a
+/// same-inode rewrite that restores `mtime` is refused; the ordinary
+/// [`publish_verified_noreplace_in`] keeps its historical device/inode/length
+/// contract for callers whose handles already exclude writers.
+pub fn publish_verified_noreplace_bound_in(
+    directory: &Dir,
+    source: &Path,
+    destination: &Path,
+    verified: &VerifiedFile,
+) -> io::Result<()> {
+    publish_verified_bound_with_hook_in(directory, source, destination, verified, || {})
+}
+
+// The hook exercises the exact gap between the last source check and commit.
+// Production monomorphizes the empty closure away.
+fn publish_verified_bound_with_hook_in(
+    directory: &Dir,
+    source: &Path,
+    destination: &Path,
+    verified: &VerifiedFile,
+    before_commit: impl FnOnce(),
+) -> io::Result<()> {
+    basename(source)?;
+    basename(destination)?;
+    if !verified.matches_in_before_rename(directory, source)? {
+        return Err(publication_changed());
+    }
+    before_commit();
+    platform_publish_in(directory, source, destination)?;
+    if !verified.matches_in(directory, destination)? {
+        return Err(publication_changed());
+    }
+    Ok(())
 }
 
 // The hook exercises the exact gap between the last source check and commit.
@@ -183,11 +332,11 @@ pub fn publish_directory_noreplace_in(
     directory_children(source, destination, files)?;
     let identity = verified_directory.dir_metadata()?;
     let identity = (identity.dev(), identity.ino());
-    if files.is_empty() || directory_matches(parent, source, identity, files)?.is_none() {
+    if files.is_empty() || directory_matches(parent, source, identity, files, true)?.is_none() {
         return Err(publication_changed());
     }
     platform_publish_in(parent, source, destination)?;
-    if directory_matches(parent, destination, identity, files)?.is_none() {
+    if directory_matches(parent, destination, identity, files, false)?.is_none() {
         return Err(publication_changed());
     }
     Ok(())
@@ -244,7 +393,7 @@ fn publish_directory_with_hook_in(
     let identity = (identity.dev(), identity.ino());
     // Verify through `parent` while the caller's handles still pin the set;
     // the probe capability is closed when this statement ends.
-    if files.is_empty() || directory_matches(parent, source, identity, &files)?.is_none() {
+    if files.is_empty() || directory_matches(parent, source, identity, &files, true)?.is_none() {
         return Err(publication_changed());
     }
     let mut released = Vec::with_capacity(files.len());
@@ -283,7 +432,7 @@ fn publish_directory_with_hook_in(
         files.push((name, VerifiedFile::new(file.into_std(), recorded.len())?));
     }
     drop(published);
-    let published = directory_matches(parent, destination, identity, &files)?.ok_or_else(publication_changed)?;
+    let published = directory_matches(parent, destination, identity, &files, false)?.ok_or_else(publication_changed)?;
     Ok((published, files))
 }
 
@@ -311,6 +460,7 @@ fn directory_matches(
     name: &Path,
     identity: (u64, u64),
     files: &[(std::path::PathBuf, VerifiedFile)],
+    before_rename: bool,
 ) -> io::Result<Option<Dir>> {
     use cap_fs_ext::DirExt;
     let metadata = parent.symlink_metadata(name)?;
@@ -327,7 +477,12 @@ fn directory_matches(
         return Ok(None);
     }
     for (name, file) in files {
-        if !file.matches_in(&opened, name)? {
+        let matches = if before_rename {
+            file.matches_in_before_rename(&opened, name)?
+        } else {
+            file.matches_in(&opened, name)?
+        };
+        if !matches {
             return Ok(None);
         }
     }
@@ -702,6 +857,65 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(std::fs::read(root.join("complete/partial")).unwrap(), edited);
         drop(parent);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn degenerate_change_times_are_not_publication_proof() {
+        assert_eq!(change_time(0, 0), None);
+        assert_eq!(change_time(1, 1_000_000_000), None);
+        assert!(change_time(1, 0).is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn verified_file_handle_identity_rejects_a_same_inode_rewrite() {
+        use std::io::Write;
+        let root = std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let (verified, bytes) = verified_fixture(&root);
+        let source = root.join("partial");
+        assert!(verified.matches_file(&std::fs::File::open(&source).unwrap()).unwrap());
+        let modified = std::fs::metadata(&source).unwrap().modified().unwrap();
+        let mut edited = bytes.clone();
+        *edited.get_mut(4).unwrap() ^= 0xff;
+        let mut writer = std::fs::OpenOptions::new().write(true).open(&source).unwrap();
+        writer.write_all(&edited).unwrap();
+        writer.sync_all().unwrap();
+        drop(writer);
+        std::fs::OpenOptions::new().write(true).open(&source).unwrap()
+            .set_modified(modified).unwrap();
+        assert!(!verified.matches_file(&std::fs::File::open(&source).unwrap()).unwrap());
+        drop(verified);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pre_rename_identity_rejects_a_same_inode_rewrite_with_restored_mtime() {
+        use std::io::Write;
+        let root = std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let (verified, bytes) = verified_fixture(&root);
+        let source = root.join("partial");
+        let destination = root.join("complete");
+        let modified = std::fs::metadata(&source).unwrap().modified().unwrap();
+        let mut edited = bytes.clone();
+        *edited.get_mut(4).unwrap() ^= 0xff;
+        let mut writer = std::fs::OpenOptions::new().write(true).open(&source).unwrap();
+        writer.write_all(&edited).unwrap();
+        writer.sync_all().unwrap();
+        drop(writer);
+        std::fs::OpenOptions::new().write(true).open(&source).unwrap()
+            .set_modified(modified).unwrap();
+        let parent = Dir::open_ambient_dir(&root, cap_std::ambient_authority()).unwrap();
+        assert!(!verified.matches_in_before_rename(&parent, Path::new("partial")).unwrap());
+        let error = publish_verified_noreplace_bound(&source, &destination, &verified).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!destination.exists());
+        assert_eq!(std::fs::read(&source).unwrap(), edited);
+        drop((parent, verified));
         std::fs::remove_dir_all(root).unwrap();
     }
 

@@ -861,15 +861,29 @@ fn run_application(options: Options) -> Result<(), String> {
     windows::install_native_tabbing();
     // The saved theme is a paint hint for the first frame. It is read from the
     // profile before any webview exists and validated again by the store.
-    let shell_theme =
-        crate::store::saved_theme_hint(&path).unwrap_or_else(|| "system".into());
     let portable = portable::PortableProfile::detect()?;
     // A saved strict read-only policy is startup authority, not just a store
     // setting: the profile must not gain a lock file or a rendezvous socket.
-    let profile_read_only = match &portable {
-        Some(profile) => profile.saved_read_only()?,
-        None => store::saved_desktop_read_only(&path)?,
+    // One inspection supplies the policy, the first-paint theme and the exact
+    // bytes the store reuses, so a normal profile reads state.json once.
+    let startup = match &portable {
+        Some(_) => None,
+        None => Some(store::startup_hint(&path)),
     };
+    let shell_theme = match &startup {
+        Some(hint) => hint.theme.clone(),
+        None => store::saved_theme_hint(&path),
+    }
+    .unwrap_or_else(|| "system".into());
+    let profile_read_only = match &startup {
+        Some(hint) => hint.read_only.clone()?,
+        None => match &portable {
+            Some(profile) => profile.saved_read_only()?,
+            None => false,
+        },
+    };
+    let startup_bytes = startup.as_ref().and_then(|hint| hint.bytes.clone());
+    let startup_identity = startup.as_ref().and_then(|hint| hint.identity.clone());
     // Install before any Service/store work so a startup panic is captured.
     // Read-only profiles stay inert because they must not mutate the profile.
     crash::install(&path, options.read_only || profile_read_only);
@@ -880,7 +894,7 @@ fn run_application(options: Options) -> Result<(), String> {
             // way the windowed path does. Losing that claim is a second
             // instance, not a startup failure: hand the launch to the owner
             // and exit 0.
-            let service = match Service::new_checked(path.clone(), options.private, options.read_only) {
+            let service = match Service::new_checked(path.clone(), options.private, options.read_only, None) {
                 Ok(service) => service,
                 #[cfg(unix)]
                 Err(store::StoreOpenError::Busy(_)) => {
@@ -1058,6 +1072,14 @@ fn run_application(options: Options) -> Result<(), String> {
             quit::ack_quit_flush
         ])
         .setup(move |app| {
+            // The lock is held now. Reuse the pre-lock bytes only if the file
+            // still has the identity that was inspected; otherwise let the
+            // store read the profile once under its own lock.
+            let startup_bytes = startup_bytes.filter(|_| {
+                startup_identity.as_ref().is_some_and(|expected| {
+                    store::state_identity(&path).as_ref() == Some(expected)
+                })
+            });
             // Unix startup already owns the lock claimed before the builder;
             // the store adopts that descriptor instead of locking again.
             #[cfg(unix)]
@@ -1066,9 +1088,10 @@ fn run_application(options: Options) -> Result<(), String> {
                 options.private,
                 options.read_only,
                 claimed_lock,
+                startup_bytes,
             );
             #[cfg(not(unix))]
-            let service_result = Service::new_checked(path.clone(), options.private, options.read_only);
+            let service_result = Service::new_checked(path.clone(), options.private, options.read_only, startup_bytes);
             let service = match service_result {
                 Ok(service) => service,
                 // Another live process owns the profile. Unix decides this
@@ -1602,7 +1625,7 @@ mod launch_tests {
         };
         assert!(rendezvous.is_none());
         let reopened =
-            store::Store::new_with_claimed_lock(profile.0.clone(), false, None, lock).unwrap();
+            store::Store::new_with_claimed_lock(profile.0.clone(), false, None, lock, None).unwrap();
         assert!(reopened.read_only().unwrap());
         drop(reopened);
         assert!(!instance::socket_dir(&profile.0).exists());
@@ -1611,7 +1634,7 @@ mod launch_tests {
         // lock file missing it must fail instead of recreating it writable.
         let lock_path = profile.0.join("store.lock");
         std::fs::remove_file(&lock_path).unwrap();
-        assert!(store::Store::new_with_mode_checked(profile.0.clone(), false).is_err());
+        assert!(store::Store::new_with_mode_checked(profile.0.clone(), false, None).is_err());
         assert!(!lock_path.exists());
     }
 

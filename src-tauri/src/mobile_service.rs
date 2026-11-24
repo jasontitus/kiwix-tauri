@@ -1884,6 +1884,7 @@ impl Service {
         { self.mobile.state.lock().map_err(|_| "Mobile lifecycle unavailable")?.checkpoint=None; }
         #[cfg(target_os="android")]
         if let Err(error)=self.mobile_transfer_update_locked().await { errors.push(error); }
+        if let Err(error) = self.store.flush_browsing() { errors.push(error); }
         if errors.is_empty() {Ok(())} else {Err(errors.join("; "))}
     }
     pub(super) fn mobile_transfer_command(&self, command:&str,args:&Value)->bool {

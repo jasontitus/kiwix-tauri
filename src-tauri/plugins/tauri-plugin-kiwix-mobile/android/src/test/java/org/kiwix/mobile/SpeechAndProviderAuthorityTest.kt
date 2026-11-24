@@ -48,6 +48,39 @@ class SpeechAndProviderAuthorityTest {
         assertEquals(6, SpeechPosition.previous(text, 14))
     }
 
+    @Test fun speechChunkBoundariesNeverSplitSurrogatePairsOrOverrunText() {
+        val text = "a\uD83D\uDE00bc"
+        // A limit that would land between the high and low surrogate backs off
+        // to the boundary instead of handing the engine half a code point.
+        assertEquals(1, speechChunkEnd(text, 0, 2))
+        assertEquals(text.length, speechChunkEnd(text, 0, 4000))
+        assertEquals(3, speechChunkEnd("abcdef", 1, 2))
+        assertEquals(6, speechChunkEnd("abcdef", 5, 4000))
+        try { speechChunkEnd("abc", -1, 2); fail("negative start accepted") }
+        catch (_: IllegalArgumentException) { }
+        try { speechChunkEnd("abc", 0, 0); fail("empty chunk accepted") }
+        catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun cancelledOrReplacedSpeechWorkNeverRunsOnTheLiveEngine() {
+        assertTrue(speechTaskCurrent(4, 4, 9, 9))
+        // Engine retired or replaced.
+        assertFalse(speechTaskCurrent(4, 5, 9, 9))
+        // Pause, seek, stop or natural completion invalidated the queued speak.
+        assertFalse(speechTaskCurrent(4, 4, 9, 10))
+        assertFalse(speechTaskCurrent(4, 5, 9, 10))
+    }
+
+    @Test fun failedStopFailsTheLiveSessionButNeverANewerEngine() {
+        // Same engine and a live successor: fail it closed.
+        assertTrue(speechStopFailureFailsLiveSession(4, 4, live = true))
+        // Same engine with no live session: retire only.
+        assertFalse(speechStopFailureFailsLiveSession(4, 4, live = false))
+        // A newer engine owns the live session; the stale stop must not kill it.
+        assertFalse(speechStopFailureFailsLiveSession(4, 5, live = true))
+        assertFalse(speechStopFailureFailsLiveSession(4, 5, live = false))
+    }
+
     @Test fun timedSeekHonorsMeasuredRateAndRejectsInvalidTime() {
         val text = "x".repeat(1000)
         assertEquals(400, SpeechPosition.timed(text, 100, 15.0, 20.0))

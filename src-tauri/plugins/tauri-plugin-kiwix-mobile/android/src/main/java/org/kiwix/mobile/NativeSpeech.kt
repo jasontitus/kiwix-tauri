@@ -14,19 +14,36 @@ import app.tauri.plugin.JSObject
 import java.util.IllformedLocaleException
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.Executors
 
-/** Main-thread owned. Only the trusted Rust mobile transport calls these methods. */
+/**
+ * Main-thread owned state machine. Only the trusted Rust mobile transport calls
+ * these methods, always on the main thread.
+ *
+ * Every TextToSpeech binder call (construction, voice/rate selection, speak,
+ * stop, shutdown and voice enumeration) runs on one dedicated serial engine
+ * lane. The lane preserves command order, while callbacks post back to main and
+ * are validated against the engine generation, the exact session and the exact
+ * utterance before they can mutate state. Main never waits on the engine.
+ */
 internal class NativeSpeech(
     private val context: Context,
     private val foreground: () -> Boolean,
     private val emit: (JSObject) -> Unit
 ) {
     private val main = Handler(Looper.getMainLooper())
+    /** One engine command at a time; never an unbounded pool. */
+    private val engineLane = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "kiwix-speech-engine").apply { isDaemon = true }
+    }
+    /** Confined to [engineLane]. Main only enqueues commands. */
     private var engine: TextToSpeech? = null
     private var ready = false
     private var initializing = false
-    private var engineGeneration = 0L
-    private var shutdownError: String? = null
+    @Volatile private var engineGeneration = 0L
+    /** Invalidates queued speak work when playback is paused, seeked or retired. */
+    @Volatile private var playbackToken = 0L
+    @Volatile private var shutdownError: String? = null
     private var initTimeout: Runnable? = null
     private var startTimeout: Runnable? = null
     private val voiceRequests = mutableListOf<Invoke>()
@@ -53,6 +70,8 @@ internal class NativeSpeech(
         var chunkEnd = 0
         var utterance = ""
         var paused = false
+        /** True once the engine reported onStart/onRangeStart for this chunk. */
+        var startObserved = false
         var utteranceRevision = 0L
         var progressAt = 0L
         var progressOffset = 0
@@ -115,8 +134,8 @@ internal class NativeSpeech(
             finish(request, "SPEECH_FOREGROUND_REQUIRED")
             return
         }
-        // Let the playback service reach onStartCommand before the TTS engine's
-        // synchronous binder work can occupy the main thread.
+        // Let the playback service reach onStartCommand before engine admission
+        // is posted; the engine lane owns the binder work.
         main.post {
             if (current !== request) return@post
             if (ready) begin(request) else ensureEngine()
@@ -173,13 +192,12 @@ internal class NativeSpeech(
             return
         }
         session.paused = true
+        ++playbackToken
+        // A stop callback from the interrupted utterance must never be applied
+        // after resume, before the replacement utterance is prepared.
+        session.utterance = ""
         clearStartTimeout()
-        val stopError = haltEngine()
-        if (stopError != null) {
-            finish(session, stopError)
-            reject(invoke, stopError)
-            return
-        }
+        haltEngine()
         session.registration.offset = session.offset
         // A transport request may arrive while engine initialization owns Start.
         // Settle that admission before pausing; never overwrite its callback.
@@ -242,6 +260,7 @@ internal class NativeSpeech(
     private fun reposition(session: Session, offset: Int, invoke: Invoke) {
         session.invoke?.resolve(JSObject().put("id", session.id).put("accepted", true))
         session.invoke = null
+        ++playbackToken
         // Invalidate before stop, including seeks to the same chunk. A delayed
         // cancellation/range callback cannot claim the replacement utterance.
         session.utterance = ""
@@ -251,9 +270,9 @@ internal class NativeSpeech(
         session.chunkEnd = offset
         session.registration.offset = offset
         if (offset == session.text.length) {
-            val stopError = haltEngine()
+            haltEngine()
             invoke.resolve(JSObject().put("id", session.id).put("offset", offset).put("paused", false))
-            finish(session, stopError)
+            finish(session)
             return
         }
         if (session.paused) {
@@ -266,12 +285,7 @@ internal class NativeSpeech(
         clearStartTimeout()
         session.invoke = invoke
         if (!ready) { ensureEngine(); return }
-        val stopError = haltEngine()
-        if (stopError != null) {
-            finish(session, stopError)
-            reject(invoke, stopError)
-            return
-        }
+        haltEngine()
         begin(session)
     }
 
@@ -295,6 +309,9 @@ internal class NativeSpeech(
     }
 
     fun forceStop(error: String? = null, keepPlayback: Boolean = false) {
+        // Cancel queued speak work even when no session is current (a natural
+        // completion may still have a continuation task in the lane).
+        ++playbackToken
         val session = current ?: return
         // Invalidate before stop(): engines may synchronously deliver cancellation callbacks.
         current = null
@@ -303,8 +320,8 @@ internal class NativeSpeech(
         session.registration.offset = session.offset
         session.invoke?.let { reject(it, error ?: "SPEECH_CANCELLED") }
         session.invoke = null
-        val stopError = haltEngine()
-        state(session, false, error ?: stopError)
+        haltEngine()
+        state(session, false, error)
         if (!keepPlayback) SpeechPlayback.stop(context, session.id)
     }
 
@@ -318,9 +335,11 @@ internal class NativeSpeech(
         val pending = voiceRequests.toList()
         voiceRequests.clear()
         pending.forEach { unavailable(it, "SPEECH_ENGINE_CLOSED") }
-        val old = engine
-        engine = null
-        try { old?.shutdown() } catch (error: Exception) { shutdownError = error.toString() }
+        engineLane.execute {
+            val old = engine
+            engine = null
+            try { old?.shutdown() } catch (error: Exception) { shutdownError = error.toString() }
+        }
         return shutdownError
     }
 
@@ -332,9 +351,35 @@ internal class NativeSpeech(
         val timeout = Runnable { finishInit(generation, TextToSpeech.ERROR, "SPEECH_INIT_TIMEOUT") }
         initTimeout = timeout
         main.postDelayed(timeout, 15_000)
-        try {
-            engine = TextToSpeech(context) { status -> main.post { finishInit(generation, status) } }
-        } catch (_: Exception) { finishInit(generation, TextToSpeech.ERROR) }
+        engineLane.execute {
+            var created: TextToSpeech? = null
+            try {
+                created = TextToSpeech(context) { status ->
+                    // OnInit may run on the main thread; settle it through the
+                    // engine lane so configuration and speech stay ordered.
+                    engineLane.execute { main.post { finishInit(generation, status) } }
+                }
+                // A prior engine may be constructed but not yet adopted (its
+                // completeInit is now stale). Retire it before taking the slot.
+                val previous = engine
+                if (previous != null && previous !== created) {
+                    engine = null
+                    try { previous.shutdown() } catch (_: Exception) { }
+                }
+                // Publish on the engine lane before the queued init callback
+                // runs, so finishInit never observes a half-created engine.
+                engine = created
+            } catch (_: Exception) {
+                val failed = created
+                val previous = engine
+                engine = null
+                try { failed?.shutdown() } catch (_: Exception) { }
+                if (previous != null && previous !== failed) {
+                    try { previous.shutdown() } catch (_: Exception) { }
+                }
+                main.post { finishInit(generation, TextToSpeech.ERROR) }
+            }
+        }
     }
 
     private fun finishInit(generation: Long, status: Int, failure: String = "SPEECH_INIT_FAILED") {
@@ -342,20 +387,47 @@ internal class NativeSpeech(
         initializing = false
         initTimeout?.let { main.removeCallbacks(it) }
         initTimeout = null
-        val tts = engine
-        var success = status == TextToSpeech.SUCCESS && tts != null
-        if (success && tts != null) {
-            try {
-                success = tts.setOnUtteranceProgressListener(listener) == TextToSpeech.SUCCESS &&
-                    tts.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()) == TextToSpeech.SUCCESS
-            } catch (_: Exception) { success = false }
+        if (status != TextToSpeech.SUCCESS) {
+            // Fail the waiting session on main immediately. The constructor may
+            // still be inside a binder call; the lane shuts it down when it can.
+            engineLane.execute {
+                val tts = engine
+                engine = null
+                try { tts?.shutdown() } catch (_: Exception) { }
+            }
+            completeInit(generation, success = false, failure = failure)
+            return
         }
+        engineLane.execute {
+            // A newer ensureEngine may have started after finishInit released
+            // `initializing`. Retire this engine instead of overwriting it in
+            // the lane's single engine slot.
+            if (generation != engineGeneration) {
+                val stale = engine
+                engine = null
+                try { stale?.shutdown() } catch (_: Exception) { }
+                return@execute
+            }
+            val tts = engine
+            var success = tts != null
+            if (success && tts != null) {
+                try {
+                    success = tts.setOnUtteranceProgressListener(listener) == TextToSpeech.SUCCESS &&
+                        tts.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()) == TextToSpeech.SUCCESS
+                } catch (_: Exception) { success = false }
+            }
+            if (!success) {
+                engine = null
+                try { tts?.shutdown() } catch (_: Exception) { }
+            }
+            main.post { completeInit(generation, success, failure) }
+        }
+    }
+
+    private fun completeInit(generation: Long, success: Boolean, failure: String) {
+        if (generation != engineGeneration) return
         ready = success
-        if (!success) {
-            engine = null
-            try { tts?.shutdown() } catch (_: Exception) { }
-        }
         val pending = voiceRequests.toList()
         voiceRequests.clear()
         pending.forEach { if (success) resolveVoices(it) else unavailable(it, failure) }
@@ -364,113 +436,171 @@ internal class NativeSpeech(
         else if (!session.paused) begin(session)
     }
 
+    /** Engine-lane cache: a voice list is a binder call, so enumerate once per
+     * engine, not on every start/resume/seek/next/previous. Re-enumerate after
+     * ten seconds so a voice installed or removed in system settings appears. */
     private var voiceCacheGeneration = -1L
     private var voiceCacheAt = 0L
     private var voiceCache: List<Voice> = emptyList()
 
-    /** The engine's voice list is a binder call: read it once per engine, not
-     * on every start/resume/seek/next/previous. Re-enumerate after ten seconds
-     * so a voice installed or removed in system settings becomes visible. */
-    private fun installedVoices(): List<Voice> {
-        if (voiceCacheGeneration == engineGeneration &&
+    private fun installedVoices(tts: TextToSpeech, generation: Long): List<Voice> {
+        if (voiceCacheGeneration == generation &&
             System.currentTimeMillis() - voiceCacheAt < 10_000L) return voiceCache
-        val voices = (engine?.voices ?: emptySet()).filter {
+        val voices = tts.voices.orEmpty().filter {
             !it.isNetworkConnectionRequired &&
                 !it.features.orEmpty().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) &&
                 it.name.isNotEmpty() && it.locale.language.isNotEmpty() && it.locale.language != "und"
         }.sortedWith(compareBy<Voice> { it.locale.toLanguageTag() }.thenBy { it.name })
         voiceCache = voices
-        voiceCacheGeneration = engineGeneration
+        voiceCacheGeneration = generation
         voiceCacheAt = System.currentTimeMillis()
         return voices
     }
 
     private fun resolveVoices(invoke: Invoke) {
         if (!foreground()) { unavailable(invoke, "SPEECH_FOREGROUND_REQUIRED"); return }
-        try {
-            val voices = installedVoices()
-            val preferred = engine?.defaultVoice?.name
-            val default = voices.firstOrNull { it.name == preferred }?.name ?: voices.firstOrNull()?.name
-            val result = JSArray()
-            voices.forEach { voice -> result.put(JSObject().put("name", voice.name)
-                .put("lang", voice.locale.toLanguageTag()).put("voiceURI", voice.name)
-                .put("default", voice.name == default).put("quality", 0)
-                .put("localService", true)) }
-            val reply = JSObject().put("available", voices.isNotEmpty()).put("voices", result)
-            if (voices.isEmpty()) reply.put("error", "SPEECH_OFFLINE_VOICES_UNAVAILABLE")
-            invoke.resolve(reply)
-        } catch (_: Exception) { unavailable(invoke, "SPEECH_VOICES_FAILED") }
+        val generation = engineGeneration
+        engineLane.execute {
+            val reply = try {
+                val tts = engine ?: throw IllegalStateException()
+                val voices = installedVoices(tts, generation)
+                val preferred = tts.defaultVoice?.name
+                val default = voices.firstOrNull { it.name == preferred }?.name ?: voices.firstOrNull()?.name
+                val result = JSArray()
+                voices.forEach { voice -> result.put(JSObject().put("name", voice.name)
+                    .put("lang", voice.locale.toLanguageTag()).put("voiceURI", voice.name)
+                    .put("default", voice.name == default).put("quality", 0)
+                    .put("localService", true)) }
+                JSObject().put("available", voices.isNotEmpty()).put("voices", result).also {
+                    if (voices.isEmpty()) it.put("error", "SPEECH_OFFLINE_VOICES_UNAVAILABLE")
+                }
+            } catch (_: Exception) { null }
+            main.post {
+                if (generation != engineGeneration || !ready) unavailable(invoke, "SPEECH_VOICES_FAILED")
+                else if (reply != null) invoke.resolve(reply)
+                else unavailable(invoke, "SPEECH_VOICES_FAILED")
+            }
+        }
     }
+
+    private class Chunk(val utterance: String, val text: String)
 
     private fun begin(session: Session) {
-        if (current !== session) return
-        try {
-            val voices = installedVoices()
-            val preferred = engine?.defaultVoice?.name
-            val deviceLanguage = Locale.getDefault().toLanguageTag()
-            val voice = if (session.voice.isNotEmpty()) voices.firstOrNull { it.name == session.voice }
-                else voices.firstOrNull {
-                    it.name == preferred &&
-                        it.locale.toLanguageTag().equals(session.language.toLanguageTag(), true)
-                }
-                    ?: voices.firstOrNull { it.locale.toLanguageTag().equals(session.language.toLanguageTag(), true) }
-                    ?: voices.firstOrNull {
-                        it.locale.toLanguageTag().equals(deviceLanguage, true) &&
-                            it.locale.language == session.language.language
-                    }
-                    ?: voices.firstOrNull { it.locale.language == session.language.language }
-            if (voice == null) {
-                finish(session, if (session.voice.isEmpty()) "SPEECH_LANGUAGE_UNAVAILABLE" else "SPEECH_VOICE_UNAVAILABLE")
-                return
-            }
-            val tts = engine ?: throw IllegalStateException()
-            if (tts.setVoice(voice) != TextToSpeech.SUCCESS) { finish(session, "SPEECH_VOICE_UNAVAILABLE"); return }
-            if (tts.setSpeechRate(session.rate) != TextToSpeech.SUCCESS) { finish(session, "SPEECH_RATE_FAILED"); return }
-            if (queueChunk(session)) {
-                state(session, true)
-                session.invoke?.resolve(JSObject().put("id", session.id).put("accepted", true))
-                session.invoke = null
-            }
-        } catch (_: Exception) { finish(session, "SPEECH_ENGINE_FAILED") }
+        if (current !== session || session.paused) return
+        val chunk = prepareChunk(session) ?: return
+        speak(session, chunk, configure = true)
     }
 
-    private fun queueChunk(session: Session): Boolean {
-        if (current !== session) return false
+    /**
+     * Advances the chunk window on main. The engine lane only ever receives an
+     * immutable [Chunk], so a later seek/pause cannot mutate text already
+     * handed to the engine.
+     */
+    private fun prepareChunk(session: Session): Chunk? {
+        if (current !== session) return null
         // Some engines reject a chunk exactly equal to the advertised maximum
         // (Ivona on Fire OS logs "Text too long" for 4000 characters). Leave a
         // small margin so the advertised limit remains inclusive-safe.
         val maximum = TextToSpeech.getMaxSpeechInputLength()
         val limit = if (maximum > 200) maximum - 100 else maximum
-        if (limit < 2) { finish(session, "SPEECH_INPUT_LIMIT_UNAVAILABLE"); return false }
+        if (limit < 2) { finish(session, "SPEECH_INPUT_LIMIT_UNAVAILABLE"); return null }
         session.paused = false
         session.chunkStart = session.chunkEnd
-        var end = minOf(session.text.length, session.chunkStart + limit)
-        if (end < session.text.length && Character.isHighSurrogate(session.text[end - 1]) &&
-            Character.isLowSurrogate(session.text[end])) --end
+        val end = speechChunkEnd(session.text, session.chunkStart, limit)
         session.chunkEnd = end
-        session.utterance = "kiwix-speech-${session.token}-${++session.utteranceRevision}"
-        val parameters = Bundle().apply {
-            // Explicitly request embedded synthesis as well as selecting an offline-only Voice.
-            putBoolean(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, false)
-            putBoolean(TextToSpeech.Engine.KEY_FEATURE_EMBEDDED_SYNTHESIS, true)
+        val utterance = "kiwix-speech-${session.token}-${++session.utteranceRevision}"
+        session.utterance = utterance
+        session.startObserved = false
+        return Chunk(utterance, session.text.substring(session.chunkStart, end))
+    }
+
+    private fun speak(session: Session, chunk: Chunk, configure: Boolean) {
+        if (current !== session) return
+        val generation = engineGeneration
+        val token = playbackToken
+        val admission = session.invoke
+        engineLane.execute {
+            // The engine or the session may have been retired after this command
+            // was queued; never speak on a successor engine or a cancelled seek.
+            if (!speechTaskCurrent(generation, engineGeneration, token, playbackToken)) return@execute
+            val tts = engine
+            var failure: String? = null
+            if (tts == null) failure = "SPEECH_ENGINE_FAILED"
+            else try {
+                if (configure) {
+                    val voice = chooseVoice(tts, session, generation)
+                    if (voice == null) failure = if (session.voice.isEmpty())
+                        "SPEECH_LANGUAGE_UNAVAILABLE" else "SPEECH_VOICE_UNAVAILABLE"
+                    else if (tts.setVoice(voice) != TextToSpeech.SUCCESS) failure = "SPEECH_VOICE_UNAVAILABLE"
+                    else if (tts.setSpeechRate(session.rate) != TextToSpeech.SUCCESS) failure = "SPEECH_RATE_FAILED"
+                }
+                if (failure == null) {
+                    // Voice enumeration can be slow; recheck before the binder
+                    // call that actually starts audio.
+                    if (!speechTaskCurrent(generation, engineGeneration, token, playbackToken)) return@execute
+                    val parameters = Bundle().apply {
+                        // Explicitly request embedded synthesis as well as selecting an offline-only Voice.
+                        putBoolean(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, false)
+                        putBoolean(TextToSpeech.Engine.KEY_FEATURE_EMBEDDED_SYNTHESIS, true)
+                    }
+                    if (tts.speak(chunk.text, TextToSpeech.QUEUE_FLUSH, parameters, chunk.utterance) !=
+                        TextToSpeech.SUCCESS) failure = "SPEECH_QUEUE_FAILED"
+                }
+            } catch (_: Exception) { failure = "SPEECH_ENGINE_FAILED" }
+            main.post {
+                if (generation != engineGeneration || token != playbackToken || current !== session) return@post
+                if (failure != null) {
+                    if (session.utterance == chunk.utterance && !session.paused) finish(session, failure)
+                    return@post
+                }
+                if (session.utterance == chunk.utterance && !session.paused) {
+                    state(session, true)
+                    // onStart may have arrived before this lane result; never
+                    // re-arm a start timeout that would fail a live utterance.
+                    if (!session.startObserved) armStartTimeout(session, chunk.utterance)
+                }
+                // A progress callback may have resolved this admission first;
+                // only the exact invoke captured for this speak is settled here.
+                if (admission != null && session.invoke === admission && !session.paused) {
+                    admission.resolve(JSObject().put("id", session.id).put("accepted", true))
+                    session.invoke = null
+                }
+            }
         }
-        val result = engine?.speak(session.text.substring(session.chunkStart, end),
-            TextToSpeech.QUEUE_FLUSH, parameters, session.utterance)
-        if (result != TextToSpeech.SUCCESS) { finish(session, "SPEECH_QUEUE_FAILED"); return false }
-        val utterance = session.utterance
+    }
+
+    private fun chooseVoice(tts: TextToSpeech, session: Session, generation: Long): Voice? {
+        val voices = installedVoices(tts, generation)
+        val preferred = tts.defaultVoice?.name
+        val deviceLanguage = Locale.getDefault().toLanguageTag()
+        return if (session.voice.isNotEmpty()) voices.firstOrNull { it.name == session.voice }
+        else voices.firstOrNull {
+            it.name == preferred &&
+                it.locale.toLanguageTag().equals(session.language.toLanguageTag(), true)
+        }
+            ?: voices.firstOrNull { it.locale.toLanguageTag().equals(session.language.toLanguageTag(), true) }
+            ?: voices.firstOrNull {
+                it.locale.toLanguageTag().equals(deviceLanguage, true) &&
+                    it.locale.language == session.language.language
+            }
+            ?: voices.firstOrNull { it.locale.language == session.language.language }
+    }
+
+    private fun armStartTimeout(session: Session, utterance: String) {
         val timeout = Runnable {
             val active = current
-            if (active != null && active.utterance == utterance) finish(active, "SPEECH_START_TIMEOUT")
+            if (active === session && active.utterance == utterance && !active.startObserved)
+                finish(active, "SPEECH_START_TIMEOUT")
         }
         clearStartTimeout()
         startTimeout = timeout
         main.postDelayed(timeout, 15_000)
-        return true
     }
 
     private val listener = object : UtteranceProgressListener() {
         override fun onStart(utteranceId: String?) = callback(utteranceId) { session ->
             clearStartTimeout()
+            session.startObserved = true
             session.progressAt = android.os.SystemClock.elapsedRealtime()
             session.stateAt = session.progressAt
             session.progressOffset = session.chunkStart
@@ -481,7 +611,10 @@ internal class NativeSpeech(
             clearStartTimeout()
             session.offset = session.chunkEnd
             if (session.offset == session.text.length) finish(session) else {
-                try { queueChunk(session) } catch (_: Exception) { finish(session, "SPEECH_QUEUE_FAILED") }
+                try {
+                    val chunk = prepareChunk(session)
+                    if (chunk != null) speak(session, chunk, configure = false)
+                } catch (_: Exception) { finish(session, "SPEECH_QUEUE_FAILED") }
             }
         }
         @Deprecated("Required by UtteranceProgressListener")
@@ -493,6 +626,10 @@ internal class NativeSpeech(
             finish(it, "SPEECH_INTERRUPTED")
         }
         override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) = callback(utteranceId) { session ->
+            if (!session.startObserved) {
+                session.startObserved = true
+                clearStartTimeout()
+            }
             if (start >= 0 && start <= session.chunkEnd - session.chunkStart) {
                 val now = android.os.SystemClock.elapsedRealtime()
                 val position = session.chunkStart + start
@@ -519,6 +656,13 @@ internal class NativeSpeech(
         main.post {
             val session = current ?: return@post
             if (session.utterance != id || session.paused) return@post
+            // Any progress callback for the active utterance proves the engine
+            // accepted the speak, even if this callback reached main before the
+            // engine lane's speak result. Settle only the exact pending invoke.
+            session.invoke?.let { invoke ->
+                invoke.resolve(JSObject().put("id", session.id).put("accepted", true))
+                session.invoke = null
+            }
             action(session)
         }
     }
@@ -526,6 +670,7 @@ internal class NativeSpeech(
     private fun finish(session: Session, error: String? = null) {
         if (current !== session) return
         current = null
+        ++playbackToken
         clearStartTimeout()
         session.registration.status = if (error == null) Status.FINISHED else Status.CANCELLED
         session.registration.offset = session.offset
@@ -536,19 +681,33 @@ internal class NativeSpeech(
         SpeechPlayback.stop(context, session.id)
     }
 
-    private fun haltEngine(): String? {
-        val tts = engine ?: return null
+    private fun haltEngine() {
         // An initializing engine has not received any text to synthesize.
-        if (!ready) return null
-        val stopped = try { tts.stop() == TextToSpeech.SUCCESS } catch (_: Exception) { false }
-        if (stopped) return null
-        // A failed stop must not leave a reusable engine holding playback ownership.
-        engine = null
+        if (!ready) return
+        val generation = engineGeneration
+        engineLane.execute {
+            val tts = engine ?: return@execute
+            val stopped = try { tts.stop() == TextToSpeech.SUCCESS } catch (_: Exception) { false }
+            if (stopped) return@execute
+            // A failed stop must not leave a reusable engine holding playback ownership.
+            engine = null
+            try { tts.shutdown() } catch (error: Exception) { shutdownError = "SPEECH_STOP_FAILED; $error" }
+            main.post { engineRetired(generation, "SPEECH_STOP_FAILED") }
+        }
+    }
+
+    private fun engineRetired(generation: Long, error: String) {
+        val currentGeneration = engineGeneration
+        if (generation != currentGeneration) return
         ready = false
         ++engineGeneration
-        shutdownError = "SPEECH_STOP_FAILED"
-        try { tts.shutdown() } catch (error: Exception) { shutdownError = "$shutdownError; $error" }
-        return "SPEECH_STOP_FAILED"
+        shutdownError = error
+        // The engine is gone. Fail whichever session is live now, including a
+        // successor whose speak result will be dropped by the generation bump.
+        val live = current
+        if (speechStopFailureFailsLiveSession(generation, currentGeneration, live != null)) {
+            live?.let { finish(it, error) }
+        }
     }
 
     private fun clearStartTimeout() {
@@ -596,3 +755,24 @@ internal class NativeSpeech(
         const val STATE_INTERVAL_MS = 300L
     }
 }
+
+/**
+ * Exclusive end of the next engine chunk. Never overruns [text] and never
+ * splits a surrogate pair at the chunk boundary. Pure so host tests can cover
+ * the boundary without an engine or a device.
+ */
+internal fun speechChunkEnd(text: String, start: Int, limit: Int): Int {
+    require(start in 0..text.length && limit > 0)
+    var end = minOf(text.length, start + limit)
+    if (end < text.length && Character.isHighSurrogate(text[end - 1]) &&
+        Character.isLowSurrogate(text[end])) --end
+    return end
+}
+
+/** True only when queued engine work still belongs to the live engine and playback generation. */
+internal fun speechTaskCurrent(generation: Long, currentGeneration: Long, token: Long, currentToken: Long): Boolean =
+    generation == currentGeneration && token == currentToken
+
+/** A failed stop must fail the live session on the same engine, including a successor. */
+internal fun speechStopFailureFailsLiveSession(generation: Long, currentGeneration: Long, live: Boolean): Boolean =
+    generation == currentGeneration && live

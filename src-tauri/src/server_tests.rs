@@ -914,6 +914,29 @@ async fn ranged_media_request_returns_exact_bytes_and_headers() {
 }
 
 #[tokio::test]
+async fn ranged_resource_is_served_from_one_reader_lock_acquisition() {
+    let fixture = ReaderFixture::start().await;
+    // Warm the metadata lookup outside the measured window.
+    let _ = fixture.archive.entry(MEDIA_PATH).unwrap();
+    let before = fixture.archive.lock_acquisitions();
+    let response = fetch(
+        fixture.port,
+        &fixture.host,
+        "GET",
+        &fixture.url(MEDIA_PATH),
+        &[("Range", "bytes=1000-1999")],
+    )
+    .await;
+    let acquisitions = fixture.archive.lock_acquisitions() - before;
+    assert_eq!(response.status, 206);
+    assert_eq!(response.body.len(), 1000);
+    assert_eq!(
+        acquisitions, 1,
+        "a ranged resource must resolve the entry and read its bytes under one retained read lock"
+    );
+}
+
+#[tokio::test]
 async fn malformed_archive_media_type_still_serves_ranged_bytes() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/media.zim");
     let mut archive = std::fs::read(source).unwrap();

@@ -276,6 +276,33 @@ async fn corrupt_cache_and_unsolicited_304_never_become_success_or_trusted_links
     fixture.stop().await;
 }
 
+#[test]
+fn oversized_batch_record_is_skipped_without_dropping_other_pages() {
+    fn cached(url: &str) -> Arc<Record> {
+        let mut record = Record {
+            url: url.into(), language: "en".into(), kind: Kind::Page,
+            base: "https://example.org/".into(), etag: None, xml: "<feed/>".into(),
+            digest: String::new(), encoded_bytes: OnceLock::new(),
+        };
+        record.digest = record_digest(&record);
+        Arc::new(record)
+    }
+    let profile = Profile::new();
+    let store = Arc::new(Store::new(profile.0.clone()).unwrap());
+    let cache = cache(store.clone());
+    let kept = cached("https://example.org/feed?q=kept");
+    let oversized = cached(&format!("https://example.org/feed?q={}", "x".repeat(MAX_CACHE)));
+    let warning = store.with_catalog_cache_policy(|_, _| cache.save_refresh(vec![
+        CacheUpdate::Fresh { record: Arc::clone(&oversized), previous: None },
+        CacheUpdate::Fresh { record: Arc::clone(&kept), previous: None },
+    ])).unwrap().expect("an oversized record must not abort the batch");
+    assert!(warning.contains("capacity"), "{warning}");
+    let records: Records = serde_json::from_slice(&std::fs::read(profile.file()).unwrap()).unwrap();
+    assert!(records.records.iter().any(|record| record.url == kept.url));
+    assert!(!records.records.iter().any(|record| record.url == oversized.url));
+    assert!(std::fs::metadata(profile.file()).unwrap().len() <= MAX_CACHE as u64);
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn finite_entry_eviction_does_not_mix_distinct_queries() {
     let profile = Profile::new();
@@ -412,7 +439,7 @@ async fn failed_revalidation_rewrite_preserves_actual_existing_durability() {
 
 #[cfg(unix)]
 #[tokio::test(flavor = "current_thread")]
-async fn cache_history_permissions_are_private_on_creation_and_pending_reuse() {
+async fn cache_history_permissions_are_private_on_creation_and_pending_recovery() {
     use std::os::unix::fs::PermissionsExt;
     let profile = Profile::new();
     let fixture = Fixture::new().await;
@@ -424,13 +451,75 @@ async fn cache_history_permissions_are_private_on_creation_and_pending_reuse() {
     assert_eq!(std::fs::metadata(profile.0.join("cache")).unwrap().permissions().mode() & 0o777, 0o700);
     let pending = profile.0.join("cache").join(PENDING_FILE);
     std::fs::set_permissions(profile.0.join("cache"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::fs::write(&pending, b"interrupted old scratch").unwrap();
-    std::fs::set_permissions(&pending, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::write(&pending, CACHE_PAYLOAD_PREFIX).unwrap();
+    std::fs::set_permissions(&pending, std::fs::Permissions::from_mode(0o600)).unwrap();
     let reused = cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
     assert_eq!(reused.cache.status, "revalidated");
-    assert!(reused.cache.stored);
+    assert!(reused.cache.stored && reused.cache.error.is_none());
+    assert!(!pending.exists());
     assert_eq!(std::fs::metadata(profile.file()).unwrap().permissions().mode() & 0o777, 0o600);
     assert_eq!(std::fs::metadata(profile.0.join("cache")).unwrap().permissions().mode() & 0o777, 0o700);
+    fixture.stop().await;
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn truncated_legacy_scratch_is_recovered() {
+    use std::os::unix::fs::PermissionsExt;
+    let profile = Profile::new();
+    let fixture = Fixture::new().await;
+    let cache = cache(Arc::new(Store::new(profile.0.clone()).unwrap()));
+    let (gate, generation) = policy();
+    let url = fixture.url("/feed?q=truncated-history");
+    cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    let pending = profile.0.join("cache").join(PENDING_FILE);
+    std::fs::write(&pending, &CACHE_PAYLOAD_PREFIX[..3]).unwrap();
+    std::fs::set_permissions(&pending, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let reused = cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    assert!(reused.cache.stored && reused.cache.error.is_none());
+    assert!(!pending.exists());
+    fixture.stop().await;
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn foreign_pending_file_is_never_overwritten() {
+    use std::os::unix::fs::PermissionsExt;
+    let profile = Profile::new();
+    let fixture = Fixture::new().await;
+    let cache = cache(Arc::new(Store::new(profile.0.clone()).unwrap()));
+    let (gate, generation) = policy();
+    let url = fixture.url("/feed?q=foreign-pending");
+    cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    let before = std::fs::read(profile.file()).unwrap();
+    let pending = profile.0.join("cache").join(PENDING_FILE);
+    std::fs::write(&pending, b"foreign sentinel").unwrap();
+    std::fs::set_permissions(&pending, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let refused = cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    assert_eq!(refused.cache.status, "revalidated");
+    assert!(refused.cache.stored && refused.cache.error.as_deref().is_some_and(|error| error.contains("not app-owned")));
+    assert_eq!(std::fs::read(&pending).unwrap(), b"foreign sentinel");
+    assert_eq!(std::fs::read(profile.file()).unwrap(), before);
+    fixture.stop().await;
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn interrupted_uuid_scratch_is_recovered_before_publication() {
+    use std::os::unix::fs::PermissionsExt;
+    let profile = Profile::new();
+    let fixture = Fixture::new().await;
+    let cache = cache(Arc::new(Store::new(profile.0.clone()).unwrap()));
+    let (gate, generation) = policy();
+    let url = fixture.url("/feed?q=recover-scratch");
+    cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    let stale = profile.0.join("cache").join(format!("{PENDING_FILE}.{}", uuid::Uuid::new_v4()));
+    std::fs::write(&stale, CACHE_PAYLOAD_PREFIX).unwrap();
+    std::fs::set_permissions(&stale, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let recovered = cache.fetch_page(&url, "en", &gate, &generation, generation.load(Ordering::SeqCst)).await.unwrap();
+    assert_eq!(recovered.cache.status, "revalidated");
+    assert!(recovered.cache.stored && recovered.cache.error.is_none());
+    assert!(!stale.exists());
     fixture.stop().await;
 }
 
@@ -453,7 +542,7 @@ fn cache_attachment_replacement_prevents_mutation_and_detached_publication() {
     assert!(!profile.file().exists());
     let attached = store.with_catalog_cache_policy(|_, _| cache.directory(true)).unwrap().unwrap();
     let late_detached = profile.0.join("late-detached-cache");
-    let error = atomic_write_with_hook(&attached, b"fully written but unpublished", || {
+    let error = atomic_write_with_hook(&attached, b"fully written but unpublished", |_| {
         std::fs::rename(profile.0.join("cache"), &late_detached).unwrap();
         std::fs::create_dir(profile.0.join("cache")).unwrap();
         std::fs::write(profile.file(), b"replacement sentinel").unwrap();
@@ -471,15 +560,19 @@ fn scratch_inode_replacement_does_not_overwrite_published_history() {
     let cache = cache(store.clone());
     let directory = store.with_catalog_cache_policy(|_, _| cache.directory(true)).unwrap().unwrap();
     atomic_write(&directory, b"published").unwrap();
-    let scratch = profile.0.join("cache").join(PENDING_FILE);
     let displaced = profile.0.join("displaced");
-    let error = atomic_write_with_hook(&directory, b"private", || {
+    let error = atomic_write_with_hook(&directory, b"private", |scratch| {
+        let scratch = profile.0.join("cache").join(scratch);
         std::fs::rename(&scratch, &displaced).unwrap();
         std::fs::write(&scratch, b"foreign").unwrap();
     }).unwrap_err();
     assert!(error.contains("scratch file changed"));
     assert_eq!(std::fs::read(profile.file()).unwrap(), b"published");
-    assert_eq!(std::fs::read(scratch).unwrap(), b"foreign");
+    let foreign = std::fs::read_dir(profile.0.join("cache")).unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.file_name().and_then(|name| name.to_str()) != Some(CACHE_FILE))
+        .unwrap();
+    assert_eq!(std::fs::read(foreign).unwrap(), b"foreign");
 }
 
 #[cfg(windows)]
@@ -491,7 +584,7 @@ fn held_cache_directory_cannot_be_detached_before_or_during_publication() {
     let directory = store.with_catalog_cache_policy(|_, _| cache.directory(true)).unwrap().unwrap();
     let error = std::fs::rename(profile.0.join("cache"), profile.0.join("detached-cache")).unwrap_err();
     assert_eq!(error.raw_os_error(), Some(32), "{error}");
-    atomic_write_with_hook(&directory, b"published in the attached directory", || {
+    atomic_write_with_hook(&directory, b"published in the attached directory", |_| {
         let error = std::fs::rename(profile.0.join("cache"), profile.0.join("late-detached-cache")).unwrap_err();
         assert_eq!(error.raw_os_error(), Some(32), "{error}");
     })

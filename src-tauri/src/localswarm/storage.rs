@@ -183,10 +183,33 @@ pub(super) struct OwnedSet {
 }
 pub(super) struct OpenSet {
     pub parent: Directory, pub directory: Directory, pub files: Vec<File>, stamps: Vec<Stamp>, pub published: bool, sealed: bool,
+    /// In-memory change time of each staged handle, captured when the set was
+    /// sealed for its final digest pass. Serialized [`Stamp`]s stay compatible;
+    /// this only binds live publication to the bytes that were verified.
+    changes: Vec<Option<(i64, i64)>>,
     /// Windows publication surrendered `directory.dir` and could not rebind it
     /// by identity; every staged-set operation fails closed until reopened.
     #[cfg(windows)] detached: bool,
 }
+
+/// Unix `ctime` cannot be restored from userland; a rewrite that puts `mtime`
+/// back still moves it. A zero or degenerate Unix change time is treated as
+/// unprovable and refuses publication. Other platforms expose no change time
+/// through the current metadata set, so the retained read-only handles plus
+/// `mtime` are the available proof there.
+#[cfg(unix)]
+fn change_of(file: &File) -> Option<(i64, i64)> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = file.metadata().ok()?;
+    let seconds = metadata.ctime();
+    let nanos = u32::try_from(metadata.ctime_nsec()).ok()?;
+    if nanos >= 1_000_000_000 || (seconds == 0 && nanos == 0) {
+        return None;
+    }
+    Some((seconds, i64::from(nanos)))
+}
+#[cfg(not(unix))]
+fn change_of(_file: &File) -> Option<(i64, i64)> { None }
 impl OwnedSet {
     pub fn check_space(parent: &Directory, manifest: &Manifest, remaining: u64, identity: &str, acknowledgement: Option<&str>) -> Result<(), String> {
         parent.unchanged()?;
@@ -206,7 +229,8 @@ impl OwnedSet {
         directory.sync()?;
         let owned = Self { parent: parent.path.clone(), parent_identity: parent.identity.clone(), staging, destination, identity: directory.identity.clone(), files: identities };
         let stamps = files.iter().map(|file| Stamp::of(&Metadata::from_file(file).map_err(err)?)).collect::<Result<Vec<_>, _>>()?;
-        Ok((owned, OpenSet { parent, directory, files, stamps, published: false, sealed: false, #[cfg(windows)] detached: false }))
+        let changes = files.iter().map(change_of).collect();
+        Ok((owned, OpenSet { parent, directory, files, stamps, changes, published: false, sealed: false, #[cfg(windows)] detached: false }))
     }
     pub fn open(&self, manifest: &Manifest, publishing: bool) -> Result<OpenSet, String> {
         basename(&self.staging)?; basename(&self.destination)?;
@@ -220,12 +244,12 @@ impl OwnedSet {
         if directory.identity != self.identity || self.files.len() != manifest.files.len() { return Err("LocalSwarm staging ownership changed; retained data was not touched".into()); }
         let names = directory.dir.entries().map_err(err)?.collect::<Result<Vec<_>, _>>().map_err(err)?;
         if names.len() != manifest.files.len() { return Err("Unexpected entries in LocalSwarm staging; retained data was not touched".into()); }
-        let mut files = Vec::new(); let mut stamps = Vec::new();
+        let mut files = Vec::new(); let mut stamps = Vec::new(); let mut changes = Vec::new();
         for (entry, identity) in manifest.files.iter().zip(&self.files) {
             let file = directory.file(&entry.path, !published, false)?; let stamp = Stamp::of(&Metadata::from_file(&file).map_err(err)?)?;
-            if &stamp.identity != identity || stamp.size != entry.size_bytes { return Err("LocalSwarm file ownership or size changed".into()); } stamps.push(stamp); files.push(file);
+            if &stamp.identity != identity || stamp.size != entry.size_bytes { return Err("LocalSwarm file ownership or size changed".into()); } stamps.push(stamp); changes.push(change_of(&file)); files.push(file);
         }
-        Ok(OpenSet { parent, directory, files, stamps, published, sealed: published, #[cfg(windows)] detached: false })
+        Ok(OpenSet { parent, directory, files, stamps, changes, published, sealed: published, #[cfg(windows)] detached: false })
     }
     pub fn final_path(&self, first: &str) -> PathBuf { self.parent.join(&self.destination).join(first) }
 }
@@ -292,6 +316,7 @@ impl OpenSet {
         }
         self.files = files;
         self.stamps = stamps;
+        self.changes = self.files.iter().map(change_of).collect();
         self.unchanged(manifest, owned)
     }
     /// Fresh read-only handles are identity-bound to the retained sealed set.
@@ -349,6 +374,9 @@ impl OpenSet {
         for (file, stamp) in self.files.iter().zip(self.stamps.iter_mut()) {
             *stamp = Stamp::of(&Metadata::from_file(file).map_err(err)?)?;
         }
+        for (file, change) in self.files.iter().zip(self.changes.iter_mut()) {
+            *change = change_of(file);
+        }
         self.unchanged(manifest, owned)?;
         super::profile::record(9, 0, measured);
         Ok(())
@@ -357,6 +385,17 @@ impl OpenSet {
     /// binding the committed set to `files` (verified handles to `self.files`).
     pub fn publish(&mut self, manifest: &Manifest, owned: &OwnedSet, files: Vec<(PathBuf, crate::publication::VerifiedFile)>) -> Result<(), String> {
         if self.published { return Err("LocalSwarm set is already published".into()); }
+        // The final digest pass runs after `seal`; bind the rename to the exact
+        // handles that pass verified. A same-inode rewrite that restores mtime
+        // still moves Unix ctime, and the publication helper rechecks the
+        // verified handles immediately before the rename.
+        if self.changes.len() != self.files.len() { return Err("LocalSwarm staged set was not sealed before publication".into()); }
+        for (file, expected) in self.files.iter().zip(&self.changes) {
+            let current = change_of(file);
+            if current != *expected || (cfg!(unix) && expected.is_none()) {
+                return Err("LocalSwarm staged bytes changed after chunk verification".into());
+            }
+        }
         #[cfg(not(windows))]
         {
             let _ = manifest;

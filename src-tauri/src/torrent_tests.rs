@@ -1769,6 +1769,68 @@ fn publication_succeeds_with_readable_0755_parent_and_capture() {
 
 #[cfg(unix)]
 #[test]
+fn publication_rejects_a_temporary_rewritten_after_its_digest() {
+    use std::io::{Seek, SeekFrom, Write};
+    let (_profile, manager, id) = publication_fixture();
+    let record = manager.record(&id).unwrap();
+    let factory = publication_factory(&record);
+    factory
+        .open_file(Path::new("archive.zim"), TEST_ARCHIVE.len() as u64)
+        .unwrap();
+    let sources = factory.sources.lock().unwrap().clone();
+    let mut substituted = TEST_ARCHIVE.to_vec();
+    substituted[4..8].copy_from_slice(b"EVIL");
+    let result = publish_archives(
+        &record,
+        &manager.inner.store,
+        &sources,
+        &CancellationToken::new(),
+        |temporary, remove| {
+            manager.update_record(&id, |r| {
+                r.publication_temporaries
+                    .retain(|prior| prior.name != temporary.name);
+                if !remove {
+                    r.publication_temporaries.push(temporary);
+                }
+            })
+        },
+        |intent| {
+            manager.update_record(&id, |r| r.publication_intents.push(intent))?;
+            // Rewrite the exact temporary in place, keeping its length, and put
+            // mtime back. The rename must still refuse because ctime moved.
+            let temporary = fs::read_dir(&record.directory)
+                .unwrap()
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .find(|path| {
+                    let name = path.file_name().unwrap().to_string_lossy();
+                    name.starts_with(".kiwix-publish-")
+                        && !name.starts_with(".kiwix-publish-cleanup-")
+                })
+                .unwrap();
+            let modified = fs::metadata(&temporary).unwrap().modified().unwrap();
+            let mut file = fs::OpenOptions::new().write(true).open(&temporary).unwrap();
+            file.seek(SeekFrom::Start(0)).unwrap();
+            file.write_all(&substituted).unwrap();
+            file.sync_all().unwrap();
+            drop(file);
+            fs::OpenOptions::new().write(true).open(&temporary).unwrap()
+                .set_modified(modified).unwrap();
+            Ok(())
+        },
+        |_| panic!("a rewritten temporary must never be committed"),
+    );
+    let error = result.unwrap_err();
+    assert!(error.contains("verified identity"), "the digest identity must bind the rename: {error}");
+    assert!(!record.directory.join("archive.zim").exists());
+    assert_eq!(
+        fs::read(record.staging.join("archive.zim")).unwrap(),
+        TEST_ARCHIVE
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn publication_rejects_mutable_parent_before_creating_temporaries() {
     use std::os::unix::fs::PermissionsExt;
     let (profile, manager, id) = publication_fixture();

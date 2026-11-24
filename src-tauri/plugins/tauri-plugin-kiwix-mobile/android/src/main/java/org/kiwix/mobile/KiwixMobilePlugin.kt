@@ -119,8 +119,9 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private var uiAdmission = true
     private val applicationContext = initialActivity.applicationContext
     private val main = Handler(Looper.getMainLooper())
-    /** Short control commands and notification admission. */
+    /** Short control commands, durable intake and notification admission. */
     private val worker = Executors.newSingleThreadExecutor()
+    /** Long file scans and cache maintenance; never head-of-line blocks control work. */
     private val scanWorker = Executors.newSingleThreadExecutor()
     /** One long copy/export at a time; never head-of-line blocks control work. */
     private val copyWorker = Executors.newSingleThreadExecutor()
@@ -147,12 +148,27 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private var incomingFailure: String? = null
     /** User-visible notice for an intake batch that could not survive a cold start. */
     private var incomingNotice: String? = null
-    /** Batches kept only in memory because no persistable URI grant was taken. */
-    private var transientBatches = JSONArray()
+    /** Admitted transient batches keyed by requestId, in admission order. */
+    private val transientBatches = linkedMapOf<String, TransientBatch>()
+    /** urisKey -> requestId, so redelivery dedupe is O(1). */
+    private val transientBatchUris = hashMapOf<String, String>()
+    /** Marker writes in flight; counted against the transient batch cap. */
+    private var pendingTransientAdmissions = 0
+    /** A marker write failed and should be reconciled by a later retry. */
+    private var transientMarkerDirty = false
     /** Durable intake writes handed to the worker but not yet fsynced. */
     private val queuedIntakeBatches = mutableSetOf<String>()
     /** Offered native intent flags are not themselves a persisted permission. */
     private val incomingGrantFlags = mutableMapOf<Uri, Int>()
+    /** Reference count for transient batches sharing the same URI. */
+    private val incomingGrantRefs = mutableMapOf<Uri, Int>()
+    private class TransientBatch(val json: JSONObject, val urisKey: String, val uris: List<Uri>)
+    private class ParsedDocuments(
+        val uris: List<Uri>,
+        val flags: Int,
+        val handled: Boolean = false,
+        val malformed: Boolean = false,
+    )
     private var transientIntakeChecked = false
     private val externalDocuments by lazy { ExternalDocuments(applicationContext) }
     private val deviceScan by lazy { DeviceZimScan(applicationContext, externalDocuments) }
@@ -230,6 +246,9 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         private const val INTAKE_BATCHES = "batches"
         private const val INTAKE_TRANSIENT_PENDING = "transient-pending"
         private const val INTAKE_REOPEN_MESSAGE = "Re-open the file to import it."
+        private const val INTAKE_HANDLED_EXTRA = "org.kiwix.mobile.INTAKE_HANDLED"
+        private const val MAX_TRANSIENT_INTAKE_BATCHES = 32
+        private const val MAX_INCOMING_GRANT_FLAGS = 64
         private var retained = WeakReference<KiwixMobilePlugin>(null)
         private var currentActivity = WeakReference<Activity>(null)
         private val generations = WeakHashMap<Activity, Long>()
@@ -323,7 +342,6 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         if (currentActivity.get() !== owner) return
         CrashIntake.install(applicationContext)
         bindWebView(webView)
-        sweepExportCache()
         val lifecycle = (owner as? LifecycleOwner)?.lifecycle?.currentState
         windowState.restore(
             lifecycle?.isAtLeast(Lifecycle.State.STARTED) == true,
@@ -331,16 +349,21 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         )
         TransferEvents.attach(this)
         nearbyRoutes.install()
+        // Durable intent intake is enqueued before the best-effort export-cache
+        // sweep so a cold-start file open is not delayed behind deletions.
         receiveCompletionNotification(owner.intent)
         receiveDocuments(owner.intent)
         receiveEntries(owner.intent)
+        sweepExportCache()
     }
 
     /** Bound the lifetime of export/share scratch copies: a receiving app may
      * still read a file after the chooser closes, so deletion is deferred to a
      * later launch instead of racing the grant. */
     private fun sweepExportCache() {
-        worker.execute {
+        // Best-effort deletion is file IO; keep it off the interactive/control
+        // worker so durable intake and notification admission stay responsive.
+        scanWorker.execute {
             val base = File(applicationContext.cacheDir, "kiwix-mobile-exports")
             val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
             base.listFiles()?.forEach { entry ->
@@ -1566,11 +1589,19 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     }
 
     private fun receiveCompletionNotification(intent: Intent?) {
-        // Activity intake has no deferred-delivery ownership. Preserve its
-        // existing durable admission before returning from the callback.
-        if (AndroidCompletionNotifications.receiveIntent(applicationContext, intent)) {
-            main.post { if (!destroyed && hasListener("completion-notification-tap"))
-                trigger("completion-notification-tap", JSObject()) }
+        if (intent == null) return
+        // The verified-tap journal is an AtomicFile with an fsync. Copy the
+        // intent on main and commit on the worker so the Activity callback never
+        // blocks; the tap event is delivered only after the durable write.
+        val copy = try { Intent(intent) } catch (_: Exception) { return }
+        worker.execute {
+            val received = try {
+                AndroidCompletionNotifications.receiveIntent(applicationContext, copy)
+            } catch (_: Exception) { false }
+            if (received) main.post {
+                if (!destroyed && hasListener("completion-notification-tap"))
+                    trigger("completion-notification-tap", JSObject())
+            }
         }
     }
 
@@ -1740,101 +1771,194 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
 
     /** Initial VIEW/SEND and warm onNewIntent intake stay native until shell admission. */
     private fun receiveDocuments(intent: Intent?) {
-        if (intent == null || intent.getBooleanExtra("org.kiwix.mobile.INTAKE_HANDLED", false)) return
+        if (intent == null) return
         if (intent.action !in listOf(Intent.ACTION_VIEW, Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) return
+        // Copy on main, then parse every extra on the worker. A malformed
+        // explicit Intent (bad Parcelable, wrong EXTRA_STREAM type) must never
+        // throw from an Activity callback.
+        val copy = try { Intent(intent) } catch (_: Exception) { return }
+        worker.execute {
+            val parsed = try {
+                parseDocumentIntent(copy)
+            } catch (_: Exception) {
+                ParsedDocuments(emptyList(), 0, malformed = true)
+            }
+            if (parsed.handled || parsed.malformed || parsed.uris.isEmpty()) return@execute
+            main.post { onDocumentsParsed(intent, parsed) }
+        }
+    }
+
+    private fun parseDocumentIntent(intent: Intent): ParsedDocuments {
+        if (intent.getBooleanExtra(INTAKE_HANDLED_EXTRA, false))
+            return ParsedDocuments(emptyList(), 0, handled = true)
         val uris = linkedSetOf<Uri>()
         intent.data?.let { uris.add(it) }
-        intent.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) } }
-        @Suppress("DEPRECATION")
-        if (intent.action == Intent.ACTION_SEND) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.add(it) }
-        @Suppress("DEPRECATION")
-        if (intent.action == Intent.ACTION_SEND_MULTIPLE)
-            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.addAll(it) }
-        val content = uris.filter { it.scheme == "content" }
-        if (content.isEmpty()) return
-        expireTransientIntake()
-        // One binder call for the whole intake, never one per attached document.
-        val persisted = applicationContext.contentResolver.persistedUriPermissions
-            .filter { it.isReadPermission }.mapTo(HashSet()) { it.uri }
-        val grants = mutableListOf<Boolean>()
-        val batchUris = JSONArray()
-        for (uri in content) {
-            // Do not retain permissions before the shell has admitted an
-            // original in normal mode. Private/read-only opens remain session
-            // only; unaccepted transient batches must not survive their grant.
-            incomingGrantFlags[uri] = intent.flags
-            grants.add(uri in persisted)
-            batchUris.put(uri.toString())
+        intent.clipData?.let { clip ->
+            for (index in 0 until clip.itemCount) clip.getItemAt(index)?.uri?.let { uris.add(it) }
         }
+        when (intent.action) {
+            Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE ->
+                uris.addAll(streamUris(intent.extras?.get(Intent.EXTRA_STREAM)))
+        }
+        return ParsedDocuments(uris.filter { it.scheme == "content" }, intent.flags)
+    }
+
+    /** Typed EXTRA_STREAM: never a blind Parcelable cast. */
+    private fun streamUris(value: Any?): List<Uri> = when (value) {
+        null -> emptyList()
+        is Uri -> listOf(value)
+        is Iterable<*> -> value.filterIsInstance<Uri>()
+        is Array<*> -> value.filterIsInstance<Uri>()
+        else -> emptyList()
+    }
+
+    private fun onDocumentsParsed(intent: Intent, parsed: ParsedDocuments) {
+        if (parsed.handled || parsed.uris.isEmpty()) return
+        val batchUris = JSONArray()
+        for (uri in parsed.uris) batchUris.put(uri.toString())
         val urisKey = batchUris.toString()
-        // Re-delivery after recreation/crash reuses an outstanding batch instead of losing its identity.
-        for (index in 0 until transientBatches.length()) {
-            val batch = transientBatches.getJSONObject(index)
-            if (batch.getJSONArray("uris").toString() == urisKey) {
-                incomingFailure = null
-                incomingNotice = null
-                intent.putExtra("org.kiwix.mobile.INTAKE_HANDLED", true)
-                notifyIncomingDocuments()
-                return
-            }
+        expireTransientIntake()
+        // An admitted transient batch already owns this identity.
+        if (transientBatchUris.containsKey(urisKey)) {
+            incomingFailure = null
+            incomingNotice = null
+            intent.putExtra(INTAKE_HANDLED_EXTRA, true)
+            notifyIncomingDocuments()
+            return
         }
         // A batch already handed to the worker is durable-or-pending, never new.
         if (queuedIntakeBatches.contains(urisKey)) {
             incomingFailure = null
             incomingNotice = null
-            intent.putExtra("org.kiwix.mobile.INTAKE_HANDLED", true)
+            // Only a successful worker commit may mark the Intent handled.
             notifyIncomingDocuments()
             return
         }
-        val pending = JSONArray(intakePreferences().getString(INTAKE_BATCHES, "[]") ?: "[]")
-        for (index in 0 until pending.length()) {
-            val batch = pending.getJSONObject(index)
-            if (batch.getJSONArray("uris").toString() == urisKey) {
-                incomingFailure = null
-                incomingNotice = null
-                intent.putExtra("org.kiwix.mobile.INTAKE_HANDLED", true)
-                notifyIncomingDocuments()
-                return
-            }
-        }
-        val batch = JSONObject().put("requestId", UUID.randomUUID().toString()).put("uris", batchUris)
-        if (!intakeCanPersist(grants)) {
-            // Keep the batch available now, but never let it outlive the URI
-            // grant. The marker lets a cold start explain why it disappeared.
-            transientBatches.put(batch)
-            incomingFailure = null
-            incomingNotice = null
-            // The marker is fsynced on the worker; the shell only learns about
-            // the batch once that durability record exists.
-            setTransientIntakeMarker(true) {
-                intent.putExtra("org.kiwix.mobile.INTAKE_HANDLED", true)
-                notifyIncomingDocuments()
-            }
-            return
-        }
         queuedIntakeBatches.add(urisKey)
-        worker.execute {
+        val batch = JSONObject().put("requestId", UUID.randomUUID().toString()).put("uris", batchUris)
+        worker.execute { commitDocumentBatch(intent, parsed, urisKey, batch) }
+    }
+
+    private fun rememberIncomingFlags(uris: List<Uri>, flags: Int): Boolean {
+        val unique = uris.toSet()
+        val missing = unique.filter { it !in incomingGrantRefs }
+        if (incomingGrantRefs.size + missing.size > MAX_INCOMING_GRANT_FLAGS) return false
+        for (uri in unique) {
+            incomingGrantRefs[uri] = (incomingGrantRefs[uri] ?: 0) + 1
+            incomingGrantFlags[uri] = (incomingGrantFlags[uri] ?: 0) or flags
+        }
+        return true
+    }
+
+    private fun forgetIncomingFlags(uris: List<Uri>) {
+        for (uri in uris.toSet()) {
+            val count = incomingGrantRefs[uri] ?: continue
+            if (count <= 1) {
+                incomingGrantRefs.remove(uri)
+                incomingGrantFlags.remove(uri)
+            } else incomingGrantRefs[uri] = count - 1
+        }
+    }
+
+    private fun removeTransientBatch(requestId: String): TransientBatch? {
+        val removed = transientBatches.remove(requestId) ?: return null
+        transientBatchUris.remove(removed.urisKey)
+        forgetIncomingFlags(removed.uris)
+        // Capacity was freed; a prior limit failure is no longer current.
+        if (incomingFailure == "INCOMING_DOCUMENTS_LIMIT") incomingFailure = null
+        return removed
+    }
+
+    /**
+     * Every SharedPreferences read/commit and the persisted-grant binder query
+     * run here. The Activity callback has already returned; only a durable
+     * commit or a durably-marked transient batch may set INTAKE_HANDLED.
+     */
+    private fun commitDocumentBatch(intent: Intent, parsed: ParsedDocuments, urisKey: String, batch: JSONObject) {
+        var duplicate = false
+        var saved = false
+        var failure: String? = null
+        try {
+            // One binder call for the whole intake, never one per attached document.
+            val persisted = applicationContext.contentResolver.persistedUriPermissions
+                .filter { it.isReadPermission }.mapTo(HashSet()) { it.uri }
+            val grants = parsed.uris.map { it in persisted }
             val prefs = intakePreferences()
             val before = prefs.getString(INTAKE_BATCHES, "[]") ?: "[]"
             val durable = JSONArray(before)
-            val duplicate = (0 until durable.length()).any {
+            duplicate = (0 until durable.length()).any {
                 durable.getJSONObject(it).getJSONArray("uris").toString() == urisKey
             }
-            val saved = duplicate ||
-                prefs.edit().putString(INTAKE_BATCHES, JSONArray(before).put(batch).toString()).commit()
-            if (!saved) {
-                // SharedPreferences changes memory before its disk commit; restore the previous visible queue.
-                prefs.edit().putString(INTAKE_BATCHES, before).commit()
+            if (!duplicate && intakeCanPersist(grants)) {
+                try {
+                    saved = prefs.edit().putString(INTAKE_BATCHES,
+                        JSONArray(before).put(batch).toString()).commit()
+                } catch (error: Exception) {
+                    // Editor.commit applies the in-memory map before its disk
+                    // write; a throwing commit must not expose an unpersisted
+                    // batch to the shell.
+                    try { prefs.edit().putString(INTAKE_BATCHES, before).commit() } catch (_: Exception) { }
+                    throw error
+                }
+                if (!saved) {
+                    // SharedPreferences changes memory before its disk commit; restore the previous visible queue.
+                    try { prefs.edit().putString(INTAKE_BATCHES, before).commit() } catch (_: Exception) { }
+                    // A failed durable write is not a transient grant: keep the
+                    // Intent unhandled so the next delivery retries the batch.
+                    failure = "INCOMING_DOCUMENTS_DURABILITY_ERROR"
+                }
             }
-            main.post {
+        } catch (_: Exception) { failure = "INCOMING_DOCUMENTS_DURABILITY_ERROR" }
+        main.post {
+            if (failure != null) {
                 queuedIntakeBatches.remove(urisKey)
-                if (saved) {
+                incomingFailure = failure
+                notifyIncomingDocuments()
+                return@post
+            }
+            if (duplicate || saved) {
+                queuedIntakeBatches.remove(urisKey)
+                incomingFailure = null
+                incomingNotice = null
+                intent.putExtra(INTAKE_HANDLED_EXTRA, true)
+                notifyIncomingDocuments()
+                return@post
+            }
+            if (transientBatches.size + pendingTransientAdmissions >= MAX_TRANSIENT_INTAKE_BATCHES) {
+                queuedIntakeBatches.remove(urisKey)
+                incomingFailure = "INCOMING_DOCUMENTS_LIMIT"
+                notifyIncomingDocuments()
+                return@post
+            }
+            if (!rememberIncomingFlags(parsed.uris, parsed.flags)) {
+                queuedIntakeBatches.remove(urisKey)
+                incomingFailure = "INCOMING_DOCUMENTS_LIMIT"
+                notifyIncomingDocuments()
+                return@post
+            }
+            ++pendingTransientAdmissions
+            // Admit the transient batch only after its marker is durable. Keep
+            // the queued key until then so a redelivery cannot be marked handled
+            // before this write succeeds.
+            setTransientIntakeMarker(true) { committed ->
+                --pendingTransientAdmissions
+                queuedIntakeBatches.remove(urisKey)
+                if (committed) {
+                    val requestId = batch.getString("requestId")
+                    transientBatches[requestId] = TransientBatch(batch, urisKey, parsed.uris)
+                    transientBatchUris[urisKey] = requestId
                     incomingFailure = null
                     incomingNotice = null
-                    // A failed commit keeps the Intent unhandled so the next
-                    // delivery can retry the same batch.
-                    intent.putExtra("org.kiwix.mobile.INTAKE_HANDLED", true)
-                } else incomingFailure = "INCOMING_DOCUMENTS_DURABILITY_ERROR"
+                    intent.putExtra(INTAKE_HANDLED_EXTRA, true)
+                } else {
+                    forgetIncomingFlags(parsed.uris)
+                    incomingFailure = "INCOMING_DOCUMENTS_DURABILITY_ERROR"
+                    // A concurrent ack may have set the marker true; reconcile
+                    // to the live state now that this admission failed.
+                    setTransientIntakeMarker(
+                        transientBatches.isNotEmpty() || pendingTransientAdmissions > 0,
+                    ) { }
+                }
                 notifyIncomingDocuments()
             }
         }
@@ -1842,12 +1966,22 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
 
     /** PROCESS_TEXT, kiwix:// links and dynamic shortcuts; consumed by the shell. */
     private fun receiveEntries(intent: Intent?) {
-        AppEntryPoints.receive(applicationContext, intent, worker) { queued ->
-            if (queued) main.post {
-                // Marked only after the durable write, so a failed commit can be
-                // retried by the next onResume/onNewIntent delivery.
-                AppEntryPoints.markHandled(intent)
-                if (!destroyed && hasListener("app-entry")) trigger("app-entry", JSObject())
+        if (intent == null) return
+        // AppEntryPoints reads SharedPreferences; parse and persist on the
+        // worker so the first preference load never runs in the Activity callback.
+        val copy = try { Intent(intent) } catch (_: Exception) { return }
+        worker.execute {
+            try {
+                AppEntryPoints.receive(applicationContext, copy, worker) { queued ->
+                    if (queued) main.post {
+                        // Marked only after the durable write, so a failed commit can be
+                        // retried by the next onResume/onNewIntent delivery.
+                        AppEntryPoints.markHandled(intent)
+                        if (!destroyed && hasListener("app-entry")) trigger("app-entry", JSObject())
+                    }
+                }
+            } catch (_: Exception) {
+                // Leave the Intent unhandled so the next delivery can retry.
             }
         }
     }
@@ -1855,56 +1989,125 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private fun intakePreferences() = applicationContext.getSharedPreferences(
         INTAKE_PREFERENCES, android.content.Context.MODE_PRIVATE)
 
-    /** Durable marker write on the worker; [then] runs on the main thread once
-     * the fsync completed, so nothing is published before it is durable. */
-    private fun setTransientIntakeMarker(pending: Boolean, then: (() -> Unit)? = null) {
-        val prefs = intakePreferences()
+    /** Durable marker write on the worker; [then] runs on the main thread with
+     * true only when the fsync committed, so nothing is published before it is
+     * durable and a failed write stays retryable. */
+    private fun setTransientIntakeMarker(pending: Boolean, then: ((Boolean) -> Unit)? = null) {
         worker.execute {
-            prefs.edit().putBoolean(INTAKE_TRANSIENT_PENDING, pending).commit()
-            then?.let { continuation -> main.post { continuation() } }
+            var committed = false
+            try {
+                val prefs = intakePreferences()
+                val before = prefs.getBoolean(INTAKE_TRANSIENT_PENDING, false)
+                try {
+                    committed = prefs.edit().putBoolean(INTAKE_TRANSIENT_PENDING, pending).commit()
+                } catch (_: Exception) { committed = false }
+                if (!committed) {
+                    // commit() applies the in-memory value before its disk write;
+                    // restore the previous marker so a failed write is not visible.
+                    try { prefs.edit().putBoolean(INTAKE_TRANSIENT_PENDING, before).commit() } catch (_: Exception) { }
+                }
+            } catch (_: Exception) { committed = false }
+            then?.let { continuation -> main.post {
+                transientMarkerDirty = !committed
+                continuation(committed)
+            } }
         }
     }
+
+    private var transientIntakePending = false
+    private val transientIntakeWaiters = mutableListOf<() -> Unit>()
 
     /**
      * A transient batch cannot survive process death. The marker written when
      * it was queued lets the next cold start tell the user to re-open the file
      * instead of silently resurrecting an unusable URI.
+     *
+     * The marker read and reset run on the worker; [then] runs on the main
+     * thread once that decision is known, so the first preference load never
+     * blocks the Activity callback.
      */
-    private fun expireTransientIntake() {
-        if (transientIntakeChecked) return
-        transientIntakeChecked = true
-        val prefs = intakePreferences()
-        if (!intakeColdStartNotice(prefs.getBoolean(INTAKE_TRANSIENT_PENDING, false), transientBatches.length()))
-            return
-        worker.execute { prefs.edit().putBoolean(INTAKE_TRANSIENT_PENDING, false).commit() }
-        if (incomingNotice == null) incomingNotice = INTAKE_REOPEN_MESSAGE
+    private fun expireTransientIntake(then: (() -> Unit)? = null) {
+        if (transientIntakeChecked) { then?.invoke(); return }
+        then?.let { transientIntakeWaiters.add(it) }
+        if (transientIntakePending) return
+        transientIntakePending = true
+        val inMemoryBatches = transientBatches.size
+        worker.execute {
+            var resetAttempted = false
+            var resetFailed = false
+            val notice = try {
+                val prefs = intakePreferences()
+                val pending = prefs.getBoolean(INTAKE_TRANSIENT_PENDING, false)
+                if (intakeColdStartNotice(pending, inMemoryBatches)) {
+                    resetAttempted = true
+                    // The notice is valid even if clearing fails; the marker
+                    // remains for the next cold start to retry.
+                    resetFailed = !prefs.edit().putBoolean(INTAKE_TRANSIENT_PENDING, false).commit()
+                    true
+                } else false
+            } catch (_: Exception) { false }
+            main.post {
+                if (resetAttempted) transientMarkerDirty = resetFailed
+                transientIntakeChecked = true
+                transientIntakePending = false
+                if (notice && incomingNotice == null) incomingNotice = INTAKE_REOPEN_MESSAGE
+                val waiters = transientIntakeWaiters.toList()
+                transientIntakeWaiters.clear()
+                waiters.forEach { waiter -> try { waiter() } catch (_: Exception) { } }
+            }
+        }
     }
 
     private fun notifyIncomingDocuments() {
         main.post {
             if (destroyed || !hasListener("incoming-documents")) return@post
-            expireTransientIntake()
-            if (incomingFailure != null || incomingNotice != null || transientBatches.length() > 0 ||
-                JSONArray(intakePreferences().getString(INTAKE_BATCHES, "[]")).length() > 0)
-                trigger("incoming-documents", JSObject())
+            expireTransientIntake {
+                if (!destroyed && hasListener("incoming-documents")) {
+                    if (incomingFailure != null || incomingNotice != null || transientBatches.isNotEmpty()) {
+                        trigger("incoming-documents", JSObject())
+                    } else {
+                        // The durable queue read is disk work too; never on main.
+                        worker.execute {
+                            val pending = try {
+                                JSONArray(intakePreferences().getString(INTAKE_BATCHES, "[]")).length() > 0
+                            } catch (_: Exception) { false }
+                            main.post {
+                                if (pending && !destroyed && hasListener("incoming-documents"))
+                                    trigger("incoming-documents", JSObject())
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
     @Command fun takeIncomingDocuments(invoke: Invoke) {
         main.post {
             try {
-                expireTransientIntake()
-                incomingFailure?.let { throw NativeDocumentError(it) }
-                val values = JSONArray(intakePreferences().getString(INTAKE_BATCHES, "[]"))
-                for (index in 0 until transientBatches.length())
-                    values.put(transientBatches.getJSONObject(index))
-                // Surface a lost transient batch only after any durable batch
-                // has been offered, so one expired grant cannot block import.
-                if (values.length() == 0) incomingNotice?.let {
-                    incomingNotice = null
-                    throw NativeDocumentError(it)
+                expireTransientIntake {
+                    worker.execute {
+                        val values = try {
+                            JSONArray(intakePreferences().getString(INTAKE_BATCHES, "[]"))
+                        } catch (error: Exception) {
+                            main.post { reject(invoke, error) }
+                            return@execute
+                        }
+                        main.post {
+                            try {
+                                incomingFailure?.let { throw NativeDocumentError(it) }
+                                for (batch in transientBatches.values) values.put(batch.json)
+                                // Surface a lost transient batch only after any durable batch
+                                // has been offered, so one expired grant cannot block import.
+                                if (values.length() == 0) incomingNotice?.let {
+                                    incomingNotice = null
+                                    throw NativeDocumentError(it)
+                                }
+                                invoke.resolve(JSObject().put("batches", values))
+                            } catch (error: Exception) { reject(invoke, error) }
+                        }
+                    }
                 }
-                invoke.resolve(JSObject().put("batches", values))
             } catch (error: Exception) { reject(invoke, error) }
         }
     }
@@ -1914,53 +2117,44 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             try {
                 val requestId = invoke.getArgs().getString("requestId")
                 if (requestId.isBlank()) throw NativeDocumentError("INVALID_INCOMING_REQUEST_ID")
-                val retainedTransient = JSONArray()
-                var foundTransient = false
-                for (index in 0 until transientBatches.length()) {
-                    val batch = transientBatches.getJSONObject(index)
-                    if (batch.getString("requestId") == requestId) foundTransient = true
-                    else retainedTransient.put(batch)
-                }
                 worker.execute {
-                    val outcome = try {
+                    val failure = try {
                         val prefs = intakePreferences()
                         val before = prefs.getString(INTAKE_BATCHES, "[]") ?: "[]"
                         val pending = JSONArray(before)
                         val retained = JSONArray()
-                        var foundPersisted = false
+                        var found = false
                         for (index in 0 until pending.length()) {
                             val batch = pending.getJSONObject(index)
-                            if (batch.getString("requestId") == requestId) foundPersisted = true
+                            if (batch.getString("requestId") == requestId) found = true
                             else retained.put(batch)
                         }
                         // An already acknowledged ID is harmless; no unrelated batch is changed.
-                        if (foundPersisted &&
+                        if (found &&
                             !prefs.edit().putString(INTAKE_BATCHES, retained.toString()).commit()) {
                             prefs.edit().putString(INTAKE_BATCHES, before).commit()
                             throw NativeDocumentError("INCOMING_DOCUMENTS_DURABILITY_ERROR")
                         }
-                        foundPersisted
+                        null
                     } catch (error: Exception) { error }
                     main.post {
-                        try {
-                            if (outcome is Exception) throw outcome
-                            val foundPersisted = outcome as Boolean
-                            if (foundTransient) {
-                                // Re-filter the live list by requestId instead of
-                                // replacing it with the pre-commit snapshot: a new
-                                // intent may have appended a batch while the
-                                // worker fsynced.
-                                val kept = JSONArray()
-                                for (index in 0 until transientBatches.length()) {
-                                    val batch = transientBatches.getJSONObject(index)
-                                    if (batch.getString("requestId") != requestId) kept.put(batch)
-                                }
-                                transientBatches = kept
+                        if (failure != null) {
+                            reject(invoke, failure)
+                            return@post
+                        }
+                        // Re-read the live keyed map on main: a new intent may
+                        // have appended a batch while the worker fsynced.
+                        val removed = removeTransientBatch(requestId)
+                        if (removed != null || transientMarkerDirty) {
+                            // Reconcile after a removal or a previous failed
+                            // marker write; count in-flight admissions too.
+                            setTransientIntakeMarker(
+                                transientBatches.isNotEmpty() || pendingTransientAdmissions > 0,
+                            ) { committed ->
+                                if (committed) invoke.resolve(JSObject())
+                                else reject(invoke, NativeDocumentError("INCOMING_DOCUMENTS_DURABILITY_ERROR"))
                             }
-                            if (foundPersisted || foundTransient)
-                                setTransientIntakeMarker(transientBatches.length() > 0) { invoke.resolve(JSObject()) }
-                            else invoke.resolve(JSObject())
-                        } catch (error: Exception) { reject(invoke, error) }
+                        } else invoke.resolve(JSObject())
                     }
                 }
             } catch (error: Exception) { reject(invoke, error) }
@@ -1968,7 +2162,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     }
 
     @Command fun takeAppEntries(invoke: Invoke) {
-        main.post {
+        // AppEntryPoints reads SharedPreferences; take it on the worker.
+        worker.execute {
             try {
                 invoke.resolve(JSObject().put("entries", AppEntryPoints.take(applicationContext)))
             } catch (error: Exception) { reject(invoke, error) }

@@ -19,7 +19,6 @@ type RegisteredBinding = Binding & {
   onRestore?: (url: string) => void;
   currentUrl?: string;
   ready: boolean;
-  reserve: number;
   documentId?: string;
   failed?: Error;
   retirementReported?: boolean;
@@ -45,8 +44,13 @@ type Stream = {
   /** Batches of this stream still waiting in `queue`. */
   queued: number;
   queuedBytes: number;
+  /** Capacity-blocked batches retained for ordered retry, not yet charged. */
+  blocked: number;
+  blockedBytes: number;
+  blockedSequence: number;
 };
 type QueuedBatch = { stream: Stream; batch: StorageBatch; bytes: number };
+type BlockedBatch = QueuedBatch;
 const bindings = new WeakMap<WindowProxy, Set<RegisteredBinding>>();
 // Null-source delivery may finish an already-authenticated document stream,
 // never admit a new one: detached descendants share the archive origin but are
@@ -57,7 +61,6 @@ const activeFrames = new Map<WindowProxy, HTMLIFrameElement>();
 const currentDocuments = new WeakMap<WindowProxy, string>();
 let retiringDocuments: Promise<() => void> | undefined;
 let retirementActive = false;
-const reservations = new Set<RegisteredBinding>();
 // A forced security detach has no final producer proof. Retain its bounded
 // authority until the shell replaces the frames and explicitly discards it;
 // never recycle that authority for a later document.
@@ -77,10 +80,20 @@ function dequeue(): void {
     queueHead = 0;
   }
 }
-// Includes unspent producer credits, detached frames, and every queued batch.
+// A static document holds no reservation: registration and ready are free.
+// Only admitted-but-uncommitted mutations consume the shared root budget, and
+// each producer is still bounded by its own SOURCE_CREDIT allowance.
 const SOURCE_CREDIT = 2 * 1024 * 1024;
 const ROOT_CREDIT = 16 * 1024 * 1024;
-let reservedBytes = 0;
+// A write the producer already accepted must not be dropped just because the
+// root was briefly full. Retain a bounded overflow in admission order and
+// admit it as commits free capacity; only an overflow beyond this bound is
+// failed, and that failure is reported rather than silent.
+const BLOCKED_CREDIT = 16 * 1024 * 1024;
+let inFlightBytes = 0;
+const blockedQueue: BlockedBatch[] = [];
+let blockedHead = 0;
+let blockedBytes = 0;
 let privacyGeneration = 0;
 type FreezeLease = {
   id: string;
@@ -97,13 +110,10 @@ const deferredRestores = new Set<() => void>();
 type NavigationWaiter = { resolve(): void; reject(error: unknown): void };
 const navigationWaiters = new Set<NavigationWaiter>();
 let suppressFreezeRestore = false;
-// GC is a fallback for detached contexts; live, reused contexts settle unused
-// reservations at a navigation/message boundary instead.
-const abandonedReservations = new FinalizationRegistry<RegisteredBinding>(
+// GC is a fallback for detached contexts that never reported navigation.
+// Live, reused contexts are released at a navigation/message boundary instead.
+const abandonedBindings = new FinalizationRegistry<RegisteredBinding>(
   (binding) => {
-    reservedBytes -= binding.reserve;
-    binding.reserve = 0;
-    reservations.delete(binding);
     removeOriginBinding(binding);
   },
 );
@@ -224,7 +234,7 @@ function send(stream: Stream, message: Record<string, unknown>): void {
   );
 }
 function releaseClosed(stream: Stream): void {
-  if (!stream.queued && stream.closed) {
+  if (!stream.queued && !stream.blocked && stream.closed) {
     streams.delete(stream);
     releaseBinding(stream.source, stream.binding);
   }
@@ -235,23 +245,72 @@ function removeOriginBinding(binding: RegisteredBinding): void {
   if (!registered?.size) origins.delete(binding.origin);
 }
 function releaseBinding(source: WindowProxy, binding: RegisteredBinding): void {
-  if (binding.reserve || active.get(source) === binding) return;
+  if (active.get(source) === binding) return;
   for (const stream of streams) if (stream.binding === binding) return;
-  // An unconsumed registration can still authenticate a late initial ready
-  // after its unused allowance was settled. Its source remains weak.
+  // An unconsumed registration can still authenticate a late initial ready.
+  // Its source remains weak.
   if (!binding.documentId && !binding.retired) return;
   bindings.get(source)?.delete(binding);
   removeOriginBinding(binding);
-  abandonedReservations.unregister(binding);
+  abandonedBindings.unregister(binding);
+}
+function closeIdleStreams(
+  source: WindowProxy,
+  binding: RegisteredBinding,
+): void {
+  for (const stream of [...streams])
+    if (stream.source === source && stream.binding === binding)
+      closeStream(stream);
+  releaseBinding(source, binding);
 }
 function closeStream(stream: Stream): void {
   if (stream.closed) return;
   if (stream.binding.documentId === stream.documentId)
     stream.binding.ready = false;
   stream.closed = true;
-  reservedBytes -= stream.available;
+  // Unspent producer allowance is local to the document; only admitted
+  // batches are charged to the root and they are released on commit/failure.
   stream.available = 0;
   releaseClosed(stream);
+}
+function discardBlocked(stream: Stream): void {
+  if (!stream.blocked) return;
+  let write = blockedHead;
+  for (let read = blockedHead; read < blockedQueue.length; read++) {
+    const item = blockedQueue[read];
+    if (item.stream === stream) {
+      blockedBytes -= item.bytes;
+      stream.blocked -= 1;
+      stream.blockedBytes -= item.bytes;
+    } else blockedQueue[write++] = item;
+  }
+  blockedQueue.length = write;
+  if (blockedHead === blockedQueue.length) {
+    blockedQueue.length = 0;
+    blockedHead = 0;
+  }
+}
+function drainBlocked(): void {
+  while (blockedHead < blockedQueue.length) {
+    const item = blockedQueue[blockedHead];
+    if (inFlightBytes + item.bytes > ROOT_CREDIT) break;
+    blockedHead += 1;
+    blockedBytes -= item.bytes;
+    item.stream.blocked -= 1;
+    item.stream.blockedBytes -= item.bytes;
+    item.stream.sequence = item.batch.sequence;
+    item.stream.queued += 1;
+    item.stream.queuedBytes += item.bytes;
+    inFlightBytes += item.bytes;
+    queue.push(item);
+  }
+  if (blockedHead === blockedQueue.length) {
+    blockedQueue.length = 0;
+    blockedHead = 0;
+  } else if (blockedHead > 1024 && blockedHead * 2 >= blockedQueue.length) {
+    blockedQueue.splice(0, blockedHead);
+    blockedHead = 0;
+  }
 }
 function failStream(
   stream: Stream,
@@ -263,19 +322,21 @@ function failStream(
   stream.failed = true;
   if (!retired) stream.binding.failed = error;
   closeStream(stream);
+  discardBlocked(stream);
   if (discardPending) {
     // One compaction pass instead of a splice per matching batch.
     let write = queueHead;
     for (let read = queueHead; read < queue.length; read++) {
       const item = queue[read];
       if (item.stream === stream) {
-        reservedBytes -= item.bytes;
+        inFlightBytes -= item.bytes;
         stream.queued -= 1;
         stream.queuedBytes -= item.bytes;
       } else queue[write++] = item;
     }
     queue.length = write;
   }
+  drainBlocked();
   releaseClosed(stream);
   if (!alreadyFailed) {
     send(stream, { type: "kiwix-storage-failed" });
@@ -306,13 +367,7 @@ function registeredAuthority(
       return;
     // Repeated registrations of one source/authority are not ambiguous. Prefer
     // its live binding so drains follow the document currently being admitted.
-    if (
-      !authority ||
-      active.get(source) === binding ||
-      (active.get(source) !== authority.binding &&
-        !authority.binding.reserve &&
-        binding.reserve)
-    )
+    if (!authority || active.get(source) === binding)
       authority = { source, binding };
   }
   return authority;
@@ -323,9 +378,6 @@ function settleLoadedDocuments(
   frame: HTMLIFrameElement,
 ): Promise<void> {
   const binding = active.get(source);
-  const pending = [...(bindings.get(source) ?? [])].filter(
-    (registered) => registered !== binding && registered.reserve,
-  );
   return messageFence().then(() => {
     if (
       !frame.isConnected ||
@@ -333,12 +385,6 @@ function settleLoadedDocuments(
       active.get(source) !== binding
     )
       return;
-    for (const registered of pending) {
-      if (registered === active.get(source) || !registered.reserve) continue;
-      reservedBytes -= registered.reserve;
-      registered.reserve = 0;
-      reservations.delete(registered);
-    }
     const current = currentDocuments.get(source);
     // A same-origin successor's ready is emitted after outgoing pagehide and
     // its microtasks. Revisit on both ready and hiding: a load can arrive before
@@ -377,7 +423,7 @@ export function retireReaderStorageGeneration(newGeneration: number): void {
   }
   for (const stream of [...streams]) {
     if (stream.binding.privacyGeneration < newGeneration) {
-      if (stream.queued)
+      if (stream.queued || stream.blocked)
         failStream(
           stream,
           new Error(
@@ -394,13 +440,6 @@ export function retireReaderStorageGeneration(newGeneration: number): void {
       }
     }
   }
-  for (const binding of reservations) {
-    if (binding.privacyGeneration < newGeneration && binding.reserve) {
-      reservedBytes -= binding.reserve;
-      binding.reserve = 0;
-      reservations.delete(binding);
-    }
-  }
   settleNavigationWaiters();
 }
 
@@ -409,6 +448,7 @@ function pump(): Promise<void> {
   clearTimeout(retry);
   retry = undefined;
   const task = (async () => {
+    drainBlocked();
     while (queued()) {
       const item = queue[queueHead];
       const binding = item.stream.binding;
@@ -445,8 +485,9 @@ function pump(): Promise<void> {
       dequeue();
       item.stream.queued -= 1;
       item.stream.queuedBytes -= item.bytes;
-      if (item.stream.closed) reservedBytes -= item.bytes;
-      else item.stream.available += item.bytes;
+      inFlightBytes -= item.bytes;
+      if (!item.stream.closed) item.stream.available += item.bytes;
+      drainBlocked();
       send(item.stream, {
         type: "kiwix-storage-ack",
         id: item.batch.id,
@@ -576,28 +617,14 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
       (stream.binding !== binding || message.sequence !== stream.sequence)
     )
       return;
-    // Successor identity is independent of admission capacity: even a new
-    // document refused credit has completed the outgoing same-origin dispatch.
+    // Successor identity is independent of admission capacity: even an idle
+    // static document has completed the outgoing same-origin dispatch.
     if (active.get(source) === binding)
       currentDocuments.set(source, message.documentId);
     const frame = activeFrames.get(source);
     if (frame) void settleLoadedDocuments(source, frame);
     if (!stream) {
-      if (!binding.reserve && reservedBytes + SOURCE_CREDIT > ROOT_CREDIT) {
-        const error = new Error(
-          t("Archive storage is waiting for persistence acknowledgement"),
-        );
-        binding.failed = error;
-        report(error);
-        source.postMessage(
-          { type: "kiwix-storage-failed", documentId: message.documentId },
-          binding.origin,
-        );
-        return;
-      }
-      if (!binding.reserve) reservedBytes += SOURCE_CREDIT;
-      binding.reserve = 0;
-      reservations.delete(binding);
+      // No shared budget is spent until a mutation is actually admitted.
       stream = {
         source,
         binding,
@@ -609,23 +636,18 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
         failed: false,
         queued: 0,
         queuedBytes: 0,
+        blocked: 0,
+        blockedBytes: 0,
+        blockedSequence: message.sequence,
       };
       streams.add(stream);
     } else if (stream.closed && !stream.failed) {
-      const available = SOURCE_CREDIT - stream.queuedBytes;
-      if (reservedBytes + available > ROOT_CREDIT) {
-        failStream(
-          stream,
-          new Error(
-            t("Archive storage is waiting for persistence acknowledgement"),
-          ),
-        );
-        return;
-      }
+      // A resumed BFCache document gets its own allowance back, minus batches
+      // that are still uncommitted or waiting for root capacity.
       stream.closed = false;
       streams.add(stream);
-      stream.available = available;
-      reservedBytes += available;
+      stream.available =
+        SOURCE_CREDIT - stream.queuedBytes - stream.blockedBytes;
     }
     stream.hiding = false;
     binding.documentId = stream.documentId;
@@ -707,9 +729,11 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
       return;
     }
     const { batch, bytes } = admitted;
+    const next = batch.sequence === stream.sequence + 1 && !stream.blocked;
+    const continuation = batch.sequence === stream.blockedSequence + 1;
     if (
       stream.closed ||
-      batch.sequence !== stream.sequence + 1 ||
+      (!next && !continuation) ||
       bytes > stream.available
     ) {
       failStream(
@@ -721,10 +745,31 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
       return;
     }
     stream.available -= bytes;
-    stream.sequence = batch.sequence;
-    stream.queued += 1;
-    stream.queuedBytes += bytes;
-    queue.push({ stream, batch, bytes });
+    if (next && inFlightBytes + bytes <= ROOT_CREDIT) {
+      stream.sequence = batch.sequence;
+      stream.queued += 1;
+      stream.queuedBytes += bytes;
+      inFlightBytes += bytes;
+      queue.push({ stream, batch, bytes });
+    } else if (blockedBytes + bytes > BLOCKED_CREDIT) {
+      // Even the bounded retry allowance is exhausted. This producer fails
+      // with a visible error rather than silently dropping its mutation.
+      failStream(
+        stream,
+        new Error(
+          t("Archive storage is waiting for persistence acknowledgement"),
+        ),
+      );
+      return;
+    } else {
+      // The producer already returned success for this write. Keep it in
+      // admission order and retry as commits release root capacity.
+      stream.blocked += 1;
+      stream.blockedBytes += bytes;
+      stream.blockedSequence = batch.sequence;
+      blockedBytes += bytes;
+      blockedQueue.push({ stream, batch, bytes });
+    }
     void pump().catch(() => undefined);
   }
 });
@@ -732,7 +777,7 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 /**
  * Register trusted native origin/book/generation before starting navigation.
  * A null result forbids navigation. Dispose stops active ownership, not already-
- * posted document authority; pass the real frame to settle aborted reservations.
+ * posted document authority; pass the real frame to settle aborted documents.
  */
 export function registerReaderStorage(
   source: WindowProxy,
@@ -772,10 +817,7 @@ export function registerReaderStorage(
       return null;
     }
   }
-  if (
-    binding.privacyGeneration < privacyGeneration ||
-    reservedBytes + SOURCE_CREDIT > ROOT_CREDIT
-  ) {
+  if (binding.privacyGeneration < privacyGeneration) {
     report(
       new Error(
         t("Archive storage is waiting for persistence acknowledgement"),
@@ -783,17 +825,16 @@ export function registerReaderStorage(
     );
     return null;
   }
+  // Registration is intentionally free: an idle read-only document must not
+  // hold shared credit that would deny the next frame's navigation.
   const registered: RegisteredBinding = {
     ...binding,
     source: new WeakRef(source),
     onRetire,
     onRestore,
     ready: false,
-    reserve: SOURCE_CREDIT,
   };
-  reservedBytes += SOURCE_CREDIT;
-  reservations.add(registered);
-  abandonedReservations.register(source, registered, registered);
+  abandonedBindings.register(source, registered, registered);
   let registeredBindings = bindings.get(source);
   if (!registeredBindings) {
     registeredBindings = new Set();
@@ -823,6 +864,12 @@ export function registerReaderStorage(
     releaseBinding(source, registered);
     // Genuine navigation, not iframe removal, runs archive pagehide handlers.
     // Retain weak authority until their final batches and close are received.
+    // A removed frame cannot produce another document, so settle its idle
+    // stream after the current commit instead of retaining it indefinitely.
+    if (frame)
+      queueMicrotask(() => {
+        if (!frame.isConnected) closeIdleStreams(source, registered);
+      });
   };
 }
 
@@ -940,13 +987,8 @@ export function discardQuarantinedReaderStorage(): void {
     binding.retired = true;
     binding.ready = false;
     binding.quarantined = false;
-    if (binding.reserve) {
-      reservedBytes -= binding.reserve;
-      binding.reserve = 0;
-    }
-    reservations.delete(binding);
     removeOriginBinding(binding);
-    abandonedReservations.unregister(binding);
+    abandonedBindings.unregister(binding);
   }
   quarantinedBindings.clear();
   retirementActive = false;
@@ -1052,9 +1094,6 @@ function retireDocuments(restoreOnFailure = true): Promise<() => void> {
               for (const registered of bindings.get(source) ?? []) {
                 registered.retired = true;
                 registered.ready = false;
-                reservedBytes -= registered.reserve;
-                registered.reserve = 0;
-                reservations.delete(registered);
               }
               // Hiding is advisory and can arrive late. The trusted successor
               // retires every outgoing stream, not only ones already hiding.

@@ -272,7 +272,7 @@ impl EditionManager {
         let mut decisions = self.decisions.lock().map_err(|_| "Edition authorization unavailable")?;
         let decision = decisions.get_mut(token).ok_or("Select this edition again before downloading")?;
         authorize(decision, epoch, window)?;
-        decision.source.unchanged()?;
+        recheck_original(decision)?;
         std::fs::create_dir_all(&decision.directory).map_err(|error| format!("Opening edition download directory: {error}"))?;
         let directory = std::fs::canonicalize(&decision.directory).map_err(|error| error.to_string())?;
         let intent = store.update(|state| {
@@ -437,7 +437,7 @@ impl EditionManager {
         let decision = decisions.get(token).ok_or("Select this edition again before replacing")?;
         authorize(decision, epoch, window)?;
         if decision.intent_id.as_deref() != Some(intent_id) { return Err("Edition authorization belongs to another download".into()); }
-        decision.source.unchanged()?;
+        recheck_original(decision)?;
         imports.with_ready_sources(ready, |books, sources, publication| {
             let state = store.read()?;
             validate_decision(decision, &state)?;
@@ -525,6 +525,42 @@ fn authorize(decision: &Decision, epoch: u64, window: &str) -> Result<(), String
         return Err("Edition authorization expired; select this edition again".into());
     }
     Ok(())
+}
+/// `RetainedSource::unchanged` proves the path still names the pinned inode and
+/// compares size/mtime, but mtime is restorable. Recompute the full content
+/// identity, which includes Unix change time, before reserving or committing so
+/// a rewrite that restores timestamps cannot inherit the original's authority.
+/// A zero or degenerate Unix change time is not proof and refuses the operation;
+/// Windows exposes creation/modification time rather than change time, so there
+/// a deliberately restored mtime still leaves only the retained read handles as
+/// proof (the recheck still rejects replacement, growth and ordinary rewrites).
+fn recheck_original(decision: &Decision) -> Result<(), String> {
+    decision.source.unchanged()?;
+    if !change_times_provable(&decision.source)? {
+        return Err("The installed archive's change time is unavailable; select this edition again".into());
+    }
+    if decision.source.identity()? != decision.identity {
+        return Err("The installed archive changed; select this edition again".into());
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn change_times_provable(source: &RetainedSource) -> Result<bool, String> {
+    use std::os::unix::fs::MetadataExt;
+    for (_, file) in source.files() {
+        let metadata = file.metadata().map_err(|error| error.to_string())?;
+        let nanos = metadata.ctime_nsec();
+        if nanos < 0 || nanos >= 1_000_000_000 || (metadata.ctime() == 0 && nanos == 0) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(not(unix))]
+fn change_times_provable(_source: &RetainedSource) -> Result<bool, String> {
+    Ok(true)
 }
 fn validate_decision(decision: &Decision, state: &State) -> Result<(), String> {
     writable(state)?;
@@ -1251,5 +1287,73 @@ mod authorization_tests {
         drop(manager);
         drop(store);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reserve_rejects_an_original_rewritten_after_prepare() {
+        use std::{fs, io::{Seek, SeekFrom, Write}};
+        let directory = std::env::temp_dir().join(format!("kiwix-edition-original-{}", new_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("original.zim");
+        fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim"),
+            &source,
+        ).unwrap();
+        let mut old = crate::imports::load_book(source.to_str().unwrap(), false, false).unwrap();
+        old.metadata.name = "encyclopedia_eng".into();
+        old.metadata.language = "eng".into();
+        old.metadata.date = "2025-01".into();
+        old.metadata.tags = vec!["_flavour:maxi".into()];
+        let root = "https://example.org/catalog";
+        let selection = EditionSelection {
+            source_id: crate::catalog::source_id(root).unwrap(), source_url: root.into(),
+            entry_id: "opaque-newer-entry".into(), catalog_generation: 1,
+            entry: CatalogEntry {
+                id: "opaque-newer-entry".into(), title: old.metadata.title.clone(),
+                description: String::new(), language: old.metadata.language.clone(),
+                creator: String::new(), publisher: String::new(), date: "2026-01".into(),
+                name: old.metadata.name.clone(), tags: old.metadata.tags.clone(), size: old.metadata.size,
+                article_count: 1, media_count: 0, url: "https://example.org/new.zim".into(),
+                thumbnail_url: None, torrent_url: None, torrent_resolver_url: None,
+            },
+        };
+        // Real ZIM metadata may omit the flavour inferred by the catalog parser.
+        old.metadata.tags.clear();
+        let store = Store::new(directory.join("profile")).unwrap();
+        store.update(|state| {
+            state.books.push(old.clone());
+            state.settings.catalog_url = root.into();
+            state.settings.download_directory = directory.join("archives").to_string_lossy().into_owned();
+            Ok(())
+        }).unwrap();
+        let manager = EditionManager::new();
+        let prepared = manager.prepare(&store, 7, "main", &old, selection, true).unwrap();
+        // Rewrite the original in place without changing its length, then put
+        // mtime back. The stamp-only path still accepts it; the full content
+        // identity (which includes ctime) must not.
+        let modified = fs::metadata(&source).unwrap().modified().unwrap();
+        let mut file = fs::OpenOptions::new().write(true).open(&source).unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        file.write_all(b"changed!").unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        fs::OpenOptions::new().write(true).open(&source).unwrap()
+            .set_modified(modified).unwrap();
+        {
+            let decisions = manager.decisions.lock().unwrap();
+            let decision = decisions.get(&prepared.token).unwrap();
+            assert!(
+                decision.source.unchanged().is_ok(),
+                "the stamp check cannot see a rewrite whose mtime was restored"
+            );
+            assert!(recheck_original(decision).is_err());
+        }
+        let error = manager.reserve(&store, &prepared.token, 7, "main").unwrap_err();
+        assert!(error.contains("installed archive changed"), "{error}");
+        assert!(store.read().unwrap().edition_intents.is_empty());
+        drop(manager);
+        drop(store);
+        fs::remove_dir_all(directory).unwrap();
     }
 }

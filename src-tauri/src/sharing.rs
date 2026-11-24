@@ -72,7 +72,25 @@ const LIBRARY_AVAILABILITY_TTL: Duration = Duration::from_secs(2);
 const LIBRARY_AVAILABILITY_MAX: usize = 8192;
 const BOOTSTRAP_BODY_BYTES: usize = 256;
 const SHARING_MAX_CONNECTIONS: usize = 128;
+/// Longest silence tolerated inside a response body. A stalled client stops
+/// making progress, not merely elapsed time, so a slow link keeps streaming.
 const SHARING_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+/// Absolute budget for delivering a complete request head. Connections are
+/// admitted before a client is authenticated, so a slowloris must not hold one
+/// of the bounded permits for the long body deadline.
+const SHARING_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+/// Absolute budget for a declared request body once its head arrived. Sharing
+/// only accepts small PIN/bootstrap forms; handlers also bound these bodies.
+const SHARING_BODY_TIMEOUT: Duration = Duration::from_secs(30);
+/// Request head bytes kept for framing. Hyper's default HTTP/1 read buffer
+/// accepts a head up to about 408 KiB, so a head that outgrows this storage cap
+/// is not rejected here: the scan keeps looking for its terminator without
+/// keeping the bytes, and a completed oversized head is treated as unaccounted
+/// rather than misparsed.
+const SHARING_HEAD_BYTES: usize = 16 * 1024;
+/// HTTP/2 clients (prior knowledge) multiplex requests on one connection, so
+/// the HTTP/1 request-phase machine does not apply to them.
+const HTTP2_PREFACE: &[u8] = b"PRI * HTTP/2.0";
 const PIN_ATTEMPTS: usize = 5;
 const PIN_WINDOW: Duration = Duration::from_secs(30);
 /// A spent PIN budget locks the form for this long, doubling on each new
@@ -347,7 +365,7 @@ impl axum::serve::Listener for SharingListener {
         loop {
             let (socket, address) = axum::serve::Listener::accept(&mut self.listener).await;
             if let Ok(permit) = self.cancellation.0.connections.clone().try_acquire_owned() {
-                return (SharingIo::new(socket, &self.cancellation, permit, SHARING_IDLE_TIMEOUT), address);
+                return (SharingIo::new(socket, &self.cancellation, permit, SHARING_TIMEOUTS), address);
             }
             // Do not let one listener queue an unbounded number of sockets
             // or spin while the session's active connections are saturated.
@@ -361,44 +379,337 @@ impl axum::serve::Listener for SharingListener {
     }
 }
 
+/// The index just past an HTTP/1 request head terminator, tolerating a bare
+/// line feed so a hand-written client is not misclassified.
+fn request_head_end(head: &[u8]) -> Option<usize> {
+    head.windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|at| at + 4)
+        .or_else(|| {
+            head.windows(2)
+                .position(|window| window == b"\n\n")
+                .map(|at| at + 2)
+        })
+}
+
+/// What the request head declared about its body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeclaredBody {
+    /// No body, or an explicit zero length.
+    None,
+    /// A declared number of body bytes.
+    Length(u64),
+    /// Chunked, repeated, malformed or beyond the head storage cap. Reads can
+    /// no longer be attributed to the next request, so the connection never
+    /// re-enters a request phase.
+    Unaccounted,
+}
+
+/// A request body framing decision. Hyper rejects repeated or malformed
+/// lengths itself; a handler that still reads such a body bounds it with its
+/// own body limit and timeout.
+fn declared_body(head: &[u8]) -> DeclaredBody {
+    let Ok(text) = std::str::from_utf8(head) else {
+        return DeclaredBody::Unaccounted;
+    };
+    let mut length = None;
+    for line in text.split('\n') {
+        let line = line.trim_end_matches('\r');
+        let Some((name, value)) = line.split_once(':') else { continue };
+        if name.eq_ignore_ascii_case("transfer-encoding") {
+            if value.to_ascii_lowercase().contains("chunked") {
+                return DeclaredBody::Unaccounted;
+            }
+        } else if name.eq_ignore_ascii_case("content-length") {
+            // A repeated length is ambiguous and Hyper rejects it.
+            if length.is_some() {
+                return DeclaredBody::Unaccounted;
+            }
+            let Ok(declared) = value.trim().parse::<u64>() else {
+                return DeclaredBody::Unaccounted;
+            };
+            length = Some(declared);
+        }
+    }
+    match length {
+        Some(0) | None => DeclaredBody::None,
+        Some(declared) => DeclaredBody::Length(declared),
+    }
+}
+
+/// Per-connection deadlines. A client must deliver its request head and any
+/// declared body within short absolute windows; only a response in progress
+/// uses the long idle deadline. Time a handler spends between the request and
+/// its first response byte is therefore not charged against the client.
+#[derive(Clone, Copy)]
+struct SharingTimeouts {
+    request: Duration,
+    body: Duration,
+    idle: Duration,
+}
+const SHARING_TIMEOUTS: SharingTimeouts = SharingTimeouts {
+    request: SHARING_REQUEST_TIMEOUT,
+    body: SHARING_BODY_TIMEOUT,
+    idle: SHARING_IDLE_TIMEOUT,
+};
+
+/// Result of feeding request-head bytes.
+enum HeadFeed {
+    /// The head terminator has not arrived yet.
+    Pending,
+    /// The client speaks HTTP/2 with prior knowledge.
+    Http2,
+    /// The head is complete; `arrived` bytes of the following section came in
+    /// the same read.
+    Complete { declared: DeclaredBody, arrived: u64 },
+}
+
+#[derive(Clone, Copy)]
+enum RequestState {
+    /// A request head is being read under the short absolute budget.
+    Head,
+    /// A declared body is still outstanding under the absolute body budget.
+    Body { remaining: u64 },
+    /// The current request is fully framed; further bytes are the next
+    /// request, which gets a fresh head budget.
+    Framed,
+    /// The current request's body framing cannot be accounted for (chunked,
+    /// malformed, oversized head), so reads may be a body drain and are never
+    /// treated as the next request. The response idle bound governs.
+    Unaccounted,
+}
+
 /// Wake and abort the connection even if its client is not polling the body
 /// (for example, a download blocked by TCP backpressure).
 struct SharingIo {
     socket: TcpStream,
     _permit: OwnedSemaphorePermit,
-    idle_period: Duration,
-    idle: Pin<Box<tokio::time::Sleep>>,
+    timeouts: SharingTimeouts,
+    request: RequestState,
+    /// Head/body budget while a request is still incomplete.
+    request_deadline: Option<Pin<Box<tokio::time::Sleep>>>,
+    /// Response idle bound. Armed at the first response byte, reset on write
+    /// progress, and kept until the next request's head completes.
+    response_idle: Option<Pin<Box<tokio::time::Sleep>>>,
+    /// Request head bytes kept for framing, at most `SHARING_HEAD_BYTES`.
+    head: Vec<u8>,
+    /// Last bytes seen after the storage cap, for terminator detection only.
+    head_tail: Vec<u8>,
+    /// The head outgrew the storage cap, so its framing is unknown.
+    head_truncated: bool,
+    /// A response byte was already written for the current request.
+    responded: bool,
+    /// This connection speaks HTTP/2 and keeps the plain idle bound.
+    http2: bool,
     stopped: Pin<Box<dyn Future<Output = ()> + Send>>,
     cancelled: bool,
 }
 impl SharingIo {
-    fn new(socket: TcpStream, cancellation: &SharingCancellation, permit: OwnedSemaphorePermit, idle_period: Duration) -> Self {
+    fn new(socket: TcpStream, cancellation: &SharingCancellation, permit: OwnedSemaphorePermit, timeouts: SharingTimeouts) -> Self {
         Self {
             socket,
             _permit: permit,
-            idle_period,
-            idle: Box::pin(tokio::time::sleep(idle_period)),
+            timeouts,
+            request: RequestState::Head,
+            request_deadline: Some(Box::pin(tokio::time::sleep(timeouts.request))),
+            response_idle: None,
+            head: Vec::new(),
+            head_tail: Vec::new(),
+            head_truncated: false,
+            responded: false,
+            http2: false,
             stopped: Box::pin(cancellation.clone().cancelled()),
             cancelled: false,
         }
     }
 
-    fn progressed(&mut self) {
-        self.idle.as_mut().reset(tokio::time::Instant::now() + self.idle_period);
+    // The arm/reset helpers read the period inside the method: calling
+    // `self.arm_request(self.timeouts.request)` would borrow `self` both
+    // mutably (the `Pin<&mut Self>` deref) and immutably (the argument).
+    fn arm_request(&mut self) {
+        let request = self.timeouts.request;
+        self.request_deadline = Some(Box::pin(tokio::time::sleep(request)));
+    }
+
+    fn arm_body(&mut self) {
+        let body = self.timeouts.body;
+        self.request_deadline = Some(Box::pin(tokio::time::sleep(body)));
+    }
+
+    fn disarm_request(&mut self) {
+        self.request_deadline = None;
+    }
+
+    fn arm_response(&mut self) {
+        let idle = self.timeouts.idle;
+        self.response_idle = Some(Box::pin(tokio::time::sleep(idle)));
+    }
+
+    fn reset_response(&mut self) {
+        let idle = self.timeouts.idle;
+        match self.response_idle.as_mut() {
+            Some(deadline) => deadline.as_mut().reset(tokio::time::Instant::now() + idle),
+            None => self.arm_response(),
+        }
+    }
+
+    fn disarm_response(&mut self) {
+        self.response_idle = None;
+    }
+
+    /// Account for request bytes. A fully framed request may be followed by the
+    /// next request; an unaccounted body may not, because its bytes could be a
+    /// chunked body still being drained.
+    fn received(&mut self, bytes: &[u8]) {
+        if self.http2 {
+            self.reset_response();
+            return;
+        }
+        match self.request {
+            RequestState::Head => match self.feed_head(bytes) {
+                HeadFeed::Pending => {}
+                HeadFeed::Http2 => {
+                    self.http2 = true;
+                    self.head.clear();
+                    self.head_tail.clear();
+                    self.request = RequestState::Unaccounted;
+                    self.disarm_request();
+                    // An idle multiplexed connection is still bounded.
+                    self.arm_response();
+                }
+                HeadFeed::Complete { declared, arrived } => self.head_complete(declared, arrived),
+            },
+            RequestState::Body { remaining } => {
+                let remaining = remaining.saturating_sub(bytes.len() as u64);
+                if remaining > 0 {
+                    self.request = RequestState::Body { remaining };
+                } else {
+                    // The declared body is complete; the handler owns the
+                    // connection until it writes, with no connection budget.
+                    self.request = RequestState::Framed;
+                    self.disarm_request();
+                }
+            }
+            RequestState::Framed => {
+                // The next request may only start after the previous response
+                // completed. Keep that response's idle bound armed until this
+                // head completes, then hand the connection to the new handler.
+                self.request = RequestState::Head;
+                self.head.clear();
+                self.head_tail.clear();
+                self.head_truncated = false;
+                self.arm_request();
+                self.received(bytes);
+            }
+            RequestState::Unaccounted => {
+                // Never re-enter a request phase here: these bytes may be an
+                // unread chunked body. The response idle bound governs.
+            }
+        }
+    }
+
+    /// Feed request-head bytes, keeping at most `SHARING_HEAD_BYTES` for
+    /// framing while still finding the terminator of a larger head.
+    fn feed_head(&mut self, bytes: &[u8]) -> HeadFeed {
+        if !self.head_truncated {
+            let room = SHARING_HEAD_BYTES.saturating_sub(self.head.len());
+            let stored = bytes.len().min(room);
+            self.head.extend_from_slice(&bytes[..stored]);
+            if self.head.starts_with(HTTP2_PREFACE) {
+                return HeadFeed::Http2;
+            }
+            if let Some(end) = request_head_end(&self.head) {
+                let declared = declared_body(&self.head[..end]);
+                // Body bytes may arrive in the same read as the head; the
+                // declared length must not outlive them.
+                let arrived = (self.head.len() - end + (bytes.len() - stored)) as u64;
+                return HeadFeed::Complete { declared, arrived };
+            }
+            if stored < bytes.len() {
+                // The head continues past the storage cap. Seed the tail from
+                // the stored bytes so a terminator spanning the boundary is
+                // still seen, then keep scanning without keeping the bytes.
+                self.head_truncated = true;
+                self.head_tail.clear();
+                let tail = &self.head[self.head.len().saturating_sub(3)..];
+                self.head_tail.extend_from_slice(tail);
+                return self.feed_truncated(&bytes[stored..]);
+            }
+            return HeadFeed::Pending;
+        }
+        self.feed_truncated(bytes)
+    }
+
+    fn feed_truncated(&mut self, bytes: &[u8]) -> HeadFeed {
+        let mut window = Vec::with_capacity(self.head_tail.len() + bytes.len());
+        window.extend_from_slice(&self.head_tail);
+        window.extend_from_slice(bytes);
+        if let Some(end) = request_head_end(&window) {
+            let arrived = (window.len() - end) as u64;
+            return HeadFeed::Complete {
+                declared: DeclaredBody::Unaccounted,
+                arrived,
+            };
+        }
+        self.head_tail.clear();
+        self.head_tail.extend_from_slice(&window[window.len().saturating_sub(3)..]);
+        HeadFeed::Pending
+    }
+
+    /// A request head completed. HTTP/1.1 serializes responses, so a new head
+    /// means the previous response is complete: its idle bound ends here.
+    fn head_complete(&mut self, declared: DeclaredBody, arrived: u64) {
+        self.responded = false;
+        self.disarm_response();
+        match declared {
+            DeclaredBody::Length(remaining) if remaining > arrived => {
+                self.request = RequestState::Body {
+                    remaining: remaining - arrived,
+                };
+                self.arm_body();
+            }
+            DeclaredBody::Length(_) | DeclaredBody::None => {
+                self.request = RequestState::Framed;
+                self.disarm_request();
+            }
+            DeclaredBody::Unaccounted => {
+                self.request = RequestState::Unaccounted;
+                self.disarm_request();
+            }
+        }
     }
 
     fn poll_available(&mut self, cx: &mut Context<'_>) -> io::Result<()> {
         if self.cancelled || self.stopped.as_mut().poll(cx).is_ready() {
             self.cancelled = true;
-            Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::ConnectionAborted,
                 "Sharing stopped",
-            ))
-        } else if self.idle.as_mut().poll(cx).is_ready() {
-            Err(io::Error::new(io::ErrorKind::TimedOut, "Sharing connection is idle"))
-        } else {
-            Ok(())
+            ));
         }
+        if let Some(deadline) = self.request_deadline.as_mut() {
+            if deadline.as_mut().poll(cx).is_ready() {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    match self.request {
+                        RequestState::Head => "Sharing request head timed out",
+                        RequestState::Body { .. } => "Sharing request body timed out",
+                        RequestState::Framed | RequestState::Unaccounted => {
+                            "Sharing request timed out"
+                        }
+                    },
+                ));
+            }
+        }
+        if let Some(idle) = self.response_idle.as_mut() {
+            if idle.as_mut().poll(cx).is_ready() {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Sharing connection is idle",
+                ));
+            }
+        }
+        Ok(())
     }
 }
 impl AsyncRead for SharingIo {
@@ -413,7 +724,7 @@ impl AsyncRead for SharingIo {
         let before = buf.filled().len();
         let result = Pin::new(&mut self.socket).poll_read(cx, buf);
         if matches!(result, Poll::Ready(Ok(()))) && buf.filled().len() > before {
-            self.progressed();
+            self.received(&buf.filled()[before..]);
         }
         result
     }
@@ -427,9 +738,15 @@ impl AsyncWrite for SharingIo {
         if let Err(error) = self.poll_available(cx) {
             return Poll::Ready(Err(error));
         }
+        // The first response byte starts the long idle bound; nothing before
+        // it may charge the handler's own time against the client.
+        if !self.responded {
+            self.responded = true;
+            self.arm_response();
+        }
         let result = Pin::new(&mut self.socket).poll_write(cx, buf);
         if matches!(result, Poll::Ready(Ok(written)) if written > 0) {
-            self.progressed();
+            self.reset_response();
         }
         result
     }

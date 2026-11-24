@@ -697,8 +697,9 @@ impl Service {
         data_dir: PathBuf,
         private: bool,
         read_only: bool,
+        preloaded: Option<Vec<u8>>,
     ) -> Result<Arc<Self>, crate::store::StoreOpenError> {
-        let store = Arc::new(Store::new_with_mode_checked(data_dir, read_only)?);
+        let store = Arc::new(Store::new_with_mode_checked(data_dir, read_only, preloaded)?);
         Self::from_store(store, private, read_only).map_err(crate::store::StoreOpenError::Fatal)
     }
 
@@ -710,6 +711,7 @@ impl Service {
         private: bool,
         read_only: bool,
         lock_file: std::fs::File,
+        preloaded: Option<Vec<u8>>,
     ) -> Result<Arc<Self>, crate::store::StoreOpenError> {
         let store = Arc::new(Store::new_with_claimed_lock(
             data_dir,
@@ -717,6 +719,7 @@ impl Service {
             crate::portable::PortableProfile::detect()
                 .map_err(crate::store::StoreOpenError::Fatal)?,
             lock_file,
+            preloaded,
         )?);
         Self::from_store(store, private, read_only).map_err(crate::store::StoreOpenError::Fatal)
     }
@@ -3535,6 +3538,10 @@ impl Service {
         }
         if let Err(error) = crate::native_pdf::retry_cleanup() {
             errors.push(error);
+        }
+        // The last reading-position refresh may still be coalesced in memory.
+        if let Err(error) = self.store.flush_browsing() {
+            errors.push(format!("Writing the last reading position: {error}"));
         }
         if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
     }

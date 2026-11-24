@@ -538,6 +538,36 @@ async fn deleted_history_stays_deleted_until_explicit_navigation() {
     restored.shutdown().await.unwrap();
 }
 
+/// A settled-scroll refresh is repeatable telemetry: it updates the live
+/// profile at once, is written at most once per coalescing window, and is
+/// carried to disk by the next write-through visit.
+#[tokio::test]
+async fn scroll_refreshes_coalesce_and_the_next_visit_flushes_them() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let generation = service.launch_generation();
+    let visit = |path: &str, create, scroll| json!({
+        "privacyGeneration":generation, "bookId":"book", "path":path,
+        "title":"Chapter", "scroll":scroll, "create":create,
+    });
+    let durable = |profile: &Profile| -> Vec<serde_json::Value> {
+        let bytes = std::fs::read(profile.0.join("state.json")).unwrap();
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["history"]
+            .as_array().cloned().unwrap()
+    };
+    service.clone().dispatch("record_visit", visit("A/one", true, 0.0)).await.unwrap();
+    assert_eq!(durable(&profile).len(), 1);
+    service.clone().dispatch("record_visit", visit("A/one", false, 500.0)).await.unwrap();
+    assert_eq!(service.store.read().unwrap().history[0].scroll, 500.0);
+    assert_eq!(durable(&profile)[0]["scroll"], json!(0.0));
+    service.clone().dispatch("record_visit", visit("A/two", true, 0.0)).await.unwrap();
+    let saved = durable(&profile);
+    assert_eq!(saved.len(), 2);
+    assert!(saved.iter().any(|entry| entry["path"] == json!("A/one") && entry["scroll"] == json!(500.0)),
+        "{saved:?}");
+    service.shutdown().await.unwrap();
+}
+
 #[tokio::test]
 async fn collection_deletions_require_original_current_privacy_authority() {
     let profile = Profile::new();

@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 //! Read-only archive origins. No privileged application command is exposed here.
 //! Retirement closes network IO and joins archive workers before releasing providers.
-use crate::archive::{is_html_mime, Archive, MAX_READ_LENGTH};
+use crate::archive::{is_html_mime, Archive, EntryLookup, MAX_READ_LENGTH};
 use crate::store::Store;
 #[cfg(any(desktop, test))]
 use axum::response::IntoResponse;
@@ -725,6 +725,10 @@ async fn archive_request(
 /// Resolve an archive path exactly first. Only a recoverable entry-not-found
 /// miss may retry the one-step trailing-slash variant, preserving distinct
 /// `path` and `path/` entries and all other archive failures.
+///
+/// Serving uses [`crate::archive::EntryLookup`] under one retained archive
+/// acquisition; this copy remains the direct regression for that policy.
+#[cfg(test)]
 fn lookup_entry_with_slash_fallback<T>(
     path: &str,
     mut lookup: impl FnMut(&str) -> Result<T, String>,
@@ -792,97 +796,159 @@ async fn archive_request_inner(
     };
     let archive = state.archive.clone();
     let lookup_path = path.clone();
-    let entry = match state.workers.run_for(&state.id, &state.installation_id, "read_article", move || {
-        let archive = archive.upgrade().ok_or("Reading stopped. Reload the article")?;
-        Ok(if lookup_path.is_empty() {
-            archive.main_or_random_entry().map(|(entry, _)| entry)
-        } else {
-            lookup_entry_with_slash_fallback(&lookup_path, |candidate| archive.entry(candidate))
+    let cancellation = state.cancellation.clone();
+    let archive_id = state.id.clone();
+    let token = state.token.clone();
+    let query = uri.query().map(str::to_owned);
+    let request_headers = headers.clone();
+    let request_method = method.clone();
+    let document_request = is_document_request(&headers);
+    // Resolve the entry, choose its response shape, and read every selected
+    // byte inside one archive lock acquisition. Redirects and HEAD/304/416
+    // decisions read nothing, and no path is looked up twice.
+    let served = state
+        .workers
+        .run_for(&state.id, &state.installation_id, "read_article", move || {
+            let archive = archive.upgrade().ok_or("Reading stopped. Reload the article")?;
+            let lookup = if lookup_path.is_empty() {
+                EntryLookup::MainOrRandom
+            } else {
+                EntryLookup::ExactOrTrailingSlash(&lookup_path)
+            };
+            archive.with_entry(lookup, &cancellation, |entry, reader| {
+                let redirect = if lookup_path.is_empty() {
+                    Some(format!("/{}", encode_path(&entry.path)))
+                } else if entry.path != lookup_path {
+                    Some(format!(
+                        "/{0}{1}",
+                        encode_path(&entry.path),
+                        query
+                            .as_deref()
+                            .map(|q| format!("?{q}"))
+                            .unwrap_or_default()
+                    ))
+                } else {
+                    None
+                };
+                if let Some(target) = redirect {
+                    return Ok(ServedEntry {
+                        entry: entry.clone(),
+                        index: reader.index(),
+                        plan: ServedPlan::Redirect(target),
+                    });
+                }
+                let plan = if is_html_mime(&entry.mime) {
+                    // A large article must stay readable: inject the bridge
+                    // from the first bounded prefix and stream the rest in
+                    // 1 MiB archive ranges instead of refusing the document.
+                    if entry.size > MAX_READ_LENGTH {
+                        ServedPlan::HtmlPrefix(reader.read_range(0, entry.size.min(HTML_PREFIX))?)
+                    } else {
+                        ServedPlan::HtmlWhole(reader.read_range(0, entry.size)?)
+                    }
+                } else if document_request {
+                    let mime = entry.mime.split(';').next().unwrap_or("");
+                    if (mime.starts_with("text/")
+                        || matches!(mime, "application/json" | "application/xml"))
+                        && entry.size <= MAX_READ_LENGTH
+                    {
+                        match reader.read_range(0, entry.size) {
+                            Ok(bytes) => ServedPlan::ResourceText(bytes),
+                            Err(message) => ServedPlan::ResourceUnreadable(message),
+                        }
+                    } else {
+                        ServedPlan::ResourceFallback
+                    }
+                } else {
+                    ServedPlan::Raw(raw_plan(
+                        reader,
+                        entry,
+                        &request_headers,
+                        &request_method,
+                        &archive_id,
+                        &token,
+                    )?)
+                };
+                Ok(ServedEntry {
+                    entry: entry.clone(),
+                    index: reader.index(),
+                    plan,
+                })
+            })
         })
-    })
-    .await
-    {
-        Ok(Ok(entry)) => entry,
-        Ok(Err(message)) => {
+        .await;
+    let ServedEntry { entry, index, plan } = match served {
+        Ok(served) => served,
+        Err(message) if message == "Archive worker stopped" => {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped");
+        }
+        Err(message) => {
             // A document navigation must still reach the reader bridge: an
             // uninstrumented 404 leaves the frame inert until the shell's
             // watchdog fires. Redirect to the fallback document with the miss
             // marker so the shell can say so quietly.
-            if crate::archive::is_entry_not_found(&message) && is_document_request(&headers) {
+            if crate::archive::is_entry_not_found(&message) && document_request {
                 return missing_document(&state, method).await;
             }
             return archive_failure(&state, "read_article", &message);
         }
-        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped"),
     };
-    if entry.path != path && !path.is_empty() {
-        let target = format!(
-            "/{0}{1}",
-            encode_path(&entry.path),
-            uri.query().map(|q| format!("?{q}")).unwrap_or_default()
-        );
-        return Response::builder()
+    match plan {
+        ServedPlan::Redirect(target) => Response::builder()
             .status(StatusCode::TEMPORARY_REDIRECT)
             .header("Location", target)
             .body(Body::empty())
-            .unwrap();
-    }
-    if path.is_empty() {
-        return Response::builder()
-            .status(StatusCode::TEMPORARY_REDIRECT)
-            .header("Location", format!("/{}", encode_path(&entry.path)))
-            .body(Body::empty())
-            .unwrap();
-    }
-    let html = is_html_mime(&entry.mime);
-    if html {
-        // A large article must stay readable: inject the bridge from the first
-        // bounded prefix and stream the rest in 1 MiB archive ranges instead of
-        // refusing the document outright.
-        if entry.size > MAX_READ_LENGTH {
-            return stream_html_document(state, entry, method).await;
+            .unwrap(),
+        ServedPlan::HtmlWhole(bytes) => {
+            if std::str::from_utf8(&bytes).is_err() {
+                return reader_error_document(
+                    &state,
+                    method,
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "This page could not be opened.",
+                    "The article is not valid UTF-8 HTML.",
+                );
+            }
+            let nonce = restricted_nonce(&state);
+            let injection = bridge_injection(&state, &entry.mime, nonce.as_deref());
+            let size = bytes.len() + injection.len();
+            archive_response(
+                &state,
+                StatusCode::OK,
+                "text/html; charset=utf-8",
+                size as u64,
+                None,
+                None,
+                nonce.as_deref(),
+                if method == Method::HEAD {
+                    Body::empty()
+                } else {
+                    injected_html_body(bytes, injection)
+                },
+            )
         }
-        let archive = state.archive.clone();
-        let path = entry.path.clone();
-        let size = entry.size;
-        let bytes = match state.workers.run_for(&state.id, &state.installation_id, "read_article", move || {
-            Ok(archive.upgrade().ok_or("Reading stopped. Reload the article")?.read(&path, 0, size))
-        }).await {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(e)) => return archive_failure(&state, "read_article", &e),
-            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped"),
-        };
-        if std::str::from_utf8(&bytes).is_err() {
-            return reader_error_document(
+        ServedPlan::HtmlPrefix(first) => {
+            stream_html_document(state, entry, index, first, method).await
+        }
+        ServedPlan::ResourceText(bytes) => {
+            resource_document(state, entry, method, Some(bytes))
+        }
+        ServedPlan::ResourceUnreadable(message) => {
+            crate::diagnostics::record(&state.store, "read_article", Some(&message));
+            reader_error_document(
                 &state,
                 method,
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "This page could not be opened.",
-                "The article is not valid UTF-8 HTML.",
-            );
+                "The archive could not read this entry.",
+            )
         }
-        let nonce = restricted_nonce(&state);
-        let injection = bridge_injection(&state, &entry.mime, nonce.as_deref());
-        let size = bytes.len() + injection.len();
-        return archive_response(
-            &state,
-            StatusCode::OK,
-            "text/html; charset=utf-8",
-            size as u64,
-            None,
-            None,
-            nonce.as_deref(),
-            if method == Method::HEAD {
-                Body::empty()
-            } else {
-                injected_html_body(bytes, injection)
-            },
-        );
+        ServedPlan::ResourceFallback => resource_document(state, entry, method, None),
+        ServedPlan::Raw(plan) => raw_response(&state, entry, index, method, plan),
+        ServedPlan::RejectHtml => {
+            error(StatusCode::BAD_REQUEST, "HTML documents must use the instrumented reader")
+        }
     }
-    if is_document_request(&headers) {
-        return resource_document(state, entry, method).await;
-    }
-    stream_resource(state, entry, method, headers)
 }
 
 /// Browser metadata for a navigation that renders a document. Other
@@ -1122,29 +1188,14 @@ fn html_head_offset(bytes: &[u8]) -> usize {
 async fn stream_html_document(
     state: ArchiveState,
     entry: crate::archive::EntryInfo,
+    index: u32,
+    first: Vec<u8>,
     method: Method,
 ) -> Response {
-    const PREFIX: u64 = 64 * 1024;
     const CHUNK: u64 = 1024 * 1024;
     let nonce = restricted_nonce(&state);
     let injection = bridge_injection(&state, &entry.mime, nonce.as_deref());
-    let prefix_length = entry.size.min(PREFIX);
-    let archive = state.archive.clone();
-    let path = entry.path.clone();
-    let first = match state
-        .workers
-        .run_for(&state.id, &state.installation_id, "read_article", move || {
-            Ok(archive
-                .upgrade()
-                .ok_or("Reading stopped. Reload the article")?
-                .read(&path, 0, prefix_length))
-        })
-        .await
-    {
-        Ok(Ok(bytes)) => bytes,
-        Ok(Err(message)) => return archive_failure(&state, "read_article", &message),
-        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped"),
-    };
+    let prefix_length = entry.size.min(HTML_PREFIX);
     if first.len() as u64 != prefix_length {
         return error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1164,16 +1215,16 @@ async fn stream_html_document(
             state.cancellation.clone(),
             state.id.clone(),
             state.installation_id.clone(),
-            entry.path,
+            index,
             prefix_length,
             entry.size - prefix_length,
             Some(prefix),
         ),
-        |(archive, workers, cancellation, archive_id, installation_id, path, offset, remaining, prefix)| async move {
+        |(archive, workers, cancellation, archive_id, installation_id, index, offset, remaining, prefix)| async move {
             if let Some(bytes) = prefix {
                 return Ok::<_, io::Error>(Some((
                     bytes,
-                    (archive, workers, cancellation, archive_id, installation_id, path, offset, remaining, None),
+                    (archive, workers, cancellation, archive_id, installation_id, index, offset, remaining, None),
                 )));
             }
             if remaining == 0 {
@@ -1181,14 +1232,16 @@ async fn stream_html_document(
             }
             let count = remaining.min(CHUNK);
             let a = archive.clone();
-            let p = path.clone();
+            let cancel = cancellation.clone();
             let bytes = tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => {
                     return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "Reading stopped. Reload the article"));
                 }
                 bytes = workers.run_for(&archive_id, &installation_id, "read_article", move || {
-                    a.upgrade().ok_or("Reading stopped. Reload the article")?.read(&p, offset, count)
+                    a.upgrade()
+                        .ok_or("Reading stopped. Reload the article")?
+                        .read_index_cancellable(index, offset, count, &cancel)
                 }) => {
                     bytes.map_err(io::Error::other)?
                 }
@@ -1198,7 +1251,7 @@ async fn stream_html_document(
             }
             Ok(Some((
                 bytes,
-                (archive, workers, cancellation, archive_id, installation_id, path, offset + count, remaining - count, None),
+                (archive, workers, cancellation, archive_id, installation_id, index, offset + count, remaining - count, None),
             )))
         },
     );
@@ -1260,13 +1313,57 @@ fn reader_error_document(
     response
 }
 
-fn stream_resource(
-    state: ArchiveState,
+const RAW_CHUNK: u64 = 1024 * 1024;
+const HTML_PREFIX: u64 = 64 * 1024;
+
+/// What the serving decision selected while the archive lock was held.
+enum ServedPlan {
+    Redirect(String),
+    HtmlWhole(Vec<u8>),
+    HtmlPrefix(Vec<u8>),
+    ResourceText(Vec<u8>),
+    ResourceUnreadable(String),
+    ResourceFallback,
+    Raw(RawPlan),
+    RejectHtml,
+}
+
+struct ServedEntry {
     entry: crate::archive::EntryInfo,
-    method: Method,
-    headers: HeaderMap,
-) -> Response {
-    let etag = entry_validator(&state, &entry.path, entry.size);
+    /// Exact resolved entry index. Streaming uses this instead of the public
+    /// path so a same-path entry in another namespace cannot be substituted.
+    index: u32,
+    plan: ServedPlan,
+}
+
+enum RawPlan {
+    NotModified {
+        etag: String,
+    },
+    Unsatisfiable {
+        size: u64,
+    },
+    Body {
+        etag: String,
+        status: StatusCode,
+        start: u64,
+        length: u64,
+        content_range: Option<String>,
+        first: Vec<u8>,
+    },
+}
+
+/// Decide the raw resource response from metadata and bytes read under the
+/// same archived-item acquisition. No second entry lookup or range read.
+fn raw_plan(
+    reader: &crate::archive::RetainedItem<'_>,
+    entry: &crate::archive::EntryInfo,
+    headers: &HeaderMap,
+    method: &Method,
+    archive_id: &str,
+    token: &str,
+) -> Result<RawPlan, String> {
+    let etag = entry_validator(archive_id, token, &entry.path, entry.size);
     // A client that already holds this exact representation keeps its copy
     // instead of re-streaming a media entry it cannot use.
     if headers
@@ -1274,7 +1371,7 @@ fn stream_resource(
         .and_then(|h| h.to_str().ok())
         .is_some_and(|value| if_none_match_matches(value, &etag))
     {
-        return not_modified(&etag);
+        return Ok(RawPlan::NotModified { etag });
     }
     // A range is only meaningful while the client's validator still names this
     // representation. A stale `If-Range` means the client's cached prefix is
@@ -1291,74 +1388,127 @@ fn stream_resource(
     {
         Ok(range) => range,
         Err(_) => {
-            return Response::builder()
-                .status(StatusCode::RANGE_NOT_SATISFIABLE)
-                .header("Content-Range", format!("bytes */{}", entry.size))
-                .body(Body::empty())
-                .unwrap()
+            return Ok(RawPlan::Unsatisfiable { size: entry.size });
         }
     };
     let (start, length, status) = range
         .map(|(s, l)| (s, l, StatusCode::PARTIAL_CONTENT))
         .unwrap_or((0, entry.size, StatusCode::OK));
+    let content_range =
+        range.map(|_| format!("bytes {start}-{}/{}", start + length - 1, entry.size));
+    let first = if *method == Method::HEAD || length == 0 {
+        Vec::new()
+    } else {
+        let count = length.min(RAW_CHUNK);
+        let first = reader.read_range(start, count)?;
+        if first.len() as u64 != count {
+            return Err("Truncated archive resource".into());
+        }
+        first
+    };
+    Ok(RawPlan::Body {
+        etag,
+        status,
+        start,
+        length,
+        content_range,
+        first,
+    })
+}
+
+fn raw_response(
+    state: &ArchiveState,
+    entry: crate::archive::EntryInfo,
+    index: u32,
+    method: Method,
+    plan: RawPlan,
+) -> Response {
+    let (etag, status, start, length, content_range, first) = match plan {
+        RawPlan::NotModified { etag } => return not_modified(&etag),
+        RawPlan::Unsatisfiable { size } => {
+            return Response::builder()
+                .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                .header("Content-Range", format!("bytes */{size}"))
+                .body(Body::empty())
+                .unwrap();
+        }
+        RawPlan::Body {
+            etag,
+            status,
+            start,
+            length,
+            content_range,
+            first,
+        } => (etag, status, start, length, content_range, first),
+    };
     let mime = if entry.mime.starts_with("text/") && !entry.mime.contains("charset=") {
         format!("{}; charset=utf-8", entry.mime)
     } else {
         entry.mime.clone()
     };
-    let content_range =
-        range.map(|_| format!("bytes {start}-{}/{}", start + length - 1, entry.size));
-    let stream = stream::try_unfold(
-        (
-            state.archive.clone(),
-            state.workers.clone(),
-            state.cancellation.clone(),
-            state.id.clone(),
-            state.installation_id.clone(),
-            entry.path,
-            start,
-            length,
-        ),
-        |(archive, workers, cancellation, archive_id, installation_id, path, offset, remaining)| async move {
-            if remaining == 0 {
-                return Ok::<_, std::io::Error>(None);
-            }
-            let count = remaining.min(1024 * 1024);
-            let a = archive.clone();
-            let p = path.clone();
-            let bytes = tokio::select! {
-                biased;
-                _ = cancellation.cancelled() => {
-                    return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "Reading stopped. Reload the article"));
+    let body = if method == Method::HEAD {
+        Body::empty()
+    } else {
+        let prefix = (!first.is_empty()).then_some(first);
+        let consumed = prefix.as_ref().map_or(0, |bytes| bytes.len() as u64);
+        let stream = stream::try_unfold(
+            (
+                state.archive.clone(),
+                state.workers.clone(),
+                state.cancellation.clone(),
+                state.id.clone(),
+                state.installation_id.clone(),
+                index,
+                start + consumed,
+                length - consumed,
+                prefix,
+            ),
+            |(archive, workers, cancellation, archive_id, installation_id, index, offset, remaining, prefix)| async move {
+                if let Some(bytes) = prefix {
+                    return Ok::<_, std::io::Error>(Some((
+                        bytes,
+                        (archive, workers, cancellation, archive_id, installation_id, index, offset, remaining, None),
+                    )));
                 }
-                bytes = workers.run_for(&archive_id, &installation_id, "read_resource", move || {
-                    a.upgrade().ok_or("Reading stopped. Reload the article")?.read(&p, offset, count)
-                }) => {
-                    bytes.map_err(io::Error::other)?
+                if remaining == 0 {
+                    return Ok(None);
                 }
-            };
-            if bytes.len() as u64 != count {
-                return Err(std::io::Error::other("Truncated archive resource"));
-            }
-            Ok(Some((
-                bytes,
-                (archive, workers, cancellation, archive_id, installation_id, path, offset + count, remaining - count),
-            )))
-        },
-    );
+                let count = remaining.min(RAW_CHUNK);
+                let a = archive.clone();
+                let cancel = cancellation.clone();
+                let bytes = tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => {
+                        return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "Reading stopped. Reload the article"));
+                    }
+                    bytes = workers.run_for(&archive_id, &installation_id, "read_resource", move || {
+                        a.upgrade()
+                            .ok_or("Reading stopped. Reload the article")?
+                            .read_index_cancellable(index, offset, count, &cancel)
+                    }) => {
+                        bytes.map_err(io::Error::other)?
+                    }
+                };
+                if bytes.len() as u64 != count {
+                    return Err(std::io::Error::other("Truncated archive resource"));
+                }
+                Ok(Some((
+                    bytes,
+                    (archive, workers, cancellation, archive_id, installation_id, index, offset + count, remaining - count, None),
+                )))
+            },
+        );
+        Body::from_stream(stream)
+    };
     archive_response(
-        &state,
+        state,
         status,
         &mime,
         length,
         content_range.as_deref(),
         Some(&etag),
         None,
-        if method == Method::HEAD {
-            Body::empty()
-        } else {
-            Body::from_stream(stream)
-        },
+        body,
     )
 }
 
@@ -1384,20 +1534,57 @@ async fn internal_request(
             Err(_) => return error(StatusCode::BAD_REQUEST, "Invalid resource path"),
         };
         let archive = state.archive.clone();
-        let entry = match state.workers.run_for(&state.id, &state.installation_id, "read_resource", move || {
-            Ok(archive.upgrade().ok_or("Reading stopped. Reload the article")?.entry(&path))
-        }).await {
-            Ok(Ok(entry)) => entry,
-            Ok(Err(message)) => return archive_failure(&state, "read_resource", &message),
-            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped"),
+        let cancellation = state.cancellation.clone();
+        let archive_id = state.id.clone();
+        let token = state.token.clone();
+        let request_method = method.clone();
+        // One acquisition resolves the exact entry and either rejects HTML or
+        // reads the selected raw range; the archive cannot change in between.
+        let served = state
+            .workers
+            .run_for(&state.id, &state.installation_id, "read_resource", move || {
+                let archive = archive
+                    .upgrade()
+                    .ok_or("Reading stopped. Reload the article")?;
+                archive.with_entry(EntryLookup::Exact(&path), &cancellation, |entry, reader| {
+                    let plan = if is_html_mime(&entry.mime) {
+                        ServedPlan::RejectHtml
+                    } else {
+                        ServedPlan::Raw(raw_plan(
+                            reader,
+                            entry,
+                            &headers,
+                            &request_method,
+                            &archive_id,
+                            &token,
+                        )?)
+                    };
+                    Ok(ServedEntry {
+                        entry: entry.clone(),
+                        index: reader.index(),
+                        plan,
+                    })
+                })
+            })
+            .await;
+        let ServedEntry { entry, index, plan } = match served {
+            Ok(served) => served,
+            Err(message) if message == "Archive worker stopped" => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped");
+            }
+            Err(message) => return archive_failure(&state, "read_resource", &message),
         };
-        if is_html_mime(&entry.mime) {
-            return error(
+        return match plan {
+            ServedPlan::Raw(plan) => raw_response(&state, entry, index, method, plan),
+            ServedPlan::RejectHtml => error(
                 StatusCode::BAD_REQUEST,
                 "HTML documents must use the instrumented reader",
-            );
-        }
-        return stream_resource(state, entry, method, headers);
+            ),
+            _ => error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Archive resource plan was not readable",
+            ),
+        };
     }
     match (method.as_str(), resource) {
         ("GET", "bridge.js") => Response::builder()
@@ -1723,11 +1910,11 @@ fn archive_response(
 /// Every open publishes a new origin, host and token, and the archive handle
 /// retains the exact file, so an entry's bytes cannot change while this server
 /// lives. The validator therefore only has to keep representations distinct.
-fn entry_validator(state: &ArchiveState, path: &str, size: u64) -> String {
+fn entry_validator(archive_id: &str, token: &str, path: &str, size: u64) -> String {
     let mut digest = Sha256::new();
     for part in [
-        state.id.as_bytes(),
-        state.token.as_bytes(),
+        archive_id.as_bytes(),
+        token.as_bytes(),
         path.as_bytes(),
         &size.to_le_bytes(),
     ] {
@@ -1775,10 +1962,20 @@ fn error(status: StatusCode, message: &str) -> Response {
         .unwrap()
 }
 fn escape_attribute(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+    // One pass with a pre-sized output. The old chained `replace` calls
+    // allocated a full copy per entity, so a 16 MiB text resource could hold
+    // several simultaneous full-size copies while serving one document.
+    let mut escaped = String::with_capacity(text.len().saturating_mul(6));
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '"' => escaped.push_str("&quot;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
 }
 
 pub fn parse_range(header: &str, size: u64) -> Result<(u64, u64), String> {
@@ -1963,10 +2160,11 @@ fn resource_fallback(title: &str, source: &str, path: &str, read_only: bool) -> 
 }
 /// Binary navigation still needs a bridge-bearing document so history, Back,
 /// title, export, and subsequent navigation remain owned by the trusted shell.
-async fn resource_document(
+fn resource_document(
     state: ArchiveState,
     entry: crate::archive::EntryInfo,
     method: Method,
+    bytes: Option<Vec<u8>>,
 ) -> Response {
     let prefix = format!("/.kiwix/{}/", state.token);
     let resource = format!("{prefix}raw/{}", encode_path(&entry.path));
@@ -1982,24 +2180,14 @@ async fn resource_document(
     } else if (mime.starts_with("text/") || matches!(mime, "application/json" | "application/xml"))
         && entry.size <= MAX_READ_LENGTH
     {
-        let archive = state.archive.clone();
-        let path = entry.path.clone();
-        let size = entry.size;
-        let bytes = match state.workers.run_for(&state.id, &state.installation_id, "read_article", move || {
-            Ok(archive.upgrade().ok_or("Reading stopped. Reload the article")?.read(&path, 0, size))
-        }).await {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(message)) => {
-                crate::diagnostics::record(&state.store, "read_article", Some(&message));
-                return reader_error_document(
-                    &state,
-                    method,
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    "This page could not be opened.",
-                    "The archive could not read this entry.",
-                );
-            }
-            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "Archive worker stopped"),
+        let Some(bytes) = bytes else {
+            return reader_error_document(
+                &state,
+                method,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "This page could not be opened.",
+                "The archive could not read this entry.",
+            );
         };
         format!(
             "<pre>{}</pre>",

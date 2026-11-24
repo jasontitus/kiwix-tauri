@@ -18,6 +18,10 @@ const CACHE_FILE: &str = "catalog-opds-v1.json";
 const PENDING_FILE: &str = "catalog-opds-v1.pending";
 const INDEX_FILE: &str = "catalog-index-v1.json";
 const INDEX_PENDING_FILE: &str = "catalog-index-v1.pending";
+// Exact compact JSON prefixes produced by the serializers. A legacy fixed-name
+// scratch file may only be recovered when its bytes are empty or begin with one.
+const CACHE_PAYLOAD_PREFIX: &[u8] = br#"{"version":1,"records":["#;
+const INDEX_PAYLOAD_PREFIX: &[u8] = br#"{"version":1,"snapshots":["#;
 const MAX_ETAG: usize = 1024;
 
 #[derive(Clone, Debug, Serialize)]
@@ -302,7 +306,7 @@ impl CatalogCache {
     pub(super) fn write_index(&self, bytes: &[u8]) -> Result<(), String> {
         if bytes.len() > MAX_CACHE { return Err("Catalog index exceeds disk limit".into()); }
         let directory = self.directory(true)?.ok_or("Catalog cache directory unavailable")?;
-        atomic_write_named(&directory, bytes, INDEX_PENDING_FILE, INDEX_FILE, || {}).map(|_| ())
+        atomic_write_named(&directory, bytes, INDEX_PENDING_FILE, INDEX_FILE, INDEX_PAYLOAD_PREFIX, |_| {}).map(|_| ())
     }
 
     /// Cheap identity of the durable index, so a retained parse is reused only
@@ -442,7 +446,15 @@ impl CatalogCache {
                         // later 200 may already have committed a different representation.
                         if !private && !read_only && (!revalidated || cache.contains(&record)) {
                             match cache.save_updates(vec![CacheUpdate::Fresh { record: Arc::clone(&record), previous: None }], false) {
-                                Ok(()) => metadata.stored = true,
+                                Ok(warning) => {
+                                    metadata.stored = warning.is_none() || cache.contains(&record);
+                                    if let Some(warning) = warning {
+                                        metadata.error = Some(match metadata.error.take() {
+                                            Some(existing) => format!("{existing}; {warning}"),
+                                            None => warning,
+                                        });
+                                    }
+                                }
                                 Err(error) => {
                                     metadata.stored = cache.contains(&record);
                                     metadata.error = Some(error);
@@ -635,23 +647,27 @@ impl CatalogCache {
             r.matches(url, language, kind) && r.base == base && r.digest == digest))
     }
 
-    pub(super) fn save_refresh(&self, updates: Vec<CacheUpdate>) -> Result<(), String> {
+    pub(super) fn save_refresh(&self, updates: Vec<CacheUpdate>) -> Result<Option<String>, String> {
         self.save_updates(updates, true)
     }
 
     // Callers hold Store's policy transaction. Reload any intervening single
     // page writes, then merge in traversal order and encode once for publication.
-    fn save_updates(&self, updates: Vec<CacheUpdate>, batch: bool) -> Result<(), String> {
-        if updates.is_empty() { return Ok(()); }
+    // An accepted representation that cannot fit the bounded file is skipped
+    // with a warning so the remaining traversal pages still publish.
+    fn save_updates(&self, updates: Vec<CacheUpdate>, batch: bool) -> Result<Option<String>, String> {
+        if updates.is_empty() { return Ok(None); }
         let directory = self.directory(true)?.ok_or("Catalog cache directory unavailable")?;
         let retained = self.retained_in(&directory).and_then(Self::verified).ok();
         let mut records = retained.as_ref().map(|cache| cache.records.records.clone()).unwrap_or_default();
         const ENVELOPE_BYTES: usize = br#"{"version":1,"records":[]}"#.len();
+        let mut skipped = 0usize;
         for update in updates {
             match update {
                 CacheUpdate::Fresh { record, previous } => {
                     if ENVELOPE_BYTES + record.encoded_bytes() > MAX_CACHE {
-                        return Err("Catalog representation exceeds durable cache capacity".into());
+                        skipped += 1;
+                        continue;
                     }
                     if let Some(index) = records.iter().position(|r| r.matches(&record.url, &record.language, record.kind)) {
                         if batch && records[index].digest != record.digest
@@ -671,10 +687,11 @@ impl CatalogCache {
                 }
             }
         }
-        if records.is_empty() { return Ok(()); }
+        let warning = skipped_warning(skipped);
+        if records.is_empty() { return Ok(warning); }
         if batch && retained.as_ref().is_some_and(|old| old.records.records.iter().map(|r| &r.digest)
             .eq(records.iter().map(|r| &r.digest))) {
-            return Ok(());
+            return Ok(warning);
         }
         let mut bytes = ENVELOPE_BYTES + records.iter().map(|r| r.encoded_bytes()).sum::<usize>()
             + records.len().saturating_sub(1);
@@ -688,11 +705,19 @@ impl CatalogCache {
         serde_json::to_writer(&mut encoded, &Records { version: 1, records: records.iter().map(Arc::as_ref).collect() })
             .map_err(|e| format!("Encoding catalog cache: {e}"))?;
         debug_assert_eq!(encoded.len(), bytes);
-        let stamp = atomic_write_named(&directory, &encoded, PENDING_FILE, CACHE_FILE, || {})?;
+        let stamp = atomic_write_named(&directory, &encoded, PENDING_FILE, CACHE_FILE, CACHE_PAYLOAD_PREFIX, |_| {})?;
         *self.memory() = Some(Arc::new(Retained {
             stamp, records: Records { version: 1, records }, verified: AtomicBool::new(true),
         }));
-        Ok(())
+        Ok(warning)
+    }
+}
+
+fn skipped_warning(skipped: usize) -> Option<String> {
+    match skipped {
+        0 => None,
+        1 => Some("A catalog page exceeds durable cache capacity and was not saved".into()),
+        skipped => Some(format!("{skipped} catalog pages exceed durable cache capacity and were not saved")),
     }
 }
 
@@ -748,58 +773,170 @@ fn read_records(directory: &Dir, loopback: bool) -> Result<(Stamp, Records<Arc<R
 
 #[cfg(test)]
 fn atomic_write(cache: &CacheDirectory, bytes: &[u8]) -> Result<(), String> {
-    atomic_write_with_hook(cache, bytes, || {})
+    atomic_write_with_hook(cache, bytes, |_| {})
 }
 
 #[cfg(test)]
-fn atomic_write_with_hook(cache: &CacheDirectory, bytes: &[u8], before_publish: impl FnOnce()) -> Result<(), String> {
-    atomic_write_named(cache, bytes, PENDING_FILE, CACHE_FILE, before_publish).map(|_| ())
+fn atomic_write_with_hook(cache: &CacheDirectory, bytes: &[u8], before_publish: impl FnOnce(&str)) -> Result<(), String> {
+    atomic_write_named(cache, bytes, PENDING_FILE, CACHE_FILE, CACHE_PAYLOAD_PREFIX, before_publish).map(|_| ())
 }
 
-fn atomic_write_named(cache: &CacheDirectory, bytes: &[u8], pending: &str, destination: &str, before_publish: impl FnOnce()) -> Result<Stamp, String> {
+/// A scratch file is app-owned only if it is a private, single-link regular
+/// file created by this user.
+fn app_owned_scratch(metadata: &cap_std::fs::Metadata) -> bool {
+    if !metadata.is_file() || metadata.nlink() != 1 || metadata.len() > MAX_CACHE as u64 { return false; }
+    #[cfg(unix)]
+    if cap_std::fs::MetadataExt::uid(metadata) != crate::fs_ext::effective_uid()
+        || cap_std::fs::MetadataExt::mode(metadata) & 0o077 != 0 {
+        return false;
+    }
+    true
+}
+
+fn scratch_uuid(name: &str) -> bool {
+    name.len() == 36 && name.bytes().enumerate().all(|(index, byte)|
+        if matches!(index, 8 | 13 | 18 | 23) { byte == b'-' } else { byte.is_ascii_hexdigit() })
+}
+
+fn open_read_nofollow(directory: &Dir, name: &str) -> std::io::Result<cap_std::fs::File> {
+    let mut options = OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    #[cfg(unix)] { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    directory.open_with(name, &options)
+}
+
+/// Older builds used one fixed scratch name and truncated it before writing.
+/// Recover only a file this app could have written (private, owned, and an
+/// empty or truncated copy of the expected payload); never touch a foreign file.
+fn recover_legacy_scratch(directory: &Dir, pending: &str, expected: &[u8]) -> std::io::Result<()> {
+    let named = match directory.symlink_metadata(pending) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if !app_owned_scratch(&named) {
+        return Err(std::io::Error::other("Catalog cache scratch file is not app-owned"));
+    }
+    let opened = open_read_nofollow(directory, pending)?;
+    let metadata = opened.metadata()?;
+    if !app_owned_scratch(&metadata) || metadata.dev() != named.dev() || metadata.ino() != named.ino() {
+        return Err(std::io::Error::other("Catalog cache scratch file changed"));
+    }
+    let mut prefix = Vec::with_capacity(expected.len() + 1);
+    (&opened).take(expected.len() as u64 + 1).read_to_end(&mut prefix)?;
+    if !prefix.is_empty() && !prefix.starts_with(expected) && !expected.starts_with(&prefix) {
+        return Err(std::io::Error::other("Catalog cache scratch file is not app-owned"));
+    }
+    drop(opened);
+    match directory.remove_file(pending) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+/// Interrupted writes leave UUID-named scratch files behind. Remove only
+/// app-owned leftovers before claiming a new, unguessable scratch name.
+fn remove_stale_scratch(directory: &Dir, pending: &str, expected: &[u8]) -> std::io::Result<()> {
+    let prefix = format!("{pending}.");
+    let mut stale = Vec::new();
+    for entry in directory.entries()? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(text) = name.to_str() else { continue; };
+        if text.strip_prefix(prefix.as_str()).is_some_and(scratch_uuid) { stale.push(text.to_owned()); }
+    }
+    for name in stale {
+        let named = match directory.symlink_metadata(&name) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        if !app_owned_scratch(&named) { continue; }
+        let opened = open_read_nofollow(directory, &name)?;
+        let metadata = opened.metadata()?;
+        if !app_owned_scratch(&metadata) || metadata.dev() != named.dev() || metadata.ino() != named.ino() { continue; }
+        let mut prefix = Vec::with_capacity(expected.len() + 1);
+        (&opened).take(expected.len() as u64 + 1).read_to_end(&mut prefix)?;
+        if !prefix.is_empty() && !prefix.starts_with(expected) && !expected.starts_with(&prefix) { continue; }
+        drop(opened);
+        match directory.remove_file(&name) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
+fn atomic_write_named(cache: &CacheDirectory, bytes: &[u8], pending: &str, destination: &str, legacy_prefix: &[u8], before_publish: impl FnOnce(&str)) -> Result<Stamp, String> {
     let directory = &cache.directory;
     let io = || -> std::io::Result<Stamp> {
         cache.unchanged()?;
+        recover_legacy_scratch(directory, pending, legacy_prefix)?;
+        remove_stale_scratch(directory, pending, legacy_prefix)?;
+        // A fresh, unguessable scratch name is created exclusively, so a
+        // pre-existing file is never opened, truncated, or reused.
+        let scratch = format!("{pending}.{}", uuid::Uuid::new_v4());
         let mut options = OpenOptions::new();
-        // A fixed scratch name bounds even interrupted writes to one extra file.
-        // Open without truncation until its retained descriptor is verified.
-        options.read(true).write(true).create(true).follow(FollowSymlinks::No);
+        options.read(true).write(true).create_new(true).follow(FollowSymlinks::No);
         #[cfg(unix)] { use cap_std::fs::OpenOptionsExt; options.mode(0o600).custom_flags(libc::O_NONBLOCK); }
-        let file = directory.open_with(pending, &options)?;
+        let file = directory.open_with(&scratch, &options)?;
         let before = file.metadata()?;
-        if !before.is_file() || before.nlink() != 1 || before.len() > MAX_CACHE as u64 {
+        if !before.is_file() || before.nlink() != 1 || before.len() != 0 {
+            drop(file);
+            if let Ok(named) = directory.symlink_metadata(&scratch) {
+                if named.is_file() && named.dev() == before.dev() && named.ino() == before.ino() {
+                    let _ = directory.remove_file(&scratch);
+                }
+            }
             return Err(std::io::Error::other("Catalog cache scratch file is unsafe"));
         }
-        let named = directory.symlink_metadata(pending)?;
+        let named = match directory.symlink_metadata(&scratch) {
+            Ok(metadata) => metadata,
+            Err(error) => { drop(file); return Err(error); }
+        };
         if !named.is_file() || named.nlink() != 1 || named.dev() != before.dev() || named.ino() != before.ino() {
+            drop(file);
             return Err(std::io::Error::other("Catalog cache scratch file changed"));
         }
         let mut file = file.into_std();
-        #[cfg(unix)] {
-            use std::os::unix::fs::PermissionsExt;
-            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        let result = (|| -> std::io::Result<Stamp> {
+            #[cfg(unix)] {
+                use std::os::unix::fs::PermissionsExt;
+                file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+            }
+            cache.unchanged()?;
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            let verified = crate::publication::VerifiedFile::new(file, bytes.len() as u64)?;
+            before_publish(&scratch);
+            cache.unchanged()?;
+            if !verified.matches_in(directory, std::path::Path::new(&scratch))? {
+                return Err(std::io::Error::other("Catalog cache scratch file changed"));
+            }
+            let metadata = cap_std::fs::Metadata::from_file(verified.file())?;
+            if metadata.nlink() != 1 {
+                return Err(std::io::Error::other("Catalog cache scratch file changed"));
+            }
+            directory.rename(&scratch, directory, destination)?;
+            if !verified.matches_in(directory, std::path::Path::new(destination))? {
+                return Err(std::io::Error::other("Catalog cache publication changed"));
+            }
+            #[cfg(unix)] crate::storage::sync_cap_directory(directory)?;
+            cache.unchanged()?;
+            Ok(Stamp::of(&metadata))
+        })();
+        if result.is_err() {
+            // Remove only the scratch inode this call created; a replaced name
+            // belongs to someone else and is preserved.
+            if let Ok(named) = directory.symlink_metadata(&scratch) {
+                if named.is_file() && named.nlink() == 1 && named.dev() == before.dev() && named.ino() == before.ino() {
+                    let _ = directory.remove_file(&scratch);
+                }
+            }
         }
-        cache.unchanged()?;
-        file.set_len(0)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        let verified = crate::publication::VerifiedFile::new(file, bytes.len() as u64)?;
-        before_publish();
-        cache.unchanged()?;
-        if !verified.matches_in(directory, std::path::Path::new(pending))? {
-            return Err(std::io::Error::other("Catalog cache scratch file changed"));
-        }
-        let metadata = cap_std::fs::Metadata::from_file(verified.file())?;
-        if metadata.nlink() != 1 {
-            return Err(std::io::Error::other("Catalog cache scratch file changed"));
-        }
-        directory.rename(pending, directory, destination)?;
-        if !verified.matches_in(directory, std::path::Path::new(destination))? {
-            return Err(std::io::Error::other("Catalog cache publication changed"));
-        }
-        #[cfg(unix)] crate::storage::sync_cap_directory(directory)?;
-        cache.unchanged()?;
-        Ok(Stamp::of(&metadata))
+        result
     };
     io().map_err(|e| format!("Persisting catalog cache: {e}"))
 }

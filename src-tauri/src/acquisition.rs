@@ -400,6 +400,29 @@ struct PublicationIntent {
     sha256: String,
 }
 
+/// Platform change time, captured only where the filesystem exposes it. An
+/// unprivileged process can restore `mtime` after rewriting a file, so a
+/// receipt that proves nothing beyond `mtime` cannot authorize skipping a
+/// hash pass. Unix `ctime` is updated by the write itself and cannot be set
+/// back from userland; a zero or out-of-range change time is treated as
+/// unprovable and fails closed. Windows metadata available through the current
+/// dependency set (`winapi-util`) exposes creation/access/write times but not
+/// change time, so it records `None` and receipts fail closed there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct ChangeTime {
+    seconds: i64,
+    nanos: u32,
+}
+
+#[cfg(unix)]
+fn change_time(seconds: i64, nanos: i64) -> Option<ChangeTime> {
+    let nanos = u32::try_from(nanos).ok()?;
+    if nanos >= 1_000_000_000 || (seconds == 0 && nanos == 0) {
+        return None;
+    }
+    Some(ChangeTime { seconds, nanos })
+}
+
 /// The exact part inode one checksum pass covered. `links` is part of the
 /// receipt so a hard link created after the pass can never authorize reuse.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -414,6 +437,8 @@ struct PartIdentity {
     mtime_seconds: i64,
     #[serde(default)]
     mtime_nanos: u32,
+    #[serde(default)]
+    change: Option<ChangeTime>,
     #[serde(default)]
     links: u64,
 }
@@ -450,6 +475,7 @@ fn part_identity(metadata: &fs::Metadata) -> Option<PartIdentity> {
         inode: metadata.ino(),
         mtime_seconds: metadata.mtime(),
         mtime_nanos: u32::try_from(metadata.mtime_nsec()).ok()?,
+        change: change_time(metadata.ctime(), metadata.ctime_nsec()),
         links: metadata.nlink(),
     })
 }
@@ -465,8 +491,12 @@ fn part_identity(_metadata: &fs::Metadata) -> Option<PartIdentity> {
 /// through an open handle (`GetFileInformationByHandle`); the stable `std`
 /// metadata accessors do not carry them. The volume serial and 64-bit file
 /// index are the NTFS equivalent of `dev`/`ino`: both are stable across rename
-/// and differ for any replacement file, so a receipt still proves "this exact
-/// file" exactly as the Unix inode pair does.
+/// and differ for any replacement file, so an identity proves "this exact
+/// file"; byte identity additionally needs a change time. `winapi-util`
+/// exposes creation/access/write times but not the change time, so `change`
+/// stays `None` and no verification receipt is issued or reused on Windows.
+/// Resume therefore rehashes there rather than claiming a proof this API set
+/// cannot provide.
 #[cfg(windows)]
 fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
     let info = winapi_util::file::information(file)?;
@@ -480,6 +510,7 @@ fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
         mtime_seconds: i64::try_from(unix_ticks.div_euclid(10_000_000))
             .map_err(|_| std::io::Error::other("File time is out of range"))?,
         mtime_nanos: (unix_ticks.rem_euclid(10_000_000) * 100) as u32,
+        change: None,
         links: info.number_of_links(),
     })
 }
@@ -518,7 +549,8 @@ async fn tokio_file_identity(file: &tokio::fs::File) -> Result<Option<PartIdenti
 }
 
 /// Build a receipt for a completed pass. `None` means this platform cannot
-/// prove identity and the caller must leave the receipt absent.
+/// prove a change time and the caller must leave the receipt absent; an
+/// mtime-only receipt can be forged by restoring the timestamp after a write.
 fn verification_receipt(
     identity: Option<PartIdentity>,
     digest: &str,
@@ -526,6 +558,7 @@ fn verification_receipt(
     error: Option<String>,
 ) -> Option<VerificationReceipt> {
     let identity = identity?;
+    identity.change?;
     hex::decode_to_slice(digest, &mut [0u8; 32]).ok()?;
     Some(VerificationReceipt {
         version: VERIFICATION_RECEIPT_VERSION,
@@ -537,7 +570,10 @@ fn verification_receipt(
 }
 
 /// A receipt may only skip hashing while it proves this exact inode still holds
-/// the same bytes. A changed size, mtime, device, inode or link count rehashes.
+/// the same bytes. A changed size, mtime, device, inode, link count or change
+/// time rehashes. An identity without a provable change time never matches, so
+/// platforms that cannot prove it (Windows with the current handle API) always
+/// rehash rather than trusting a restorable mtime.
 fn matching_receipt<'a>(
     stored: &'a StoredJob,
     identity: Option<&PartIdentity>,
@@ -548,7 +584,7 @@ fn matching_receipt<'a>(
     }
     hex::decode_to_slice(&receipt.sha256, &mut [0u8; 32]).ok()?;
     let identity = identity?;
-    if identity.links != 1 || *identity != receipt.identity {
+    if identity.links != 1 || identity.change.is_none() || *identity != receipt.identity {
         return None;
     }
     Some(receipt)
@@ -2204,6 +2240,9 @@ fn copy_native_completion(
         .map_err(|error| format!("Opening completed native download: {error}"))?;
     let metadata = source.metadata().map_err(|error| error.to_string())?;
     let identity = part_identity(&metadata).ok_or("Native download has no stable inode receipt")?;
+    if identity.change.is_none() {
+        return Err("Native download has no provable change time".into());
+    }
     if identity.device != stage.device || identity.inode != stage.inode
         || identity.size != stage.total || identity.links != 1 || stage.total < 80
     {

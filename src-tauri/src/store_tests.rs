@@ -2097,3 +2097,168 @@ fn history_export_refuses_an_invalid_reading_position_instead_of_writing_null() 
     )], ..State::default() };
     assert!(export_history(&state).is_err());
 }
+
+/// The history the last write actually published, decoded from disk.
+fn durable_history(profile: &Profile) -> Vec<HistoryEntry> {
+    let bytes = fs::read(profile.0.join("state.json")).unwrap();
+    serde_json::from_slice::<State>(&bytes).unwrap().history
+}
+
+#[test]
+fn browsing_refresh_coalesces_and_is_written_by_the_next_transaction() {
+    let profile = Profile::new();
+    let store = Store::new(profile.0.clone()).unwrap();
+    store
+        .update(|state| {
+            state.history = vec![exported_history(
+                "visit", "book", "A/One", "One", "2026-01-01T00:00:00+00:00", 0.0,
+            )];
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(durable_history(&profile)[0].scroll, 0.0);
+    // A position refresh is applied immediately and written at most once per
+    // window, so the file keeps the previous offset while the live state is current.
+    store
+        .update_browsing(|state| {
+            state.history[0].scroll = 120.0;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(store.read().unwrap().history[0].scroll, 120.0);
+    assert_eq!(durable_history(&profile)[0].scroll, 0.0);
+    store
+        .update_browsing(|state| {
+            state.history[0].scroll = 240.0;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(durable_history(&profile)[0].scroll, 0.0);
+    // Any explicit transaction carries the pending delta with the rest.
+    store
+        .update(|state| {
+            state.settings.zoom = 1.25;
+            Ok(())
+        })
+        .unwrap();
+    let durable = durable_history(&profile);
+    assert_eq!(durable.len(), 1);
+    assert_eq!(durable[0].scroll, 240.0);
+    assert_eq!(durable[0].title, "One");
+}
+
+#[test]
+fn flush_browsing_writes_the_pending_position_once() {
+    let profile = Profile::new();
+    let store = Store::new(profile.0.clone()).unwrap();
+    store
+        .update(|state| {
+            state.history = vec![exported_history(
+                "visit", "book", "A/One", "One", "2026-01-01T00:00:00+00:00", 0.0,
+            )];
+            Ok(())
+        })
+        .unwrap();
+    assert!(!store.flush_browsing().unwrap(), "nothing is outstanding yet");
+    store
+        .update_browsing(|state| {
+            state.history[0].scroll = 99.0;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(durable_history(&profile)[0].scroll, 0.0);
+    assert!(store.flush_browsing().unwrap());
+    assert_eq!(durable_history(&profile)[0].scroll, 99.0);
+    assert!(!store.flush_browsing().unwrap(), "the delta was written");
+}
+
+#[test]
+fn private_mode_flushes_pending_browsing_before_cutover() {
+    let profile = Profile::new();
+    let store = Store::new(profile.0.clone()).unwrap();
+    store
+        .update(|state| {
+            state.history = vec![exported_history(
+                "visit", "book", "A/One", "One", "2026-01-01T00:00:00+00:00", 0.0,
+            )];
+            Ok(())
+        })
+        .unwrap();
+    store
+        .update_browsing(|state| {
+            state.history[0].scroll = 50.0;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(durable_history(&profile)[0].scroll, 0.0);
+    store.set_runtime_mode(true, false).unwrap();
+    // Entering private mode preserves the pre-private browsing delta instead of
+    // erasing an acknowledged scroll position.
+    assert_eq!(durable_history(&profile)[0].scroll, 50.0);
+    assert!(!store.flush_browsing().unwrap());
+    assert_eq!(durable_history(&profile)[0].scroll, 50.0);
+    store.set_runtime_mode(false, false).unwrap();
+    assert_eq!(store.read().unwrap().history[0].scroll, 50.0);
+}
+
+#[cfg(desktop)]
+#[test]
+fn startup_hint_matches_the_policy_and_theme_readers() {
+    let profile = Profile::new();
+    fs::create_dir_all(&profile.0).unwrap();
+    let path = profile.0.join("state.json");
+    for document in [
+        br#"{"settings":{"theme":"dark","readOnly":true}}"#.as_slice(),
+        br#"{"settings":{"theme":"chartreuse"}}"#.as_slice(),
+        br#"{"settings":{"readOnly":"yes"}}"#.as_slice(),
+        b"not json".as_slice(),
+        b"[]".as_slice(),
+    ] {
+        fs::write(&path, document).unwrap();
+        let hint = startup_hint(&profile.0);
+        assert_eq!(hint.theme, saved_theme_hint(&profile.0), "{document:?}");
+        assert_eq!(hint.read_only, saved_desktop_read_only(&profile.0), "{document:?}");
+        assert_eq!(hint.bytes.is_some(), hint.read_only.is_ok(), "{document:?}");
+        assert_eq!(hint.identity.is_some(), hint.bytes.is_some(), "{document:?}");
+    }
+    fs::write(&path, br#"{"settings":{"theme":"dark"}}"#).unwrap();
+    let hint = startup_hint(&profile.0);
+    let identity = hint.identity.clone().unwrap();
+    fs::write(&path, br#"{"settings":{"theme":"light"}}"#).unwrap();
+    assert_ne!(state_identity(&profile.0).as_ref(), Some(&identity));
+    fs::remove_file(&path).unwrap();
+    let hint = startup_hint(&profile.0);
+    assert_eq!(hint.theme, None);
+    assert_eq!(hint.read_only, Ok(false));
+    assert!(hint.bytes.is_none());
+}
+
+#[cfg(desktop)]
+#[test]
+fn the_store_opens_the_profile_from_the_startup_hint_bytes() {
+    let profile = Profile::new();
+    let store = Store::new(profile.0.clone()).unwrap();
+    store
+        .update(|state| {
+            state.settings.zoom = 1.75;
+            Ok(())
+        })
+        .unwrap();
+    drop(store);
+    let bytes = startup_hint(&profile.0).bytes.expect("startup inspected the profile");
+    assert_eq!(
+        Store::new_with_mode_checked(profile.0.clone(), false, Some(bytes))
+            .unwrap()
+            .read()
+            .unwrap()
+            .settings
+            .zoom,
+        1.75
+    );
+    // The handed-over bytes are authoritative: startup never re-reads the file.
+    let error = match Store::new_with_mode_checked(profile.0.clone(), false, Some(b"not json".to_vec())) {
+        Ok(_) => panic!("preloaded bytes must be decoded, not ignored"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("Cannot parse"), "{error}");
+}

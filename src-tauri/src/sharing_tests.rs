@@ -105,7 +105,7 @@ async fn cancellation_wakes_pending_socket_io_and_stays_cancelled() {
         .unwrap();
     let (socket, _) = listener.accept().await.unwrap();
     let permit = cancellation.0.connections.clone().try_acquire_owned().unwrap();
-    let mut socket = SharingIo::new(socket, &cancellation, permit, SHARING_IDLE_TIMEOUT);
+    let mut socket = SharingIo::new(socket, &cancellation, permit, SHARING_TIMEOUTS);
     let reading = tokio::spawn(async move {
         let mut byte = [0];
         assert_eq!(
@@ -127,26 +127,340 @@ async fn cancellation_wakes_pending_socket_io_and_stays_cancelled() {
     drop(client);
 }
 
-#[tokio::test]
-async fn sharing_socket_releases_capacity_after_idle_timeout() {
-    let cancellation = SharingCancellation::new();
+fn short_timeouts(request: u64, body: u64, idle: u64) -> SharingTimeouts {
+    SharingTimeouts {
+        request: Duration::from_millis(request),
+        body: Duration::from_millis(body),
+        idle: Duration::from_millis(idle),
+    }
+}
+
+/// A loopback pair whose server side owns one admission permit.
+async fn connected(
+    cancellation: &SharingCancellation,
+    timeouts: SharingTimeouts,
+) -> (TcpStream, SharingIo) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let mut client = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+    let client = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
     let (socket, _) = listener.accept().await.unwrap();
     let permit = cancellation.0.connections.clone().try_acquire_owned().unwrap();
-    let mut socket = SharingIo::new(socket, &cancellation, permit, Duration::from_millis(250));
-    let initial_deadline = socket.idle.deadline();
-    client.write_all(b"progress").await.unwrap();
-    let mut body = [0; 8];
-    socket.read_exact(&mut body).await.unwrap();
-    assert_eq!(&body, b"progress");
-    assert!(socket.idle.deadline() > initial_deadline);
-    assert_eq!(cancellation.0.connections.available_permits(), SHARING_MAX_CONNECTIONS - 1);
+    (client, SharingIo::new(socket, cancellation, permit, timeouts))
+}
+
+#[test]
+fn request_head_and_body_framing_is_conservative() {
+    assert_eq!(request_head_end(b"GET / HTTP/1.1\r\n\r\n"), Some(18));
+    assert_eq!(request_head_end(b"GET / HTTP/1.1\n\n"), Some(16));
+    assert_eq!(request_head_end(b"GET / HTTP/1.1\r\nHost: x"), None);
+    assert_eq!(declared_body(b"GET / HTTP/1.1\r\n\r\n"), DeclaredBody::None);
+    assert_eq!(
+        declared_body(b"POST / HTTP/1.1\r\nContent-Length: 12\r\n\r\n"),
+        DeclaredBody::Length(12)
+    );
+    assert_eq!(
+        declared_body(b"POST / HTTP/1.1\r\nContent-Length: 0\r\n\r\n"),
+        DeclaredBody::None
+    );
+    assert_eq!(
+        declared_body(b"POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n"),
+        DeclaredBody::Unaccounted
+    );
+    assert_eq!(
+        declared_body(b"POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\n"),
+        DeclaredBody::Unaccounted,
+        "a repeated length is Hyper's to reject"
+    );
+    assert_eq!(
+        declared_body(b"POST / HTTP/1.1\r\nContent-Length: nope\r\n\r\n"),
+        DeclaredBody::Unaccounted
+    );
+}
+
+/// A chunked (unaccounted) body may still be draining after the response
+/// starts, so its bytes must never be mistaken for a next request and must
+/// never arm a request budget again.
+#[tokio::test]
+async fn sharing_chunked_body_never_reenters_a_request_phase() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(200, 200, 5000)).await;
+    socket.received(
+        b"POST /nearby/session HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n",
+    );
+    assert!(matches!(socket.request, RequestState::Unaccounted));
+    assert!(
+        socket.request_deadline.is_none(),
+        "an unaccounted body has no request budget"
+    );
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .unwrap();
+    assert!(socket.response_idle.is_some(), "the response bound is armed");
+    // Chunked framing and a following request head both stay unaccounted.
+    socket.received(b"5\r\nhello\r\n0\r\n\r\n");
+    socket.received(b"GET /secret/ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    assert!(matches!(socket.request, RequestState::Unaccounted));
+    assert!(socket.request_deadline.is_none());
+    // Past the 200 ms request budget but inside the idle bound: reads still
+    // succeed, proving no short request deadline was armed.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    client.write_all(b"next").await.unwrap();
+    let mut body = [0; 16];
+    assert_eq!(socket.read(&mut body).await.unwrap(), 4);
+}
+
+/// While the next request's head is incomplete, the previous response's idle
+/// bound is still the governing deadline.
+#[tokio::test]
+async fn sharing_next_request_keeps_the_response_bound_until_its_head_completes() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(5000, 5000, 1000)).await;
+    let head = b"GET /secret/ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+    client.write_all(head).await.unwrap();
+    let mut received = vec![0; head.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .unwrap();
+    client
+        .write_all(b"GET /secret/book HTTP/1.1\r\nHost: 127.0.0.1")
+        .await
+        .unwrap();
+    let mut body = [0; 64];
+    assert!(socket.read(&mut body).await.unwrap() > 0);
+    assert!(
+        socket.request_deadline.is_some(),
+        "a fresh head budget is armed for the next request"
+    );
+    // The 5 s head budget would hide a lost response bound; the 1 s idle
+    // bound is what must close this connection.
     let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut body))
-        .await.unwrap().unwrap_err();
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    assert_eq!(error.to_string(), "Sharing connection is idle");
+}
+
+/// A head larger than the storage cap is still scanned for its terminator so a
+/// completed head is not mistaken for a stalled one, but its framing is never
+/// parsed and the connection never re-enters a request phase.
+#[tokio::test]
+async fn sharing_oversized_head_is_scanned_but_never_parsed() {
+    let cancellation = SharingCancellation::new();
+    let (_client, mut socket) = connected(&cancellation, short_timeouts(2000, 2000, 5000)).await;
+    let filler = vec![b'x'; SHARING_HEAD_BYTES + 4096];
+    socket.received(&filler);
+    assert!(socket.head_truncated);
+    assert!(matches!(socket.request, RequestState::Head));
+    assert!(
+        socket.request_deadline.is_some(),
+        "an incomplete head keeps its budget past the storage cap"
+    );
+    socket.received(b"\r\n\r\n");
+    assert!(matches!(socket.request, RequestState::Unaccounted));
+    assert!(socket.request_deadline.is_none());
+    socket.received(b"GET /secret/ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    assert!(
+        matches!(socket.request, RequestState::Unaccounted),
+        "an oversized head's connection never re-enters a request phase"
+    );
+}
+
+/// A terminator spanning the storage boundary is still detected.
+#[tokio::test]
+async fn sharing_head_terminator_spanning_the_storage_cap_is_found() {
+    let cancellation = SharingCancellation::new();
+    let (_client, mut socket) = connected(&cancellation, short_timeouts(2000, 2000, 5000)).await;
+    let mut first = vec![b'x'; SHARING_HEAD_BYTES - 1];
+    first.extend_from_slice(b"\r\n");
+    socket.received(&first);
+    assert!(socket.head_truncated);
+    socket.received(b"\r\n");
+    assert!(matches!(socket.request, RequestState::Unaccounted));
+}
+
+/// An oversized head that never terminates still releases its permit through
+/// the absolute head budget.
+#[tokio::test]
+async fn sharing_incomplete_oversized_head_still_times_out() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(1000, 1000, 5000)).await;
+    let filler = vec![b'x'; SHARING_HEAD_BYTES + 4096];
+    let writer = tokio::spawn(async move {
+        client.write_all(&filler).await.unwrap();
+        client
+    });
+    let mut buffer = vec![0; SHARING_HEAD_BYTES + 4096];
+    socket.read_exact(&mut buffer).await.unwrap();
+    let _client = writer.await.unwrap();
+    assert!(socket.head_truncated);
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut buffer))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+}
+
+#[tokio::test]
+async fn sharing_socket_releases_capacity_after_head_timeout() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(1000, 1000, 1000)).await;
+    client
+        .write_all(b"GET / HTTP/1.1\r\nHost: x")
+        .await
+        .unwrap();
+    let mut body = [0; 64];
+    assert!(socket.read(&mut body).await.unwrap() > 0);
+    assert_eq!(
+        cancellation.0.connections.available_permits(),
+        SHARING_MAX_CONNECTIONS - 1
+    );
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut body))
+        .await
+        .unwrap()
+        .unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::TimedOut);
     drop(socket);
-    assert_eq!(cancellation.0.connections.available_permits(), SHARING_MAX_CONNECTIONS);
+    assert_eq!(
+        cancellation.0.connections.available_permits(),
+        SHARING_MAX_CONNECTIONS
+    );
+}
+
+/// A slowloris must not extend its admission by trickling bytes: the head
+/// budget is absolute, not an idle reset per byte.
+#[tokio::test]
+async fn sharing_head_budget_is_absolute_while_bytes_trickle() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(250, 250, 5000)).await;
+    let started = tokio::time::Instant::now();
+    let error = tokio::time::timeout(Duration::from_secs(2), async {
+        let mut byte = [0];
+        loop {
+            client.write_all(b"X").await.unwrap();
+            if let Err(error) = socket.read(&mut byte).await {
+                break error;
+            }
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
+    })
+    .await
+    .expect("the absolute head budget must close a trickled request");
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    assert!(
+        started.elapsed() < Duration::from_millis(1500),
+        "the head budget must not grow with each trickled byte"
+    );
+}
+
+/// Handler work happens before the first response byte; it must never be
+/// charged to the client's connection budget.
+#[tokio::test]
+async fn sharing_handler_time_is_not_charged_to_the_first_response() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(1000, 1000, 200)).await;
+    let head = b"GET /secret/ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+    client.write_all(head).await.unwrap();
+    let mut received = vec![0; head.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    // Longer than every configured budget, standing in for archive work.
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .expect("a slow handler still owns its first response");
+    let mut byte = [0; 16];
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut byte))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut, "the response idle bound still applies");
+}
+
+#[tokio::test]
+async fn sharing_declared_body_has_its_own_absolute_deadline() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(2000, 1000, 5000)).await;
+    let head = b"POST /nearby/session HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 10\r\n\r\n";
+    client.write_all(head).await.unwrap();
+    let mut received = vec![0; head.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    client.write_all(b"pin=").await.unwrap();
+    let mut body = [0; 4];
+    socket.read_exact(&mut body).await.unwrap();
+    assert_eq!(&body, b"pin=");
+    let mut extra = [0; 16];
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut extra))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+}
+
+#[tokio::test]
+async fn sharing_completed_body_returns_to_unbounded_handler_time() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(2000, 1000, 100)).await;
+    let head = b"POST /nearby/session HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 4\r\n\r\n";
+    client.write_all(head).await.unwrap();
+    client.write_all(b"pin=").await.unwrap();
+    let mut received = vec![0; head.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    let mut body = [0; 4];
+    socket.read_exact(&mut body).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .expect("a complete body disarms the body deadline");
+}
+
+#[tokio::test]
+async fn sharing_keep_alive_request_gets_a_fresh_head_budget() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(1000, 1000, 5000)).await;
+    let head = b"GET /secret/ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+    client.write_all(head).await.unwrap();
+    let mut received = vec![0; head.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .unwrap();
+    client
+        .write_all(b"GET /secret/book HTTP/1.1\r\nHost: 127.0.0.1")
+        .await
+        .unwrap();
+    let mut body = [0; 64];
+    assert!(socket.read(&mut body).await.unwrap() > 0);
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut body))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+}
+
+/// HTTP/2 multiplexes requests on one connection, so the HTTP/1 phase machine
+/// must not apply; only the long idle bound does.
+#[tokio::test]
+async fn sharing_http2_connection_keeps_only_the_idle_bound() {
+    let cancellation = SharingCancellation::new();
+    let (mut client, mut socket) = connected(&cancellation, short_timeouts(1000, 1000, 5000)).await;
+    let preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    client.write_all(preface).await.unwrap();
+    let mut frame = [0; 9];
+    let mut received = vec![0; preface.len()];
+    socket.read_exact(&mut received).await.unwrap();
+    assert_eq!(&received[..], &preface[..]);
+    assert!(socket.http2);
+    // Past the request budget, but the multiplexed connection keeps its idle
+    // bound and keeps carrying frames.
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+    client.write_all(&[0; 9]).await.unwrap();
+    socket.read_exact(&mut frame).await.unwrap();
+    socket.write_all(&[0; 9]).await.unwrap();
 }
 
 #[tokio::test]

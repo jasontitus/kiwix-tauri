@@ -1014,46 +1014,62 @@ impl Service {
                     .unwrap_or(0.0)
                     .max(0.0);
                 let _window = self.active_window_guard(&label)?;
-                self.store.update(|state| {
-                    let id = edition_service::current_reading_reference(state, &id);
-                    if !state.settings.history_enabled {
-                        return Ok(());
-                    }
-                    if !create {
+                // A new history entry is user-visible history and writes
+                // through. A position/title refresh for an existing entry is
+                // repeatable browsing telemetry: the write is coalesced and the
+                // full snapshot broadcast is skipped unless the rendered
+                // identity actually changed.
+                let visible = if create {
+                    self.store.update(|state| {
+                        let id = edition_service::current_reading_reference(state, &id);
+                        if !state.settings.history_enabled {
+                            return Ok(false);
+                        }
+                        state.history.retain(|entry| {
+                            entry.book_id != id
+                                || (entry.path != path
+                                    && crate::server::normalize_location(&entry.path)
+                                        .map(|existing| existing != path)
+                                        .unwrap_or(true))
+                        });
+                        state.history.insert(
+                            0,
+                            HistoryEntry {
+                                id: Uuid::new_v4().to_string(),
+                                book_id: id,
+                                path,
+                                title,
+                                visited_at: now(),
+                                scroll,
+                            },
+                        );
+                        state.history.truncate(10000);
+                        Ok(true)
+                    })?
+                } else {
+                    self.store.update_browsing(|state| {
+                        let id = edition_service::current_reading_reference(state, &id);
+                        if !state.settings.history_enabled {
+                            return Ok(false);
+                        }
                         let identity = store::history_resource_identity(&path);
-                        if let Some(entry) = state.history.iter_mut()
+                        let Some(entry) = state.history.iter_mut()
                             .filter(|entry| entry.book_id == id &&
                                 store::history_resource_identity(&entry.path) == identity)
                             .max_by(|left, right| left.visited_at.cmp(&right.visited_at))
-                        {
-                            entry.path = path;
-                            entry.title = title;
-                            entry.scroll = scroll;
-                        }
-                        return Ok(());
-                    }
-                    state.history.retain(|entry| {
-                        entry.book_id != id
-                            || (entry.path != path
-                                && crate::server::normalize_location(&entry.path)
-                                    .map(|existing| existing != path)
-                                    .unwrap_or(true))
-                    });
-                    state.history.insert(
-                        0,
-                        HistoryEntry {
-                            id: Uuid::new_v4().to_string(),
-                            book_id: id,
-                            path,
-                            title,
-                            visited_at: now(),
-                            scroll,
-                        },
-                    );
-                    state.history.truncate(10000);
-                    Ok(())
-                })?;
-                self.notify_library_changed();
+                        else {
+                            return Ok(false);
+                        };
+                        let visible = entry.path != path || entry.title != title;
+                        entry.path = path;
+                        entry.title = title;
+                        entry.scroll = scroll;
+                        Ok(visible)
+                    })?
+                };
+                if visible {
+                    self.notify_library_changed();
+                }
                 Ok(Value::Null)
             }
             "close_window" => {

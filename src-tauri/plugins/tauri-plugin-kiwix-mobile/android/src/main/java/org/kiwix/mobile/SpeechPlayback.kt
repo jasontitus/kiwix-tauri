@@ -134,11 +134,10 @@ internal object SpeechPlayback {
             running = true
             val intent = Intent(app, KiwixSpeechService::class.java).setAction(ACTION_START)
             // Read-aloud is admitted from a visible reader. startService avoids
-            // the five-second startForegroundService contract while the TTS
-            // engine performs synchronous binder work on the main thread; the
-            // service still enters the foreground in onStartCommand. Background
-            // starts (media buttons, restored sessions) fall back to the
-            // foreground-service contract.
+            // the five-second startForegroundService contract; the service still
+            // enters the foreground in onStartCommand. Background starts (media
+            // buttons, restored sessions) fall back to the foreground-service
+            // contract.
             try {
                 try {
                     app.startService(intent)

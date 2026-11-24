@@ -1448,6 +1448,40 @@ fn staged_set_publication_survives_a_refused_commit_and_follows_the_published_id
     assert!(owned.open(&manifest, true).unwrap().published);
 }
 
+#[cfg(unix)]
+#[test]
+fn publication_rejects_a_staged_member_rewritten_after_seal() {
+    use std::io::{Seek, SeekFrom, Write};
+    let root = Temp::new();
+    let manifest = manifest(&["book.zim"]);
+    let (owned, mut open) = OwnedSet::create(
+        Directory::open(&root.0).unwrap(), &manifest, &Uuid::new_v4().to_string(),
+    ).unwrap();
+    open.write_chunk(&manifest, 0, b"abcd").unwrap();
+    open.write_chunk(&manifest, 1, b"efgh").unwrap();
+    open.seal(&manifest, &owned).unwrap();
+    let verified = |open: &OpenSet| {
+        manifest.files.iter().zip(&open.files).map(|(entry, file)| (
+            PathBuf::from(&entry.path),
+            crate::publication::VerifiedFile::new(file.try_clone().unwrap(), entry.size_bytes).unwrap(),
+        )).collect::<Vec<_>>()
+    };
+    let path = root.0.join(&owned.staging).join("book.zim");
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    let mut file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"xxxx").unwrap();
+    file.sync_all().unwrap();
+    drop(file);
+    fs::OpenOptions::new().write(true).open(&path).unwrap()
+        .set_modified(modified).unwrap();
+    let error = open.publish(&manifest, &owned, verified(&open)).unwrap_err();
+    assert!(error.contains("changed after chunk verification"), "{error}");
+    assert!(!open.published);
+    assert!(root.0.join(&owned.staging).exists());
+    assert_eq!(fs::read(&path).unwrap(), b"xxxxefgh");
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_empty_directory_removal_is_bound_to_identity() {

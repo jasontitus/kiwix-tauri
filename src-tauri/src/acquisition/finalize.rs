@@ -47,15 +47,13 @@ pub(super) fn record_verification_success(
     identity: Option<PartIdentity>,
     digest: &str,
 ) -> Result<(), String> {
-    let Some(receipt) = verification_receipt(
+    let receipt = verification_receipt(
         identity,
         digest,
         VerificationOutcome::Passed,
         None,
-    ) else {
-        return Ok(());
-    };
-    inner.update(id, |stored| stored.verification = Some(receipt))
+    );
+    inner.update(id, |stored| stored.verification = receipt)
 }
 
 /// Persist a failed pass so a restart reuses the verdict instead of hashing the
@@ -67,15 +65,13 @@ pub(super) fn record_verification_failure(
     digest: &str,
     error: &str,
 ) {
-    let Some(receipt) = verification_receipt(
+    let receipt = verification_receipt(
         identity,
         digest,
         VerificationOutcome::Failed,
         Some(error.to_owned()),
-    ) else {
-        return;
-    };
-    let _ = inner.update(id, |stored| stored.verification = Some(receipt));
+    );
+    let _ = inner.update(id, |stored| stored.verification = receipt);
 }
 
 /// A live worker may ignore an interrupt (foreground/background churn) but
@@ -187,6 +183,10 @@ pub(super) fn publish_verified_download(
     );
     stored.published_ownership = stored.part_ownership.as_ref()
         .map(|entry| entry.renamed(&stored.job.file_name).with_publication(downloaded, Some(published_digest)));
+    // Keep the pre-attempt advertised digest and ownership for a rejected
+    // commit. Only the publication intent is withdrawn on that path.
+    let previous_sha = previous.job.sha256.clone();
+    let previous_ownership = previous.published_ownership.clone();
     // Persist proof before the move: a crash after this point can recover a
     // missing part only by matching its exact verified bytes, never just its name.
     if let Err(error) = inner.save(&state) {
@@ -196,7 +196,7 @@ pub(super) fn publish_verified_download(
     let mut backup_result = Ok(());
     let publication_url = state.jobs.get(id).ok_or("Unknown download ID")?.job.url.as_str();
     if let Err(error) = inner.store.with_http_acquisition_destinations(&[&destination], publication_url, || {
-        crate::publication::publish_verified_noreplace(&part, &destination, &verified)
+        crate::publication::publish_verified_noreplace_bound(&part, &destination, &verified)
             .map_err(|error| error.to_string())?;
         backup_result = crate::mobile_backup::archive_policy(verified.file(), &destination);
         Ok(())
@@ -204,13 +204,10 @@ pub(super) fn publish_verified_download(
         // Withdraw this attempt's recovery proof after a rejected live commit.
         // Even byte-identical foreign entries must not turn a known identity
         // rejection into a successful adoption when the failed job is resumed.
-        state
-            .jobs
-            .get_mut(id)
-            .ok_or("Unknown download ID")?
-            .publication = None;
         let rejected = state.jobs.get_mut(id).ok_or("Unknown download ID")?;
-        rejected.job.sha256 = None;
+        rejected.publication = None;
+        rejected.job.sha256 = previous_sha;
+        rejected.published_ownership = previous_ownership;
         return Err(format!(
             "Publishing verified archive without overwrite: {error}"
         ));
