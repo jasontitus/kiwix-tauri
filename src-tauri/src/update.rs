@@ -753,17 +753,16 @@ async fn final_install_gate(
 pub(crate) async fn install(
     service: &Arc<Service>,
     expected_version: Option<&str>,
-    // Exclusive update admission, acquired by dispatch before the privacy read
-    // lease. It is deliberately held across the whole artifact download:
-    // releasing it would mean re-acquiring the writer while the caller's
-    // privacy read is still held, which inverts the documented order (admission
-    // before privacy) and deadlocks against `save_settings` (admission read,
-    // then privacy write). A handoff therefore needs a service-side interface
-    // that drops the privacy lease first and re-checks the install blocker
-    // afterwards; until then this command fails closed by excluding transfers
-    // for its whole life.
-    _installation: tokio::sync::OwnedRwLockWriteGuard<()>,
+    generation: Option<u64>,
 ) -> Result<(), String> {
+    // Hold only the privacy read lease while downloading. Installation
+    // admission is deliberately not held yet: a policy cutover still cannot
+    // begin mid-download, but ordinary commands (including `save_settings`'
+    // admission read) may proceed. We drop this lease before waiting for the
+    // install writer in `update_install_handoff`; see the ordering proof there.
+    let download_lease = service.update_download_lease().await;
+    service.ensure_running()?;
+    service.ensure_update_generation(generation)?;
     let settings = service.store.settings()?;
     if let Some(reason) = mode_blocker(&settings) {
         return Err(reason);
@@ -775,8 +774,9 @@ pub(crate) async fn install(
     let app = app_handle(service)?;
     let _config = channel_config(&app)?;
     let _operation = OPERATION.try_begin().ok_or_else(|| BUSY.to_string())?;
-    // Dispatch acquired the exclusive lease before privacy/transfer locks.
-    // Keep it alive across both the snapshot and awaited artifact download.
+    // Keep the download lease alive across the snapshot and the awaited
+    // artifact download. The blocker is checked once before downloading to
+    // refuse early, and again after the handoff under the install writer.
     service.ensure_running()?;
     if let Some(reason) = service.update_install_blocker().await? {
         return Err(reason);
@@ -856,12 +856,26 @@ pub(crate) async fn install(
             phase: "verifying".into(),
         }),
     );
+    // The download privacy lease is released here, before waiting for the
+    // install writer. Everything read before the download may now have
+    // changed (privacy/read-only policy, generation, the pending artifact, or
+    // an active transfer), so recheck all of it under the install writer and
+    // a fresh privacy read lease. `_installation` stays alive through the
+    // installer call; dropping it on any early return releases admission.
+    let (_installation, _privacy) = service.update_install_handoff(download_lease).await;
+    let update = match recheck_before_install(service, expected_version, generation, update).await {
+        Ok(update) => update,
+        Err(error) => {
+            set_progress(&app, None);
+            return Err(error);
+        }
+    };
     // `download` already verified these bytes; verify again at the install
     // boundary so an unsigned payload can never reach the installer.
-    update.verify(&bytes).map_err(|error| {
+    if let Err(error) = update.verify(&bytes) {
         set_progress(&app, None);
-        plain_update_error(&error)
-    })?;
+        return Err(plain_update_error(&error));
+    }
     // Quit may have begun while the artifact verified. Installing then would
     // replace the bundle of a retiring process, so this is the last gate
     // before the installer takes over (and, on Windows, exits).
@@ -914,6 +928,43 @@ pub(crate) async fn install(
     Ok(())
 }
 
+/// Re-read everything the download phase observed, now that the install
+/// writer excludes new transfer/import publication and the fresh privacy read
+/// lease excludes policy cutovers. A setting or generation change during the
+/// download must fail the install rather than install under stale authority.
+async fn recheck_before_install(
+    service: &Arc<Service>,
+    expected_version: Option<&str>,
+    generation: Option<u64>,
+    update: Update,
+) -> Result<Update, String> {
+    service.ensure_running()?;
+    service.ensure_update_generation(generation)?;
+    let settings = service.store.settings()?;
+    if let Some(reason) = mode_blocker(&settings) {
+        return Err(reason);
+    }
+    let update = {
+        let pending = PENDING
+            .lock()
+            .map_err(|_| "Update state unavailable")?;
+        let current = pending.as_ref().ok_or_else(|| CHECK_AGAIN.to_string())?;
+        if let Some(expected) = expected_version {
+            if expected != current.version {
+                return Err("The available update changed. Check for updates again.".into());
+            }
+        }
+        if current.version != update.version {
+            return Err("The available update changed. Check for updates again.".into());
+        }
+        current.clone()
+    };
+    if let Some(reason) = service.update_install_blocker().await? {
+        return Err(reason);
+    }
+    Ok(update)
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -922,7 +973,6 @@ pub(crate) async fn command(
     service: Arc<Service>,
     command: &str,
     args: &Value,
-    installation: Option<tokio::sync::OwnedRwLockWriteGuard<()>>,
 ) -> Result<Value, String> {
     match command {
         "update_status" => value(status(&service).await?),
@@ -935,8 +985,8 @@ pub(crate) async fn command(
                 return Err("Installing an update requires confirmation.".into());
             }
             let expected = args.get("version").and_then(Value::as_str);
-            let installation = installation.ok_or("Update installation admission is unavailable")?;
-            install(&service, expected, installation).await?;
+            let generation = args.get("privacyGeneration").and_then(Value::as_u64);
+            install(&service, expected, generation).await?;
             Ok(Value::Null)
         }
         _ => Err("Unknown update action".into()),
@@ -1139,6 +1189,158 @@ mod tests {
         final_install_gate(|| Ok(()), async { Ok(None) })
             .await
             .expect("nothing is retiring or writing");
+    }
+
+    #[cfg(desktop)]
+    fn update_test_service() -> (Arc<Service>, PathBuf) {
+        let directory = std::env::temp_dir().join(format!(
+            "kiwix-update-install-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let service = Service::new(directory.clone(), false, false).unwrap();
+        (service, directory)
+    }
+
+    /// Admission ordering proof: the download privacy lease must be gone
+    /// before the install writer is awaited. Otherwise a `save_settings` that
+    /// already holds an admission read would wait for the privacy writer while
+    /// the updater waits for the install writer — a cycle.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn install_handoff_releases_the_download_lease_before_waiting_for_admission() {
+        let (service, directory) = update_test_service();
+        let privacy = service.update_privacy_gate();
+        let download = service.update_download_lease().await;
+        let admitted = service.update_admission.admit().await;
+        let handoff = service.update_install_handoff(download);
+        tokio::pin!(handoff);
+        assert!(
+            matches!(futures_util::poll!(&mut handoff), std::task::Poll::Pending),
+            "an in-flight admitted operation delays installation"
+        );
+        // The download lease was released before the writer wait, so a
+        // privacy writer can proceed while admission is still occupied.
+        assert!(
+            privacy.try_write().is_ok(),
+            "the download privacy lease must not outlive the handoff wait"
+        );
+        drop(admitted);
+        let (installation, install_privacy) = handoff.await;
+        assert!(
+            privacy.try_write().is_err(),
+            "the install holds a fresh privacy read lease"
+        );
+        let later = service.update_admission.install();
+        tokio::pin!(later);
+        assert!(
+            matches!(futures_util::poll!(&mut later), std::task::Poll::Pending),
+            "the install writer excludes later updater admission"
+        );
+        drop(installation);
+        drop(install_privacy);
+        let later = later.await;
+        drop(later);
+        service.shutdown().await.unwrap();
+        std::fs::remove_dir_all(directory).ok();
+    }
+
+    /// A policy cutover that starts during the download is observed by the
+    /// post-handoff recheck and fails the install closed.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn a_policy_change_during_download_fails_the_post_download_recheck() {
+        let (service, directory) = update_test_service();
+        let generation = service.launch_generation();
+        let download = service.update_download_lease().await;
+        let save = service
+            .clone()
+            .dispatch("save_settings", json!({"settings": {"privateMode": true}}));
+        tokio::pin!(save);
+        assert!(
+            matches!(futures_util::poll!(&mut save), std::task::Poll::Pending),
+            "the settings writer waits for the download privacy lease"
+        );
+        // Let the spawned save reach the privacy writer while holding its
+        // admission read; otherwise the handoff could win the install writer
+        // first and deadlock outside the production ordering under test.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !service.settings_save_in_flight() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the settings save reaches the privacy writer");
+        // Dropping the download lease lets the settings save proceed; the
+        // install writer is only granted after that save releases admission.
+        let (_installation, _privacy) = service.update_install_handoff(download).await;
+        save.await.unwrap();
+        assert!(service.store.settings().unwrap().private_mode);
+        assert!(mode_blocker(&service.store.settings().unwrap()).is_some());
+        assert!(
+            service.ensure_update_generation(Some(generation)).is_err(),
+            "the privacy generation advanced during the download"
+        );
+        drop(_installation);
+        drop(_privacy);
+        service.shutdown().await.unwrap();
+        std::fs::remove_dir_all(directory).ok();
+    }
+
+    /// Retirement during the download closes the post-handoff gate even though
+    /// the install writer itself is free.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn retirement_during_download_is_refused_after_the_handoff() {
+        let (service, directory) = update_test_service();
+        let download = service.update_download_lease().await;
+        let retiring = tokio::spawn({
+            let service = service.clone();
+            async move { service.shutdown().await }
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while service.ensure_running().is_ok() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("shutdown marks the service as retiring");
+        let (_installation, _privacy) = service.update_install_handoff(download).await;
+        assert!(
+            service.ensure_running().is_err(),
+            "a retiring install phase must refuse"
+        );
+        drop(_installation);
+        drop(_privacy);
+        tokio::time::timeout(Duration::from_secs(5), retiring)
+            .await
+            .expect("shutdown is not blocked by the handoff")
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(directory).ok();
+    }
+
+    /// The uncontended path: a quiet profile passes every post-download check
+    /// under the install writer and nothing changes while the artifact is
+    /// fetched.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn a_quiet_profile_passes_the_post_download_checks_under_the_handoff_guards() {
+        let (service, directory) = update_test_service();
+        let generation = service.launch_generation();
+        let download = service.update_download_lease().await;
+        let (_installation, _privacy) = service.update_install_handoff(download).await;
+        service.ensure_running().expect("nothing is retiring");
+        service
+            .ensure_update_generation(Some(generation))
+            .expect("the generation did not change");
+        assert_eq!(mode_blocker(&service.store.settings().unwrap()), None);
+        assert_eq!(service.update_install_blocker().await.unwrap(), None);
+        drop(_installation);
+        drop(_privacy);
+        service.shutdown().await.unwrap();
+        std::fs::remove_dir_all(directory).ok();
     }
 
     #[test]

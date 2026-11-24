@@ -6,7 +6,7 @@
 use super::*;
 
 impl Service {
-    pub(super) async fn dispatch_inner(self: Arc<Self>, command: &str, args: Value, _update_installation: Option<tokio::sync::OwnedRwLockWriteGuard<()>>) -> Result<Value, String> {
+    pub(super) async fn dispatch_inner(self: Arc<Self>, command: &str, args: Value) -> Result<Value, String> {
         let label = args
             .get("__windowLabel")
             .and_then(Value::as_str)
@@ -80,7 +80,7 @@ impl Service {
                 if command != "update_status" {
                     self.ensure_generation(&args)?;
                 }
-                crate::update::command(self.clone(), command, &args, _update_installation).await
+                crate::update::command(self.clone(), command, &args).await
             }
             #[cfg(target_os = "android")]
             "library_files_relocate" => self.mobile_library_files_relocate(&args).await,

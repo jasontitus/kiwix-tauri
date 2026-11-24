@@ -1092,7 +1092,7 @@ impl Service {
                         let _mode = service.privacy_gate.read().await;
                         // Internal cleanup bypasses external admission, which is
                         // already closed, and cannot reacquire the lifetime gate.
-                        service.clone().dispatch_inner("close_window", json!({"__windowLabel":"main"}), None).await.map(|_| ())
+                        service.clone().dispatch_inner("close_window", json!({"__windowLabel":"main"})).await.map(|_| ())
                     };
                     let _ = completion.send_replace(Some(result));
                 });
@@ -2427,6 +2427,69 @@ impl Service {
         }
         Ok(None)
     }
+
+    /// Hold the privacy read lease while the updater downloads its artifact.
+    /// Installation admission is deliberately not part of this lease: ordinary
+    /// commands may keep running, and the download must never wait for the
+    /// install writer while holding the privacy lock.
+    #[cfg(desktop)]
+    pub(crate) async fn update_download_lease(
+        &self,
+    ) -> tokio::sync::OwnedRwLockReadGuard<()> {
+        self.privacy_gate.clone().read_owned().await
+    }
+
+    /// Hand the download lease back for installation. The download's privacy
+    /// lease is dropped first, then the install writer is acquired, then a
+    /// fresh privacy read lease is taken for the install itself. That is the
+    /// documented `admission` before `privacy` order: waiting for the install
+    /// writer while still holding privacy would deadlock `save_settings`,
+    /// which holds an admission read while waiting for the privacy writer.
+    /// Callers must recheck retirement, generation, settings, the pending
+    /// artifact and the install blocker after this returns.
+    #[cfg(desktop)]
+    pub(crate) async fn update_install_handoff(
+        &self,
+        download: tokio::sync::OwnedRwLockReadGuard<()>,
+    ) -> (
+        tokio::sync::OwnedRwLockWriteGuard<()>,
+        tokio::sync::OwnedRwLockReadGuard<()>,
+    ) {
+        drop(download);
+        let installation = self.update_admission.install().await;
+        let privacy = self.privacy_gate.clone().read_owned().await;
+        (installation, privacy)
+    }
+
+    /// Compare the caller's privacy generation with the live one. Installation
+    /// uses this again after the download handoff, under the install writer.
+    #[cfg(desktop)]
+    pub(crate) fn ensure_update_generation(
+        &self,
+        generation: Option<u64>,
+    ) -> Result<(), String> {
+        let generation = generation.ok_or(
+            "This window's session has expired. Reopen the window to continue",
+        )?;
+        if generation != self.launch_generation() {
+            return Err("Browsing session expired after a privacy transition".into());
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn update_privacy_gate(&self) -> Arc<tokio::sync::RwLock<()>> {
+        self.privacy_gate.clone()
+    }
+
+    /// Test observation only: a settings save holds its serial across the
+    /// privacy writer, so this becomes true once `save_settings` has taken its
+    /// admission read and is waiting for (or holding) the policy writer.
+    #[cfg(test)]
+    pub(crate) fn settings_save_in_flight(&self) -> bool {
+        self.settings_writes.try_lock().is_err()
+    }
+
     async fn operation(self: Arc<Self>, command: &str, args: Value) -> Result<Value, String> {
         if matches!(command, "save_pdf" | "mobile_save_pdf" | "share_pdf" | "print_pdf") {
             let job = self.admit_pdf(command, &args)?;
@@ -2556,14 +2619,13 @@ impl Service {
         ) {
             self.ensure_window_active(label)?;
         }
-        // Always take update admission before transfer/privacy locks. Updater
-        // installation and newly admitted archive writers must not cross.
-        #[cfg(desktop)]
-        let update_installation = if command == "update_install" {
-            Some(self.update_admission.install().await)
-        } else { None };
-        #[cfg(not(desktop))]
-        let update_installation = None;
+        // Update installation admission is not taken here. The updater
+        // downloads under only the privacy read lease (see
+        // `update::install`), then drops it before acquiring the install
+        // writer. Taking the install writer while the command already holds
+        // privacy would invert the documented admission-before-privacy order
+        // and deadlock against `save_settings`, which holds an admission read
+        // while it waits for the privacy writer.
         let _update_admission = if matches!(command,
             "save_settings" | "import_archives" | "scan_folder" | "migrate_library"
             | "move_archives" | "recover_migrations" | "library_maintenance"
@@ -2672,7 +2734,7 @@ impl Service {
             // A reader lease excludes policy cutovers without queueing behind
             // imports or other readers.
             Some(self.privacy_gate.read().await)
-        } else if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
+        } else if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "update_install" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
             None
         } else {
             Some(self.privacy_gate.read().await)
@@ -2765,7 +2827,7 @@ impl Service {
             let policy = self.store.settings()?;
             Some((self.launch_generation(), policy.private_mode, policy.read_only))
         } else { None };
-        let result = self.clone().dispatch_inner(command, args, update_installation).await;
+        let result = self.clone().dispatch_inner(command, args).await;
         if let Some((epoch, private, read_only)) = previous_policy {
             if self.launch_generation() != epoch {
                 if !self.store.settings().is_ok_and(|s| (s.private_mode, s.read_only) == (private, read_only)) {
