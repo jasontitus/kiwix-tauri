@@ -510,7 +510,7 @@ fn handle_identity(file: &File) -> std::io::Result<PartIdentity> {
         mtime_seconds: i64::try_from(unix_ticks.div_euclid(10_000_000))
             .map_err(|_| std::io::Error::other("File time is out of range"))?,
         mtime_nanos: (unix_ticks.rem_euclid(10_000_000) * 100) as u32,
-        change: None,
+        change: crate::publication::windows_change_time(file),
         links: info.number_of_links(),
     })
 }
@@ -557,16 +557,25 @@ fn verification_receipt(
     outcome: VerificationOutcome,
     error: Option<String>,
 ) -> Option<VerificationReceipt> {
-    let identity = identity?;
-    identity.change?;
-    hex::decode_to_slice(digest, &mut [0u8; 32]).ok()?;
-    Some(VerificationReceipt {
-        version: VERIFICATION_RECEIPT_VERSION,
-        identity,
-        sha256: digest.to_owned(),
-        outcome,
-        error,
-    })
+    // Windows `ChangeTime` is user-settable; keep receipt reuse fail-closed.
+    #[cfg(not(unix))]
+    {
+        let _ = (identity, digest, outcome, error);
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        let identity = identity?;
+        identity.change?;
+        hex::decode_to_slice(digest, &mut [0u8; 32]).ok()?;
+        Some(VerificationReceipt {
+            version: VERIFICATION_RECEIPT_VERSION,
+            identity,
+            sha256: digest.to_owned(),
+            outcome,
+            error,
+        })
+    }
 }
 
 /// A receipt may only skip hashing while it proves this exact inode still holds

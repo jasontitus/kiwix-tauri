@@ -1,6 +1,6 @@
 {
-  "matches": 73,
-  "blocks": 73,
+  "matches": 74,
+  "blocks": 74,
   "impls": 2,
   "implsByFile": {
     "win-security/src/lib.rs": 2
@@ -23,6 +23,7 @@
     "src-tauri/src/sandbox.rs": 1,
     "src-tauri/src/storage.rs": 4,
     "src-tauri/src/webkit_backdrop.rs": 1,
-    "win-security/src/lib.rs": 15
+    "win-security/src/lib.rs": 15,
+    "src-tauri/src/publication.rs": 1
   }
 }

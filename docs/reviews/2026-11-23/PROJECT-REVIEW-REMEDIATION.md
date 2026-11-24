@@ -28,6 +28,8 @@
 - **Torrent source identity:** `ConfinedStorage::init` derives the SHA-1 piece receipt from the torrent metadata (`piece_range`, `offset_in_torrent`, piece length/hashes) and attaches it to the engine-opened inode. Publication hashes the bytes it actually copies through `ReceiptReader`, refusing a same-inode rewrite/truncation after engine verification before any intent or rename. Archives must occupy whole pieces by themselves; a padded multi-file torrent whose archive tail shares a piece with padding, or any other shared-piece layout, is refused at init rather than downloaded unverifiably.
 - **Archive inline text:** text resources are rendered from at most 1 MiB with an explicit truncation notice, bounding archive-controlled escape amplification instead of building a multi-hundred-MiB document.
 - **Android intake bound:** the transient/in-flight cap is checked before a worker task is queued, so over-cap deliveries no longer allocate worker work; the worker still repeats the durable check.
+- **Sharing pipelining:** bytes after a framed request are buffered until the current response is flushed; the response idle bound remains armed until the next request head completes, so a pipelined partial head cannot replace the response deadline or truncate a long response.
+- **Windows identity:** file publication reads `ChangeTime` from the open handle via `GetFileInformationByHandleEx(FileBasicInfo)` and includes it in `ChangeStamp` when the volume reports a usable value. Receipt reuse remains disabled on Windows because `ChangeTime` is user-settable; the clock is an additional detection signal, not proof.
 - **Updater admission handoff:** the artifact downloads under only the privacy read lease; the lease is dropped before waiting for `update_admission.install()`, then a fresh privacy read rechecks generation/mode/blocker before verify/install. This removes the download-length exclusion of other commands without inverting the documented admission→privacy order.
 - **Updater buffering:** remains an upstream plugin API limit (`download` returns `Vec<u8>`, `install(&[u8])`); no streaming install path is available in this dependency.
 
@@ -48,17 +50,17 @@
 - `KIWIX_TEST_CHROME=… node --test scripts/test-frontend-surfaces.mjs` — passed; isolated Chromium, local fake IPC, StrictMode dialog/tag/catalog/map surfaces.
 - `node --test scripts/test-reader-storage-admission.mjs scripts/test-reader-storage-bridge.mjs` — **15 passed**.
 - `node --test scripts/test-reader-video-capability.mjs` (Node 22) — **21 passed**, including batched theme reads and inverted mutation rescan.
-- `cargo test --offline --manifest-path src-tauri/Cargo.toml --lib` — **1358 passed, 0 failed, 25 ignored**.
+- `cargo test --offline --manifest-path src-tauri/Cargo.toml --lib` — **1359 passed, 0 failed, 25 ignored**.
 - `npm run build` (TypeScript + Vite production bundle) — passed, with the existing Node/Vite version warning and ineffective-dynamic-import warnings.
 - Android plugin host tests: `:tauri-plugin-kiwix-mobile:testDebugUnitTest` — **BUILD SUCCESSFUL** (Gradle, offline, rerun).
+- `npm run check:unsafe` — **74 matches / 74 blocks / 2 impls in 19 files; every item documented**.
 - `xcrun swiftc -parse` on the changed iOS sources — passed (syntax only, not type-check or runtime).
 
 ## Not measured / residual limits
 
 - No physical iOS/Android device or instrumented native run; Kotlin/Swift changes are host-tested or syntax-checked only.
-- No Windows/Linux runtime; Windows receipt/publication identity remains mtime-only and same-user local rewrite cannot be fully excluded without a write-denying handle/redesign. Receipt reuse remains disabled on Windows.
+- No Windows/Linux runtime; Windows `ChangeTime` is user-settable and exFAT/FAT may not report a usable value, so it is detection rather than proof and receipts stay fail-closed there. The unsafe census was updated to 74 blocks in 19 files and passes.
 - Torrent archives whose pieces are shared with other files without padding are refused at init; they cannot be verified per-file from metadata.
 - Archive inline text is intentionally capped at 1 MiB; larger text entries require opening/downloading the original.
-- Sharing HTTP/1 pipelining retains a narrow low-severity deadline interaction; browsers do not pipeline.
 - Updater still buffers the artifact because the plugin API returns a `Vec<u8>`; admission handoff no longer holds the install writer during download. Metadata checks remain bounded but non-cancellable.
 - No long-running network, multi-GB transfer, memory-pressure, thermal, or battery measurement.

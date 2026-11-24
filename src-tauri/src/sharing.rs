@@ -499,6 +499,11 @@ struct SharingIo {
     head_truncated: bool,
     /// A response byte was already written for the current request.
     responded: bool,
+    /// The current response has been flushed; bytes after a framed request may
+    /// now be treated as the next request.
+    response_done: bool,
+    /// Pipelined bytes held until the current response is flushed.
+    next_request: Vec<u8>,
     /// This connection speaks HTTP/2 and keeps the plain idle bound.
     http2: bool,
     stopped: Pin<Box<dyn Future<Output = ()> + Send>>,
@@ -517,6 +522,8 @@ impl SharingIo {
             head_tail: Vec::new(),
             head_truncated: false,
             responded: false,
+            response_done: true,
+            next_request: Vec::new(),
             http2: false,
             stopped: Box::pin(cancellation.clone().cancelled()),
             cancelled: false,
@@ -591,6 +598,20 @@ impl SharingIo {
                 }
             }
             RequestState::Framed => {
+                // Do not let a pipelined request start a fresh head budget
+                // while the previous response is still streaming.
+                if !self.response_done {
+                    if self.next_request.len().saturating_add(bytes.len())
+                        > SHARING_HEAD_BYTES.saturating_mul(4)
+                    {
+                        self.next_request.clear();
+                        self.request = RequestState::Unaccounted;
+                        self.disarm_request();
+                    } else {
+                        self.next_request.extend_from_slice(bytes);
+                    }
+                    return;
+                }
                 // The next request may only start after the previous response
                 // completed. Keep that response's idle bound armed until this
                 // head completes, then hand the connection to the new handler.
@@ -660,7 +681,11 @@ impl SharingIo {
     /// means the previous response is complete: its idle bound ends here.
     fn head_complete(&mut self, declared: DeclaredBody, arrived: u64) {
         self.responded = false;
-        self.disarm_response();
+        let response_done = self.response_done;
+        self.response_done = false;
+        if response_done {
+            self.disarm_response();
+        }
         match declared {
             DeclaredBody::Length(remaining) if remaining > arrived => {
                 self.request = RequestState::Body {
@@ -742,6 +767,7 @@ impl AsyncWrite for SharingIo {
         // it may charge the handler's own time against the client.
         if !self.responded {
             self.responded = true;
+            self.response_done = false;
             self.arm_response();
         }
         let result = Pin::new(&mut self.socket).poll_write(cx, buf);
@@ -754,7 +780,15 @@ impl AsyncWrite for SharingIo {
         if let Err(error) = self.poll_available(cx) {
             return Poll::Ready(Err(error));
         }
-        Pin::new(&mut self.socket).poll_flush(cx)
+        let result = Pin::new(&mut self.socket).poll_flush(cx);
+        if matches!(result, Poll::Ready(Ok(()))) && !self.response_done {
+            self.response_done = true;
+            if !self.next_request.is_empty() {
+                let pending = std::mem::take(&mut self.next_request);
+                self.received(&pending);
+            }
+        }
+        result
     }
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.socket).poll_shutdown(cx)

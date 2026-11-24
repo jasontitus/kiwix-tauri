@@ -223,6 +223,7 @@ async fn sharing_next_request_keeps_the_response_bound_until_its_head_completes(
         .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
         .await
         .unwrap();
+    socket.flush().await.unwrap();
     client
         .write_all(b"GET /secret/book HTTP/1.1\r\nHost: 127.0.0.1")
         .await
@@ -429,6 +430,7 @@ async fn sharing_keep_alive_request_gets_a_fresh_head_budget() {
         .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
         .await
         .unwrap();
+    socket.flush().await.unwrap();
     client
         .write_all(b"GET /secret/book HTTP/1.1\r\nHost: 127.0.0.1")
         .await

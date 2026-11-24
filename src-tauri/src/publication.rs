@@ -31,14 +31,12 @@ pub struct VerifiedFile {
 /// can be restored with `utimes`; Unix `ctime` cannot be set from userland.
 /// `rename` itself updates `ctime`, so this identity is only meaningful before
 /// a rename. A zero/degenerate Unix change time is treated as unprovable and
-/// fails closed. Windows exposes no change time through the current dependency
-/// set (`winapi-util`); file publication there relies on the modification time
-/// plus a verified handle that denies writers, while directory publication
-/// must release handles and only has the modification-time snapshot.
+/// fails closed. Windows `ChangeTime` is read from the open handle when the
+/// volume exposes it; it is an additional detection signal, not proof, because
+/// a same-user writer can restore it with `SetFileInformationByHandle`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ChangeStamp {
     modified: Option<std::time::SystemTime>,
-    #[cfg(unix)]
     changed: Option<(i64, i64)>,
 }
 
@@ -51,16 +49,57 @@ fn change_time(seconds: i64, nanos: i64) -> Option<(i64, i64)> {
     Some((seconds, i64::from(nanos)))
 }
 
+#[cfg(any(windows, test))]
+fn filetime_change(ticks: i64) -> Option<(i64, i64)> {
+    // FILETIME counts 100 ns intervals since 1601-01-01 (UTC).
+    let unix_ticks = i128::from(ticks) - 116_444_736_000_000_000;
+    if unix_ticks <= 0 {
+        return None;
+    }
+    Some((
+        i64::try_from(unix_ticks.div_euclid(10_000_000)).ok()?,
+        i64::from((unix_ticks.rem_euclid(10_000_000) * 100) as u32),
+    ))
+}
+
+#[cfg(windows)]
+pub(crate) fn windows_change_time(file: &File) -> Option<(i64, i64)> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        FileBasicInfo, GetFileInformationByHandleEx, FILE_BASIC_INFO,
+    };
+    let mut info = FILE_BASIC_INFO::default();
+    // SAFETY: `file` owns a valid handle for this synchronous query; `info`
+    // points to initialized writable storage of exactly the declared size.
+    unsafe {
+        GetFileInformationByHandleEx(
+            HANDLE(file.as_raw_handle()),
+            FileBasicInfo,
+            (&mut info as *mut FILE_BASIC_INFO).cast(),
+            std::mem::size_of::<FILE_BASIC_INFO>() as u32,
+        )
+    }
+    .ok()?;
+    filetime_change(info.ChangeTime)
+}
+
 impl ChangeStamp {
-    fn of(metadata: &std::fs::Metadata) -> Self {
-        Self {
-            modified: metadata.modified().ok(),
-            #[cfg(unix)]
-            changed: {
+    fn of_handle(file: &File) -> Self {
+        let modified = file.metadata().ok().and_then(|metadata| metadata.modified().ok());
+        #[cfg(unix)]
+        let changed = file
+            .metadata()
+            .ok()
+            .and_then(|metadata| {
                 use std::os::unix::fs::MetadataExt;
                 change_time(metadata.ctime(), metadata.ctime_nsec())
-            },
-        }
+            });
+        #[cfg(windows)]
+        let changed = windows_change_time(file);
+        #[cfg(not(any(unix, windows)))]
+        let changed = None;
+        Self { modified, changed }
     }
 }
 
@@ -77,7 +116,7 @@ impl VerifiedFile {
                 "Verified publication requires a regular file of the expected size without hard links",
             ));
         }
-        let change = ChangeStamp::of(&file.metadata()?);
+        let change = ChangeStamp::of_handle(&file);
         Ok(Self { file, metadata, change })
     }
 
@@ -150,7 +189,7 @@ impl VerifiedFile {
         if self.change.changed.is_none() {
             return Ok(false);
         }
-        Ok(ChangeStamp::of(&file.metadata()?) == self.change)
+        Ok(ChangeStamp::of_handle(file) == self.change)
     }
 
     /// Bind a rename to the identity whose bytes were verified: the same
@@ -181,7 +220,8 @@ impl VerifiedFile {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
             Err(error) => return Err(error),
         };
-        Ok(ChangeStamp::of(&opened.into_std().metadata()?) == self.change)
+        let opened = opened.into_std();
+        Ok(ChangeStamp::of_handle(&opened) == self.change)
     }
 }
 
@@ -688,6 +728,16 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
     use std::io::Read;
+
+    #[test]
+    fn filetime_change_rejects_degenerate_values_and_converts_epoch_ticks() {
+        const EPOCH: i64 = 116_444_736_000_000_000;
+        assert_eq!(filetime_change(0), None);
+        assert_eq!(filetime_change(-1), None);
+        assert_eq!(filetime_change(EPOCH), None);
+        assert_eq!(filetime_change(EPOCH + 1), Some((0, 100)));
+        assert_eq!(filetime_change(EPOCH + 10_000_000), Some((1, 0)));
+    }
 
     fn verified_fixture(directory: &Path) -> (VerifiedFile, Vec<u8>) {
         let mut bytes = vec![b'v'; 128];

@@ -443,7 +443,7 @@ unverified.
 
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(73 blocks in 18 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(74 blocks in 19 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map
