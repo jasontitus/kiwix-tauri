@@ -212,6 +212,7 @@ pub(super) async fn segment_worker(
     let mut buffer = vec![0u8; READ_BUDGET];
     let mut retries = 0usize;
     let mut since_sync = Instant::now();
+    let mut retry_delay = None;
     loop {
         if *stop.borrow() || *signal.borrow() != Signal::Run {
             flush_segment(&mut writer, counters, index, done).await?;
@@ -220,6 +221,11 @@ pub(super) async fn segment_worker(
         if done >= length {
             flush_segment(&mut writer, counters, index, done).await?;
             return Ok(());
+        }
+        if let Some(delay) = retry_delay.take() {
+            if !segment_sleep(&mut stop, &mut signal, delay).await? {
+                return Ok(()); // The previous attempt already flushed its progress.
+            }
         }
         let request_start = range.start + done;
         let expected = range.end - request_start + 1;
@@ -350,16 +356,15 @@ pub(super) async fn segment_worker(
                 "Object validator changed during a segmented transfer",
             ));
         }
-        let before = done;
         let mut received = 0u64;
         let stream = response
             .bytes_stream()
             .map(|result| result.map_err(std::io::Error::other));
         futures_util::pin_mut!(stream);
         let mut reader = StreamReader::new(stream);
-        loop {
+        let body_error = loop {
             if received >= expected {
-                break;
+                break None;
             }
             let remaining = (expected - received).min(READ_BUDGET as u64) as usize;
             let permit = tokio::select! {
@@ -379,7 +384,7 @@ pub(super) async fn segment_worker(
                 flush_segment(&mut writer, counters, index, done).await?;
                 return Ok(());
             };
-            let count = tokio::select! {
+            let result = tokio::select! {
                 biased;
                 changed = stop.changed() => {
                     if changed.is_err() || *stop.borrow() {
@@ -395,19 +400,18 @@ pub(super) async fn segment_worker(
                     }
                     continue;
                 }
-                result = reader.read(&mut buffer[..permit.bytes.min(remaining)]) => match result {
-                    Ok(count) => count,
-                    Err(error) => {
-                        flush_segment(&mut writer, counters, index, done).await?;
-                        return Err(SegmentError::fatal(format!(
-                            "Receiving download segment: {error}"
-                        )));
-                    }
-                },
+                result = reader.read(&mut buffer[..permit.bytes.min(remaining)]) => result,
+            };
+            let count = match result {
+                Ok(count) => count,
+                Err(error) => {
+                    refund_bandwidth(inner, &permit, 0).map_err(SegmentError::fatal)?;
+                    break Some(error);
+                }
             };
             refund_bandwidth(inner, &permit, count).map_err(SegmentError::fatal)?;
             if count == 0 {
-                break;
+                break None;
             }
             if count as u64 > expected - received {
                 return Err(SegmentError::fatal(
@@ -429,21 +433,17 @@ pub(super) async fn segment_worker(
                 flush_segment(&mut writer, counters, index, done).await?;
                 since_sync = Instant::now();
             }
-        }
+        };
         flush_segment(&mut writer, counters, index, done).await?;
-        if done > before {
-            retries = 0;
-        }
         if received < expected {
             retries += 1;
             if retries > SEGMENT_RETRIES {
-                return Err(SegmentError::fatal(
-                    "Download segment ended before its declared length",
-                ));
+                return Err(SegmentError::fatal(match body_error {
+                    Some(error) => format!("Receiving download segment: {error}"),
+                    None => "Download segment ended before its declared length".into(),
+                }));
             }
-            if !segment_sleep(&mut stop, &mut signal, segment_delay(retries, index, None)).await? {
-                return Ok(());
-            }
+            retry_delay = Some(segment_delay(retries, index, None));
             continue;
         }
         if done == length {

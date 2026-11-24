@@ -6,6 +6,8 @@ This changelog records source changes, not release certification. Only unsigned 
 
 ### Latest implementation and adversarial corrections
 
+- Address the 2026-11-23 project review across reader navigation authority, settings admission, error/crash redaction, network timeouts and retries, LocalSwarm/Web Seed/edition proof reuse, map/catalog/search caches, mobile speech and PDF ownership, and frontend dialogs/accessibility/private-mode gating. The integrated host suite passes; native iOS/Android and platform runtime behavior remain source-reviewed, not certified. [Remediation record](docs/reviews/2026-11-23/PROJECT-REVIEW-REMEDIATION.md)
+
 - Fix natural voice model removal and repair on Windows once a marker file already exists (a second preserved install record, a repeated removal beside a legacy model folder, a resumed removal, or clearing voice audio twice with foreign files present): recording the same marker again failed with "Access is denied" because Windows flushes only through a writable handle. Make the Rust and host-tool test suites pass on native Windows: on Windows, tests release an archive's reader before deleting it, and the macOS/Linux host-tool tests are skipped. 1169 Rust, 384 JS and 123 Python tests pass there; the installed-app runtime matrix was not repeated. [Windows report](docs/WINDOWS-TEST-REPORT.md#follow-up--2026-11-20-public-history-sdk-free-build)
 
 - Build spelling suggestions in a checked Rust file format tied to the actual installed archive. Existing SQLite spelling files are preserved. A user can rebuild suggestions from the archive's titles after a zero-result search. [Storage, verification and measurements](docs/benchmarks/2026-11-18-spelling-index.md)

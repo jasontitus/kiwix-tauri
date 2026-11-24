@@ -365,35 +365,46 @@ class NativeArticlePdf private constructor(activity: Activity, private var invok
             // must not close either one behind its back.
             document = null
             trace("write-start")
-            writer.execute {
-                var failure: String? = null
-                try {
-                    FileOutputStream(android.system.Os.dup(descriptor)).use { file ->
-                        val bounded = object : FilterOutputStream(file) {
-                            private var bytes = 0L
-                            private fun account(count: Int) {
-                                bytes += count
-                                if (bytes > 64L * 1024 * 1024 || !admitted()) throw java.io.IOException("Article PDF limit exceeded or export cancelled")
+            try {
+                writer.execute {
+                    var failure: String? = null
+                    try {
+                        // This constructor borrows the fd. The worker closes
+                        // the single owned descriptor in its finally block.
+                        FileOutputStream(descriptor).use { file ->
+                            val bounded = object : FilterOutputStream(file) {
+                                private var bytes = 0L
+                                private fun account(count: Int) {
+                                    bytes += count
+                                    if (bytes > 64L * 1024 * 1024 || !admitted()) throw java.io.IOException("Article PDF limit exceeded or export cancelled")
+                                }
+                                override fun write(value: Int) { account(1); out.write(value) }
+                                override fun write(buffer: ByteArray, offset: Int, length: Int) { account(length); out.write(buffer, offset, length) }
                             }
-                            override fun write(value: Int) { account(1); out.write(value) }
-                            override fun write(buffer: ByteArray, offset: Int, length: Int) { account(length); out.write(buffer, offset, length) }
+                            pdf.writeTo(bounded)
+                            file.fd.sync()
                         }
-                        pdf.writeTo(bounded)
-                        file.fd.sync()
+                    } catch (error: Exception) {
+                        failure = error.message ?: "Android live article PDF rendering failed"
+                    } finally {
+                        try { pdf.close() }
+                        catch (cleanup: Exception) { if (failure == null) failure = cleanup.message ?: "Closing the PDF document failed" }
+                        try { android.system.Os.close(descriptor) }
+                        catch (cleanup: Exception) { if (failure == null) failure = cleanup.message ?: "Closing the PDF output failed" }
                     }
-                    rendered = true
-                } catch (error: Exception) {
-                    failure = error.message ?: "Android live article PDF rendering failed"
-                } finally {
-                    try { pdf.close() }
-                    catch (cleanup: Exception) { if (failure == null) failure = cleanup.message ?: "Closing the PDF document failed" }
-                    try { android.system.Os.close(descriptor) } catch (_: Exception) {}
+                    val outcome = failure
+                    main.post {
+                        if (outcome == null && !retired) {
+                            rendered = true
+                            trace("write-complete")
+                        }
+                        retire(outcome)
+                    }
                 }
-                val outcome = failure
-                main.post {
-                    if (outcome == null) trace("write-complete")
-                    retire(outcome)
-                }
+            } catch (error: java.util.concurrent.RejectedExecutionException) {
+                document = pdf
+                try { android.system.Os.close(descriptor) } catch (cleanup: Exception) { error.addSuppressed(cleanup) }
+                throw error
             }
         } catch (error: Exception) { retire(error.message ?: "Android live article PDF rendering failed") }
     }

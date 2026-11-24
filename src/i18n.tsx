@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -210,6 +211,7 @@ function preloadLocale(): Promise<void> {
     },
     (error) => {
       if (activeLoad === state) {
+        activeLoad = null;
         loadError = error instanceof Error ? error : new Error(String(error));
         notify();
       }
@@ -260,6 +262,7 @@ const snapshot = () => revision;
 const serverSnapshot = () => 0;
 export function I18nProvider({ children }: { children: ReactNode }) {
   const version = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const [dismissedError, setDismissedError] = useState<Error | null>(null);
   useEffect(() => {
     void preloadLocale();
     updateDocument();
@@ -279,7 +282,23 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
   return (
     <LocaleContext.Provider value={value}>
-      {loadError && <div role="alert">{loadError.message}</div>}
+      {loadError && loadError !== dismissedError && (
+        <div className="startup-notice" role="alert">
+          <div>
+            <strong>{t("The interface language could not be loaded.")}</strong>
+            <p>{loadError.message}</p>
+          </div>
+          <button type="button" onClick={() => {
+            setDismissedError(null);
+            void preloadLocale().catch(() => undefined);
+          }}>
+            {t("Try again")}
+          </button>
+          <button type="button" onClick={() => setDismissedError(loadError)}>
+            {t("Dismiss")}
+          </button>
+        </div>
+      )}
       {children}
     </LocaleContext.Provider>
   );

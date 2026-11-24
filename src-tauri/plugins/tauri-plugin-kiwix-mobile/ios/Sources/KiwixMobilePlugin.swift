@@ -133,6 +133,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     self?.trigger("network-policy-changed", data: state)
   }
   private let worker = DispatchQueue(label: "org.kiwix.mobile.documents", qos: .userInitiated)
+  private let providerWorker = DispatchQueue(label: "org.kiwix.mobile.providers", qos: .userInitiated)
   private var operation: DocumentOperation?
   private var observers: [NSObjectProtocol] = []
   private var checkpoints: [Int: UIBackgroundTaskIdentifier] = [:]
@@ -155,7 +156,8 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
   private static let retainedExportAttemptLimit = 4
   private let externalDocuments = ExternalDocuments()
   private var speech: NativeSpeech?
-  private var engineNowPlaying: AnyObject?
+  private var engineNowPlaying: (any SpeechNowPlayingController)?
+  private var engineSpeechId: String?
   private weak var speechScene: UIScene?
   private var nearbyRadio: NearbyBluetooth?
   private var nearbyAssociation: NearbyJoin?
@@ -163,7 +165,10 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
   /// Owns the playback category for archive media and read-aloud. Created on
   /// first use, but `load(webview:)` installs the category before playback.
   private lazy var readerAudio = ReaderAudioSession { [weak self] state in
-    self?.trigger("reader-audio", data: state)
+    guard let self else { return }
+    var event = state
+    if let id = self.engineSpeechId { event["sessionId"] = id }
+    self.trigger("reader-audio", data: event)
   }
   private lazy var hardwareShortcuts: HardwareShortcutRouter = HardwareShortcutRouter { [weak self] action in
     guard let self = self else { return }
@@ -202,7 +207,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
       self?.pauseCaptureForInactivity()
     })
     observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
-      self?.revokeCamera(reason: "background")
+      self?.suspendReaderUi()
       self?.retireNearby()
     })
     observers.append(center.addObserver(forName: UIScene.didDisconnectNotification, object: nil, queue: .main) { [weak self] notification in
@@ -212,7 +217,13 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
       if self.hostScene === scene { self.nearbyRoutes.retire() }
       guard self.hostScene === scene || self.speechScene === scene ||
             self.hardwareShortcuts.hostScene === scene || self.operation?.scene === scene else { return }
-      self.speech?.cancelAll(error: "SPEECH_BACKGROUND")
+      if self.speechScene === scene || self.hostScene === scene {
+        self.speech?.cancelAll(error: "SPEECH_BACKGROUND")
+        if let id = self.engineSpeechId {
+          self.stopExternalSpeech()
+          self.trigger("speech-action", data: ["action": "stop", "sessionId": id])
+        }
+      }
       if self.operation?.scene === scene { self.cancelCurrent() }
       if self.hardwareShortcuts.hostScene === scene {
         self.hardwareShortcuts.unbind()
@@ -222,7 +233,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     })
     observers.append(center.addObserver(forName: UIScene.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] notification in
       guard let self = self, let scene = notification.object as? UIScene else { return }
-      if self.hostScene === scene { self.revokeCamera(reason: "background") }
+      if self.hostScene === scene { self.suspendReaderUi() }
       self.nearbyRadio?.retire(scene: scene)
       self.nearbyAssociation?.retire(scene: scene)
       if self.hostScene === scene { self.nearbyRoutes.retire() }
@@ -230,6 +241,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     })
     observers.append(center.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
       self?.speech?.shutdown()
+      self?.stopExternalSpeech()
       self?.readerAudio.shutdown()
       self?.retireNearby()
       self?.cancelCurrent(); self?.expireAllCheckpoints()
@@ -242,6 +254,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     operation?.cancellation.cancel()
     speech?.shutdown()
     let audio = readerAudio
+    let playback = engineNowPlaying
     let radio = nearbyRadio
     let association = nearbyAssociation
     let routes = nearbyRoutes
@@ -249,6 +262,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     let tasks = Array(checkpoints.values)
     let transferIdleTimer = self.transferIdleTimer
     DispatchQueue.main.async {
+      playback?.stop()
       audio.shutdown()
       radio?.retire(); association?.retire(); routes.retire()
       tasks.forEach { UIApplication.shared.endBackgroundTask($0) }
@@ -365,12 +379,11 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     }
   }
 
-  private func revokeCamera(reason: String) {
+  private func suspendReaderUi() {
     // Read-aloud is audio-background capable; its terminal state retires the
     // native session instead of an app-background transition.
     stopCameraCapture()
     hardwareShortcuts.unbind()
-    trigger("camera-revoked", data: ["reason": reason])
     if !lifecycleSuspended {
       // UIKit must grant execution time synchronously while delivering the
       // background notification, before Rust's asynchronous retirement begins.
@@ -391,6 +404,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
       return self.hostScene?.activationState == .foregroundActive && UIApplication.shared.applicationState == .active
     }, setSpeechActive: { [audio = readerAudio] active in audio.setSpeechActive(active) },
        setSpeechPaused: { [audio = readerAudio] paused in audio.setSpeechPaused(paused) },
+       retireExternal: { [weak self] in self?.stopExternalSpeech() },
        emit: { [weak self] state in self?.trigger("speech-state", data: state) })
     speech = engine
     return engine
@@ -462,79 +476,72 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     } catch { invoke.reject("kiwix_mobile.invalid_audio_state", code: "invalid_audio_state") }
   }
 
-  /// Internal RustMobile.call transport for the cross-platform Kokoro player.
-  /// The Rust audio thread owns the stream; this only claims/releases the
-  /// process-wide playback category so audio survives backgrounding.
-  @objc public func speechEngineStart(_ invoke: Invoke) {
-    DispatchQueue.main.async {
-      if self.readerAudio.setSpeechActive(true) { invoke.resolve(["active": true]) }
-      else { invoke.reject("kiwix_mobile.audio_session_failed", code: "audio_session_failed") }
-    }
+  private struct SpeechEngineStartArgs: Decodable {
+    let id: String
+    let token: String
+    let title: String
+    let subtitle: String?
   }
+  private struct SpeechEngineUpdateArgs: Decodable { let id: String; let paused: Bool }
 
-  private struct SpeechEngineUpdateArgs: Decodable { let paused: Bool }
+  /// The Rust worker owns the audio stream. Native owns only the exact
+  /// registration's background playback category and system presentation.
+  @objc public func speechEngineStart(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(SpeechEngineStartArgs.self)
+      DispatchQueue.main.async {
+        guard self.speechEngine().admitExternal(NativeSpeechSessionArgs(id: args.id, token: args.token)) else {
+          invoke.reject("SPEECH_SESSION_RETIRED", code: "SPEECH_SESSION_RETIRED"); return
+        }
+        self.stopExternalSpeech()
+        guard self.readerAudio.setSpeechActive(true) else {
+          invoke.reject("kiwix_mobile.audio_session_failed", code: "audio_session_failed"); return
+        }
+        self.engineSpeechId = args.id
+        let controller = makeSpeechNowPlaying(id: args.id, title: args.title, subtitle: args.subtitle, advanced: true) {
+          [weak self] action in
+          guard self?.engineSpeechId == args.id else { return }
+          self?.trigger("speech-action", data: ["action": action, "sessionId": args.id])
+        }
+        self.engineNowPlaying = controller
+        controller.activate()
+        controller.setPlaying(true)
+        invoke.resolve(["active": true])
+      }
+    } catch { invoke.reject("SPEECH_INVALID_REQUEST", code: "SPEECH_INVALID_REQUEST") }
+  }
 
   @objc public func speechEngineUpdate(_ invoke: Invoke) {
     do {
       let args = try invoke.parseArgs(SpeechEngineUpdateArgs.self)
       DispatchQueue.main.async {
-        _ = self.readerAudio.setSpeechPaused(args.paused)
+        guard self.engineSpeechId == args.id else {
+          invoke.reject("SPEECH_SESSION_RETIRED", code: "SPEECH_SESSION_RETIRED"); return
+        }
+        guard self.readerAudio.setSpeechPaused(args.paused) else {
+          invoke.reject("kiwix_mobile.audio_session_failed", code: "audio_session_failed"); return
+        }
+        self.engineNowPlaying?.setPlaying(!args.paused)
         invoke.resolve(["paused": args.paused])
       }
-    } catch { invoke.reject("kiwix_mobile.invalid_audio_state", code: "invalid_audio_state") }
+    } catch { invoke.reject("SPEECH_INVALID_REQUEST", code: "SPEECH_INVALID_REQUEST") }
   }
 
   @objc public func speechEngineStop(_ invoke: Invoke) {
-    DispatchQueue.main.async {
-      _ = self.readerAudio.setSpeechActive(false)
-      #if canImport(NowPlaying)
-      if #available(iOS 27.0, *) {
-        (self.engineNowPlaying as? SpeechNowPlaying)?.stop()
-        self.engineNowPlaying = nil
-      }
-      #endif
-      invoke.resolve(["active": false])
-    }
-  }
-
-  private struct SpeechEngineNowPlayingArgs: Decodable {
-    let active: Bool
-    let speaking: Bool?
-    let title: String?
-    let subtitle: String?
-  }
-
-  /// Publishes the Rust Kokoro player as a Now Playing session so the lock
-  /// screen and Dynamic Island show what is being read and offer transport.
-  @objc public func speechEngineNowPlaying(_ invoke: Invoke) {
     do {
-      let args = try invoke.parseArgs(SpeechEngineNowPlayingArgs.self)
+      let args = try invoke.parseArgs(NativeSpeechPrepareArgs.self)
       DispatchQueue.main.async {
-        #if canImport(NowPlaying)
-        if #available(iOS 27.0, *) {
-          if args.active {
-            if self.engineNowPlaying == nil {
-              let controller = SpeechNowPlaying(
-                id: UUID().uuidString,
-                title: args.title ?? "Reading aloud",
-                subtitle: args.subtitle,
-                onPlay: { [weak self] in self?.trigger("speech-action", data: ["action": "play"]) },
-                onPause: { [weak self] in self?.trigger("speech-action", data: ["action": "pause"]) },
-                onPrevious: { [weak self] in self?.trigger("speech-action", data: ["action": "previous"]) },
-                onStop: { [weak self] in self?.trigger("speech-action", data: ["action": "stop"]) })
-              self.engineNowPlaying = controller
-              controller.activate()
-            }
-            (self.engineNowPlaying as? SpeechNowPlaying)?.setPlaying(args.speaking ?? true)
-          } else {
-            (self.engineNowPlaying as? SpeechNowPlaying)?.stop()
-            self.engineNowPlaying = nil
-          }
-        }
-        #endif
-        invoke.resolve(["active": args.active])
+        if self.engineSpeechId == args.id { self.stopExternalSpeech() }
+        invoke.resolve(["active": false])
       }
-    } catch { invoke.reject("kiwix_mobile.invalid_audio_state", code: "invalid_audio_state") }
+    } catch { invoke.reject("SPEECH_INVALID_REQUEST", code: "SPEECH_INVALID_REQUEST") }
+  }
+
+  private func stopExternalSpeech() {
+    guard engineSpeechId != nil else { return }
+    engineSpeechId = nil
+    MainActor.assumeIsolated { engineNowPlaying?.stop(); engineNowPlaying = nil }
+    _ = readerAudio.setSpeechActive(false)
   }
 
   @objc public func networkState(_ invoke: Invoke) {
@@ -658,14 +665,14 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
       let pick = ExternalPickArgs(persistent: args.persistent, folder: false, labels: args.labels)
       guard let (current, _) = self.start(invoke, kind: .external(pick)) else { return }
       current.working = true
-      self.worker.async {
+      self.providerWorker.async {
         do {
           try current.cancellation.check()
           let selection = try self.externalDocuments.selectIncoming(url,
             persistent: args.persistent, cancellation: current.cancellation)
           DispatchQueue.main.async {
             if current.cancellation.isCancelled {
-              self.worker.async {
+              self.providerWorker.async {
                 do {
                   try self.externalDocuments.forget(selection.reference)
                   DispatchQueue.main.async { self.finishCancelled(current) }
@@ -696,18 +703,18 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
   }
   @objc public func acquireExternalArchive(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ExternalReferenceArgs.self)
-    worker.async {
+    providerWorker.async {
       do { invoke.resolve(try self.externalDocuments.acquire(args.reference, cancellation: WorkCancellation())) }
       catch { invoke.resolve(["error": ["code": providerAcquisitionCode(error)]]) }
     }
   }
   @objc public func releaseExternalArchive(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ExternalLeaseArgs.self)
-    worker.async { self.externalDocuments.release(args.lease); invoke.resolve(CancelReply(cancelled: false)) }
+    providerWorker.async { self.externalDocuments.release(args.lease); invoke.resolve(CancelReply(cancelled: false)) }
   }
   @objc public func forgetExternalArchive(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ExternalReferenceArgs.self)
-    worker.async {
+    providerWorker.async {
       do { try self.externalDocuments.forget(args.reference); invoke.resolve(CancelReply(cancelled: false)) }
       catch { invoke.reject("kiwix_mobile.invalid_provider_reference", code: "invalid_provider_reference") }
     }
@@ -803,7 +810,12 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     // UIDocumentPicker dismisses itself. Wait for its transition instead of
     // presenting over a disappearing provider controller.
     controller.dismiss(animated: true, completion: run)
-    worker.async { self.processSelection(current, urls: urls) }
+    let queue: DispatchQueue
+    switch current.kind {
+    case .external, .externalBatch: queue = providerWorker
+    default: queue = worker
+    }
+    queue.async { self.processSelection(current, urls: urls) }
   }
 
   public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
@@ -887,7 +899,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
           persistent: args.persistent, cancellation: current.cancellation)
         DispatchQueue.main.async {
           if current.cancellation.isCancelled {
-            self.worker.async { try? self.externalDocuments.forget(selection.reference) }
+            self.providerWorker.async { try? self.externalDocuments.forget(selection.reference) }
             self.finishCancelled(current)
           } else {
             self.finish(current, ExternalPickReply(selection: selection, cancelled: false))
@@ -899,7 +911,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
           persistent: args.persistent, cancellation: current.cancellation)
         DispatchQueue.main.async {
           if current.cancellation.isCancelled {
-            self.worker.async {
+            self.providerWorker.async {
               do {
                 for selection in result.selections { try self.externalDocuments.forget(selection.reference) }
                 DispatchQueue.main.async { self.finishCancelled(current) }

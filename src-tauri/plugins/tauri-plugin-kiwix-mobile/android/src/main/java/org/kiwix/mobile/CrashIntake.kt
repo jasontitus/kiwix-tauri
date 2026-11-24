@@ -26,12 +26,15 @@ object CrashIntake {
     private const val PREVIOUS_FILE = "previous.json"
     private const val TEMP_FILE = ".pending.json.tmp"
 
-    private val urlPattern = Regex("""https?://[^\s"'<>)]+""", RegexOption.IGNORE_CASE)
+    private val urlPattern = Regex(
+        """(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://|(?:blob|content|data|file|mailto|tauri|tel|zim):(?!:))[^\s"<>`]*""",
+        RegexOption.IGNORE_CASE
+    )
     private val bearerPattern = Regex("""(?i)\bbearer\s+\S+""")
     private val secretPattern = Regex(
         """(?i)\b(authorization|access_token|refresh_token|api_key|apikey|password|passwd|cookie|token|secret|pin)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;&)\]}]+)"""
     )
-    private val pathPattern = Regex("""(?<!\S)(?:/[^\s"'<>),;]+|[A-Za-z]:[\\/][^\s"'<>),;]+|~/[^\s"'<>),;]+)""")
+    private val pathPattern = Regex("""(?<![^\s=(\[{"',;:`])(?:/(?!/)|[a-zA-Z]:[\\/]|~/|\\\\)[^\s"<>`]+""")
     private val opaquePattern = Regex("""\b[A-Za-z0-9_+/=-]{40,}\b""")
     private val whitespacePattern = Regex("""\s+""")
     /** SimpleDateFormat is not thread-safe; one formatter per crashing thread. */
@@ -122,30 +125,36 @@ object CrashIntake {
 
     private fun timestamp(): String = timestampFormat.get().format(Date())
 
-    private fun redact(value: String): String {
+    internal fun redact(value: String): String {
         var text = urlPattern.replace(value) { match -> safeUrl(match.value) }
         text = bearerPattern.replace(text) { "bearer [redacted]" }
         text = secretPattern.replace(text) { match ->
             val key = match.value.takeWhile { it != '=' && it != ':' }.trim()
             "$key=[redacted]"
         }
-        text = pathPattern.replace(text) { match ->
-            File(match.value.replace('\\', '/')).name.ifEmpty { "[path]" }
-        }
+        text = pathPattern.replace(text) { "[path]" }
         text = opaquePattern.replace(text) { "[redacted]" }
         return whitespacePattern.replace(text, " ").trim()
     }
 
-    private fun safeUrl(raw: String): String =
-        try {
+    private fun safeUrl(raw: String): String {
+        return try {
             val uri = java.net.URI(raw)
+            val scheme = uri.scheme?.lowercase(Locale.ROOT)
+            if (scheme != "http" && scheme != "https") return "[url]"
             val host = uri.host ?: return "[url]"
-            var path = uri.rawPath ?: ""
-            val marker = path.indexOf("/.kiwix/")
-            if (marker >= 0) path = path.substring(0, marker) + "/.kiwix/[redacted]"
-            val port = if (uri.port > 0) ":${uri.port}" else ""
-            "${uri.scheme}://$host$port$path"
+            val hostname = host.lowercase(Locale.ROOT).trim('[', ']', '.')
+            val loopback = hostname == "localhost" || hostname.endsWith(".localhost") ||
+                (hostname.startsWith("127.") && hostname.all { it == '.' || it in '0'..'9' }) ||
+                (':' in hostname && hostname.endsWith("1") && hostname.dropLast(1).all { it == ':' || it == '0' })
+            val path = uri.path.orEmpty()
+            val nested = path.contains("://") ||
+                listOf("mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:").any { path.contains(it) }
+            if (loopback || path.contains("/.kiwix/") || nested) return "[reader-url]"
+            val port = if (uri.port >= 0) ":${uri.port}" else ""
+            "$scheme://$host$port${uri.rawPath.orEmpty()}"
         } catch (_: Exception) {
             "[url]"
         }
+    }
 }

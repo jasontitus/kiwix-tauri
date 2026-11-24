@@ -4,7 +4,7 @@
 //! normal-writable/privacy/window admission lease and source-mutation gate.
 #![forbid(unsafe_code)]
 use crate::{
-    acquisition::{DownloadJob, DownloadManager},
+    acquisition::{DownloadJob, DownloadManager, ImportPublication},
     archive_source::{self, RetainedSource},
     catalog::CatalogEntry,
     imports::{ImportManager, ReadyImport},
@@ -366,31 +366,41 @@ impl EditionManager {
         &self, store: &Store, intent_id: &str, ready: &ReadyImport,
         imports: &ImportManager, downloads: &DownloadManager,
     ) -> Result<EditionIntent, String> {
-        let result = imports.with_ready_sources(ready, |books, sources| {
+        let result = imports.with_ready_sources(ready, |books, sources, publication| {
             let state = store.read()?;
             writable(&state)?;
             let expected = state.edition_intents.iter().find(|intent| intent.id == intent_id)
                 .ok_or("Unknown edition intent")?;
-            if let Err(error) = verify_ready(expected, ready.receipt(), books, sources, downloads) {
-                return Ok(Err(error));
+            let (id, publication) = match verify_ready(expected, ready.receipt(), books, sources, publication) {
+                Ok(verified) => verified,
+                Err(error) => return Ok(Err(error)),
+            };
+            // Compare the worker's exact publication proof, not a persisted
+            // Ready identity. Hold its producer's ownership through the write.
+            match downloads.with_import_publication(id, &sources[0], publication, || {
+                Ok((|| {
+                    let identity = sources[0].identity()?;
+                    if expected.status == "ready" && expected.receipt.as_deref() == Some(ready.receipt())
+                        && expected.verified.as_ref() == Some(&books[0])
+                        && expected.verified_identity.as_ref() == Some(&identity)
+                    { return Ok(expected.clone()); }
+                    store.update(|state| {
+                        writable(state)?;
+                        ready.sources_unchanged()?;
+                        let intent = state.edition_intents.iter_mut().find(|intent| intent.id == intent_id)
+                            .ok_or("Unknown edition intent")?;
+                        if &*intent != expected { return Err("Edition intent changed during verification".into()); }
+                        intent.verified = Some(books[0].clone());
+                        intent.verified_identity = Some(identity);
+                        intent.receipt = Some(ready.receipt().into());
+                        intent.status = "ready".into();
+                        Ok(intent.clone())
+                    })
+                })())
+            }) {
+                Ok(recorded) => recorded.map(Ok),
+                Err(error) => Ok(Err(error)),
             }
-            if expected.status == "ready" && expected.receipt.as_deref() == Some(ready.receipt())
-                && expected.verified.as_ref() == Some(&books[0])
-                && expected.verified_identity.as_ref() == Some(&sources[0].identity()?)
-            { return Ok(Ok(expected.clone())); }
-            store.update(|state| {
-                writable(state)?;
-                let intent = state.edition_intents.iter_mut().find(|intent| intent.id == intent_id)
-                    .ok_or("Unknown edition intent")?;
-                if intent.destination != expected.destination || intent.download_id != expected.download_id
-                    || !matches!(intent.status.as_str(), "reserved" | "downloading" | "ready")
-                { return Err("Edition intent changed during verification".into()); }
-                intent.verified = Some(books[0].clone());
-                intent.verified_identity = Some(sources[0].identity()?);
-                intent.receipt = Some(ready.receipt().into());
-                intent.status = "ready".into();
-                Ok(intent.clone())
-            }).map(Ok)
         })?;
         match result {
             Ok(intent) => Ok(intent),
@@ -428,24 +438,26 @@ impl EditionManager {
         authorize(decision, epoch, window)?;
         if decision.intent_id.as_deref() != Some(intent_id) { return Err("Edition authorization belongs to another download".into()); }
         decision.source.unchanged()?;
-        imports.with_ready_sources(ready, |books, sources| {
+        imports.with_ready_sources(ready, |books, sources, publication| {
             let state = store.read()?;
             validate_decision(decision, &state)?;
             let expected = state.edition_intents.iter().find(|intent| intent.id == intent_id)
                 .ok_or("Unknown edition intent")?.clone();
-            verify_ready(&expected, ready.receipt(), books, sources, downloads)?;
+            let (id, publication) = verify_ready(&expected, ready.receipt(), books, sources, publication)?;
             if expected.status != "ready" || expected.receipt.as_deref() != Some(ready.receipt())
                 || expected.verified_identity.as_ref() != Some(&sources[0].identity()?)
             { return Err("Verify this edition before replacing the installed archive".into()); }
-            store.update(|state| {
-                validate_decision(decision, state)?;
-                for source in sources { source.unchanged()?; }
-                let intent = state.edition_intents.iter().find(|intent| intent.id == intent_id)
-                    .ok_or("Unknown edition intent")?.clone();
-                if intent.status != "ready" || intent.receipt != expected.receipt
-                    || intent.verified_identity != expected.verified_identity
-                { return Err("Edition intent changed before commit".into()); }
-                state.replace_edition(&intent, &books[0], ready.receipt())
+            downloads.with_import_publication(id, &sources[0], publication, || {
+                store.update(|state| {
+                    validate_decision(decision, state)?;
+                    ready.sources_unchanged()?;
+                    let intent = state.edition_intents.iter().find(|intent| intent.id == intent_id)
+                        .ok_or("Unknown edition intent")?.clone();
+                    if intent != expected {
+                        return Err("Edition intent changed before commit".into());
+                    }
+                    state.replace_edition(&intent, &books[0], ready.receipt())
+                })
             })
         })
     }
@@ -525,10 +537,10 @@ fn validate_decision(decision: &Decision, state: &State) -> Result<(), String> {
     { return Err("Catalog source changed; select this edition again".into()); }
     Ok(())
 }
-fn verify_ready(
-    intent: &EditionIntent, receipt: &str, books: &[Book], sources: &[RetainedSource],
-    downloads: &DownloadManager,
-) -> Result<(), String> {
+fn verify_ready<'a, 'b>(
+    intent: &'a EditionIntent, receipt: &str, books: &[Book], sources: &[RetainedSource],
+    publication: Option<&'b ImportPublication>,
+) -> Result<(&'a str, &'b ImportPublication), String> {
     if books.len() != 1 || sources.len() != 1 || books[0].path != intent.destination
         || !matches!(intent.status.as_str(), "reserved" | "downloading" | "ready")
     { return Err("Verified import does not belong to this edition intent".into()); }
@@ -536,10 +548,10 @@ fn verify_ready(
     if receipt != id && !receipt.strip_prefix(id).is_some_and(|suffix| suffix.starts_with(':')) {
         return Err("Edition receipt belongs to another acquisition".into());
     }
-    if intent.verified_identity.as_ref() != Some(&sources[0].identity()?) {
-        downloads.validate_edition_publication(id, &intent.destination, &sources[0])?;
-    }
-    check_book(&intent.selection, &books[0], intent.lineage_associated)
+    let publication = publication.filter(|proof| proof.destination() == intent.destination)
+        .ok_or("Edition import has no verified download publication")?;
+    check_book(&intent.selection, &books[0], intent.lineage_associated)?;
+    Ok((id, publication))
 }
 
 impl State {
@@ -820,6 +832,74 @@ mod tests {
         state.settings.pinned_book_ids.push("old".into());
         state.reader_storage.insert(old.installation_id.clone(), serde_json::json!({"cookie": "private"}));
         (state, intent, new)
+    }
+
+    #[tokio::test]
+    async fn edition_ready_rechecks_its_download_even_with_a_saved_verified_identity() {
+        use sha2::{Digest, Sha256};
+        use std::{fs, time::Duration};
+
+        let root = std::env::temp_dir().join(format!("kiwix-edition-publication-{}", new_id()));
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let store = std::sync::Arc::new(Store::new(root.join("profile")).unwrap());
+        let download_state = root.join("downloads");
+        fs::create_dir(&download_state).unwrap();
+        let path = root.join("edition.zim");
+        let bytes = include_bytes!("../tests/fixtures/small.zim");
+        fs::write(&path, bytes).unwrap();
+        let path_str = path.to_str().unwrap();
+        let book = crate::imports::load_book(path_str, true, false).unwrap();
+        let (_, mut intent, _) = setup(false);
+        let id = new_id();
+        intent.destination = path_str.to_owned();
+        intent.download_id = Some(id.clone());
+        intent.status = "downloading".into();
+        intent.receipt = None;
+        intent.verified = None;
+        intent.verified_identity = None;
+        intent.selection.entry.name = book.metadata.name;
+        intent.selection.entry.language = book.metadata.language;
+        intent.selection.entry.date = book.metadata.date;
+        intent.selection.entry.tags = book.metadata.tags;
+        store.update(|state| {
+            state.edition_intents.push(intent.clone());
+            Ok(())
+        }).unwrap();
+
+        let ownership = crate::torrent::CleanupEntry::retain(&path, &fs::File::open(&path).unwrap()).unwrap();
+        let digest = hex::encode(Sha256::digest(bytes));
+        let journal = serde_json::json!({ (id.clone()): {
+            "id": &id, "url": &intent.selection.entry.url, "fileName": "edition.zim",
+            "destination": path_str, "status": "complete", "downloaded": bytes.len(),
+            "total": bytes.len(), "speed": 0,
+            "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+            "publication": {"size": bytes.len(), "sha256": digest},
+            "publishedOwnership": ownership,
+        }});
+        fs::write(download_state.join("downloads.json"), serde_json::to_vec(&journal).unwrap()).unwrap();
+        let downloads = DownloadManager::new(download_state, store.clone(), Default::default()).unwrap();
+        let imports = ImportManager::new().unwrap();
+        imports.enqueue_publication(&id, vec![path_str.to_owned()], downloads.import_publication(&id)).unwrap();
+        let ready = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(ready) = imports.ready().into_iter().next() { break ready; }
+                imports.changed().notified().await;
+            }
+        }).await.unwrap();
+
+        let editions = EditionManager::new();
+        let admitted = editions.ready(&store, &intent.id, &ready, &imports, &downloads).unwrap();
+        assert!(admitted.verified_identity.is_some());
+        downloads.remove_terminal(&id).unwrap();
+        assert!(editions.ready(&store, &intent.id, &ready, &imports, &downloads).is_err());
+        assert_eq!(imports.status(&id).unwrap().state, crate::imports::ImportState::Failed);
+        assert_eq!(fs::read(&path).unwrap().as_slice(), bytes);
+        imports.shutdown();
+        drop(ready);
+        drop(downloads);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

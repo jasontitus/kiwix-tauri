@@ -180,6 +180,8 @@ export default function Settings({
   const webSharingDisclosure = useRef<HTMLDetailsElement>(null);
   const consumedWebSharingIntent = useRef(0);
   const privateSyncDisclosure = useRef<HTMLDetailsElement>(null);
+  const [privateSyncOpen, setPrivateSyncOpen] = useState(false);
+  const [speechModelsOpen, setSpeechModelsOpen] = useState(false);
   const consumedPrivateSyncIntent = useRef(0);
   useEffect(() => {
     if (!privateSyncIntent || consumedPrivateSyncIntent.current === privateSyncIntent) return;
@@ -452,7 +454,7 @@ export default function Settings({
                   <option value="original">{t("Archive original")}</option>
                   <option value="light">{t("Light")}</option>
                   <option value="dark">{t("Dark")}</option>
-                  <option value="sepia">{t("Sepia")}</option>
+                  <option value="sepia">{t("Paper")}</option>
                 </select>
               </label>
               <label className="field">
@@ -490,12 +492,12 @@ export default function Settings({
                   {...input("zoom")}
                 />
               </label>
-              <details className="secondary-controls">
+              <details className="secondary-controls" onToggle={(event) => setSpeechModelsOpen(event.currentTarget.open)}>
                 <summary>{t("Read aloud")}</summary>
                 <p className="muted">
                   {t("Choose read-aloud language, voice and speed in the reader. Each language remembers its own preferences.")}
                 </p>
-                <SpeechModels />
+                <SpeechModels active={speechModelsOpen} />
               </details>
             </div>
             <label className="check-field">
@@ -690,8 +692,7 @@ export default function Settings({
                       {activeLocation
                         ? `${activeLocation.kind === "internal" ? t("Internal app storage") : activeLocation.label || t("External app storage")}${activeLocation.removable ? ` · ${t("Removable volume")}` : ""}`
                         : t("Selected library location")}
-                      {" · "}
-                      <span className="file-path">{storage.directory}</span>
+                      {!isIOS && <>{" · "}<span className="file-path">{storage.directory}</span></>}
                     </dd>
                   </div>
                 </dl>
@@ -917,9 +918,11 @@ export default function Settings({
         </div>
       </form>
       <h2 className="settings-group-heading">{t("Sharing & devices")}</h2>
-      <details className="secondary-controls" ref={privateSyncDisclosure}>
+      <details className="secondary-controls" ref={privateSyncDisclosure}
+        onToggle={(event) => setPrivateSyncOpen(event.currentTarget.open)}>
         <summary>{t("Connect my devices")}</summary>
         <PrivateReadingSync
+          visible={privateSyncOpen}
           privateMode={settings.privateMode}
           readOnly={settings.readOnly}
           privacyGeneration={privacyGeneration}
@@ -1232,7 +1235,7 @@ export default function Settings({
       )}
       {externalUrl && (
         <Modal title={t("Open external link?")} onClose={closeExternal}>
-          <p>{t("Open this link in your default browser?\n{url}", { url: externalUrl })}</p>
+          <p className="confirm-message">{t("Open this link in your default browser?\n{url}", { url: externalUrl })}</p>
           <div className="modal-actions">
             <button autoFocus disabled={openingExternal} onClick={closeExternal}>
               {t("Cancel")}

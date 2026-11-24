@@ -4,6 +4,8 @@
 #[allow(unused_imports)]
 use super::*;
 
+const BODY_RETRIES: usize = 3;
+
 pub(super) fn settle_worker_result(result: Result<Outcome, String>, action: Signal) -> Result<Outcome, String> {
     // Publication is already committed at Complete. Every earlier outcome,
     // including an error racing a local hash stop, must retain explicit intent.
@@ -147,6 +149,8 @@ pub(super) async fn execute_transfer(
     // A 206 may legally end before the object, but an unbounded continuation
     // loop lets a short-range server issue request after request forever.
     let mut short_body_continues = 0u32;
+    let mut body_retries = 0;
+    let mut retry_delay = None;
     'transfer: {
     // A durable layout resumes each segment at its own synced offset without a
     // probe request. Every segment still sends If-Range, so a changed object
@@ -220,6 +224,17 @@ pub(super) async fn execute_transfer(
         if *signal.borrow() != Signal::Run {
             let action = *signal.borrow();
             return stop_file(inner, id, &mut file, downloaded, action).await;
+        }
+        if let Some(delay) = retry_delay.take() {
+            tokio::select! {
+                biased;
+                _ = &mut network_denied => return stop_file(inner, id, &mut file, downloaded, Signal::Interrupt).await,
+                _ = signal.changed() => {
+                    let action = *signal.borrow();
+                    return stop_file(inner, id, &mut file, downloaded, action).await;
+                }
+                _ = tokio::time::sleep(delay) => {}
+            }
         }
         snapshot = inner.snapshot(id)?;
         let transfer = download_url(inner, id, snapshot.transfer_url.as_deref().ok_or("Download has no transfer URL")?)?;
@@ -449,6 +464,8 @@ pub(super) async fn execute_transfer(
                 }
             }
         }
+        let retryable_body = matches!(&response, TransferResponse::Http(_))
+            && (etag.is_some() || modified.is_some());
         // Validators are durable before the first byte associated with them is written.
         file.flush().await.map_err(|e| e.to_string())?;
         file.sync_data().await.map_err(|e| e.to_string())?;
@@ -476,23 +493,30 @@ pub(super) async fn execute_transfer(
         let mut buffer = vec![0u8; READ_BUDGET];
         let mut writer = tokio::io::BufWriter::with_capacity(WRITE_BUDGET, file);
         let mut speed_tick = Instant::now();
-        loop {
+        let body_error = loop {
             let Some(permit) = bandwidth_permit(inner, signal).await? else {
                 let action = *signal.borrow();
                 return stop_buffered(inner, id, &mut writer, downloaded, action).await;
             };
-            let count = tokio::select! {
+            let result = tokio::select! {
                 biased;
                 _ = &mut network_denied => return stop_buffered(inner, id, &mut writer, downloaded, Signal::Interrupt).await,
                 _ = signal.changed() => {
                     let action = *signal.borrow();
                     return stop_buffered(inner, id, &mut writer, downloaded, action).await;
                 }
-                result = reader.read(&mut buffer[..permit.bytes]) => result.map_err(|e| format!("Receiving download: {e}"))?,
+                result = reader.read(&mut buffer[..permit.bytes]) => result,
+            };
+            let count = match result {
+                Ok(count) => count,
+                Err(error) => {
+                    refund_bandwidth(inner, &permit, 0)?;
+                    break Some(error);
+                }
             };
             refund_bandwidth(inner, &permit, count)?;
             if count == 0 {
-                break;
+                break None;
             }
             let chunk = &buffer[..count];
             let next_received = received
@@ -565,6 +589,30 @@ pub(super) async fn execute_transfer(
                 })?;
                 checkpoint = Instant::now();
             }
+        };
+        if let Some(error) = body_error {
+            // Retry at the exact checkpoint on the same retained inode. The
+            // next response must pass the normal If-Range/Content-Range and
+            // validator checks; QUIC and unvalidated representations are not
+            // retried through this path.
+            if !retryable_body || downloaded == 0 || body_retries >= BODY_RETRIES {
+                return Err(format!("Receiving download: {error}"));
+            }
+            writer.flush().await.map_err(|error| format!("Flushing download: {error}"))?;
+            file = writer.into_inner();
+            file.sync_data().await.map_err(|error| format!("Synchronizing download progress: {error}"))?;
+            inner.update(id, |stored| {
+                stored.job.downloaded = downloaded;
+                stored.job.speed = 0;
+                stored.job.eta_seconds = None;
+            })?;
+            body_retries += 1;
+            retry_delay = Some(segment_delay(body_retries, 0, None));
+            checkpoint = Instant::now();
+            speed_since = checkpoint;
+            speed_start = downloaded;
+            last_speed = 0;
+            continue;
         }
         if response_bytes.is_some_and(|n| n != received) {
             return Err("Download response ended before its declared length".into());
@@ -646,6 +694,7 @@ pub(super) async fn execute_transfer(
                     file.into_std().await,
                     downloaded,
                     &digest,
+                    identity,
                     FinalizeMode::Worker,
                 );
             }
@@ -740,7 +789,7 @@ pub(super) async fn execute_transfer(
         record_verification_failure(inner, id, after, &digest, &error);
         return Err(error);
     }
-    record_verification_success(inner, id, after, &digest)?;
+    record_verification_success(inner, id, after.clone(), &digest)?;
     if let Some(action) = worker_stop_action(inner, signal)? {
         return stop_file(inner, id, &mut file, downloaded, action).await;
     }
@@ -750,6 +799,7 @@ pub(super) async fn execute_transfer(
         file.into_std().await,
         downloaded,
         &digest,
+        after,
         FinalizeMode::Worker,
     )
 }

@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { api, capturePrivacyContext, getConfirmedSettings, isPrivacyContextCurrent } from "../api";
+import { reportError, diagnostics } from "../diagnostics";
 import {
   t,
   formatBytes,
@@ -22,6 +23,7 @@ import {
 import type { Book, CatalogCacheStatus, CatalogEntry, CatalogPage, DownloadAdmission, DownloadJob, DownloadTarget, Settings } from "../types";
 import { deviceCatalogLanguages } from "../catalog-languages";
 import {
+  ArchiveTags,
   BookCover,
   Empty,
   ErrorNotice,
@@ -53,10 +55,16 @@ type CatalogFacets = {
   categories: FacetChoice[];
   cache?: CatalogCacheStatus;
 };
-function catalogURL(source: string) {
-  const url = new URL(source || "https://library.kiwix.org/catalog/v2/entries");
-  url.searchParams.set("count", "48");
-  return url.href;
+function catalogURL(source: string): URL | null {
+  try {
+    const url = new URL(source || "https://library.kiwix.org/catalog/v2/entries");
+    if (!["http:", "https:"].includes(url.protocol) || !url.hostname || url.username || url.password)
+      return null;
+    url.searchParams.set("count", "48");
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 // Only producer metadata declares this requirement. Names, URLs, and the
@@ -184,7 +192,10 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
   const [direction, setDirection] = useState<"asc" | "desc">("asc");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [source, setSource] = useState(settings.catalogUrl);
-  const [url, setUrl] = useState(() => catalogURL(settings.catalogUrl));
+  const sourceRef = useRef(source);
+  const sourceRevision = useRef(0);
+  const baseURL = useMemo(() => catalogURL(source)?.href ?? null, [source]);
+  const [url, setUrl] = useState(() => catalogURL(settings.catalogUrl)?.href ?? null);
   const [trail, setTrail] = useState<string[]>([]);
   const [page, setPage] = useState<CatalogPage | null>(null);
   const [busy, setBusy] = useState(true);
@@ -192,7 +203,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
   const [retry, setRetry] = useState(0);
   const [detail, setDetail] = useState<CatalogEntry | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
-  const [startError, setStartError] = useState("");
+  const [actionError, setActionError] = useState<{ entryId: string; message: string } | null>(null);
   const alive = useRef(true);
   const startPending = useRef(false);
   useEffect(() => {
@@ -206,6 +217,10 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     setBusy(true);
     setError("");
     setPage(null);
+    if (!url) {
+      setBusy(false);
+      return;
+    }
     if (!privacy || privacy.generation !== privacyGeneration) {
       setError(t("Browsing session expired after a privacy transition"));
       setBusy(false);
@@ -232,31 +247,40 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
   }, [url, locale, retry, privacyGeneration]);
   useEffect(() => {
     setDetail(null);
-    setStartError("");
+    setActionError(null);
   }, [privacyGeneration]);
+  const changeSource = useCallback((next: string) => {
+    if (sourceRef.current === next) return;
+    sourceRef.current = next;
+    sourceRevision.current++;
+    setRetry((n) => n + 1);
+    setSource(next);
+    setUrl(catalogURL(next)?.href ?? null);
+    setPage(null);
+    setTrail([]);
+    setDetail(null);
+    setActionError(null);
+  }, []);
   useEffect(() => {
-    setSource(settings.catalogUrl);
-  }, [settings.catalogUrl]);
+    changeSource(settings.catalogUrl);
+  }, [settings.catalogUrl, changeSource]);
   const filterURL = useMemo(() => {
-    try {
-      const next = new URL(catalogURL(source));
-      if (query.trim()) next.searchParams.set("q", query.trim());
-      if (filters.languages.length)
-        next.searchParams.set("lang", filters.languages.join(","));
-      if (filters.categories.length)
-        next.searchParams.set("category", filters.categories.join(","));
-      const tags = filters.content.filter(
-        (tag) =>
-          filters.content.filter(
-            (other) => other.split(":")[0] === tag.split(":")[0],
-          ).length === 1,
-      );
-      if (tags.length) next.searchParams.set("tag", tags.join(";"));
-      return next.href;
-    } catch {
-      return null;
-    }
-  }, [source, query, filters]);
+    if (!baseURL) return null;
+    const next = new URL(baseURL);
+    if (query.trim()) next.searchParams.set("q", query.trim());
+    if (filters.languages.length)
+      next.searchParams.set("lang", filters.languages.join(","));
+    if (filters.categories.length)
+      next.searchParams.set("category", filters.categories.join(","));
+    const tags = filters.content.filter(
+      (tag) =>
+        filters.content.filter(
+          (other) => other.split(":")[0] === tag.split(":")[0],
+        ).length === 1,
+    );
+    if (tags.length) next.searchParams.set("tag", tags.join(";"));
+    return next.href;
+  }, [baseURL, query, filters]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (filterURL) {
@@ -271,6 +295,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     const privacy = capturePrivacyContext();
     setFacetError("");
     setFacets({ languages: [], categories: [] });
+    if (!baseURL) return;
     if (!privacy || privacy.generation !== privacyGeneration) {
       setFacetError(t("Browsing session expired after a privacy transition"));
       return;
@@ -294,13 +319,10 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     return () => {
       alive = false;
     };
-  }, [source, locale, facetRetry, privacyGeneration]);
+  }, [baseURL, source, locale, facetRetry, privacyGeneration]);
   function filter(event: React.FormEvent) {
     event.preventDefault();
-    if (!filterURL) {
-      onError(t("The catalog source URL is invalid."));
-      return;
-    }
+    if (!filterURL) return;
     setTrail([]);
     if (filterURL === url) setRetry((previous) => previous + 1);
     else setUrl(filterURL);
@@ -312,14 +334,24 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
           (direction === "asc" ? 1 : -1) * compareArchives(a, b, sort) ||
           a.id.localeCompare(b.id),
       ),
-    [page, sort, direction],
+    [page, sort, direction, locale],
   );
+  function openDetail(entry: CatalogEntry) {
+    setActionError((current) => current?.entryId === entry.id ? current : null);
+    setDetail(entry);
+  }
+  function reportActionError(entry: CatalogEntry, error: unknown) {
+    if (reportError(diagnostics, error, "blocking", true)) {
+      setActionError({ entryId: entry.id, message: errorText(error) });
+    }
+  }
   async function preview(entry: CatalogEntry) {
+    const privacy = capturePrivacyContext();
+    if (!baseURL || !privacy || settings.externalLinks === "deny") return;
+    const revision = sourceRevision.current;
+    const current = () => alive.current && revision === sourceRevision.current && isPrivacyContextCurrent(privacy);
+    setActionError(null);
     try {
-      if (settings.externalLinks === "deny") {
-        onError(t("External links are disabled in Settings."));
-        return;
-      }
       const acquisition = new URL(entry.url);
       const filename = decodeURIComponent(
         acquisition.pathname.split("/").pop() || "",
@@ -331,7 +363,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
             "This catalog entry does not provide an archive name for online preview.",
           ),
         );
-      const viewer = new URL("/viewer", source);
+      const viewer = new URL("/viewer", baseURL);
       if (viewer.hostname === "opds.library.kiwix.org")
         viewer.hostname = "library.kiwix.org";
       viewer.hash = encodeURIComponent(name);
@@ -349,9 +381,10 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
         ))
       )
         return;
+      if (!current() || getConfirmedSettings()?.externalLinks === "deny") return;
       await api("open_external", { url: viewer.href, confirmed: true });
     } catch (error) {
-      onError(error);
+      if (current()) reportActionError(entry, error);
     }
   }
   async function download(
@@ -361,6 +394,8 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     const privacy = capturePrivacyContext();
     if (startPending.current || settings.privateMode || settings.readOnly ||
       !privacy || privacy.privateMode || privacy.readOnly) return;
+    const revision = sourceRevision.current;
+    const current = () => alive.current && revision === sourceRevision.current && isPrivacyContextCurrent(privacy);
     if (
       requiresLegacyServiceWorker(entry) &&
       !(await confirmAction(
@@ -370,11 +405,10 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
       ))
     )
       return;
-    if (!alive.current || !isPrivacyContextCurrent(privacy)) return;
+    if (startPending.current || !current()) return;
     startPending.current = true;
-    setStartError("");
+    setActionError(null);
     setStarting(entry.id);
-    const current = () => alive.current && isPrivacyContextCurrent(privacy);
     try {
       let url = entry.url;
       if (transport === "torrent") {
@@ -390,10 +424,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
       onDownload({ kind: "download", id: job.id }, { privacy, focus: present });
       if (present) setDetail(null);
     } catch (e) {
-      if (current()) {
-        setStartError(errorText(e));
-        onError(e);
-      }
+      if (current()) reportActionError(entry, e);
     } finally {
       startPending.current = false;
       if (alive.current) setStarting(null);
@@ -422,10 +453,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
         {t("Catalog source")}
         <select
           value={source}
-          onChange={(e) => {
-            setSource(e.target.value);
-            setTrail([]);
-          }}
+          onChange={(e) => changeSource(e.target.value)}
         >
           {sources.map((url, index) => (
             <option key={url} value={url}>
@@ -436,9 +464,11 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
       </label>
     ) : null;
   const installedDetail = detail ? installedEdition(detail, installedArchives) : null;
+  const actionNotice = actionError &&
+    <ErrorNotice message={actionError.message} onDismiss={() => setActionError(null)} />;
   return (
     <section className="page catalog-page">
-      {startError && <p className="inline-error" role="alert">{startError}</p>}
+      {!detail && actionNotice}
       <PageHeader title={t("Discover")} />
       <form className="catalog-filters" onSubmit={filter}>
         <div className="toolbar compact-toolbar">
@@ -452,7 +482,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
               aria-label={t("Search books")}
             />
           </label>
-          <button className="primary" disabled={busy}>
+          <button className="primary" disabled={!baseURL || busy}>
             <Search size={16} aria-hidden="true" />
             {t("Search")}
           </button>
@@ -531,14 +561,14 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
             </button>
           )}
           <p className="muted catalog-result-count" aria-live="polite">
-            {!busy && !error && page && (
+            {baseURL && !busy && !error && page && (
               page.total === null
                 ? t("{count} archives on this page", { count: page.entries.length })
                 : t("{count} archives found", { count: page.total })
             )}
           </p>
         </div>
-        {facetError && (
+        {baseURL && facetError && (
           <p className="inline-error" role="status">
             {t("Could not load catalog filter choices.")} {facetError}
             <button
@@ -556,7 +586,9 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
           onRetry={() => setFacetRetry((previous) => previous + 1)}
         />
       </form>
-      {error ? (
+      {!baseURL ? (
+        <ErrorNotice message={t("The catalog source URL is invalid. Choose another source or correct the archive catalog URL in Settings.")} />
+      ) : error ? (
         <ErrorNotice
           message={t("Could not load the catalog.") + "\n" + error}
           onRetry={() => setRetry((n) => n + 1)}
@@ -591,7 +623,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
                   <article className="catalog-card" key={entry.id}>
                     <button
                       className="catalog-cover"
-                      onClick={() => setDetail(entry)}
+                      onClick={() => openDetail(entry)}
                       aria-label={t("Details for {title}", {
                         title: entry.title,
                       })}
@@ -601,7 +633,7 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
                     <div className="catalog-card-content">
                       <button
                         className="text-button book-title"
-                        onClick={() => setDetail(entry)}
+                        onClick={() => openDetail(entry)}
                       >
                         {entry.title}
                       </button>
@@ -682,11 +714,19 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
                 {t("Page {number}", { number: formatNumber(trail.length + 1) })}
               </span>
               <button
-                disabled={!page.next}
+                disabled={!page.next || !url}
                 onClick={() => {
-                  if (page.next) {
+                  if (!page.next || !url) return;
+                  try {
+                    const base = new URL(url);
+                    const next = new URL(page.next, base);
+                    if (!["http:", "https:"].includes(next.protocol) || !next.hostname ||
+                        next.username || next.password || next.hash || next.origin !== base.origin)
+                      throw new Error(t("The catalog page link is invalid."));
                     setTrail((previous) => [...previous, url]);
-                    setUrl(new URL(page.next, url).href);
+                    setUrl(next.href);
+                  } catch (error) {
+                    setError(errorText(error));
                   }
                 }}
               >
@@ -729,14 +769,8 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
               {t("BitTorrent shares pieces with peers while downloading. Continued seeding after completion requires your permission.")}
             </p>
           )}
-          {startError && <p className="inline-error" role="alert">{startError}</p>}
-          <div className="tag-list">
-            {detail.tags.map((tag) => (
-              <span key={tag} className="badge">
-                {tag}
-              </span>
-            ))}
-          </div>
+          {actionError?.entryId === detail.id && actionNotice}
+          <ArchiveTags tags={detail.tags} />
           <p className="muted file-path">{detail.url}</p>
           <div className="modal-actions">
             <button

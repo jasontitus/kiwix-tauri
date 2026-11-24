@@ -1278,7 +1278,7 @@ fn publish_install(
         if verified.matches_in(parent, INSTALLED.as_ref())? {
             crate::publication::publish_verified_noreplace_in(parent, INSTALLED.as_ref(), journal.pending_name().as_ref(), &verified)
                 .and_then(|()| sync(parent))
-                .map_err(|rollback| io::Error::other(format!("{error}. The installation record could not be restored. Keep the files in {} and retry removal: {rollback}", lease.root.display())))?;
+                .map_err(|rollback| io::Error::other(format!("{error}. The installed voice could not be restored. Keep the files in {} and retry removal: {rollback}", lease.root.display())))?;
         }
         if lease.previous.is_some() {
             recover_previous(parent, &CancellationToken::new())?;

@@ -752,7 +752,7 @@ fn maintenance_reconciles(cycles: u32) -> bool {
 /// builds) the dev server may be navigated to. External `http(s)`, `data:`,
 /// `file:` and arbitrary loopback ports are refused before a request.
 #[cfg(desktop)]
-pub(crate) fn navigation_allowed(url: &tauri::Url, reader_origins: &[String]) -> bool {
+pub(crate) fn navigation_allowed(url: &tauri::Url, reader_origin: impl FnOnce(&str) -> bool) -> bool {
     match url.scheme() {
         "tauri" => true,
         "about" => matches!(url.as_str(), "about:blank" | "about:srcdoc"),
@@ -762,14 +762,14 @@ pub(crate) fn navigation_allowed(url: &tauri::Url, reader_origins: &[String]) ->
             .as_str()
             .strip_prefix("blob:")
             .and_then(|inner| tauri::Url::parse(inner).ok())
-            .is_some_and(|inner| origin_allowed(&inner, reader_origins)),
-        "http" | "https" => origin_allowed(url, reader_origins),
+            .is_some_and(|inner| origin_allowed(&inner, reader_origin)),
+        "http" | "https" => origin_allowed(url, reader_origin),
         _ => false,
     }
 }
 
 #[cfg(desktop)]
-fn origin_allowed(url: &tauri::Url, reader_origins: &[String]) -> bool {
+fn origin_allowed(url: &tauri::Url, reader_origin: impl FnOnce(&str) -> bool) -> bool {
     let host = url.host_str().unwrap_or_default();
     // Tauri's shell origin on Windows; the macOS shell uses `tauri://localhost`.
     if host == "tauri.localhost" {
@@ -780,7 +780,7 @@ fn origin_allowed(url: &tauri::Url, reader_origins: &[String]) -> bool {
         return true;
     }
     let origin = url.origin().ascii_serialization();
-    reader_origins.iter().any(|allowed| allowed == &origin)
+    reader_origin(&origin)
 }
 
 #[cfg(desktop)]
@@ -1100,7 +1100,7 @@ fn run_application(options: Options) -> Result<(), String> {
                 let nav_service = service.clone();
                 let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), configuration)?
                     .on_navigation(move |url| {
-                        navigation_allowed(url, &nav_service.reader_origins())
+                        navigation_allowed(url, |origin| nav_service.has_reader_origin(origin))
                     });
                 #[cfg(any(target_os = "windows", target_os = "linux"))]
                 let builder = if let Some(profile) = &portable {
@@ -1991,7 +1991,7 @@ mod navigation_policy_tests {
 
     #[test]
     fn only_shell_reader_and_local_handoff_urls_may_navigate() {
-        let readers = vec!["http://abc-123.localhost:49860".to_string()];
+        let is_reader = |origin: &str| origin == "http://abc-123.localhost:49860";
         for allowed in [
             "tauri://localhost/index.html",
             "about:blank",
@@ -2003,13 +2003,13 @@ mod navigation_policy_tests {
             "http://abc-123.localhost:49860/index",
         ] {
             assert!(
-                navigation_allowed(&Url::parse(allowed).unwrap(), &readers),
+                navigation_allowed(&Url::parse(allowed).unwrap(), is_reader),
                 "{allowed}"
             );
         }
         let development_server = Url::parse("http://127.0.0.1:1420/").unwrap();
         assert_eq!(
-            navigation_allowed(&development_server, &readers),
+            navigation_allowed(&development_server, is_reader),
             cfg!(debug_assertions),
             "the development server is available only in debug builds"
         );
@@ -2025,7 +2025,7 @@ mod navigation_policy_tests {
             "ftp://example.com/",
         ] {
             assert!(
-                !navigation_allowed(&Url::parse(denied).unwrap(), &readers),
+                !navigation_allowed(&Url::parse(denied).unwrap(), is_reader),
                 "{denied}"
             );
         }

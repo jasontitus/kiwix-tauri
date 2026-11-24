@@ -1113,7 +1113,9 @@ async fn unverified_local_base_stops_before_fallback_network_and_confirms_real_c
     let manager = fixture.manager();
     let destination = fixture.root.join("output");
     fs::create_dir(&destination).unwrap();
-    let len = MAX_CACHE_BYTES;
+    // The cache budget is larger than the protocol chunk limit; a test chunk
+    // must stay within the range a real StreetZim source can request.
+    let len = MAX_CHUNK;
     let payload = vec![b'v'; len as usize];
     let expected = hex::encode(Sha256::digest(&payload));
     let candidate = fixture.root.join("wrong-base.zim");
@@ -1212,7 +1214,9 @@ async fn compose_retry_retains_initial_and_local_fallback_approvals() {
     let destination = fixture.root.join("retry-output");
     fs::create_dir(&destination).unwrap();
     let candidate = fixture.root.join("wrong-retry-base.zim");
-    fs::File::create(&candidate).unwrap().set_len(MAX_CACHE_BYTES).unwrap();
+    // StreetZim ranges cannot exceed MAX_CHUNK even though the cache budget can.
+    let chunk = MAX_CHUNK;
+    fs::File::create(&candidate).unwrap().set_len(chunk).unwrap();
     // Pin admission capacity: the approval sequence must not depend on
     // what the rest of the suite or a concurrent build writes this second.
     let available = 2 * crate::disk_warning::THRESHOLD_BYTES;
@@ -1222,14 +1226,14 @@ async fn compose_retry_retains_initial_and_local_fallback_approvals() {
     let recipe = || {
         let mut recipe = fixture.recipe();
         recipe.size = size;
-        recipe.base.size = MAX_CACHE_BYTES;
-        recipe.base.chunk = MAX_CACHE_BYTES;
+        recipe.base.size = chunk;
+        recipe.base.chunk = chunk;
         recipe.base.sha256 = vec!["e".repeat(64)];
         recipe.base.mask = None;
         recipe.segments.clear();
         let mut remaining = size - 16;
         while remaining > 0 {
-            let length = remaining.min(MAX_CACHE_BYTES);
+            let length = remaining.min(chunk);
             recipe.segments.push(Segment {
                 src: "base".into(), pack: None, off: Some(0), len: Some(length),
                 data: None, sha256: None,

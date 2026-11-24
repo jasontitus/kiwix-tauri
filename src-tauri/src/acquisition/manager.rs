@@ -402,20 +402,6 @@ impl DownloadManager {
         Ok(vec![(destination, ownership.with_publication(intent.size, Some(expected)))])
     }
 
-    /// The edition verifier must hold its pinned import while comparing this
-    /// durable publication receipt. Path names and archive UUIDs alone confer
-    /// neither ownership nor replacement authority.
-    pub(crate) fn validate_edition_publication(
-        &self, id: &str, destination: &str,
-        source: &crate::archive_source::RetainedSource,
-    ) -> Result<(), String> {
-        let publication = self.import_publication(id)?;
-        if publication.destination() != destination {
-            return Err("Downloaded archive path changed before import".into());
-        }
-        publication.verify(source, || false)?;
-        self.with_import_publication(id, source, &publication, || Ok(()))
-    }
 
     pub(crate) fn import_publication(&self, id: &str) -> Result<ImportPublication, String> {
         let state = self.inner.state()?;

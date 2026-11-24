@@ -7,11 +7,15 @@
 //! description. Those are useful in a local log, never in the red band above
 //! the library. `plain` turns them into one sentence that says what happened
 //! and what to do next; anything already written for a person passes through.
+//! Renderer control messages for suspension and a disk-space decision retain
+//! their envelopes; the renderer handles them rather than displaying them raw.
 //!
 //! Internal jargon must not survive this function. If a future error text
 //! slips through with one of the words below, the caller still sees a usable
 //! instruction instead of implementation vocabulary, and the original text is
 //! kept in the local diagnostic log by the caller.
+
+use crate::disk_warning::{SpaceWarning, WARNING_PREFIX};
 
 /// A lifecycle gate, not a failure. The command was refused only because the
 /// app was not interactive; the frontend waits for the foreground, retries it
@@ -103,9 +107,43 @@ fn panic_description(message: &str) -> Option<&str> {
         .filter(|detail| !detail.trim().is_empty())
 }
 
-/// Turn one internal error string into the sentence shown to a person.
+fn valid_disk_warning(payload: &str) -> bool {
+    #[derive(serde::Deserialize)]
+    struct Envelope {
+        #[serde(flatten)]
+        warning: SpaceWarning,
+        // Map jobs may append one user-facing recovery sentence.
+        #[serde(rename = "recoveryWarning", default)]
+        _recovery_warning: String,
+        #[serde(flatten)]
+        extra: serde_json::Map<String, serde_json::Value>,
+    }
+
+    let Ok(Envelope { warning, extra, .. }) = serde_json::from_str(payload) else {
+        return false;
+    };
+    if !extra.is_empty() {
+        return false;
+    }
+    !warning.acknowledgement.is_empty()
+        && !warning.directory.is_empty()
+        && warning.projected_free_bytes < warning.threshold_bytes
+        && warning
+            .available_bytes
+            .checked_sub(warning.remaining_bytes)
+            .is_some_and(|after_download| warning.projected_free_bytes <= after_download)
+}
+
+/// Return a renderer control message or a user-facing sentence.
 pub fn plain(message: &str) -> String {
     let trimmed = message.trim();
+    if let Some(payload) = trimmed.strip_prefix(WARNING_PREFIX) {
+        return if valid_disk_warning(payload) {
+            trimmed.to_owned()
+        } else {
+            TRY_AGAIN.to_owned()
+        };
+    }
     if let Some(code) = envelope_code(trimmed) {
         // The frontend needs the code, not a paraphrase, to retry on resume.
         if code == SUSPENDED_CODE {
@@ -175,6 +213,59 @@ mod tests {
         assert_eq!(value["code"], SUSPENDED_CODE);
         assert_eq!(value["message"], SUSPENDED_MESSAGE);
         assert_eq!(plain(&signal), signal);
+    }
+
+    #[test]
+    fn download_admission_warning_survives_the_ui_error_boundary() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("database record snapshot token");
+        let error = crate::disk_warning::check_with_available(
+            &destination,
+            Some(1_200_000_000),
+            "test download",
+            None,
+            Some(2_000_000_000),
+        )
+        .unwrap_err();
+        assert_eq!(plain(&error), error);
+
+        // Map composition sends a composite opaque acknowledgement, and job
+        // recovery may add one user-facing field without changing the warning.
+        let mut map: serde_json::Value =
+            serde_json::from_str(error.strip_prefix(WARNING_PREFIX).unwrap()).unwrap();
+        let token = map["acknowledgement"].clone();
+        map["acknowledgement"] = serde_json::json!({
+            "attempt": null, "output": [token], "cache": [],
+        })
+        .to_string()
+        .into();
+        map["recoveryWarning"] = "Some earlier map downloads could not be cleaned up.".into();
+        let error = format!("{WARNING_PREFIX}{map}");
+        assert_eq!(plain(&error), error);
+
+        map["debug"] = "internal database record".into();
+        assert_eq!(plain(&format!("{WARNING_PREFIX}{map}")), TRY_AGAIN);
+        let duplicate = error.replacen(
+            "\"directory\":",
+            "\"directory\":\"internal database record\",\"directory\":",
+            1,
+        );
+        assert_eq!(plain(&duplicate), TRY_AGAIN);
+        assert_eq!(plain("LOW_DISK_SPACE:{\"record\":\"internal\"}"), TRY_AGAIN);
+        assert_eq!(plain("LOW_DISK_SPACE:not json"), TRY_AGAIN);
+    }
+
+    #[test]
+    fn archive_metadata_limit_remains_actionable_without_exposing_internal_records() {
+        let error = crate::archive::archive_error(zimru::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "ZIM metadata record exceeds configured byte limit",
+        )));
+        assert_eq!(
+            plain(&error),
+            "An archive metadata entry exceeds the reader’s size limit. Choose a different edition."
+        );
+        assert_eq!(plain("Invalid saved record"), TRY_AGAIN);
     }
 
     #[test]

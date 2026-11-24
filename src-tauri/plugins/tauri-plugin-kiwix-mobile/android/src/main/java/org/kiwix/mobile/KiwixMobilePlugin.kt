@@ -119,8 +119,9 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private var uiAdmission = true
     private val applicationContext = initialActivity.applicationContext
     private val main = Handler(Looper.getMainLooper())
-    /** Short control commands, scans and notification admission. */
+    /** Short control commands and notification admission. */
     private val worker = Executors.newSingleThreadExecutor()
+    private val scanWorker = Executors.newSingleThreadExecutor()
     /** One long copy/export at a time; never head-of-line blocks control work. */
     private val copyWorker = Executors.newSingleThreadExecutor()
     private val windowState = ActivityWindowState()
@@ -178,8 +179,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         ).also {
             // Lock-screen and notification transport re-enters Rust, which owns
             // admission and forwards the action to the same engine commands.
-            SpeechPlayback.dispatch = { action ->
-                owner.get()?.trigger("speech-action", JSObject().put("action", action))
+            SpeechPlayback.dispatch = { id, action ->
+                owner.get()?.trigger("speech-action", JSObject().put("action", action).put("sessionId", id))
             }
         }
     }
@@ -1029,7 +1030,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         val maxEntries = invoke.getArgs().optInt("maxEntries", 512).coerceIn(1, 4096)
         val cancellation = CancellationSignal()
         scanCancellation = cancellation
-        worker.execute {
+        scanWorker.execute {
             val outcome = try { deviceScan.scan(maxEntries, cancellation) } catch (error: Exception) { error }
             main.post {
                 if (deviceScanInvoke !== invoke) return@post
@@ -1512,7 +1513,10 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         main.post {
             try {
                 requireVisible()
-                invoke.resolve(AndroidCompletionNotifications.takeTap(applicationContext))
+                worker.execute {
+                    try { invoke.resolve(AndroidCompletionNotifications.takeTap(applicationContext)) }
+                    catch (error: Exception) { reject(invoke, error) }
+                }
             } catch (error: Exception) { reject(invoke, error) }
         }
     }
@@ -1521,7 +1525,11 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         main.post {
             try {
                 requireVisible()
-                invoke.resolve(AndroidCompletionNotifications.acknowledgeTap(applicationContext, invoke.getArgs()))
+                val args = invoke.getArgs()
+                worker.execute {
+                    try { invoke.resolve(AndroidCompletionNotifications.acknowledgeTap(applicationContext, args)) }
+                    catch (error: Exception) { reject(invoke, error) }
+                }
             } catch (error: Exception) { reject(invoke, error) }
         }
     }
@@ -1558,6 +1566,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     }
 
     private fun receiveCompletionNotification(intent: Intent?) {
+        // Activity intake has no deferred-delivery ownership. Preserve its
+        // existing durable admission before returning from the callback.
         if (AndroidCompletionNotifications.receiveIntent(applicationContext, intent)) {
             main.post { if (!destroyed && hasListener("completion-notification-tap"))
                 trigger("completion-notification-tap", JSObject()) }
@@ -1697,15 +1707,20 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
                 activityScreenCallbackCurrent(source, generation, activityReference.get(),
                     activityGeneration, currentActivity.get())) releaseTransferScreen()
             if (destroyed || !hasListener(event)) return@post
-            val record = TransferEvents.record(applicationContext, event) ?: return@post
-            trigger(event, JSObject().put("requestId", record.getString("requestId")).also {
-                if (record.has("code")) it.put("code", record.getString("code"))
-            })
+            worker.execute {
+                val record = TransferEvents.record(applicationContext, event) ?: return@execute
+                main.post delivery@{
+                    if (destroyed || !hasListener(event)) return@delivery
+                    trigger(event, JSObject().put("requestId", record.getString("requestId")).also {
+                        if (record.has("code")) it.put("code", record.getString("code"))
+                    })
+                }
+            }
         }
     }
 
     @Command fun takeTransferEvents(invoke: Invoke) {
-        main.post {
+        worker.execute {
             try {
                 invoke.resolve(JSObject().put("events", TransferEvents.peek(applicationContext)))
             } catch (error: Exception) { reject(invoke, error) }
@@ -1713,7 +1728,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     }
 
     @Command fun acknowledgeTransferEvent(invoke: Invoke) {
-        main.post {
+        worker.execute {
             try {
                 val args = invoke.getArgs()
                 TransferEvents.acknowledge(applicationContext,

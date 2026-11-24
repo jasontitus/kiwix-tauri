@@ -463,6 +463,25 @@ fn cache_attachment_replacement_prevents_mutation_and_detached_publication() {
     assert_eq!(std::fs::read(profile.file()).unwrap(), b"replacement sentinel");
 }
 
+#[cfg(unix)]
+#[test]
+fn scratch_inode_replacement_does_not_overwrite_published_history() {
+    let profile = Profile::new();
+    let store = Arc::new(Store::new(profile.0.clone()).unwrap());
+    let cache = cache(store.clone());
+    let directory = store.with_catalog_cache_policy(|_, _| cache.directory(true)).unwrap().unwrap();
+    atomic_write(&directory, b"published").unwrap();
+    let scratch = profile.0.join("cache").join(PENDING_FILE);
+    let displaced = profile.0.join("displaced");
+    let error = atomic_write_with_hook(&directory, b"private", || {
+        std::fs::rename(&scratch, &displaced).unwrap();
+        std::fs::write(&scratch, b"foreign").unwrap();
+    }).unwrap_err();
+    assert!(error.contains("scratch file changed"));
+    assert_eq!(std::fs::read(profile.file()).unwrap(), b"published");
+    assert_eq!(std::fs::read(scratch).unwrap(), b"foreign");
+}
+
 #[cfg(windows)]
 #[test]
 fn held_cache_directory_cannot_be_detached_before_or_during_publication() {

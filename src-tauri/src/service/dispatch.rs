@@ -897,20 +897,20 @@ impl Service {
                 if prefix.len() > 512 {
                     return Err("Suggestion prefix is too long".into());
                 }
-                let state = self.store.read()?;
+                let scope: Vec<String> = self.store.books()?.into_iter()
+                    .filter(|book| book.available && requested.contains(&book.metadata.id))
+                    .map(|book| book.metadata.id)
+                    .collect();
                 let service = self.clone();
                 let request_cancel = cancel.clone();
                 let result = blocking(move || {
-                    let mut archives = Vec::new();
-                    for book in state.books.into_iter().filter(|book| {
-                        book.available && requested.contains(&book.metadata.id)
-                    }) {
-                        crate::search::check_cancel(&cancel)?;
-                        let archive = service.archive(&book.metadata.id);
-                        crate::search::check_cancel(&cancel)?;
-                        archives.push((book.metadata.id, archive));
-                    }
-                    crate::search::suggest(archives, &prefix, token.as_deref(), limit, &cancel)
+                    crate::search::suggest(
+                        &scope, &prefix, token.as_deref(), limit, &cancel,
+                        |book, cancel| {
+                            crate::search::check_cancel(cancel)?;
+                            service.archive(&scope[book])
+                        },
+                    )
                 })
                 .await?;
                 crate::search::check_cancel(&request_cancel)?;
@@ -1069,9 +1069,7 @@ impl Service {
                 }
                 let mut readers = self.readers.lock().await;
                 let prefix = format!("{label}:");
-                let keys: Vec<_> = readers.keys()
-                    .filter(|key| key.starts_with(&prefix)).cloned().collect();
-                let retired = keys.into_iter().filter_map(|key| readers.remove(&key)).collect();
+                let retired = readers.take_matching(|key, _| key.starts_with(&prefix));
                 shutdown_readers(retired).await?;
                 drop(readers);
                 #[cfg(mobile)]
@@ -1310,7 +1308,7 @@ impl Service {
             "save_settings" => {
                 self.ensure_running()?;
                 self.ensure_window_active(&label)?;
-                let (previous, mut settings) = self.validate_settings_patch(&args)?;
+                let (previous, settings) = self.validate_settings_patch(&args)?;
                 #[cfg(any(target_os = "ios", target_os = "macos"))]
                 let notification_policy_changed = settings.completion_notifications != previous.completion_notifications
                     || settings.private_mode != previous.private_mode || settings.read_only != previous.read_only;
@@ -1435,10 +1433,13 @@ impl Service {
                     }
                     crash_policy?;
                 }
+                let patch = args.get("settings").and_then(Value::as_object).cloned()
+                    .unwrap_or_default();
                 let saved = self.store.update(|s| {
-                    // Generic settings forms must not replace concurrent language edits.
-                    settings.speech_preferences = s.settings.speech_preferences.clone();
-                    s.settings = settings.clone();
+                    // Merge only the submitted keys. A stale full-form snapshot
+                    // must not revert a concurrent language edit, background
+                    // policy write or another window's setting.
+                    s.settings = super::settings_with_patch(&s.settings, &patch)?;
                     Ok(())
                 });
                 // A durability error may follow a committed state replacement.
@@ -1617,7 +1618,11 @@ impl Service {
                 // configured catalog host.
                 self.ensure_window_active(&label)?;
                 self.ensure_generation(&args)?;
-                value(crate::catalog::fetch_thumbnail(text(&args, "url")?).await?)
+                value(crate::catalog::fetch_thumbnail(text(&args, "url")?, || {
+                    self.ensure_window_active(&label)?;
+                    self.ensure_generation(&args)?;
+                    Ok(())
+                }).await?)
             }
             "retry_import" => {
                 self.normal_writable()?;
@@ -2399,7 +2404,7 @@ impl Service {
                 Ok(Value::Null)
             }
             "torrent_seeding" => {
-                self.writable()?;
+                self.normal_writable()?;
                 let manager = self.torrent_manager()?;
                 #[cfg(target_os = "ios")]
                 if args.get("enabled") == Some(&Value::Bool(true)) { manager.resume_admission().await?; }

@@ -616,12 +616,13 @@
   grid-column: 1 / -1;
   margin: 0;
 }
-.maps-page .map-card-controls > select {
+.maps-page .map-card-controls > .map-language-button {
   flex: 1;
   min-width: 0;
   width: auto;
   min-height: 44px;
-  font-size: calc(16px * var(--system-text-scale, 1));
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .maps-page .map-card-controls > button {
   min-height: 44px;

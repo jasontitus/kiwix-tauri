@@ -1005,7 +1005,7 @@ mod tests {
             assert!(worker_staging.join("book.zim").exists());
             exited.send(()).unwrap();
         });
-        manager.inner.state.lock().unwrap().running.insert(id.clone(), Running { cancel: cancel.clone(), task });
+        manager.inner.state.lock().unwrap().running.insert(id.clone(), Running { cancel: cancel.clone(), task, progress: None });
         assert!(manager.delete_terminal(&id).await.unwrap_err().contains("worker"));
         assert!(staging.exists());
         cancel.cancel();
@@ -1027,7 +1027,7 @@ mod tests {
             let task = tokio::spawn(async {});
             manager.inner.state.lock().unwrap().running.insert(
                 id.to_string(),
-                Running { cancel: CancellationToken::new(), task },
+                Running { cancel: CancellationToken::new(), task, progress: None },
             );
             tokio::time::timeout(Duration::from_secs(5), async {
                 loop {
@@ -1110,7 +1110,7 @@ mod tests {
         cancel.cancel();
         let (release, released) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move { released.await.unwrap(); });
-        manager.inner.state.lock().unwrap().running.insert(id.clone(), Running { cancel, task });
+        manager.inner.state.lock().unwrap().running.insert(id.clone(), Running { cancel, task, progress: None });
         let deleting = manager.clone();
         let deleting_id = id.clone();
         let caller = tokio::spawn(async move { deleting.delete_terminal(&deleting_id).await });

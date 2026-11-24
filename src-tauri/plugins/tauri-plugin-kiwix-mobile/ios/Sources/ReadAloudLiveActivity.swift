@@ -53,8 +53,8 @@ final class ReadAloudLiveActivityBridge {
 
   private func handle(_ args: ReadAloudActivityArgs) async -> [String: Any] {
     let reply = await dispatch(args)
-    readAloudActivityLog.notice(
-      "request state=\(args.state, privacy: .public) session=\(args.sessionId ?? "-", privacy: .public) status=\(args.status ?? "-", privacy: .public) offset=\(args.offset ?? 0, privacy: .public) total=\(args.total ?? 0, privacy: .public) result=\((reply["activity"] as? String) ?? "-", privacy: .public) reason=\((reply["reason"] as? String) ?? "-", privacy: .public)"
+    readAloudActivityLog.debug(
+      "request state=\(args.state, privacy: .public) result=\((reply["activity"] as? String) ?? "-", privacy: .public)"
     )
     return reply
   }
@@ -66,7 +66,7 @@ final class ReadAloudLiveActivityBridge {
               "reason": "Live Activities are disabled for Kiwix"]
     }
     switch args.state {
-    case "active": return await show(args)
+    case "start", "active": return await show(args)
     case "terminal": return await finish(args, dismissal: .immediate)
     case "clear":
       await endAll(dismissal: .immediate)
@@ -92,7 +92,7 @@ final class ReadAloudLiveActivityBridge {
       if activity.activityState == .dismissed { continue }
       if activity.attributes.sessionId == sessionId {
         current = activity
-      } else {
+      } else if args.state == "start" {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
     }
@@ -103,11 +103,13 @@ final class ReadAloudLiveActivityBridge {
 
     if let activity = current {
       let previous = activity.content.state
+      let total = max(args.total ?? previous.total, 0)
+      let requested = max(args.offset ?? previous.offset, 0)
       let content = ReadAloudActivityAttributes.ContentState(
         status: status,
         statusLabel: args.statusLabel ?? previous.statusLabel,
-        offset: max(args.offset ?? previous.offset, 0),
-        total: args.total ?? previous.total
+        offset: min(requested, total),
+        total: total
       )
       if let last = lastSent, last.id == activity.id, last.state == content,
          now.timeIntervalSince(last.at) < 1.0 {
@@ -118,7 +120,9 @@ final class ReadAloudLiveActivityBridge {
       return ["available": true, "activity": "updated"]
     }
 
-    guard let title = args.title, !title.isEmpty else {
+    // Only the foreground start may create an activity. A delayed progress
+    // update cannot recreate a terminated or explicitly dismissed surface.
+    guard args.state == "start", let title = args.title, !title.isEmpty else {
       return ["available": true, "activity": "ignored"]
     }
     let content = ReadAloudActivityAttributes.ContentState(

@@ -17,6 +17,7 @@ import {
   parseDiskSpaceWarning,
   type PrivacyContext,
 } from "../api";
+import { diagnostics, reportError } from "../diagnostics";
 import {
   t,
   formatBytes,
@@ -39,10 +40,12 @@ import {
   Loading,
   Modal,
   PageHeader,
+  PagedResults,
   confirmAction,
   errorText,
   jobStatus,
   terminalStatus,
+  useDocumentVisible,
   type SurfaceProps,
 } from "./UI";
 const groups: Record<string, string> = areaGroups;
@@ -197,14 +200,19 @@ export default function Maps({
   onDismissTarget,
 }: Props) {
   const { locale } = useLocale();
+  const visible = useDocumentVisible();
   const [catalog, setCatalog] = useState<MapCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("all");
-  const [detail, setDetail] = useState<MapRegion | null>(null);
-  const [recipeMetadata, setRecipeMetadata] = useState<{ key: string; value?: MapRecipeMetadata; error?: string } | null>(null);
+  const [openedRegion, setDetail] = useState<MapRegion | null>(null);
+  const detail = openedRegion && catalog?.regions.find((region) => region.id === openedRegion.id);
+  const [recipeMetadata, setRecipeMetadata] = useState<{ key: string; value?: MapRecipeMetadata; error?: string; stale?: boolean } | null>(null);
+  const [metadataRetry, setMetadataRetry] = useState(0);
   const [job, setJob] = useState<MapJob | null>(null);
+  const [pollEpoch, setPollEpoch] = useState(0);
   const [working, setWorking] = useState(false);
   const [startError, setStartError] = useState("");
   const [decision, setDecision] = useState<MapDecision | null>(null);
@@ -219,6 +227,8 @@ export default function Maps({
   const [cleanupError, setCleanupError] = useState("");
   const cleanupRemovedInstallations = useRef(new Set<string>());
   const alive = useRef(true);
+  const jobRevision = useRef(0);
+  const statusPayload = useRef("");
   const previous = useRef("");
   const catalogRequest = useRef(0);
   const mapRequest = useRef<(MapStartRequest & { jobId: string }) | null>(null);
@@ -236,7 +246,6 @@ export default function Maps({
     setLoading(true);
     setError("");
     dismissDecision();
-    setDetail(null);
     const privacy = capturePrivacyContext();
     if (!privacy || privacy.generation !== privacyGeneration) {
       setError(t("Browsing session expired after a privacy transition"));
@@ -248,34 +257,55 @@ export default function Maps({
         url: settings.mapCatalogUrl || undefined,
         privacyGeneration: privacy.generation,
       });
-      if (alive.current && id === catalogRequest.current) setCatalog(result);
+      if (!alive.current || id !== catalogRequest.current) return;
+      if (!isPrivacyContextCurrent(privacy)) {
+        setError(t("Browsing session expired after a privacy transition"));
+        return;
+      }
+      setCatalog(result);
+      setMetadataRetry((n) => n + 1);
     } catch (e) {
-      if (alive.current && id === catalogRequest.current)
-        setError(errorText(e));
+      if (alive.current && id === catalogRequest.current) {
+        setError(isPrivacyContextCurrent(privacy)
+          ? errorText(e) : t("Browsing session expired after a privacy transition"));
+      }
     } finally {
       if (alive.current && id === catalogRequest.current) setLoading(false);
     }
   }, [settings.mapCatalogUrl, privacyGeneration]);
   useEffect(() => {
+    setDetail(null);
+    setCatalog(null);
+    setRecipeMetadata(null);
+  }, [settings.mapCatalogUrl, privacyGeneration]);
+  useEffect(() => {
     alive.current = true;
-    let stopped = false;
+    return () => { alive.current = false; };
+  }, []);
+  useEffect(() => {
     void load();
-    let timer: number;
-    let lastPayload = "";
-    let ticking = false;
+    return () => { catalogRequest.current++; };
+  }, [load]);
+  useEffect(() => {
+    if (!visible) return;
+    let stopped = false;
+    let timer: number | undefined;
     async function tick() {
-      if (ticking) return;
-      ticking = true;
+      if (stopped || document.visibilityState === "hidden") return;
+      const privacy = capturePrivacyContext();
+      const revision = jobRevision.current;
+      let next = jobRef.current;
       try {
-        const next = await api<MapJob | null>("map_status");
-        if (stopped) return;
-        // An idle tick usually repeats the previous status; storing it would
-        // re-render every region card for nothing.
+        if (!privacy || privacy.generation !== privacyGeneration) return;
+        const result = await api<MapJob | null>("map_status");
+        if (stopped || !isPrivacyContextCurrent(privacy) || revision !== jobRevision.current) return;
+        next = result;
         const payload = JSON.stringify(next);
-        if (payload !== lastPayload) {
-          lastPayload = payload;
+        if (payload !== statusPayload.current) {
+          statusPayload.current = payload;
           setJob(next);
         }
+        setStatusError("");
         if (
           next &&
           ["completed", "complete"].includes(next.status) &&
@@ -286,28 +316,27 @@ export default function Maps({
           ? next.id + next.status + (next.importState || "")
           : "";
       } catch (e) {
-        if (!stopped) setError(errorText(e));
+        if (!stopped && privacy && isPrivacyContextCurrent(privacy) && revision === jobRevision.current)
+          setStatusError(errorText(e));
       } finally {
-        ticking = false;
+        // Retain a slower idle probe to discover a job started by another window.
+        const progresses = next && ((!terminalStatus(next.status) && next.status !== "paused") ||
+          ["queued", "verifying", "ready"].includes(next.importState || ""));
+        if (!stopped && !document.hidden)
+          timer = window.setTimeout(tick, progresses ? 1200 : 10000);
       }
-      if (!stopped) timer = window.setTimeout(tick, document.visibilityState === "hidden" ? 5000 : 1200);
     }
-    // Returning to the window must not wait out the hidden interval.
-    function onVisibility() {
-      if (stopped || document.visibilityState === "hidden") return;
-      window.clearTimeout(timer);
-      void tick();
-    }
-    document.addEventListener("visibilitychange", onVisibility);
     void tick();
     return () => {
       stopped = true;
-      alive.current = false;
-      catalogRequest.current++;
-      document.removeEventListener("visibilitychange", onVisibility);
       window.clearTimeout(timer);
     };
-  }, [load, onRefresh]);
+  }, [visible, onRefresh, privacyGeneration, pollEpoch]);
+  function noteJobUpdate() {
+    jobRevision.current++;
+    statusPayload.current = "";
+    setPollEpoch((value) => value + 1);
+  }
   const installed = books.filter(
     (book) =>
       /^osm_/i.test(book.name) ||
@@ -370,6 +399,11 @@ export default function Maps({
     dismissDecision();
     if (mapRequest.current?.regionId === region) mapRequest.current = null;
     onChoice(region, language);
+  }
+  function openDetail(region: MapRegion) {
+    dismissDecision();
+    setStartError("");
+    setDetail(region);
   }
   function closeDetail() {
     dismissDecision();
@@ -456,13 +490,13 @@ export default function Maps({
       onDownload({ kind: "map", id: next.id, request: retained }, { privacy: request.privacy, focus: present });
       if (present) {
         mapRequest.current = retained ? { ...retained, jobId: next.id } : null;
+        noteJobUpdate();
         setJob(next);
         setDetail(null);
       }
     } catch (e) {
       if (alive.current && isPrivacyContextCurrent(request.privacy)) {
-        setStartError(errorText(e));
-        onError(e);
+        if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
       }
     } finally {
       startPending.current = false;
@@ -471,7 +505,7 @@ export default function Maps({
     }
   }
   async function start(region: MapRegion) {
-    if (confirmationPending.current || startPending.current || selectionRequest.current) return;
+    if (loading || error || confirmationPending.current || startPending.current || selectionRequest.current) return;
     const selection = selectionFor(region);
     const { language, version } = selection;
     if (!version) return;
@@ -496,7 +530,8 @@ export default function Maps({
       if (selectionRequest.current !== request || !requestCurrent(request)) return;
       if (preparation.regionId !== request.regionId || preparation.language !== request.language ||
         preparation.name !== version.name || preparation.md5 !== version.md5) {
-        throw new Error(t("Map catalog changed. Reload the map registry before downloading."));
+        setError(t("Map catalog changed. Reload the map registry before downloading."));
+        return;
       }
       if (preparation.installed) {
         const next = { request, preparation, title: region.title };
@@ -508,8 +543,7 @@ export default function Maps({
     } catch (e) {
       if (selectionRequest.current === request) {
         if (requestCurrent(request)) {
-          setStartError(errorText(e));
-          onError(e);
+          if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
         }
         dismissDecision();
       }
@@ -588,11 +622,13 @@ export default function Maps({
           ? mapRequest.current : undefined;
         onDownload({ kind: "map", id: next.id, request: retained }, { privacy, focus: present });
       }
-      if (present) setJob(next);
+      if (present) {
+        noteJobUpdate();
+        setJob(next);
+      }
     } catch (e) {
       if (alive.current && isPrivacyContextCurrent(privacy)) {
-        setStartError(errorText(e));
-        onError(e);
+        if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
       }
     } finally {
       mapActionPending.current = false;
@@ -697,7 +733,10 @@ export default function Maps({
         });
         onDismissTarget({ kind: "map", id: retained.job.id });
         if (mapRequest.current?.jobId === retained.job.id) mapRequest.current = null;
-        if (alive.current) setJob((current) => current?.id === retained.job.id ? null : current);
+        if (alive.current) {
+          noteJobUpdate();
+          setJob((current) => current?.id === retained.job.id ? null : current);
+        }
       }
       if (alive.current) setCleanup(null);
       onRefresh();
@@ -725,7 +764,7 @@ export default function Maps({
     : "";
   const currentMetadata = recipeMetadata?.key === metadataKey ? recipeMetadata : null;
   useEffect(() => {
-    if (!metadataKey || !detail || !detailVersion) return;
+    if (loading || !metadataKey || !detail || !detailVersion) return;
     let stopped = false;
     const privacy = capturePrivacyContext();
     if (!privacy || privacy.generation !== privacyGeneration) return;
@@ -742,7 +781,7 @@ export default function Maps({
         value.name !== detailVersion.name || value.md5 !== detailVersion.md5 ||
         (detailVersion.size != null && value.assembledBytes !== detailVersion.size)
       ) {
-        setRecipeMetadata({ key: metadataKey, error: t("Map catalog changed. Reload the map registry before downloading.") });
+        setRecipeMetadata({ key: metadataKey, stale: true, error: t("Map catalog changed. Reload the map registry before downloading.") });
         return;
       }
       setRecipeMetadata({ key: metadataKey, value });
@@ -751,11 +790,12 @@ export default function Maps({
         setRecipeMetadata({ key: metadataKey, error: errorText(value) });
     });
     return () => { stopped = true; };
-  }, [metadataKey, detail, detailVersion, detailLanguage, settings.mapCatalogUrl, settings.privateMode, settings.readOnly, privacyGeneration]);
+  }, [metadataKey, detail, detailVersion, detailLanguage, settings.mapCatalogUrl, settings.privateMode, settings.readOnly, privacyGeneration, loading, metadataRetry]);
   return (
     <section className="page maps-page">
-      {startError && <p className="inline-error" role="alert">{startError}</p>}
+      {!openedRegion && startError && <ErrorNotice message={startError} onDismiss={() => setStartError("")} />}
       <PageHeader title={t("Maps")} />
+      {statusError && <ErrorNotice message={statusError} onDismiss={() => setStatusError("")} />}
       {!!installed.length && (
         <section className="installed-maps">
           <div className="section-heading">
@@ -796,6 +836,11 @@ export default function Maps({
                     <BookOpen size={15} />
                     {t("Open map")}
                   </button>
+                  <button className="icon-button" aria-label={t("Remove from library")} title={t("Remove from library")}
+                    disabled={working || !!cleanup || settings.privateMode || settings.readOnly}
+                    onClick={() => requestBookCleanup(book)}>
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
                 </article>
                 </SwipeRow>
               );
@@ -808,7 +853,7 @@ export default function Maps({
           disabled={working || !!cleanup || settings.privateMode || settings.readOnly ||
             (!terminalStatus(job.status) && job.status !== "paused") || checkingImport}
           onAction={requestJobCleanup}>
-        <section className="panel map-job" aria-live="polite">
+        <section className="panel map-job">
           <div className="section-heading">
             <h2>
               {t("Map: {region}", {
@@ -817,7 +862,7 @@ export default function Maps({
                     ?.title || job.regionId,
               })}
             </h2>
-            <span className="badge">{jobStatus(job.status)}</span>
+            <span className="badge" role="status">{jobStatus(job.status)}</span>
             {active && job.status !== "paused" && (
               <button disabled={working || settings.privateMode || settings.readOnly}
                 onClick={(event) => { if (event.nativeEvent.isTrusted) void changeMapState("map_pause"); }}>
@@ -941,12 +986,18 @@ export default function Maps({
             .map((entry) => (
               <button
                 key={entry.receipt}
-                disabled={working || settings.readOnly}
+                disabled={working || settings.readOnly || settings.privateMode}
                 onClick={async () => {
+                  const privacy = capturePrivacyContext();
+                  if (!privacy || privacy.privateMode || privacy.readOnly) return;
                   setWorking(true);
                   try {
                     await api("retry_import", { receipt: entry.receipt });
-                    setJob(await api<MapJob | null>("map_status"));
+                    const next = await api<MapJob | null>("map_status");
+                    if (alive.current && isPrivacyContextCurrent(privacy)) {
+                      noteJobUpdate();
+                      setJob(next);
+                    }
                     onRefresh();
                   } catch (value) {
                     onError(value);
@@ -985,13 +1036,13 @@ export default function Maps({
           <option value="local">{t("Local areas")}</option>
         </select>
       </div>
-      {error && (
+      {!openedRegion && error && (
         <ErrorNotice
           message={t("Could not load map data.") + "\n" + error}
           onRetry={load}
         />
-      )}{" "}
-      {loading ? (
+      )}
+      {loading && !catalog ? (
         <Loading label={t("Loading map registry…")} />
       ) : !catalog ? (
         <Empty
@@ -1008,9 +1059,11 @@ export default function Maps({
           description={t("Try another place name or geographic group.")}
         />
       ) : (
-        <div className="map-grid">
-          {regions.map((region) => {
-            const { language, version } = selectionFor(region);
+        <PagedResults items={regions} criteria={JSON.stringify([query, group, resolvedLocale])}
+          label={t("Maps")} className="map-grid">
+          {(region) => {
+            const { version } = selectionFor(region);
+            const language = version ? versionLabel(version) : "";
             return (
               <article className="map-card panel" key={region.id}>
                 <div className="map-card-heading">
@@ -1019,7 +1072,7 @@ export default function Maps({
                     <h3>
                       <button
                         className="text-button"
-                        onClick={() => { dismissDecision(); setDetail(region); }}
+                        onClick={() => openDetail(region)}
                       >
                         {region.title}
                       </button>
@@ -1041,16 +1094,16 @@ export default function Maps({
                   ) : t("No language available")}
                 </p>
                 <div className="compact-toolbar map-card-controls">
-                  <select
-                    value={language}
-                    onChange={(e) => chooseLanguage(region.id, e.target.value)}
-                    aria-label={t("Map language")}
-                  >
-                    {languageOptions(region)}
-                  </select>
+                  {version && (
+                    <button type="button" className="map-language-button" aria-haspopup="dialog"
+                      aria-label={`${t("Map language")}: ${language}`}
+                      onClick={() => openDetail(region)}>
+                      {language}
+                    </button>
+                  )}
                   <button
                     disabled={
-                      working || !!active || !version || settings.privateMode || settings.readOnly
+                      loading || !!error || working || !!active || !version || settings.privateMode || settings.readOnly
                     }
                     onClick={() => void start(region)}
                   >
@@ -1060,8 +1113,8 @@ export default function Maps({
                 </div>
               </article>
             );
-          })}
-        </div>
+          }}
+        </PagedResults>
       )}
       <details className="secondary-controls map-options">
         <summary>{t("Map options")}</summary>
@@ -1110,9 +1163,14 @@ export default function Maps({
           onDeleteFiles={() => void confirmCleanup(true)}
         />
       )}
-      {detail && !decision && (
-        <Modal title={detail.title} onClose={closeDetail}>
-          {startError && <p className="inline-error" role="alert">{startError}</p>}
+      {openedRegion && !decision && (
+        <Modal title={detail?.title ?? openedRegion.title} onClose={closeDetail}>
+          {startError && !loading && <ErrorNotice message={startError} onDismiss={() => setStartError("")} />}
+          {loading ? <Loading label={t("Loading map registry…")} /> : error ? (
+            <ErrorNotice message={t("Could not load map data.") + "\n" + error} onRetry={load} />
+          ) : !detail ? (
+            <ErrorNotice message={t("This area is no longer in the map registry.")} onRetry={load} />
+          ) : <>
           <label className="field">
             {t("Map language")}
             <select
@@ -1128,9 +1186,10 @@ export default function Maps({
               <dd>{formatBytes(currentMetadata?.value?.assembledBytes ?? detailVersion?.size ?? Number.NaN)}</dd>
             </div>
           </dl>
-          <div className="muted" aria-live="polite">
+          <div className="muted">
             {currentMetadata?.error ? (
-              <ErrorNotice message={currentMetadata.error} onRetry={load} />
+              <ErrorNotice message={currentMetadata.error}
+                onRetry={currentMetadata.stale ? load : () => setMetadataRetry((n) => n + 1)} />
             ) : currentMetadata?.value ? (
               <dl className="facts">
                 <div>
@@ -1144,7 +1203,7 @@ export default function Maps({
             <button
               className="primary"
               disabled={
-                working || !!active || !detailSelection?.language || !currentMetadata?.value || settings.privateMode || settings.readOnly
+                working || !!active || !detailVersion || currentMetadata?.stale || settings.privateMode || settings.readOnly
               }
               onClick={() => start(detail)}
             >
@@ -1167,6 +1226,7 @@ export default function Maps({
             <p className="muted">{t("Saved map data can reduce downloads. Metadata and retries can add data.")}</p>
             <p className="muted">{t("Cached base data is reused when available. Keep enough free space for the map and its assembly cache.")}</p>
           </details>
+          </>}
         </Modal>
       )}
       {decision && requestCurrent(decision.request) && decision.preparation.installed && (

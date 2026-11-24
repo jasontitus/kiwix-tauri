@@ -25,10 +25,12 @@ final class NativeSpeechTransportTests: XCTestCase {
     let synth = RecordingSynthesizer()
     var states: [JSObject] = []
     var activation: [Bool] = []
+    var pauses: [Bool] = []
     var admission = true
     let speech = NativeSpeech(foreground: { true }, setSpeechActive: { active in
       activation.append(active); return !active || admission
-    }, makeSynthesizer: { synth }, availableVoices: { [voice] }, emit: { states.append($0) })
+    }, setSpeechPaused: { paused in pauses.append(paused); return true },
+       makeSynthesizer: { synth }, availableVoices: { [voice] }, emit: { states.append($0) })
     defer { speech.shutdown() }
     let id = UUID().uuidString
     var token = ""
@@ -47,7 +49,8 @@ final class NativeSpeechTransportTests: XCTestCase {
     speech.pause(args, invoke: accept)
     XCTAssertEqual(states.last?["paused"] as? Bool, true)
     XCTAssertEqual(states.last?["speaking"] as? Bool, false)
-    XCTAssertEqual(activation, [true, false])
+    XCTAssertEqual(activation, [true])
+    XCTAssertEqual(pauses, [true])
     speech.speechSynthesizer(synth, didFinish: original)
     speech.speechSynthesizer(synth, didCancel: original)
     await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
@@ -86,5 +89,25 @@ final class NativeSpeechTransportTests: XCTestCase {
       XCTAssertEqual(callback, 2); XCTAssertEqual(reply["code"] as? String, "SPEECH_SESSION_UNREGISTERED")
     })
     XCTAssertEqual(synth.utterances.count, 3)
+  }
+
+  @MainActor
+  func testExternalSpeechConsumesOnlyTheMatchingNewestPreparedCapability() {
+    let speech = NativeSpeech(foreground: { true }, setSpeechActive: { _ in true }, emit: { _ in })
+    defer { speech.shutdown() }
+    func prepare() -> NativeSpeechSessionArgs {
+      let id = UUID().uuidString
+      var token = ""
+      speech.prepare(NativeSpeechPrepareArgs(id: id), invoke: invocation { callback, reply in
+        XCTAssertEqual(callback, 1); token = reply["token"] as? String ?? ""
+      })
+      return NativeSpeechSessionArgs(id: id, token: token)
+    }
+    let old = prepare()
+    let new = prepare()
+    XCTAssertFalse(speech.admitExternal(NativeSpeechSessionArgs(id: new.id, token: old.token)))
+    XCTAssertTrue(speech.admitExternal(new))
+    XCTAssertFalse(speech.admitExternal(old))
+    XCTAssertFalse(speech.admitExternal(new))
   }
 }

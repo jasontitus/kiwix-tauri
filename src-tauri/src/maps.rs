@@ -608,7 +608,7 @@ fn checked_client() -> Result<reqwest::Client, String> {
                 std::env::consts::OS
             ))
             .connect_timeout(Duration::from_secs(20))
-            .timeout(Duration::from_secs(90))
+            .read_timeout(Duration::from_secs(90))
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
                 if attempt.previous().len() >= 8 {
                     return attempt.error("Too many StreetZim redirects");

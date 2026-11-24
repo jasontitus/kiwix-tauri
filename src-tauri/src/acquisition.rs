@@ -644,7 +644,7 @@ struct Inner {
     #[cfg(test)]
     verify_gates: Mutex<[Option<AsyncGate>; 2]>,
     #[cfg(all(test, unix))]
-    native_copy_gate: Mutex<Option<FinalizeGate>>,
+    native_copy_gate: Mutex<Option<(u64, FinalizeGate)>>,
     #[cfg(all(test, unix))]
     native_copy_bytes: AtomicU64,
     #[cfg(test)]
@@ -2183,6 +2183,11 @@ struct NativeStage {
     inode: u64,
 }
 
+#[cfg(any(target_os = "ios", all(test, unix)))]
+const NATIVE_COPY_CHECKPOINT_BYTES: u64 = 64 * 1024 * 1024;
+#[cfg(any(target_os = "ios", all(test, unix)))]
+const NATIVE_COPY_CHECKPOINT_INTERVAL: Duration = Duration::from_secs(5);
+
 /// The native stage remains its immutable transport receipt until acknowledge.
 /// Copy into the pre-existing locked part rather than replacing its ownership;
 /// synchronized prefix checkpoints make pause/restart resume this local copy.
@@ -2237,6 +2242,12 @@ fn copy_native_completion(
     source.seek(std::io::SeekFrom::Start(copied)).map_err(|error| error.to_string())?;
     let checkpoint = |destination: &File, copied: u64| -> Result<(), String> {
         destination.sync_all().map_err(|error| format!("Synchronizing native download part: {error}"))?;
+        let after = verified.file().metadata().map_err(|error| error.to_string())?;
+        if part_identity(&after).as_ref() != Some(&identity)
+            || !verified.matches_path(&stage.path).map_err(|error| error.to_string())?
+        {
+            return Err("Native download stage changed while its bytes were being adopted".into());
+        }
         inner.update(id, |stored| {
             let native = stored.native.as_mut().unwrap();
             native.copied = copied;
@@ -2249,6 +2260,7 @@ fn copy_native_completion(
     };
     let mut buffer = vec![0u8; WRITE_BUDGET];
     let mut synced = copied;
+    let mut checked_space_at = copied;
     let mut last_sync = Instant::now();
     while copied < stage.total {
         if let Some(action) = local_stop_action(inner, id)? {
@@ -2264,36 +2276,38 @@ fn copy_native_completion(
         destination.write_all(&buffer[..count])
             .map_err(|error| format!("Adopting native download bytes: {error}"))?;
         copied += count as u64;
-        #[cfg(test)]
-        {
-            inner.native_copy_bytes.fetch_add(count as u64, Ordering::SeqCst);
-            let gate = if copied < stage.total {
-                inner.native_copy_gate.lock().unwrap().take()
-            } else {
-                None
-            };
-            if let Some(gate) = gate {
+        if copied < stage.total {
+            // A space probe does not claim a durable prefix. Keep probing at
+            // the same cadence, but bound the lost copy window separately.
+            if space_check_due(copied, checked_space_at) {
+                if let Err(error) = check_space(&part, stage.total - copied) {
+                    // A low-space stop still retains the prefix just copied.
+                    checkpoint(&destination, copied)?;
+                    return Err(error);
+                }
+                checked_space_at = copied;
+            }
+            if copied - synced >= NATIVE_COPY_CHECKPOINT_BYTES
+                || last_sync.elapsed() >= NATIVE_COPY_CHECKPOINT_INTERVAL
+            {
                 checkpoint(&destination, copied)?;
                 synced = copied;
                 last_sync = Instant::now();
+            }
+        }
+        #[cfg(test)]
+        {
+            inner.native_copy_bytes.fetch_add(count as u64, Ordering::SeqCst);
+            let mut pending = inner.native_copy_gate.lock().unwrap();
+            let gate = if pending.as_ref().is_some_and(|(after, _)| copied >= *after) {
+                pending.take().map(|(_, gate)| gate)
+            } else { None };
+            drop(pending);
+            if let Some(gate) = gate {
                 let _ = gate.entered.send(());
                 let _ = gate.release.recv();
             }
         }
-        if copied < stage.total
-            && (last_sync.elapsed() >= SYNC_INTERVAL || space_check_due(copied, synced))
-        {
-            checkpoint(&destination, copied)?;
-            check_space(&part, stage.total - copied)?;
-            synced = copied;
-            last_sync = Instant::now();
-        }
-    }
-    let after = verified.file().metadata().map_err(|error| error.to_string())?;
-    if part_identity(&after).as_ref() != Some(&identity)
-        || !verified.matches_path(&stage.path).map_err(|error| error.to_string())?
-    {
-        return Err("Native download stage changed while its bytes were being adopted".into());
     }
     checkpoint(&destination, copied)?;
     local_stop_action(inner, id)

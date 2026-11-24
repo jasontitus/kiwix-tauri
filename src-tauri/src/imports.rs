@@ -434,13 +434,13 @@ impl ImportManager {
         }
     }
 
-    /// Edition cutover retains the verified descriptors throughout publication
-    /// ownership checks and the isolated Store transaction. A failed admission
-    /// does not discard verified output or silently authorize a later retry.
+    /// Edition cutover retains the verified descriptors and the publication
+    /// verified by the worker throughout the isolated Store transaction. A
+    /// failed admission does not itself discard verified output.
     pub(crate) fn with_ready_sources<T>(
         &self,
         ready: &ReadyImport,
-        commit: impl FnOnce(&[Book], &[crate::archive_source::RetainedSource]) -> Result<T, String>,
+        commit: impl FnOnce(&[Book], &[crate::archive_source::RetainedSource], Option<&crate::acquisition::ImportPublication>) -> Result<T, String>,
     ) -> Result<T, String> {
         let mut state = self.shared.state.lock().unwrap();
         if state.stopped || !owns_ready(&state, ready) {
@@ -456,7 +456,7 @@ impl ImportManager {
             self.shared.changed.notify_one();
             return Err(error);
         }
-        commit(&ready.books, &ready.sources)
+        commit(&ready.books, &ready.sources, ready.publication.as_deref())
     }
 
     /// A definitive edition artifact/publication mismatch is retryable
@@ -895,22 +895,25 @@ mod tests {
         manager.enqueue("edition", temporary.paths()).unwrap();
         wait_for(&manager, "edition", ImportState::Ready).await;
         let ready = manager.ready().into_iter().find(|ready| ready.receipt() == "edition").unwrap();
-        let denied: Result<(), String> = manager.with_ready_sources(&ready, |_, _| Err("Authorization expired".into()));
+        let denied: Result<(), String> = manager.with_ready_sources(&ready, |_, _, proof| {
+            assert!(proof.is_none(), "A generic import does not confer publication authority");
+            Err("Authorization expired".into())
+        });
         assert!(denied.is_err());
         assert_eq!(manager.status("edition").unwrap().state, ImportState::Ready);
-        assert!(manager.with_ready_sources(&ready, |_, _| Ok(())).is_ok());
+        assert!(manager.with_ready_sources(&ready, |_, _, _| Ok(())).is_ok());
         let replacement = temporary.0.with_extension("replacement");
         std::fs::copy(fixture(), &replacement).unwrap();
         std::fs::remove_file(&temporary.0).unwrap();
         std::fs::rename(&replacement, &temporary.0).unwrap();
-        let changed: Result<(), String> = manager.with_ready_sources(&ready, |_, _| panic!("Changed edition must not commit"));
+        let changed: Result<(), String> = manager.with_ready_sources(&ready, |_, _, _| panic!("Changed edition must not commit"));
         assert!(changed.is_err());
         assert_eq!(manager.status("edition").unwrap().state, ImportState::Failed);
         assert!(manager.shared.state.lock().unwrap().entries["edition"].sources.is_none());
         manager.retry("edition").unwrap();
         wait_for(&manager, "edition", ImportState::Ready).await;
         let retry = manager.ready().into_iter().find(|ready| ready.receipt() == "edition").unwrap();
-        assert!(manager.with_ready_sources(&retry, |_, _| Ok(())).is_ok());
+        assert!(manager.with_ready_sources(&retry, |_, _, _| Ok(())).is_ok());
         manager.shutdown();
     }
 

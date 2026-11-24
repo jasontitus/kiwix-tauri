@@ -9,6 +9,25 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class CrashCapturePolicyTest {
+    @Test fun reportTextRedactsReaderLocationsAndNonHttpUrls() {
+        val text = CrashIntake.redact(
+            """
+            HTTP://book-uuid-nonce.localhost.:9/A/Pri)vate_Page
+            http://127.0.0.2:9/A/Private http://[::1]:9/A/Private
+            https://example.org/book-uuid/%2Ekiwix/token/A/Private
+            path=/book-uuid/A/Private relative=/.kiwix/token/A/Private
+            ZIM://book-uuid/A/Private MAILTO:private@example.org
+            content://provider/Private file:///Documents/Private%20Notes.txt
+            custom://host/Private https://user:pass@example.org/read?q=private#private
+            """.trimIndent()
+        )
+        assertEquals(
+            "[reader-url] [reader-url] [reader-url] [reader-url] path=[path] relative=[path] " +
+                "[url] [url] [url] [url] [url] https://example.org/read",
+            text
+        )
+    }
+
     @Test fun policyStartsDisabledAndCanBeDisabledAgain() {
         val policy = CrashCapturePolicy()
         var writes = 0

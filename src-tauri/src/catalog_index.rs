@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{atomic::{AtomicU64, Ordering}, Arc, Mutex};
 use tokio::sync::RwLock;
 
-const MAX_PAGES: usize = 64;
+pub(super) const MAX_PAGES: usize = 64;
 const MAX_ENTRIES: usize = 20_000;
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SOURCES: usize = 16;
@@ -132,6 +132,7 @@ impl CatalogIndex {
         let mut conflicts = HashSet::new();
         let mut bytes = 0usize;
         let mut traversed = false;
+        let mut cache_updates = Vec::new();
         while let Some(request) = next.take() {
             if snapshot.pages.len() >= MAX_PAGES {
                 append_error(&mut snapshot, "Catalog traversal reached its page limit");
@@ -141,10 +142,10 @@ impl CatalogIndex {
                 append_error(&mut snapshot, "Catalog pagination contains a cycle");
                 break;
             }
-            let result = cache.fetch_page(&request, locale, gate, generation, expected).await;
+            let result = cache.fetch_refresh_page(&request, locale, gate, generation, expected).await;
             // A retired operation must not publish even a partial result.
             check_generation(generation, expected)?;
-            let page = match result {
+            let (page, update) = match result {
                 Ok(page) => page,
                 Err(error) => { snapshot.stale = true; append_error(&mut snapshot, &error); break; }
             };
@@ -154,6 +155,7 @@ impl CatalogIndex {
                 append_error(&mut snapshot, "Catalog traversal reached its metadata limit");
                 break;
             }
+            cache_updates.extend(update);
             snapshot.stale |= page.cache.stale;
             if let Some(error) = &page.cache.error { append_error(&mut snapshot, error); }
             let representation_digest = page.representation_digest().to_owned();
@@ -203,6 +205,9 @@ impl CatalogIndex {
             store.with_catalog_cache_policy(|private, read_only| {
                 if private { return Ok(()); }
                 if !read_only {
+                    if let Err(error) = cache.save_refresh(cache_updates) {
+                        append_error(&mut snapshot, &error);
+                    }
                     let mut saved = match load(&cache) {
                         Ok(saved) => saved,
                         Err(error) => { append_error(&mut snapshot, &error); SavedIndex { version: 1, snapshots: Vec::new() } }

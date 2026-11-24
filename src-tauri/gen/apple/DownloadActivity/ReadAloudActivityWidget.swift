@@ -45,7 +45,7 @@ struct KiwixReadAloudLiveActivity: Widget {
               .foregroundStyle(.secondary)
               .lineLimit(1)
             ReadAloudActivityStyle.bar(state)
-            ReadAloudActivityStyle.controls(state)
+            ReadAloudActivityStyle.controls(state, sessionId: attributes.sessionId)
           }
           .padding(.horizontal, 4)
           .padding(.bottom, 4)
@@ -99,7 +99,7 @@ struct ReadAloudLockScreenView: View {
           .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
         Spacer()
-        ReadAloudActivityStyle.controls(state)
+        ReadAloudActivityStyle.controls(state, sessionId: attributes.sessionId)
       }
     }
     .padding(12)
@@ -153,25 +153,32 @@ enum ReadAloudActivityStyle {
     }
   }
 
+  private static func speechURL(_ action: String, sessionId: UUID) -> URL {
+    // Both fields have an ASCII-only, fixed shape; no content or capability
+    // token is exposed in the URL.
+    URL(string: "kiwix://speech?action=\(action)&sessionId=\(sessionId.uuidString.lowercased())")!
+  }
+
   @ViewBuilder
-  static func controls(_ state: ReadAloudActivityAttributes.ContentState) -> some View {
-    HStack(spacing: 18) {
-      Link(destination: URL(string: "kiwix://speech?action=previous")!) {
-        Image(systemName: "backward.end.fill")
+  static func controls(_ state: ReadAloudActivityAttributes.ContentState, sessionId: String) -> some View {
+    if let sessionId = UUID(uuidString: sessionId) {
+      HStack(spacing: 18) {
+        Link(destination: speechURL("previous", sessionId: sessionId)) {
+          Image(systemName: "backward.end.fill")
+        }
+        .accessibilityLabel("Previous paragraph")
+        Link(destination: speechURL(state.status == "paused" ? "play" : "pause", sessionId: sessionId)) {
+          Image(systemName: state.status == "paused" ? "play.fill" : "pause.fill")
+        }
+        .accessibilityLabel(state.status == "paused" ? "Resume reading" : "Pause reading")
+        Link(destination: speechURL("stop", sessionId: sessionId)) {
+          Image(systemName: "stop.fill")
+        }
+        .accessibilityLabel("Stop reading")
       }
-      .accessibilityLabel("Previous paragraph")
-      Link(destination: URL(string: state.status == "paused"
-        ? "kiwix://speech?action=play" : "kiwix://speech?action=pause")!) {
-        Image(systemName: state.status == "paused" ? "play.fill" : "pause.fill")
-      }
-      .accessibilityLabel(state.status == "paused" ? "Resume reading" : "Pause reading")
-      Link(destination: URL(string: "kiwix://speech?action=stop")!) {
-        Image(systemName: "stop.fill")
-      }
-      .accessibilityLabel("Stop reading")
+      .font(.system(size: 17, weight: .semibold))
+      .foregroundStyle(.white)
+      .buttonStyle(.plain)
     }
-    .font(.system(size: 17, weight: .semibold))
-    .foregroundStyle(.white)
-    .buttonStyle(.plain)
   }
 }

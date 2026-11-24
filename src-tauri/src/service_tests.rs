@@ -2211,6 +2211,22 @@ async fn private_cutover_signals_search_before_waiting_for_accepted_read_lease()
 }
 
 #[tokio::test]
+async fn presentation_settings_save_does_not_wait_for_a_reader_lease() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let lease = service.privacy_gate.read().await;
+    let save = service
+        .clone()
+        .dispatch("save_settings", json!({"settings":{"fontSize":19}}));
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), save).await;
+    assert!(result.is_ok(), "presentation settings must not queue behind imports");
+    result.unwrap().unwrap();
+    drop(lease);
+    assert_eq!(service.store.settings().unwrap().font_size, 19.0);
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn empty_search_page_has_no_more_results_and_respects_offset_lower_bound() {
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
@@ -2506,6 +2522,30 @@ async fn reader_storage_uses_live_listener_identity_and_survives_tab_unmount() {
         json!({"status":"retired","privacyGeneration":2})
     );
     service.shutdown().await.unwrap();
+}
+
+#[cfg(desktop)]
+#[tokio::test]
+async fn navigation_keeps_live_reader_authority_during_storage_lease() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let imported = service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
+    let args = json!({"bookId": imported["books"][0]["id"], "parentOrigin": "tauri://localhost"});
+    let first = service.clone().dispatch("open_article", args.clone()).await.unwrap();
+    let first = tauri::Url::parse(first["url"].as_str().unwrap()).unwrap();
+    let allowed = |url| crate::navigation_allowed(url, |origin| service.has_reader_origin(origin));
+    {
+        let _storage_lease = service.readers.lock().await;
+        assert!(allowed(&first), "archive navigation must not contend with storage");
+    }
+    let mut reopen = args;
+    reopen["freshOrigin"] = json!(true);
+    let second = service.clone().dispatch("open_article", reopen).await.unwrap();
+    let second = tauri::Url::parse(second["url"].as_str().unwrap()).unwrap();
+    assert!(!allowed(&first), "the retired listener has no navigation authority");
+    assert!(allowed(&second));
+    service.shutdown().await.unwrap();
+    assert!(!allowed(&second), "shutdown withdraws the listener's navigation authority");
 }
 
 /// Background retirement advances reader IPC authority without changing the

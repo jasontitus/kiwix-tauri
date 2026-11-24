@@ -22,7 +22,8 @@ interface SwipeRowHandle {
 }
 
 /** Rows share one document/window listener set instead of adding one each. */
-const mountedRows = new Set<SwipeRowHandle>();
+let mountedRows = 0;
+let unsubscribePreferences: (() => void) | undefined;
 /** Subset that can react to a press or scroll: revealed rows and live gestures. */
 const armedRows = new Set<SwipeRowHandle>();
 
@@ -34,11 +35,11 @@ function onDocumentScroll() {
 }
 function onDocumentKeyDown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
-  for (const row of mountedRows) row.escape(event);
+  for (const row of armedRows) row.escape(event);
 }
 function onRowReveal(event: Event) {
   const identity = (event as CustomEvent).detail;
-  for (const row of mountedRows) {
+  for (const row of armedRows) {
     if (row.identity !== identity) row.close();
   }
 }
@@ -47,21 +48,15 @@ function attachRowListeners() {
   document.addEventListener("scroll", onDocumentScroll, true);
   document.addEventListener("keydown", onDocumentKeyDown);
   window.addEventListener(revealEvent, onRowReveal);
+  unsubscribePreferences = subscribeReaderPreferences(onDocumentScroll);
 }
 function detachRowListeners() {
   document.removeEventListener("pointerdown", onDocumentPointerDown, true);
   document.removeEventListener("scroll", onDocumentScroll, true);
   document.removeEventListener("keydown", onDocumentKeyDown);
   window.removeEventListener(revealEvent, onRowReveal);
-}
-function registerRow(row: SwipeRowHandle) {
-  mountedRows.add(row);
-  if (mountedRows.size === 1) attachRowListeners();
-}
-function unregisterRow(row: SwipeRowHandle) {
-  mountedRows.delete(row);
-  armedRows.delete(row);
-  if (!mountedRows.size) detachRowListeners();
+  unsubscribePreferences?.();
+  unsubscribePreferences = undefined;
 }
 
 /** Swiping only reveals an explicit action; it never performs that action. */
@@ -80,7 +75,6 @@ export function SwipeRow({ children, actionLabel, onAction, disabled = false, cl
   const privacy = useRef<PrivacyContext | null>(null);
   const offset = useRef(0);
   const blocked = useRef(disabled);
-  const focusAction = useRef(false);
   const registryEntry = useRef<SwipeRowHandle | null>(null);
   blocked.current = disabled;
   const suppressClickUntil = useRef(0);
@@ -102,7 +96,6 @@ export function SwipeRow({ children, actionLabel, onAction, disabled = false, cl
     const entry = registryEntry.current;
     if (entry) armedRows.delete(entry);
     privacy.current = null;
-    focusAction.current = false;
     move(0);
     setOpen(false);
     setDragging(false);
@@ -111,13 +104,12 @@ export function SwipeRow({ children, actionLabel, onAction, disabled = false, cl
     return !blocked.current && privacy.current !== null &&
       !privacy.current.readOnly && isPrivacyContextCurrent(privacy.current);
   }
-  function reveal(keyboard = false) {
+  function reveal() {
     if (!authorized()) { close(); return; }
     const entry = registryEntry.current;
     if (entry) armedRows.add(entry);
     window.dispatchEvent(new CustomEvent(revealEvent, { detail: identity.current }));
     move(button.current?.offsetWidth ?? 120);
-    focusAction.current = keyboard;
     setOpen(true);
   }
 
@@ -132,41 +124,30 @@ export function SwipeRow({ children, actionLabel, onAction, disabled = false, cl
       },
       escape(event) {
         if (event.key === "Escape") {
-          if (button.current === document.activeElement) root.current?.focus();
+          if (button.current === document.activeElement) {
+            root.current?.querySelector<HTMLElement>(".swipe-row-content button:not(:disabled), .swipe-row-content summary")
+              ?.focus({ preventScroll: true });
+          }
           close();
         }
       },
     };
     registryEntry.current = entry;
-    registerRow(entry);
-    const unsubscribe = subscribeReaderPreferences(close);
+    if (++mountedRows === 1) attachRowListeners();
     return () => {
       registryEntry.current = null;
-      unregisterRow(entry);
-      unsubscribe();
+      armedRows.delete(entry);
+      if (--mountedRows === 0) detachRowListeners();
     };
   }, []);
-  useEffect(() => { if (disabled) close(); }, [disabled]);
   useEffect(() => {
-    if (open && focusAction.current) {
-      focusAction.current = false;
-      button.current?.focus({ preventScroll: true });
-    }
-  }, [open]);
+    const entry = registryEntry.current;
+    if (disabled && entry && armedRows.has(entry)) close();
+  }, [disabled]);
 
   return (
     <div ref={root} className={`swipe-row ${open ? "is-open" : ""} ${dragging ? "is-dragging" : ""} ${className}`}
       style={{ "--swipe-offset": `${-direction * distance}px` } as CSSProperties}
-      tabIndex={disabled ? -1 : 0} role="group" aria-label={actionLabel}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget || disabled) return;
-        const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
-        if (event.key !== (rtl ? "ArrowRight" : "ArrowLeft")) return;
-        event.preventDefault();
-        privacy.current = capturePrivacyContext();
-        setDirection(rtl ? -1 : 1);
-        reveal(true);
-      }}
       onPointerDown={(event) => {
         if (disabled || !event.isPrimary || event.button !== 0 ||
           button.current?.contains(event.target as Node) ||

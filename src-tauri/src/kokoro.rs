@@ -19,7 +19,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, RecvTimeoutError, Sender},
-        Arc, LazyLock, Mutex,
+        Arc, LazyLock, Mutex, Weak,
     },
     thread,
     time::{Duration, Instant},
@@ -99,6 +99,12 @@ fn voice_sid(voice: &str) -> Option<i32> {
     VOICES.iter().find(|(candidate, ..)| *candidate == id).map(|(_, sid, ..)| *sid)
 }
 
+#[cfg(mobile)]
+pub(crate) fn voice_name(voice: &str) -> Option<&'static str> {
+    let id = voice.strip_prefix("kokoro:")?;
+    VOICES.iter().find(|(candidate, ..)| *candidate == id).map(|(_, _, name, _)| *name)
+}
+
 static CURRENCY_WITH_MAGNITUDE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?i)\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(thousand|million|billion|trillion|m|bn|tn)\b").expect("currency regex")
 });
@@ -129,7 +135,8 @@ struct State {
     downloaded: bool,
     download: Option<Download>,
     last_job: Option<Arc<DownloadControl>>,
-    engine: Option<Arc<OfflineTts>>,
+    // Only in-flight playback/probes retain the native model.
+    engine: Option<Weak<OfflineTts>>,
     active: Option<Active>,
     error: Option<String>,
     performance: Option<Performance>,
@@ -211,7 +218,6 @@ pub(crate) struct StartRequest {
     pub text: String,
     pub voice: String,
     pub rate: f64,
-    pub title: String,
     pub reading_label: String,
     pub paused_label: String,
 }
@@ -517,6 +523,7 @@ impl KokoroManager {
         self: &Arc<Self>,
         request: StartRequest,
         events: tokio::sync::mpsc::UnboundedSender<Value>,
+        start_paused: bool,
     ) -> Result<(), String> {
         if !self.downloaded() { return Err("Download the natural voice model in Settings first".into()); }
         if !self.usable() { return Err("Natural voices are disabled on this device because synthesis cannot keep up in real time; choose a system voice".into()); }
@@ -524,6 +531,7 @@ impl KokoroManager {
         let chunks = chunks(&request.text);
         if chunks.is_empty() { return Err("The article has no readable text".into()); }
         let (commands, receiver) = mpsc::channel();
+        if start_paused { let _ = commands.send(Command::Pause); }
         let stopped = Arc::new(AtomicBool::new(false));
         let offset = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         {
@@ -539,18 +547,22 @@ impl KokoroManager {
         }
         let manager = self.clone();
         let worker_id = request.id.clone();
+        let worker_stopped = stopped.clone();
         if let Err(error) = thread::Builder::new().name("kokoro-read-aloud".into()).spawn(move || {
+            let stopped = worker_stopped;
             let result = run(&manager, request, sid, chunks, receiver, stopped.clone(), offset.clone(), &events);
             if let Err(error) = result {
                 let _ = events.send(json!({"id": worker_id, "speaking": false, "paused": false, "offset": 0, "error": error}));
             }
             let mut state = manager.state.lock().unwrap_or_else(|error| error.into_inner());
-            if state.active.as_ref().is_some_and(|active| active.stopped.as_ptr() == stopped.as_ptr()) {
+            if state.active.as_ref().is_some_and(|active| Arc::ptr_eq(&active.stopped, &stopped)) {
                 state.active = None;
             }
         }) {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            state.active = None;
+            if state.active.as_ref().is_some_and(|active| Arc::ptr_eq(&active.stopped, &stopped)) {
+                state.active = None;
+            }
             return Err(format!("Starting read-aloud failed: {error}"));
         }
         Ok(())
@@ -559,7 +571,7 @@ impl KokoroManager {
     pub(crate) fn command(&self, id: &str, token: &str, command: Command) -> bool {
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let Some(active) = state.active.as_ref() else { return false; };
-        if active.id != id || active.token != token { return false; }
+        if active.id != id || active.token != token || active.stopped.load(Ordering::SeqCst) { return false; }
         active.commands.send(command).is_ok()
     }
 
@@ -587,7 +599,7 @@ impl KokoroManager {
     fn engine(&self, cancel: Option<&CancellationToken>) -> Result<Arc<OfflineTts>, String> {
         let generation = {
             let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            if let Some(engine) = state.engine.as_ref() { return Ok(engine.clone()); }
+            if let Some(engine) = state.engine.as_ref().and_then(Weak::upgrade) { return Ok(engine); }
             state.probe_generation
         };
         let model = install::engine_files(&self.root, cancel).map_err(|e| format!("Verifying the natural voice model failed: {e}"))?;
@@ -612,7 +624,8 @@ impl KokoroManager {
         let engine = Arc::new(engine);
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         if state.probe_generation != generation || !state.downloaded { return Err("The natural voice model changed before it could be loaded".into()); }
-        state.engine = Some(engine.clone());
+        if let Some(current) = state.engine.as_ref().and_then(Weak::upgrade) { return Ok(current); }
+        state.engine = Some(Arc::downgrade(&engine));
         Ok(engine)
     }
 
@@ -626,15 +639,19 @@ impl KokoroManager {
         f()
     }
 
-    fn synthesize(&self, engine: &OfflineTts, g2p: &G2P, text: &str, sid: i32, rate: f64, stopped: &Arc<AtomicBool>) -> Result<File, String> {
+    #[allow(clippy::too_many_arguments)]
+    fn synthesize(&self, engine: &OfflineTts, g2p: &G2P, text: &str, sid: i32, rate: f64,
+        stopped: &Arc<AtomicBool>, prefetch: Option<&CancellationToken>) -> Result<File, String> {
         let cache = self.root.join("voice-audio-v2");
         let key = format!("misaki-v1\u{0}{text}\u{0}{sid}\u{0}{rate:.3}");
         let digest = chksum_hash_sha2_256::hash(key.as_bytes()).to_hex_lowercase();
         let output = cache.join(format!("{digest}.wav"));
         let name = output.file_name().ok_or("Invalid voice cache file name")?;
-        if let Some(file) = self.with_playback(stopped, || install::cached_audio(&cache, name).map_err(|e| format!("Reading cached natural voice audio failed: {e}")))? {
-            return Ok(file);
-        }
+        let cancelled = || stopped.load(Ordering::SeqCst) || prefetch.is_some_and(CancellationToken::is_cancelled);
+        self.with_playback(stopped, || Ok(()))?;
+        let cached = install::cached_audio(&cache, name).map_err(|e| format!("Reading cached natural voice audio failed: {e}"))?;
+        if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
+        if let Some(file) = cached { return Ok(file); }
         let spoken = normalize_currency(text);
         let (phonemes, _) = g2p.g2p(&spoken).map_err(|error| format!("Preparing pronunciation failed: {error}"))?;
         let phonemes: Vec<i32> = phonemes.chars().filter(|character| *character != '❓')
@@ -646,10 +663,14 @@ impl KokoroManager {
             ..Default::default()
         };
         let running = stopped.clone();
-        let audio = engine.generate_with_config(text, &config, Some(move |_: &[f32], _: f32| !running.load(Ordering::SeqCst)))
-            .ok_or("The natural voice produced no audio")?;
+        let prefetch_cancel = prefetch.cloned();
+        let audio = engine.generate_with_config(text, &config, Some(move |_: &[f32], _: f32| {
+            !running.load(Ordering::SeqCst) && !prefetch_cancel.as_ref().is_some_and(CancellationToken::is_cancelled)
+        })).ok_or("The natural voice produced no audio")?;
+        if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
         let wav = wav_bytes(audio.samples(), audio.sample_rate());
         self.with_playback(stopped, || {
+            if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
             let file = install::publish_audio(&cache, Path::new(name), &wav).map_err(|e| format!("Saving cached natural voice audio failed: {e}"))?;
             let _ = install::clean_cache(&cache, false);
             Ok(file)
@@ -681,21 +702,38 @@ fn sentence_starts(text: &str) -> Vec<usize> {
     starts
 }
 
-fn wav_seconds(file: &File) -> Option<f64> {
-    let bytes = file.metadata().ok()?.len().checked_sub(44)?;
-    Some(bytes as f64 / (2.0 * 24_000.0))
+struct Prefetch {
+    index: usize,
+    cancel: CancellationToken,
+    worker: Option<thread::JoinHandle<Result<File, String>>>,
 }
 
-fn spawn_prefetch(
-    manager: Arc<KokoroManager>, engine: Arc<OfflineTts>, g2p: Arc<G2P>,
-    text: String, sid: i32, rate: f64, stopped: Arc<AtomicBool>,
-) -> Option<thread::JoinHandle<Result<File, String>>> {
-    thread::Builder::new().name("kokoro-synth-prefetch".into()).spawn(move || {
-        manager.synthesize(&engine, &g2p, &text, sid, rate, &stopped)
-    }).ok()
+impl Prefetch {
+    #[allow(clippy::too_many_arguments)]
+    fn start(index: usize, manager: Arc<KokoroManager>, engine: Arc<OfflineTts>, g2p: Arc<G2P>,
+        text: String, sid: i32, rate: f64, stopped: Arc<AtomicBool>) -> Option<Self> {
+        let cancel = CancellationToken::new();
+        let synthesis = cancel.clone();
+        let worker = thread::Builder::new().name("kokoro-synth-prefetch".into()).spawn(move || {
+            manager.synthesize(&engine, &g2p, &text, sid, rate, &stopped, Some(&synthesis))
+        }).ok()?;
+        Some(Self { index, cancel, worker: Some(worker) })
+    }
+
+    fn finish(mut self) -> Result<File, String> {
+        self.worker.take().unwrap().join().map_err(|_| "The natural voice prefetch worker panicked".to_string())?
+    }
 }
 
-#[allow(unused_assignments, clippy::too_many_arguments)]
+impl Drop for Prefetch {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+        // Don't overlap discarded ONNX work with a new seek destination.
+        if let Some(worker) = self.worker.take() { let _ = worker.join(); }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run(
     manager: &Arc<KokoroManager>,
     request: StartRequest,
@@ -706,115 +744,172 @@ fn run(
     offset: Arc<std::sync::atomic::AtomicUsize>,
     events: &tokio::sync::mpsc::UnboundedSender<Value>,
 ) -> Result<(), String> {
-    use rodio::{Decoder, OutputStream, Sink};
+    use rodio::{Decoder, OutputStream, Sink, Source};
     if stopped.load(Ordering::SeqCst) { return Ok(()); }
     let engine = manager.engine(None)?;
     let g2p = Arc::new(G2P::new(if request.voice.starts_with("kokoro:b") { Language::EnglishGB } else { Language::EnglishUS }));
     let total_utf16 = request.text.encode_utf16().count() as u64;
     let activity = |speaking: bool, paused: bool, offset: usize| json!({
         "id": &request.id, "speaking": speaking, "paused": paused, "offset": offset,
-        "title": &request.title, "voice": &request.voice, "total": total_utf16,
         "statusLabel": if paused { &request.paused_label } else { &request.reading_label },
     });
     let (_stream, stream) = OutputStream::try_default()
         .map_err(|error| format!("Opening the audio output failed: {error}"))?;
-    let mut sink: Option<Sink> = None;
-    let mut prefetched: Option<(usize, thread::JoinHandle<Result<File, String>>)> = None;
+    let mut prefetched: Option<Prefetch> = None;
+    let mut prepared = None;
     let mut index = 0usize;
+    let mut position = chunks[0].start_utf16;
     let mut paused = false;
-    loop {
+    'playback: loop {
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
-        if index >= chunks.len() {
-            let _ = events.send(activity(false, false, request.text.encode_utf16().count()));
+        let Some(chunk) = chunks.get(index) else {
+            let _ = events.send(activity(false, false, total_utf16 as usize));
             return Ok(());
-        }
-        let chunk = &chunks[index];
-        offset.store(chunk.start_utf16, Ordering::SeqCst);
-        if paused {
-            match commands.recv_timeout(Duration::from_millis(100)) {
-                Ok(Command::Resume) => { paused = false; }
-                Ok(Command::Stop) => return Ok(()),
-                Ok(Command::Previous) => { index = index.saturating_sub(1); }
-                Ok(Command::Next) => { index = (index + 1).min(chunks.len()); }
-                Ok(Command::Seek(offset)) => { index = chunk_index(&chunks, offset); }
-                Ok(Command::Rewind(seconds)) => { index = chunk_index(&chunks, chunk.start_utf16.saturating_sub((seconds * 15.0) as usize)); }
-                Ok(Command::Forward(seconds)) => { index = chunk_index(&chunks, chunk.start_utf16.saturating_add((seconds * 15.0) as usize)); }
-                Ok(Command::Pause) | Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => return Ok(()),
+        };
+        offset.store(position, Ordering::SeqCst);
+
+        // A seek while paused does not make the destination audible (or
+        // synthesize it) before Resume. Process queued transport first.
+        let pending = if paused {
+            commands.recv().ok()
+        } else {
+            match commands.try_recv() {
+                Ok(command) => Some(command),
+                Err(mpsc::TryRecvError::Empty) => None,
+                Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
             }
+        };
+        if let Some(command) = pending {
+            match command {
+                Command::Stop => return Ok(()),
+                Command::Pause => paused = true,
+                Command::Resume => paused = false,
+                command => (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command),
+            }
+            if paused && index < chunks.len() { let _ = events.send(activity(false, true, position)); }
             continue;
         }
-        let file = if let Some((prefetched_index, handle)) = prefetched.take() {
-            if prefetched_index == index {
-                handle.join().map_err(|_| "The natural voice prefetch worker panicked")??
-            } else {
-                manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped)?
-            }
-        } else {
-            manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped)?
+        if paused { return Ok(()); } // Sender disconnected.
+
+        let file = match prepared.take() {
+            Some((prepared_index, file)) if prepared_index == index => file,
+            _ => match prefetched.take() {
+                Some(next) if next.index == index => next.finish()?,
+                other => {
+                    drop(other);
+                    manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped, None)?
+                }
+            },
         };
-        // A superseded or stopped session must not play, or synthesize and
-        // cache, even one more chunk.
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
-        if index + 1 < chunks.len() && prefetched.is_none() {
-            prefetched = spawn_prefetch(manager.clone(), engine.clone(), g2p.clone(),
-                chunks[index + 1].text.clone(), sid, request.rate, stopped.clone()).map(|handle| (index + 1, handle));
-        }
-        let _ = events.send(activity(true, false, chunk.start_utf16));
-        let duration = wav_seconds(&file).unwrap_or(0.0);
-        let source = Decoder::new(BufReader::new(file)).map_err(|error| format!("Decoding synthesized audio failed: {error}"))?;
-        let next = Sink::try_new(&stream)
-            .map_err(|error| format!("Starting the audio output failed: {error}"))?;
-        manager.with_playback(&stopped, || { next.append(source); Ok(()) })?;
-        sink = Some(next);
-        let starts = sentence_starts(&chunk.text);
-        let chunk_utf16 = chunk.text.encode_utf16().count().max(1);
-        let mut next_sentence = 1usize;
-        let mut advance = true;
-        loop {
-            if stopped.load(Ordering::SeqCst) { return Ok(()); }
-            match commands.recv_timeout(Duration::from_millis(50)) {
-                Ok(Command::Pause) => {
-                    if let Some(sink) = sink.as_ref() { sink.pause(); }
-                    paused = true;
-                    advance = false;
-                    let _ = events.send(activity(false, true, chunk.start_utf16));
-                    break;
-                }
-                Ok(Command::Stop) => return Ok(()),
-                Ok(Command::Previous) => { if let Some(sink) = sink.as_ref() { sink.stop(); } index = index.saturating_sub(1); advance = false; break; }
-                Ok(Command::Next) => { if let Some(sink) = sink.as_ref() { sink.stop(); } index = (index + 1).min(chunks.len()); advance = false; break; }
-                Ok(Command::Seek(offset)) => { if let Some(sink) = sink.as_ref() { sink.stop(); } index = chunk_index(&chunks, offset); advance = false; break; }
-                Ok(Command::Rewind(seconds)) => { if let Some(sink) = sink.as_ref() { sink.stop(); } index = chunk_index(&chunks, chunk.start_utf16.saturating_sub((seconds * 15.0) as usize)); advance = false; break; }
-                Ok(Command::Forward(seconds)) => { if let Some(sink) = sink.as_ref() { sink.stop(); } index = chunk_index(&chunks, chunk.start_utf16.saturating_add((seconds * 15.0) as usize)); advance = false; break; }
-                Ok(Command::Resume) => {}
-                Err(RecvTimeoutError::Timeout) => {
-                    if let Some(player) = sink.as_ref() {
-                        let elapsed = player.get_pos().as_secs_f64();
-                        while next_sentence < starts.len() && duration > 0.0 {
-                            let fraction = starts[next_sentence] as f64 / chunk_utf16 as f64;
-                            if elapsed + 0.05 < duration * fraction { break; }
-                            let _ = events.send(activity(true, false,
-                                chunk.start_utf16 + starts[next_sentence]));
-                            next_sentence += 1;
-                        }
-                    }
-                    if sink.as_ref().is_some_and(|sink| sink.empty()) {
-                        if let Some(sink) = sink.take() { sink.sleep_until_end(); }
-                        break;
-                    }
-                }
-                Err(RecvTimeoutError::Disconnected) => return Ok(()),
+        // Controls can arrive during synthesis. Do not play even a brief
+        // sample on an output route that already told us to pause.
+        match commands.try_recv() {
+            Ok(Command::Stop) | Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
+            Ok(Command::Pause) => {
+                paused = true;
+                let _ = events.send(activity(false, true, position));
+                prepared = Some((index, file));
+                continue;
+            }
+            Ok(Command::Resume) | Err(mpsc::TryRecvError::Empty) => {}
+            Ok(command) => {
+                (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command);
+                continue;
             }
         }
-        sink = None;
-        if advance { index += 1; }
+        let mut source = Decoder::new(BufReader::new(file)).map_err(|error| format!("Decoding synthesized audio failed: {error}"))?;
+        let duration = source.total_duration().unwrap_or_default().as_secs_f64();
+        let chunk_utf16 = chunk.text.encode_utf16().count();
+        let source_start = duration * (position - chunk.start_utf16) as f64 / chunk_utf16 as f64;
+        if source_start > 0.0 {
+            source.try_seek(Duration::from_secs_f64(source_start))
+                .map_err(|error| format!("Seeking synthesized audio failed: {error}"))?;
+        }
+        let player = Sink::try_new(&stream)
+            .map_err(|error| format!("Starting the audio output failed: {error}"))?;
+        manager.with_playback(&stopped, || { player.append(source); Ok(()) })?;
+        if index + 1 < chunks.len() {
+            prefetched = Prefetch::start(index + 1, manager.clone(), engine.clone(), g2p.clone(),
+                chunks[index + 1].text.clone(), sid, request.rate, stopped.clone());
+        }
+        let _ = events.send(activity(true, false, position));
+        let starts = sentence_starts(&chunk.text);
+        let mut next_sentence = starts.partition_point(|start| chunk.start_utf16 + start <= position);
+        loop {
+            let command = commands.recv_timeout(Duration::from_millis(50));
+            if stopped.load(Ordering::SeqCst) { return Ok(()); }
+            if !paused && duration > 0.0 {
+                // Rodio tracks the played portion of the already-seeked WAV.
+                let elapsed = source_start + player.get_pos().as_secs_f64();
+                let played = (elapsed / duration * chunk_utf16 as f64) as usize;
+                let played = utf16_boundary(&chunk.text, chunk_utf16, played);
+                position = position.max(chunk.start_utf16 + played);
+                offset.store(position, Ordering::SeqCst);
+            }
+            match command {
+                Ok(Command::Pause) if !paused => {
+                    player.pause();
+                    paused = true;
+                    let _ = events.send(activity(false, true, position));
+                }
+                Ok(Command::Resume) if paused => {
+                    manager.with_playback(&stopped, || { player.play(); Ok(()) })?;
+                    paused = false;
+                    let _ = events.send(activity(true, false, position));
+                }
+                Ok(Command::Pause | Command::Resume) => {}
+                Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
+                Ok(command) => {
+                    (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command);
+                    if paused && index < chunks.len() { let _ = events.send(activity(false, true, position)); }
+                    continue 'playback; // Drop only this sink, not the output stream.
+                }
+                Err(RecvTimeoutError::Timeout) if !paused => {
+                    while next_sentence < starts.len() && chunk.start_utf16 + starts[next_sentence] <= position {
+                        let _ = events.send(activity(true, false, chunk.start_utf16 + starts[next_sentence]));
+                        next_sentence += 1;
+                    }
+                    if player.empty() { break; }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+            }
+        }
+        index += 1;
+        position = chunks.get(index).map_or(total_utf16 as usize, |chunk| chunk.start_utf16);
     }
 }
 
-fn chunk_index(chunks: &[Chunk], offset: usize) -> usize {
-    chunks.iter().position(|chunk| chunk.start_utf16 >= offset)
-        .unwrap_or_else(|| chunks.len().saturating_sub(1))
+fn transport_position(chunks: &[Chunk], index: usize, position: usize, total: usize, rate: f64, command: Command) -> (usize, usize) {
+    let distance = |seconds| (seconds * rate * 15.0_f64) as usize;
+    let requested = match command {
+        Command::Previous => chunks[index.saturating_sub(1)].start_utf16,
+        Command::Next => chunks.get(index + 1).map_or(total, |chunk| chunk.start_utf16),
+        Command::Seek(position) => position,
+        Command::Rewind(seconds) => position.saturating_sub(distance(seconds)),
+        Command::Forward(seconds) => position.saturating_add(distance(seconds)),
+        Command::Pause | Command::Resume | Command::Stop => unreachable!("not a positioning command"),
+    };
+    if requested >= total { return (chunks.len(), total); }
+    let index = chunks.partition_point(|chunk| chunk.start_utf16 <= requested).saturating_sub(1);
+    let chunk = &chunks[index];
+    let length = chunk.text.encode_utf16().count();
+    let relative = utf16_boundary(&chunk.text, length, requested.saturating_sub(chunk.start_utf16));
+    (index, chunk.start_utf16 + relative)
+}
+
+// A rate/voice restart slices the source at this UTF-16 offset. Never point
+// it into the second code unit of a surrogate pair.
+fn utf16_boundary(text: &str, length: usize, requested: usize) -> usize {
+    let requested = requested.min(length - 1);
+    if text.len() == length { return requested; } // ASCII.
+    let mut offset = 0;
+    for character in text.chars() {
+        let end = offset + character.len_utf16();
+        if end > requested { return offset; }
+        offset = end;
+    }
+    unreachable!("bounded by the UTF-16 source length")
 }
 
 fn chunk_boundary(chars: &[(usize, char)], index: usize) -> bool {
@@ -1054,6 +1149,26 @@ mod fixtures {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn transport_uses_the_containing_chunk_and_preserves_mid_chunk_positions() {
+        let chunks = chunks(&format!("{}.\n{}.", "a".repeat(600), "b".repeat(600)));
+        let second = chunks[1].start_utf16;
+        let total = second + chunks[1].text.encode_utf16().count();
+        assert_eq!(transport_position(&chunks, 0, 0, total, 1.0, Command::Seek(300)), (0, 300));
+        assert_eq!(transport_position(&chunks, 1, second, total, 1.0, Command::Rewind(15.0)), (0, second - 225));
+        assert_eq!(transport_position(&chunks, 1, second, total, 2.0, Command::Rewind(15.0)), (0, second - 450));
+        assert_eq!(transport_position(&chunks, 0, 300, total, 1.0, Command::Forward(25.0)), (1, 675));
+        assert_eq!(transport_position(&chunks, 1, second, total, 1.0, Command::Next), (chunks.len(), total));
+    }
+
+    #[test]
+    fn transport_playhead_never_points_inside_a_surrogate_pair() {
+        let text = "a𠮷b";
+        let chunks = chunks(text);
+        assert_eq!(transport_position(&chunks, 0, 0, 4, 1.0, Command::Seek(2)), (0, 1));
+        assert_eq!(utf16_boundary(text, 4, 3), 3);
+    }
 
     #[test]
     fn voice_pack_verification_retains_the_received_file() {

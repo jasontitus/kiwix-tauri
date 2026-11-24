@@ -13,6 +13,7 @@ interface Props {
   privateMode: boolean;
   readOnly: boolean;
   privacyGeneration: number;
+  visible?: boolean;
   presentation?: "settings" | "reading";
   onConnect?: () => void;
   onOpen: (location: TabLocation) => void;
@@ -47,7 +48,7 @@ function ConflictChoice({ conflict, disabled, onChoose, onCopy }: {
 
 /** Private profile data never shares the public archive-sharing surface or authority. */
 export default function PrivateReadingSync({
-  privateMode, readOnly, privacyGeneration, presentation = "settings", onConnect, onOpen, onRefresh,
+  privateMode, readOnly, privacyGeneration, visible = true, presentation = "settings", onConnect, onOpen, onRefresh,
 }: Props) {
   const id = useId();
   const [status, setStatus] = useState<PrivateSyncStatus | null>(null);
@@ -131,7 +132,10 @@ export default function PrivateReadingSync({
     setBusy(false);
     if (blocked || observedGeneration.current !== privacyGeneration) cancelOwned();
     observedGeneration.current = privacyGeneration;
-    if (blocked || !foreground) return;
+  }, [blocked, foreground, privacyGeneration]);
+
+  useEffect(() => {
+    if (blocked || !foreground || !visible) return;
     let active = true;
     let reading = false;
     async function refresh() {
@@ -156,7 +160,7 @@ export default function PrivateReadingSync({
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [blocked, foreground, privacyGeneration]);
+  }, [blocked, foreground, privacyGeneration, visible]);
 
   async function action(work: (privacy: PrivacyContext) => Promise<PrivateSyncStatus>, success = "", pairing = false) {
     const privacy = context();

@@ -64,11 +64,13 @@ import KokoroDownloadPrompt from "./KokoroDownloadPrompt";
 import { SwipeRow } from "./SwipeRow";
 import SelectedStorageActions from "./SelectedStorageActions";
 import {
+  ArchiveTags,
   BookCover,
   BookFacts,
   Empty,
   ErrorNotice,
   Loading,
+  PagedResults,
   Modal,
   PageHeader,
   type SurfaceProps,
@@ -456,7 +458,7 @@ export default function Library({
         ),
         pinned,
       ),
-    [books, sort, direction, pinned],
+    [books, sort, direction, pinned, locale],
   );
   const needle = query.toLocaleLowerCase();
   const filtered = useMemo(
@@ -1166,8 +1168,9 @@ export default function Library({
           description={t("Try another search or adjust your filters.")}
         />
       ) : (
-        <div className={`book-collection ${view}`}>
-          {filtered.map((book) => (
+        <PagedResults items={filtered} criteria={JSON.stringify([query, filters, availability, sort, direction, locale])}
+          label={t("Library")} className={`book-collection ${view}`}>
+          {(book) => (
             <SwipeRow
               key={`${book.id}:${book.installationId}`}
               actionLabel={t("Remove from library")}
@@ -1292,8 +1295,8 @@ export default function Library({
               </div>
             </article>
             </SwipeRow>
-          ))}
-        </div>
+          )}
+        </PagedResults>
       )}
       {!!books.length && (
         <details ref={scopeSection} className="search-archives secondary-controls panel" open={searchOpen}
@@ -1360,7 +1363,7 @@ export default function Library({
                   role="combobox"
                   aria-autocomplete="list"
                   aria-expanded={suggestionOpen}
-                  aria-controls="library-search-suggestions"
+                  aria-controls={suggestionOpen ? "library-search-suggestions" : undefined}
                   aria-activedescendant={
                     suggestionOpen && suggestionActive >= 0
                       ? `library-suggestion-${suggestionActive}`
@@ -1383,7 +1386,11 @@ export default function Library({
                       role="option"
                       aria-selected={index === suggestionActive}
                       className={index === suggestionActive ? "active" : undefined}
-                      onMouseDown={(event) => event.preventDefault()}
+                      onPointerDown={(event) => {
+                        // Keep DOM focus on the combobox through a tap, including
+                        // touch/pen. Scrolling the list still cancels the click.
+                        if (event.isPrimary && event.button === 0) event.preventDefault();
+                      }}
                       onMouseEnter={() => setSuggestionActive(index)}
                       onClick={() => openSuggestion(suggestion)}
                     >
@@ -1579,7 +1586,7 @@ export default function Library({
               {t("Remove from library")}
             </button>
             <button
-              disabled={removalBusy || shareBusy || settings.readOnly || !detail.available}
+              disabled={removalBusy || shareBusy || settings.privateMode || settings.readOnly || !detail.available}
               onClick={() => void shareBook(detail)}
             >
               <Share2 size={16} />{t("Share as BitTorrent")}
@@ -1649,13 +1656,7 @@ export default function Library({
               </dd>
             </div>
           </dl>
-          <div className="tag-list">
-            {detail.tags.map((tag) => (
-              <span key={tag} className="badge">
-                {tag}
-              </span>
-            ))}
-          </div>
+          <ArchiveTags tags={detail.tags} />
           {detail.available && (
             <>
               <p className="muted">

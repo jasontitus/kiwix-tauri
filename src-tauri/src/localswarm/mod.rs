@@ -213,7 +213,8 @@ struct LibraryOffer {
     server: library::LibraryServer,
     advertisement: String,
 }
-struct Running { cancel: CancellationToken, task: tokio::task::JoinHandle<()> }
+struct ReceiveProgress { downloaded: u64, speed: u64, updated_at: String }
+struct Running { cancel: CancellationToken, task: tokio::task::JoinHandle<()>, progress: Option<ReceiveProgress> }
 struct State { jobs: BTreeMap<String, StoredJob>, running: HashMap<String, Running> }
 /// Orders durable job-map writes. `next` is assigned under the state lock, so a
 /// snapshot's sequence follows the mutation it contains; `written` is the newest
@@ -665,7 +666,23 @@ impl LocalSwarmManager {
     pub async fn set_direct(&self, direct: bool) -> Result<(), String> {
         self.inner.discovery.lock().await.set_direct(direct).await
     }
-    pub fn list(&self) -> Result<Vec<DownloadJob>, String> { Ok(self.inner.state.lock().map_err(|_| "LocalSwarm state unavailable")?.jobs.values().filter(|saved| !saved.history_dismissed).map(|v| v.job.clone()).collect()) }
+    pub fn list(&self) -> Result<Vec<DownloadJob>, String> {
+        let state = self.inner.state.lock().map_err(|_| "LocalSwarm state unavailable")?;
+        Ok(state.jobs.values().filter(|saved| !saved.history_dismissed).map(|saved| {
+            let mut job = saved.job.clone();
+            if job.status == "downloading" {
+                if let Some(progress) = state.running.get(&job.id).and_then(|worker| worker.progress.as_ref())
+                    .filter(|progress| progress.downloaded > job.downloaded)
+                {
+                    job.downloaded = progress.downloaded;
+                    job.speed = progress.speed;
+                    job.eta_seconds = (job.speed > 0).then(|| saved.manifest.total_bytes.saturating_sub(job.downloaded).div_ceil(job.speed));
+                    job.updated_at.clone_from(&progress.updated_at);
+                }
+            }
+            job
+        }).collect())
+    }
     #[cfg(target_os = "ios")]
     pub async fn set_sharing_admission(&self, accepting: bool) {
         self.inner.sharing_admission.store(accepting, std::sync::atomic::Ordering::SeqCst);
@@ -942,9 +959,9 @@ impl LocalSwarmManager {
                 return Err(format!("{}; staged files retained at {}", error.message, staging.display()));
             }
         }
-        self.spawn(&id, pin, cancel, identity, acknowledgement, false)?; Ok(job)
+        self.spawn(&id, pin, cancel, identity, acknowledgement)?; Ok(job)
     }
-    fn spawn(&self, id: &str, pin: Option<String>, cancel: CancellationToken, space_identity: String, acknowledgement: Option<String>, rehash_all: bool) -> Result<(), String> {
+    fn spawn(&self, id: &str, pin: Option<String>, cancel: CancellationToken, space_identity: String, acknowledgement: Option<String>) -> Result<(), String> {
         let manager = self.clone(); let task_id = id.to_string(); let token = cancel.clone();
         // Register the running handle before the receiver can open any staging
         // file. Otherwise a pause that wins the scheduling race finds no handle,
@@ -953,7 +970,7 @@ impl LocalSwarmManager {
         let (start, started) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
             let _ = started.await;
-            let result = manager.receive(&task_id, pin, token.clone(), space_identity, acknowledgement, rehash_all).await;
+            let result = manager.receive(&task_id, pin, token.clone(), space_identity, acknowledgement).await;
             if let Err(error) = result {
                 let mut state = manager.inner.state.lock().unwrap();
                 if let Some(saved) = state.jobs.get_mut(&task_id) {
@@ -969,7 +986,7 @@ impl LocalSwarmManager {
                 if let Err(e) = manager.persist(&state) { eprintln!("Saving LocalSwarm transfer: {e}"); }
             }
         });
-        self.inner.state.lock().unwrap().running.insert(id.to_string(), Running { cancel, task });
+        self.inner.state.lock().unwrap().running.insert(id.to_string(), Running { cancel, task, progress: None });
         let _ = start.send(());
         Ok(())
     }
@@ -1000,7 +1017,7 @@ impl LocalSwarmManager {
         let cancel = self.cancel_token();
         { let mut state = self.inner.state.lock().unwrap(); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
           if pin.is_some() { saved.job.requires_pin = true; } saved.job.status = "queued".into(); saved.job.error = None; self.persist(&state)?; }
-        self.spawn(id, pin, cancel, id.to_string(), acknowledgement, true)
+        self.spawn(id, pin, cancel, id.to_string(), acknowledgement)
     }
     async fn candidates(&self, host: String, port: u16, sid: &str, direct: bool) -> VecDeque<ConnectionTarget> {
         let peers = self.inner.discovery.lock().await.peers();
@@ -1009,7 +1026,7 @@ impl LocalSwarmManager {
     async fn refresh_candidates(&self, dialer: &mut SourceDialer) -> bool {
         dialer.add_discovered(self.inner.discovery.lock().await.peers())
     }
-    async fn receive(&self, id: &str, pin: Option<String>, cancel: CancellationToken, space_identity: String, acknowledgement: Option<String>, rehash_all: bool) -> Result<(), String> {
+    async fn receive(&self, id: &str, pin: Option<String>, cancel: CancellationToken, space_identity: String, acknowledgement: Option<String>) -> Result<(), String> {
         let _slot = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Err("LocalSwarm transfer stopped while queued".into()),
@@ -1032,7 +1049,7 @@ impl LocalSwarmManager {
         let donor_store = self.inner.store.clone();
         let (open, checked) = blocking(move || {
             let mut open = open_owned.open(&open_manifest, publishing)?;
-            rehash_verified(&mut open, &open_manifest, &open_owned, &mut verified, rehash_all, &recheck_cancel)?;
+            rehash_verified(&mut open, &open_manifest, &open_owned, &mut verified, &recheck_cancel)?;
             // Adopted chunks consume the same space as downloaded ones, so the
             // space check and its acknowledgement precede any adoption write.
             let remaining = open_manifest.total_bytes.checked_sub(verified_bytes(&open_manifest, &verified)?)
@@ -1043,10 +1060,13 @@ impl LocalSwarmManager {
                     eprintln!("Skipping BitTorrent partial reuse: {error}");
                     Vec::new()
                 });
-                if adopt_partial_chunks(&mut open, &open_manifest, &mut verified, &donors, &recheck_cancel)? != 0 {
-                    // Durable before the checkpoint below records these chunks.
-                    open.commit_data(&open_manifest, &open_owned)?;
-                }
+                adopt_partial_chunks(&mut open, &open_manifest, &mut verified, &donors, &recheck_cancel)?;
+            }
+            if !open.published && verified.iter().any(|bit| *bit) {
+                // Older journals could snapshot in-flight bits on an unrelated
+                // save. Flush checked claims and any adoption writes before
+                // recording the repaired checkpoint.
+                open.commit_data(&open_manifest, &open_owned)?;
             }
             Ok((Arc::new(Mutex::new(open)), verified))
         }).await?;
@@ -1181,7 +1201,7 @@ impl LocalSwarmManager {
                                         // In-memory progress is cheap and keeps the UI
                                         // moving; only the byte window is durable.
                                         let speed = (fetched as f64 / started.elapsed().as_secs_f64().max(0.001)) as u64;
-                                        self.advance(id, index as usize, length as u64, speed);
+                                        self.advance(id, initial + fetched, speed);
                                         if uncommitted >= checkpoint_chunks || uncommitted_bytes >= checkpoint_bytes {
                                             let committed = match verified_bytes(&manifest, &verified) {
                                                 Ok(downloaded) => commit(&verified,
@@ -1261,12 +1281,13 @@ impl LocalSwarmManager {
             check_cancel(&token)?; let mut open = validate_open.lock().map_err(|_| "LocalSwarm staging unavailable")?;
             open.seal(&validate_manifest, &validate_owned)?;
             let mut final_bits = vec![true; validate_manifest.chunk_hashes.len()];
-            rehash_verified(&mut open, &validate_manifest, &validate_owned, &mut final_bits, true, &token)?;
+            rehash_verified(&mut open, &validate_manifest, &validate_owned, &mut final_bits, &token)?;
             if final_bits.iter().any(|bit| !bit) { return Err("LocalSwarm staged bytes changed after chunk verification".into()); }
             Ok((open.directory.path.clone(), open.verification_files(&validate_manifest, &validate_owned)?))
         }).await?;
         let validate_manifest = manifest.clone();
-        readonly_verification(&cancel, move || validate_zim(&validate_path, &validate_files, &validate_manifest)).await?;
+        let token = cancel.clone();
+        readonly_verification(&cancel, move || validate_zim(&validate_path, &validate_files, &validate_manifest, &token)).await?;
         check_cancel(&cancel)?;
         { let mut state = self.inner.state.lock().unwrap(); state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?.publishing = true; self.persist(&state)?; }
         let publish_open = open.clone(); let publish_manifest = manifest.clone(); let publish_owned = owned.clone(); let store = self.inner.store.clone(); let token = cancel.clone();
@@ -1278,8 +1299,10 @@ impl LocalSwarmManager {
                 if !open.published {
                     let files = publish_manifest.files.iter().zip(&open.files).map(|(entry, file)| Ok((PathBuf::from(&entry.path), crate::publication::VerifiedFile::new(file.try_clone().map_err(err)?, entry.size_bytes).map_err(err)?))).collect::<Result<Vec<_>, String>>()?;
                     open.parent.unchanged()?; open.unchanged(&publish_manifest, &publish_owned)?;
-                    open.publish(&publish_manifest, &publish_owned, files)?; open.parent.sync()?;
+                    open.publish(&publish_manifest, &publish_owned, files)?;
                 }
+                // Also cover a restart after the rename but before its sync.
+                open.parent.sync()?;
                 for (file, path) in open.files.iter().zip(&paths) { crate::mobile_backup::archive_policy(file, path)?; }
                 open.unchanged(&publish_manifest, &publish_owned)
             })
@@ -1287,17 +1310,14 @@ impl LocalSwarmManager {
         let mut state = self.inner.state.lock().unwrap(); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
         saved.job.status = "complete".into(); saved.job.downloaded = manifest.total_bytes; saved.job.speed = 0; saved.job.eta_seconds = None; saved.job.error = None; saved.job.completed_paths = vec![saved.job.destination.clone()]; saved.job.updated_at = now(); self.persist(&state).map_err(Into::into)
     }
-    /// Advance the in-memory job row for one newly verified chunk. This does no
-    /// I/O: the durable record still comes only from `commit` after its fsync,
-    /// so a crash can never persist a chunk that was not flushed.
-    fn advance(&self, id: &str, index: usize, length: u64, speed: u64) {
+    /// In-flight progress belongs to this worker, never to the persisted job
+    /// map. Route changes and writes by other jobs may snapshot the map before
+    /// this worker's next payload flush.
+    fn advance(&self, id: &str, downloaded: u64, speed: u64) {
         let mut state = self.inner.state.lock().unwrap_or_else(|error| error.into_inner());
-        let Some(saved) = state.jobs.get_mut(id) else { return };
-        if let Some(bit) = saved.verified.get_mut(index) { *bit = true; }
-        saved.job.downloaded = saved.job.downloaded.saturating_add(length);
-        saved.job.speed = speed;
-        saved.job.eta_seconds = if speed > 0 { Some(saved.manifest.total_bytes.saturating_sub(saved.job.downloaded).div_ceil(speed)) } else { None };
-        saved.job.updated_at = now();
+        if let Some(worker) = state.running.get_mut(id) {
+            worker.progress = Some(ReceiveProgress { downloaded, speed, updated_at: now() });
+        }
     }
     /// Persist the route that actually carried payload. Sessions are bounded
     /// (four source slots, bounded reconnects), and this writes only when the
@@ -1338,15 +1358,13 @@ impl LocalSwarmManager {
         let reason = Arc::new(Mutex::new(None));
         let monitor = SourceMonitor::start(&source, cancel.clone(), reason.clone())?;
         let reader_cancel = cancel.clone(); let reader_reason = reason.clone();
-        let reader: network::ChunkReader = Arc::new(move |index| {
-            let result = source_reader.chunk(index);
-            if let Err(error) = &result {
-                *reader_reason.lock().unwrap() = Some(error.clone());
-                reader_cancel.cancel();
-            }
-            result
+        let reader: network::ChunkReader = Arc::new(move |index| source_reader.chunk(index));
+        let retire: network::SeedSourceFailure = Arc::new(move |error| {
+            *reader_reason.lock().unwrap() = Some(error.to_owned());
+            reader_cancel.cancel();
         });
-        let server = network::seed(manifest.clone(), self.inner.peer_id.clone(), pin.clone(), reader, self.inner.upload_budget.clone(), cancel.clone()).await?;
+        let server = network::seed(manifest.clone(), self.inner.peer_id.clone(), pin.clone(), reader,
+            self.inner.upload_budget.clone(), cancel.clone(), Some(retire)).await?;
         if let Err(error) = source.unchanged().and_then(|_| check_cancel(&cancel)) { server.shutdown().await; return Err(error); }
         #[cfg(target_os = "ios")]
         server.stats.set_accepting(self.inner.sharing_admission.load(std::sync::atomic::Ordering::SeqCst));
@@ -1479,14 +1497,18 @@ impl LocalSwarmManager {
     }
 }
 fn verified_bytes(manifest: &Manifest, bits: &[bool]) -> Result<u64, String> { bits.iter().enumerate().filter(|(_, b)| **b).try_fold(0u64, |n, (i, _)| n.checked_add(manifest.chunk_len(i as u32)? as u64).ok_or_else(|| "LocalSwarm verified size overflow".into())) }
+/// Check durable claims only. Unclaimed staging bytes may be unwritten or
+/// from a lost checkpoint window; the receiver must fetch them again. A set
+/// already renamed by our durable publishing intent may only be revalidated
+/// in full, never repaired.
 fn rehash_verified(
     open: &mut OpenSet, manifest: &Manifest, owned: &OwnedSet,
-    bits: &mut [bool], all: bool, cancel: &CancellationToken,
+    bits: &mut [bool], cancel: &CancellationToken,
 ) -> Result<(), String> {
     open.unchanged(manifest, owned)?;
     for (index, bit) in bits.iter_mut().enumerate() {
         check_cancel(cancel)?;
-        if *bit || all || open.published {
+        if *bit || open.published {
             let bytes = open.read_chunk(manifest, index as u32)?;
             *bit = hex::encode(Sha256::digest(&bytes)) == manifest.chunk_hashes[index];
         }
@@ -1575,17 +1597,19 @@ fn zim_header(files: &[(String, File)]) -> Result<[u8; 80], String> {
     }
     Err("LocalSwarm ZIM header is truncated".into())
 }
-fn validate_zim(directory: &Path, files: &[(String, File)], manifest: &Manifest) -> Result<(), String> {
+fn validate_zim(directory: &Path, files: &[(String, File)], manifest: &Manifest, cancel: &CancellationToken) -> Result<(), String> {
+    check_cancel(cancel)?;
     let expected = files.iter().map(|(_, file)| Stamp::of(&Metadata::from_file(file).map_err(err)?)).collect::<Result<Vec<_>, _>>()?;
     let header = zim_header(files)?;
     if &header[..4] != b"ZIM\x04" || u64::from_le_bytes(header[72..80].try_into().map_err(err)?).checked_add(16) != Some(manifest.total_bytes) {
         return Err("This archive is damaged. Remove it from your library and add it again".into());
     }
     let archive = Archive::open_files(directory, files)?;
-    let metadata = archive.metadata()?;
-    if metadata.id.is_empty() || !archive.check_integrity()? {
+    let metadata = archive.metadata_cancellable(cancel)?;
+    if metadata.id.is_empty() || !archive.check_integrity_cancellable(cancel, |_, _| {})? {
         return Err("This archive is damaged. Remove it from your library and add it again".into());
     }
+    check_cancel(cancel)?;
     for ((_, file), expected) in files.iter().zip(&expected) {
         if Stamp::of(&Metadata::from_file(file).map_err(err)?)? != *expected {
             return Err("This archive changed while Kiwix was checking it. Remove it from your library and add it again".into());
@@ -1708,6 +1732,8 @@ impl SourceSet {
         }
         Ok(())
     }
+    // Read the exact offered source. The shared transport hashes these copied
+    // bytes once before responding, including for Apple QUIC.
     fn chunk(&self, index: u32) -> Result<Vec<u8>, String> {
         let measured = profile::start();
         self.unchanged()?;
@@ -1720,9 +1746,6 @@ impl SourceSet {
             file.read_exact(&mut bytes).map_err(err)?;
         }
         self.unchanged()?;
-        if hex::encode(Sha256::digest(&bytes)) != self.manifest.chunk_hashes[index as usize] {
-            return Err("Offered archive chunk no longer matches its manifest".into());
-        }
         profile::record(0, bytes.len(), measured);
         Ok(bytes)
     }
@@ -1770,7 +1793,7 @@ mod monitored_claim_tests {
         }
         open.seal(&manifest, &owned).unwrap();
         let checked = open.verification_files(&manifest, &owned).unwrap();
-        validate_zim(&open.directory.path, &checked, &manifest).unwrap();
+        validate_zim(&open.directory.path, &checked, &manifest, &CancellationToken::new()).unwrap();
         drop(checked);
         let primary = owned.final_path("book.zimaa");
         let secondary = owned.final_path("book.zimab");

@@ -4,7 +4,7 @@
 
 use crate::archive::{
     archive_error, entry_by_path, public_path, resolve_cancellable as resolve, SearchHit,
-    SearchResults,
+    RankedHit, SearchResults,
 };
 use std::collections::VecDeque;
 use std::fs::File;
@@ -314,7 +314,10 @@ impl PrefixCache {
     fn read(&mut self, entry: &Entry) -> Result<&[u8], ZimError> {
         let index = entry.index();
         if let Some(i) = self.0.iter().position(|(id, _)| *id == index) {
-            self.0.swap(i, 0);
+            if i != 0 {
+                let hit = self.0.remove(i).expect("Known prefix cache entry");
+                self.0.push_front(hit);
+            }
         } else {
             let mut bytes = vec![0; MAX_SNIPPET_INPUT];
             let count = entry.get_item(false)?.read_at(0, &mut bytes)?;
@@ -326,19 +329,34 @@ impl PrefixCache {
         }
         Ok(&self.0[0].1)
     }
+
+    fn excerpt(
+        &mut self, entry: &Entry, query: &str, prepared: &mut Option<SnippetQuery>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<String, String> {
+        // A missing or oversized body still has a valid ranked hit.
+        let Ok(prefix) = self.read(entry) else { return Ok(String::new()) };
+        let terms = prepared.get_or_insert_with(|| SnippetQuery::new(query));
+        let text = terms.excerpt(&String::from_utf8_lossy(prefix), cancelled).map_err(|e| e.to_string())?;
+        Ok(escape_text(&text))
+    }
 }
 
-struct ResultPage<'a> {
-    rows: SearchResults,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SnippetMode { Disabled, Immediate, Deferred }
+
+struct ResultPage<'a, T> {
+    rows: SearchResults<T>,
     bytes: usize,
-    snippets: bool,
+    snippets: SnippetMode,
     fulltext: bool,
     query: &'a str,
     prepared: Option<SnippetQuery>,
     prefixes: &'a mut PrefixCache,
+    make_row: fn(SearchHit, Option<u32>) -> T,
 }
 
-impl ResultPage<'_> {
+impl<T> ResultPage<'_, T> {
     fn add(
         &mut self,
         entry: Entry,
@@ -353,38 +371,25 @@ impl ResultPage<'_> {
         if title.len() > 1 << 20 {
             return Err("Search result field exceeds 1 MiB".into());
         }
-        let snippet = if !self.snippets {
-            String::new()
-        } else if let Some(text) = stored {
-            text
-        } else if !self.fulltext {
-            escape_text(&title)
-        } else {
-            // A missing or oversized body still has a valid ranked hit.
-            match self.prefixes.read(&entry) {
-                Ok(prefix) => {
-                    let terms = self
-                        .prepared
-                        .get_or_insert_with(|| SnippetQuery::new(self.query));
-                    escape_text(
-                        &terms
-                            .excerpt(&String::from_utf8_lossy(prefix), cancelled)
-                            .map_err(|e| e.to_string())?,
-                    )
-                }
-                Err(_) => String::new(),
-            }
+        let (snippet, excerpt_entry) = match (self.snippets, stored) {
+            (SnippetMode::Disabled, _) => (String::new(), None),
+            (_, Some(text)) => (text, None),
+            (_, None) if !self.fulltext => (escape_text(&title), None),
+            (SnippetMode::Deferred, None) => (String::new(), Some(entry.index())),
+            (SnippetMode::Immediate, None) => (
+                self.prefixes.excerpt(&entry, self.query, &mut self.prepared, cancelled)?, None,
+            ),
         };
         self.bytes += title.len() + path.len() + snippet.len();
         if self.bytes > MAX_RESULT_BYTES {
             return Err("Search response exceeds 32 MiB limit".into());
         }
-        self.rows.hits.push(SearchHit {
+        self.rows.hits.push((self.make_row)(SearchHit {
             path,
             title,
             snippet,
             score,
-        });
+        }, excerpt_entry));
         Ok(())
     }
 }
@@ -426,6 +431,21 @@ impl SearchReader {
         snippets: bool,
         cancel: Option<&CancellationToken>,
     ) -> Result<SearchResults, String> {
+        let mode = if snippets { SnippetMode::Immediate } else { SnippetMode::Disabled };
+        self.page_with(q, fulltext, offset, limit, mode, cancel, |hit, _| hit)
+    }
+
+    pub(super) fn ranked(
+        &self, q: &str, fulltext: bool, offset: u32, limit: u32, snippets: bool, cancel: &CancellationToken,
+    ) -> Result<SearchResults<RankedHit>, String> {
+        let mode = if snippets { SnippetMode::Deferred } else { SnippetMode::Disabled };
+        self.page_with(q, fulltext, offset, limit, mode, Some(cancel), |hit, excerpt_entry| RankedHit { hit, excerpt_entry })
+    }
+
+    fn page_with<T>(
+        &self, q: &str, fulltext: bool, offset: u32, limit: u32, snippets: SnippetMode,
+        cancel: Option<&CancellationToken>, make_row: fn(SearchHit, Option<u32>) -> T,
+    ) -> Result<SearchResults<T>, String> {
         let cancelled = || cancel.is_some_and(CancellationToken::is_cancelled);
         let check = || {
             if cancelled() {
@@ -461,6 +481,7 @@ impl SearchReader {
             query: q,
             prepared: None,
             prefixes,
+            make_row,
         };
         match slot.open(archive, &self.parts, fulltext)? {
             Some(open) if fulltext => {
@@ -471,7 +492,7 @@ impl SearchReader {
                         offset as usize,
                         limit as usize,
                         &open.language,
-                        snippets,
+                        snippets != SnippetMode::Disabled,
                         &cancelled,
                     )
                     .map_err(|e| e.to_string())?;
@@ -539,6 +560,34 @@ impl SearchReader {
         self.parts.unchanged()?;
         Ok(result.rows)
     }
+
+    pub(super) fn excerpts(
+        &self, q: &str, rows: &mut [&mut RankedHit], cancel: &CancellationToken,
+    ) -> Result<(), String> {
+        let mut cache = self.lock(Some(cancel))?;
+        self.parts.unchanged()?;
+        let cancelled = || cancel.is_cancelled();
+        let mut prepared = None;
+        let mut bytes = 0;
+        for row in rows {
+            crate::search::check_cancel(cancel)?;
+            if let Some(index) = row.excerpt_entry {
+                let entry = self.archive.entry_by_url_index(index).map_err(archive_error)?;
+                row.hit.snippet = cache.prefixes.excerpt(&entry, q, &mut prepared, &cancelled)?;
+            }
+            bytes += row.hit.path.len() + row.hit.title.len() + row.hit.snippet.len();
+            if bytes > MAX_RESULT_BYTES {
+                return Err("Search response exceeds 32 MiB limit".into());
+            }
+        }
+        crate::search::check_cancel(cancel)?;
+        self.parts.unchanged()
+    }
+
+    #[cfg(test)]
+    pub(super) fn cached_prefixes(&self) -> usize {
+        self.cache.lock().unwrap().prefixes.0.len()
+    }
 }
 
 // Existing consumers accept snippet HTML and extract plain text. Preserve literal
@@ -556,6 +605,28 @@ mod tests {
 
     fn fixture() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/indexed_search.zim")
+    }
+
+    #[test]
+    fn reading_an_old_prefix_keeps_the_previous_hottest_prefix() {
+        let archive = Zim::open(fixture()).unwrap();
+        let hot = archive.entry_by_ns_path(b'C', "Venus").unwrap();
+        let old = archive.entry_by_ns_path(b'C', "Earth & sky").unwrap();
+        let new = archive.entry_by_ns_path(b'C', "Mars%20").unwrap();
+        let mut cache = PrefixCache::default();
+        cache.0.push_back((hot.index(), Box::from(&b"hot"[..])));
+        for id in u32::MAX - 47..=u32::MAX {
+            cache.0.push_back((id, Box::default()));
+        }
+        cache.0.push_back((old.index(), Box::from(&b"old"[..])));
+
+        assert_eq!(cache.read(&old).unwrap(), b"old");
+        cache.read(&new).unwrap();
+        assert_eq!(cache.0.len(), 50);
+        assert_eq!(cache.0[0].0, new.index());
+        assert_eq!(cache.0[1].0, old.index());
+        assert_eq!(cache.0[2].0, hot.index());
+        assert!(cache.0.iter().all(|(id, _)| *id != u32::MAX));
     }
 
     #[test]
@@ -655,6 +726,26 @@ mod tests {
             .unwrap()
             .hits
             .is_empty());
+    }
+
+    #[test]
+    fn merged_pages_only_read_visible_fallback_prefixes() {
+        use crate::search::{run, Mode};
+        let cancel = CancellationToken::new();
+        for mode in [Mode::Fulltext, Mode::Combined] {
+            let first = Archive::open(&fixture()).unwrap();
+            let second = Archive::open(&fixture()).unwrap();
+            let archives = || vec![("first".into(), Ok(first.clone())), ("second".into(), Ok(second.clone()))];
+            let hidden = run(archives(), "basalt", mode, 1, 1, false, &cancel).unwrap();
+            assert_eq!(hidden["hits"][0]["snippet"], "");
+            assert_eq!((first.cached_search_prefixes(), second.cached_search_prefixes()), (0, 0));
+
+            let visible = run(archives(), "basalt", mode, 1, 1, true, &cancel).unwrap();
+            assert_eq!(visible["hits"][0]["path"], hidden["hits"][0]["path"]);
+            assert_eq!(visible["hits"][0]["bookId"], "second");
+            assert!(visible["hits"][0]["snippet"].as_str().unwrap().to_lowercase().contains("basalt"));
+            assert_eq!((first.cached_search_prefixes(), second.cached_search_prefixes()), (0, 1));
+        }
     }
 
     // Windows explicitly leases the file against writers.

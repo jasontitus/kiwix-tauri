@@ -164,6 +164,8 @@ pub struct Service {
     privacy_generation: Arc<std::sync::atomic::AtomicU64>,
     privacy_policy_generation: std::sync::atomic::AtomicU64,
     privacy_gate: Arc<tokio::sync::RwLock<()>>,
+    /// Serializes settings transactions without excluding ordinary readers.
+    settings_writes: tokio::sync::Mutex<()>,
     launch_locations: Mutex<Vec<Value>>,
     /// "Look up in Kiwix": only the latest external search request is kept, so
     /// a flood of launches can never accumulate work for the shell.
@@ -176,7 +178,9 @@ pub struct Service {
     pdf_jobs: Mutex<HashMap<Uuid, (String, tokio_util::sync::CancellationToken)>>,
     pdf_idle: tokio::sync::Notify,
     integrity: crate::integrity::IntegrityManager,
-    readers: tokio::sync::Mutex<HashMap<String, ReaderServer>>,
+    readers: tokio::sync::Mutex<ReaderRegistry>,
+    #[cfg(any(desktop, test))]
+    reader_origins: Arc<std::sync::RwLock<HashSet<String>>>,
     sensors: Mutex<HashMap<String, SensorManager>>,
     shell_origins: Mutex<HashSet<String>>,
     imports: Mutex<Arc<ImportManager>>,
@@ -275,21 +279,74 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| format!("Background operation stopped: {e}"))?
 }
 
+/// The async reader lease protects listener lifecycle and archive operations.
+/// Its origin index is changed only with the registry, never under I/O, so a
+/// WebView navigation can check exact live authority without taking that lease.
+struct ReaderRegistry {
+    entries: HashMap<String, ReaderServer>,
+    #[cfg(any(desktop, test))]
+    origins: Arc<std::sync::RwLock<HashSet<String>>>,
+}
+
+impl std::ops::Deref for ReaderRegistry {
+    type Target = HashMap<String, ReaderServer>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.entries
+    }
+}
+
+impl ReaderRegistry {
+    fn insert(&mut self, key: String, reader: ReaderServer) {
+        #[cfg(any(desktop, test))]
+        let mut origins = self.origins.write().ok();
+        #[cfg(any(desktop, test))]
+        let origin = reader.origin.clone();
+        let previous = self.entries.insert(key, reader);
+        #[cfg(any(desktop, test))]
+        if let Some(origins) = origins.as_mut() {
+            if let Some(previous) = &previous {
+                origins.remove(&previous.origin);
+            }
+            origins.insert(origin);
+        }
+        debug_assert!(previous.is_none(), "retire the previous reader before replacement");
+    }
+
+    fn remove(&mut self, key: &str) -> Option<ReaderServer> {
+        #[cfg(any(desktop, test))]
+        let mut origins = self.origins.write().ok();
+        let reader = self.entries.remove(key)?;
+        #[cfg(any(desktop, test))]
+        if let Some(origins) = origins.as_mut() {
+            origins.remove(&reader.origin);
+        }
+        Some(reader)
+    }
+
+    fn take_matching(&mut self, mut matches: impl FnMut(&str, &ReaderServer) -> bool) -> Vec<ReaderServer> {
+        #[cfg(any(desktop, test))]
+        let mut origins = self.origins.write().ok();
+        self.entries.extract_if(|key, reader| matches(key, reader))
+            .map(|(_, reader)| {
+                #[cfg(any(desktop, test))]
+                if let Some(origins) = origins.as_mut() {
+                    origins.remove(&reader.origin);
+                }
+                reader
+            }).collect()
+    }
+}
+
 /// Remove listeners under the admission lock, then join every owned archive read.
 /// Keep the lock until retirement finishes so a replacement cannot race teardown.
 async fn retire_readers(
-    readers: &mut HashMap<String, ReaderServer>,
+    readers: &mut ReaderRegistry,
     installation: Option<&str>,
 ) -> Result<(), String> {
-    let retired: Vec<_> = if let Some(installation) = installation {
-        let keys: Vec<_> = readers.iter()
-            .filter(|(_, reader)| reader.installation_id == installation)
-            .map(|(key, _)| key.clone())
-            .collect();
-        keys.into_iter().filter_map(|key| readers.remove(&key)).collect()
-    } else {
-        readers.drain().map(|(_, reader)| reader).collect()
-    };
+    let retired = readers.take_matching(|_, reader| {
+        installation.is_none_or(|installation| reader.installation_id == installation)
+    });
     shutdown_readers(retired).await
 }
 
@@ -470,6 +527,50 @@ fn plan_session_restore(
         }
     }
     RestorePlan { plans, skipped }
+}
+
+fn settings_with_patch(
+    previous: &store::Settings,
+    patch: &serde_json::Map<String, Value>,
+) -> Result<store::Settings, String> {
+    let mut merged = serde_json::to_value(previous).map_err(|error| error.to_string())?;
+    let object = merged.as_object_mut().ok_or("Settings are not an object")?;
+    for (key, value) in patch {
+        object.insert(key.clone(), value.clone());
+    }
+    let settings: store::Settings =
+        serde_json::from_value(merged).map_err(|error| format!("Invalid settings: {error}"))?;
+    settings.validate()?;
+    Ok(settings)
+}
+
+/// Fields that only change presentation or this session's restore behavior.
+/// Every other field changes policy, permissions, files, network admission or
+/// diagnostics, and must stay behind the privacy writer.
+fn presentation_settings_only(patch: &serde_json::Map<String, Value>) -> bool {
+    !patch.is_empty()
+        && patch.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                "theme"
+                    | "locale"
+                    | "restoreSession"
+                    | "openNewTabInBackground"
+                    | "linkPreviews"
+                    | "zoom"
+                    | "libraryFilters"
+                    | "catalogFilters"
+                    | "catalogFiltersCustomized"
+                    | "showTechnicalErrors"
+                    | "fontSize"
+                    | "fontFamily"
+                    | "readerWidth"
+                    | "readerTheme"
+                    | "expandSections"
+                    | "lastImportDirectory"
+                    | "lastSaveDirectory"
+            )
+        })
 }
 
 impl Service {
@@ -670,6 +771,8 @@ impl Service {
         spelling.set_writable(
             settings.spelling_enabled && !settings.private_mode && !settings.read_only,
         )?;
+        #[cfg(any(desktop, test))]
+        let reader_origins = Arc::new(std::sync::RwLock::new(HashSet::new()));
         let service = Arc::new(Self {
             update_admission: crate::update_admission::AdmissionGate::default(),
             catalog_cache: crate::catalog::CatalogCache::new(store.clone()),
@@ -711,6 +814,7 @@ impl Service {
             #[cfg(target_os = "android")]
             bundled_voice: Default::default(),
             privacy_gate: Arc::new(tokio::sync::RwLock::new(())),
+            settings_writes: tokio::sync::Mutex::new(()),
             launch_locations: Mutex::new(Vec::new()),
             #[cfg(any(desktop, test))]
             launch_search: Mutex::new(None),
@@ -721,7 +825,13 @@ impl Service {
             pdf_jobs: Mutex::new(HashMap::new()),
             pdf_idle: tokio::sync::Notify::new(),
             integrity: crate::integrity::IntegrityManager::default(),
-            readers: tokio::sync::Mutex::new(HashMap::new()),
+            readers: tokio::sync::Mutex::new(ReaderRegistry {
+                entries: HashMap::new(),
+                #[cfg(any(desktop, test))]
+                origins: reader_origins.clone(),
+            }),
+            #[cfg(any(desktop, test))]
+            reader_origins,
             sensors: Mutex::new(HashMap::new()),
             shell_origins: Mutex::new(HashSet::from([
                 "tauri://localhost".into(),
@@ -808,14 +918,10 @@ impl Service {
         Ok(())
     }
 
-    /// Exact origins of the readers currently open. The navigation policy uses
-    /// these to allow archive frames without trusting arbitrary loopback ports.
+    /// Exact reader authority, independent of archive I/O and storage flushes.
     #[cfg(any(desktop, test))]
-    pub fn reader_origins(&self) -> Vec<String> {
-        self.readers
-            .try_lock()
-            .map(|readers| readers.values().map(|reader| reader.origin.clone()).collect())
-            .unwrap_or_default()
+    pub fn has_reader_origin(&self, origin: &str) -> bool {
+        self.reader_origins.read().is_ok_and(|origins| origins.contains(origin))
     }
     // Lock order is window liveness, then Store. Storage/sensor commits retain
     // liveness through their Store transaction; never reacquire it inside one.
@@ -1203,14 +1309,7 @@ impl Service {
         {
             return Err("Leave read-only mode before changing settings".into());
         }
-        let mut merged = serde_json::to_value(&previous).map_err(|e| e.to_string())?;
-        let object = merged.as_object_mut().ok_or("Settings are not an object")?;
-        for (k, v) in patch {
-            object.insert(k.clone(), v.clone());
-        }
-        let settings: store::Settings =
-            serde_json::from_value(merged).map_err(|e| format!("Invalid settings: {e}"))?;
-        settings.validate()?;
+        let settings = settings_with_patch(&previous, patch)?;
         #[cfg(any(mobile, test))]
         if settings.download_directory != previous.download_directory
             && crate::library_root::has_pending_operation(&self.store)?
@@ -2505,6 +2604,17 @@ impl Service {
             self.ensure_running()?;
             self.validate_settings_patch(&args)?;
         }
+        let presentation_save = command == "save_settings"
+            && args.get("settings").and_then(Value::as_object)
+                .is_some_and(presentation_settings_only);
+        // Serialize settings transactions with each other. Presentation-only
+        // saves do not take the privacy writer, so a long import cannot make a
+        // font-size change block every reader command behind it.
+        let _settings_serial = if command == "save_settings" {
+            Some(self.settings_writes.lock().await)
+        } else {
+            None
+        };
         let retire_localswarm = command == "localswarm_stop" ||
             (command == "save_settings" && args.get("settings").is_some_and(|settings| {
                 settings.get("privateMode") == Some(&Value::Bool(true))
@@ -2538,7 +2648,9 @@ impl Service {
             Some(LocalSwarmRetirement { service: self.as_ref(), retired: retire_localswarm })
         } else { None };
         if retire_localswarm { self.nearby_retire().await?; }
-        let _mode_writer = if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete") {
+        let _mode_writer = if matches!(command, "localswarm_stop" | "kokoro_delete")
+            || (command == "save_settings" && !presentation_save)
+        {
             Some(self.privacy_gate.write().await)
         } else {
             None
@@ -2553,7 +2665,11 @@ impl Service {
         if retire_private_work {
             self.integrity.cancel_and_wait(true).await?;
         }
-        let _mode_guard = if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
+        let _mode_guard = if command == "save_settings" && presentation_save {
+            // A reader lease excludes policy cutovers without queueing behind
+            // imports or other readers.
+            Some(self.privacy_gate.read().await)
+        } else if matches!(command, "save_settings" | "localswarm_stop" | "kokoro_delete" | "sensor_location" | "catalog" | "catalog_facets" | "catalog_torrent" | "find_updates" | "map_recipe_metadata" | "map_prepare" | "shared_library_browse") {
             None
         } else {
             Some(self.privacy_gate.read().await)

@@ -17,7 +17,10 @@ fn manager(service: &Arc<Service>) -> Arc<PrivateSyncManager> {
 }
 fn receipt() -> Runtime {
     let socket = TcpSocket::new_v4().unwrap();
-    Runtime { window: "main".into(), generation: 1, revision: 0, endpoints: vec!["127.0.0.1:43210".parse().unwrap()], binding: crate::transfer_policy::bind_local_tcp_socket(&socket).unwrap(), cancel: CancellationToken::new() }
+    Runtime { window: "main".into(), generation: 1, revision: 0, port: 43210, binding: crate::transfer_policy::bind_local_tcp_socket(&socket).unwrap(), cancel: CancellationToken::new() }
+}
+fn fixture_endpoints() -> Vec<SocketAddr> {
+    vec![SocketAddr::from(([127, 0, 0, 1], 43210))]
 }
 fn session() -> Arc<PairSession> {
     Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: None, peer_identity: None, peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at: crate::timestamps::format(time::OffsetDateTime::now_utc() + time::Duration::seconds(20)), phase: "waiting".into(), error: None }), token: Mutex::new(Some(zeroize::Zeroizing::new("0".repeat(64)))), expires: Instant::now() + Duration::from_secs(20), claimed: AtomicBool::new(true), notify: tokio::sync::Notify::new(), cancel: CancellationToken::new() })
@@ -45,9 +48,9 @@ async fn both_explicit_confirmations_are_required_before_durable_enrollment() {
     let am = manager(&a); let bm = manager(&b); let ar = receipt(); let br = receipt(); let ass = session(); let bss = session();
     let (mut ac, mut bc) = channels(am.clone(), bm.clone()).await;
     let aw = a.clone(); let aam = am.clone(); let aar = ar.clone(); let aass = ass.clone();
-    let at = tokio::spawn(async move { aw.private_sync_pair_exchange(&aam, &aar, &aass, &mut ac, "B".into(), aar.endpoints.clone()).await });
+    let at = tokio::spawn(async move { aw.private_sync_pair_exchange(&aam, &aar, &aass, &mut ac, "B".into(), fixture_endpoints()).await });
     let bw = b.clone(); let bbm = bm.clone(); let bbr = br.clone(); let bbss = bss.clone();
-    let bt = tokio::spawn(async move { bw.private_sync_pair_exchange(&bbm, &bbr, &bbss, &mut bc, "A".into(), bbr.endpoints.clone()).await });
+    let bt = tokio::spawn(async move { bw.private_sync_pair_exchange(&bbm, &bbr, &bbss, &mut bc, "A".into(), fixture_endpoints()).await });
     wait_verification(&ass).await; wait_verification(&bss).await;
     assert_eq!(ass.view.lock().unwrap().verification_code, bss.view.lock().unwrap().verification_code);
     ass.view.lock().unwrap().local_confirmed = true; ass.notify.notify_one();
@@ -80,7 +83,7 @@ async fn unpair_offline_cancels_owned_receipts_and_durable_identity_authority() 
     let profile = Profile::new(); let service = profile.service(); enabled(&service); let manager = manager(&service); let runtime = receipt();
     *manager.runtime.lock().unwrap() = Some(runtime.clone()); let pending = session(); *manager.session.lock().unwrap() = Some(pending.clone());
     let identity = "a".repeat(64);
-    service.store.update(|state| { state.private_sync.peers.push(Peer { id: identity.clone(), identity: identity.clone(), name: "Owned peer".into(), endpoints: runtime.endpoints.clone(), enabled: true, automatic: false, last_sync: None, acknowledged_counter: 0 }); Ok(()) }).unwrap();
+    service.store.update(|state| { state.private_sync.peers.push(Peer { id: identity.clone(), identity: identity.clone(), name: "Owned peer".into(), endpoints: fixture_endpoints(), enabled: true, automatic: false, last_sync: None, acknowledged_counter: 0 }); Ok(()) }).unwrap();
     service.clone().dispatch("private_sync_unpair", json!({"privacyGeneration":1,"peerId":identity})).await.unwrap();
     assert!(runtime.cancel.is_cancelled()); assert!(pending.cancel.is_cancelled()); assert!(service.store.read().unwrap().private_sync.peers.is_empty()); assert!(manager.session.lock().unwrap().is_none());
     assert!(pending.token.lock().unwrap().is_none());
@@ -138,7 +141,7 @@ async fn disconnect_before_ready_does_not_enroll_the_peer() {
         assert!(matches!(remote.receive().await.unwrap(), Message::Ready));
         drop(remote);
     });
-    assert!(a.private_sync_pair_exchange(&am, &runtime, &pending, &mut local, "B".into(), runtime.endpoints.clone()).await.is_err());
+    assert!(a.private_sync_pair_exchange(&am, &runtime, &pending, &mut local, "B".into(), fixture_endpoints()).await.is_err());
     disconnect.await.unwrap();
     assert!(a.store.read().unwrap().private_sync.peers.is_empty());
 }
@@ -149,7 +152,7 @@ async fn local_confirm_during_fragmented_remote_confirm_keeps_noise_framing() {
     let am = manager(&a); let bm = manager(&b); let runtime = receipt(); let pending = session();
     let (mut local, mut remote) = channels(am.clone(), bm).await;
     let service = a.clone(); let owner = am.clone(); let receipt = runtime.clone(); let pair = pending.clone();
-    let pairing = tokio::spawn(async move { service.private_sync_pair_exchange(&owner, &receipt, &pair, &mut local, "B".into(), receipt.endpoints.clone()).await });
+    let pairing = tokio::spawn(async move { service.private_sync_pair_exchange(&owner, &receipt, &pair, &mut local, "B".into(), fixture_endpoints()).await });
     wait_verification(&pending).await;
     let (sent, header) = tokio::sync::oneshot::channel(); let (release, resume) = tokio::sync::oneshot::channel();
     let identity = am.identity.public_hex();
@@ -175,7 +178,7 @@ async fn unpair_waits_for_backpressured_personal_sender_to_release_policy_lease(
     *am.runtime.lock().unwrap() = Some(runtime.clone());
     let identity = bm.identity.public_hex();
     a.store.update(|state| {
-        state.private_sync.peers.push(Peer { id: identity.clone(), identity: identity.clone(), name: "B".into(), endpoints: runtime.endpoints.clone(), enabled: true, automatic: false, last_sync: None, acknowledged_counter: 0 });
+        state.private_sync.peers.push(Peer { id: identity.clone(), identity: identity.clone(), name: "B".into(), endpoints: fixture_endpoints(), enabled: true, automatic: false, last_sync: None, acknowledged_counter: 0 });
         for index in 0..180 {
             state.bookmarks.push(Bookmark { id: Uuid::new_v4().to_string(), book_id: "missing".into(), path: format!("A/Article{index}"), title: "Title".into(), note: "x".repeat(8000), tags: vec![], highlights: vec![], created_at: crate::timestamps::now(), legacy_book: None });
         }

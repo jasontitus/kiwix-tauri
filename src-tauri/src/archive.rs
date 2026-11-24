@@ -291,9 +291,17 @@ pub struct SearchHit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchResults {
-    pub hits: Vec<SearchHit>,
+pub struct SearchResults<T = SearchHit> {
+    pub hits: Vec<T>,
     pub total: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct RankedHit {
+    pub(crate) hit: SearchHit,
+    // Exact resolved URL index, not an ambiguous public path. It belongs
+    // only to the retained archive that produced this hit.
+    pub(crate) excerpt_entry: Option<u32>,
 }
 
 /// A bounded window of public libzim article titles, without reading bodies.
@@ -310,7 +318,7 @@ const CLUSTER_LIMIT: &str = "This archive exceeds the reader limit of 8,388,608 
 
 const CODEC_LIMIT: &str = "The reader could not decompress this archive within its size limits. Choose a different edition or copy.";
 const RECORD_LIMIT: &str =
-    "An archive metadata record exceeds the reader’s size limit. Choose a different edition.";
+    "An archive metadata entry exceeds the reader’s size limit. Choose a different edition.";
 const UNSUPPORTED_FORMAT: &str =
     "This archive uses a format that this reader does not support. Choose a different edition.";
 
@@ -890,6 +898,11 @@ impl Archive {
         self.search_reader.capabilities(None)
     }
 
+    pub(crate) fn search_capabilities_cancellable(&self, cancel: &CancellationToken) -> Result<(bool, bool), String> {
+        let _guard = self.lock_reader(Some((cancel, "Search cancelled")))?;
+        self.search_reader.capabilities(Some(cancel))
+    }
+
     fn read_metadata(&self, cancel: Option<&CancellationToken>) -> Result<ArchiveMetadata, String> {
         let metadata =
             self.with_unchanged(cancel.map(|token| (token, "Search cancelled")), |z| {
@@ -996,6 +1009,26 @@ impl Archive {
         let _guard = self.lock_reader(Some((cancel, "Search cancelled")))?;
         self.search_reader
             .page(query, fulltext, offset, limit, snippets, Some(cancel))
+    }
+
+    pub(crate) fn rank_cancellable(
+        &self, query: &str, fulltext: bool, offset: u32, limit: u32,
+        snippets: bool, cancel: &CancellationToken,
+    ) -> Result<SearchResults<RankedHit>, String> {
+        let _guard = self.lock_reader(Some((cancel, "Search cancelled")))?;
+        self.search_reader.ranked(query, fulltext, offset, limit, snippets, cancel)
+    }
+
+    pub(crate) fn fill_search_excerpts(
+        &self, query: &str, rows: &mut [&mut RankedHit], cancel: &CancellationToken,
+    ) -> Result<(), String> {
+        let _guard = self.lock_reader(Some((cancel, "Search cancelled")))?;
+        self.search_reader.excerpts(query, rows, cancel)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cached_search_prefixes(&self) -> usize {
+        self.search_reader.cached_prefixes()
     }
 
     #[cfg(test)]

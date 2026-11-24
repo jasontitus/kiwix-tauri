@@ -20,6 +20,7 @@
     "test:reader-search-status": "node --test scripts/test-reader-search-status.mjs",
     "test:reader-read-aloud": "node --test scripts/test-reader-read-aloud.mjs",
     "test:speech-preferences": "node --test scripts/test-speech-preferences.mjs",
+    "test:frontend-surfaces": "node --test scripts/test-frontend-surfaces.mjs",
     "update:manifest": "node scripts/make-update-manifest.mjs",
     "docs:errors": "node scripts/generate-error-docs.mjs",
     "check:unsafe": "node scripts/check-unsafe-census.mjs",

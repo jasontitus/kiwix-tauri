@@ -143,7 +143,7 @@ impl Service {
                     .ok_or("The edition decision is no longer available")?;
                 if let Some(id) = &intent.download_id {
                     if let Some(job) = manager.list()?.into_iter().find(|job| &job.id == id) { return value(job); }
-                    return Err("The edition transfer record is unavailable; retained files have not been changed".into());
+                    return Err("The edition transfer is no longer available; retained files have not been changed".into());
                 }
                 // Recheck the native selection at start; IPC never supplies the acquisition URL.
                 let entry = self.catalog_index.lookup(&intent.selection.source_id,&intent.selection.entry_id,intent.selection.catalog_generation)?;

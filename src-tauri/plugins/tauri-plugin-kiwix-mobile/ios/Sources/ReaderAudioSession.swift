@@ -61,6 +61,7 @@ final class ReaderAudioSession {
           try AVAudioSession.sharedInstance().setCategory(
             .playback, mode: .spokenAudio, options: .duckOthers)
           try AVAudioSession.sharedInstance().setActive(true)
+          speechOwnsActivation = true
           speechPaused = false
           return true
         } catch {

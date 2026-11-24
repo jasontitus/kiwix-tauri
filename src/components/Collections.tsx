@@ -8,9 +8,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { api, capturePrivacyContext, isPrivacyContextCurrent, isPrivacyPolicyContextCurrent, readTextFile, saveText } from "../api";
+import { diagnostics, reportError } from "../diagnostics";
 import { t, formatDate } from "../i18n";
 import type { Book, Bookmark, HistoryEntry, TabLocation } from "../types";
-import { Empty, Modal, PagedResults, PageHeader, confirmAction } from "./UI";
+import { Empty, ErrorNotice, Modal, PagedResults, PageHeader, confirmAction, errorText } from "./UI";
 import { SwipeRow } from "./SwipeRow";
 import PrivateReadingSync from "./PrivateReadingSync";
 import { recentHistoryEntries } from "../recent-history";
@@ -45,12 +46,14 @@ export default function Collections({
   readOnlyRef.current = readOnly;
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("");
-  const [edit, setEdit] = useState<Bookmark | null>(null);
+  const [edit, setEdit] = useState<(Bookmark & { tagsText: string }) | null>(null);
   const [sort, setSort] = useState<
     "recent" | "oldest" | "alphabetical" | "reverse-alphabetical"
   >("recent");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [importError, setImportError] = useState("");
+  const [syncOpen, setSyncOpen] = useState(false);
   const tags = useMemo(
     () => [...new Set(bookmarks.flatMap((b) => b.tags))].sort(),
     [bookmarks],
@@ -206,6 +209,7 @@ export default function Collections({
     if (!privacy || privacy.readOnly || readOnlyRef.current || busy) return;
     setBusy(true);
     setNotice("");
+    setImportError("");
     try {
       const text = await readTextFile(privacy);
       const current = capturePrivacyContext();
@@ -215,7 +219,8 @@ export default function Collections({
       setNotice(t("Imported {count} reading list entries.", { count: count }));
       onRefresh();
     } catch (e) {
-      if (isPrivacyPolicyContextCurrent(privacy)) onError(e);
+      if (isPrivacyPolicyContextCurrent(privacy) && reportError(diagnostics, e, "blocking", true))
+        setImportError(t("Could not import the reading list.") + "\n" + errorText(e));
     } finally {
       setBusy(false);
     }
@@ -233,7 +238,7 @@ export default function Collections({
           title: edit.title,
           note: edit.note,
           tags: [
-            ...new Set(edit.tags.map((value) => value.trim()).filter(Boolean)),
+            ...new Set(edit.tagsText.split(",").map((value) => value.trim()).filter(Boolean)),
           ],
         },
       });
@@ -253,10 +258,11 @@ export default function Collections({
         title={kind === "bookmarks" ? t("Reading list") : t("Recently read")}
         actions={<button onClick={onConnect}>{t("Connect my devices")}</button>}
       />
-      <details className="secondary-controls">
+      <details className="secondary-controls" onToggle={(event) => setSyncOpen(event.currentTarget.open)}>
         <summary>{t("Reading across my devices")}</summary>
         <PrivateReadingSync
           presentation="reading"
+          visible={syncOpen}
           privateMode={privateMode}
           readOnly={readOnly}
           privacyGeneration={privacyGeneration}
@@ -394,6 +400,10 @@ export default function Collections({
           </div>
         </details>
       </div>
+      {importError && (
+        <ErrorNotice message={importError} onDismiss={() => setImportError("")}
+          onRetry={kind === "bookmarks" && !readOnly && !busy ? () => void importList() : undefined} />
+      )}
       {notice && (
         <p className="success-text" role="status">
           {notice}
@@ -423,20 +433,22 @@ export default function Collections({
                 <article className="reading-card panel">
                   <BookmarkIcon size={21} />
                   <div className="reading-card-main">
-                    <button
-                      className="text-button"
-                      disabled={!book?.available}
-                      onClick={() =>
-                        onOpen({
-                          bookId: item.bookId,
-                          path: item.path,
-                          title: item.title,
-                          scroll: 0,
-                        })
-                      }
-                    >
-                      <h2>{item.title}</h2>
-                    </button>
+                    <h2>
+                      <button
+                        className="text-button"
+                        disabled={!book?.available}
+                        onClick={() =>
+                          onOpen({
+                            bookId: item.bookId,
+                            path: item.path,
+                            title: item.title,
+                            scroll: 0,
+                          })
+                        }
+                      >
+                        {item.title}
+                      </button>
+                    </h2>
                     <p className="muted">
                       {book?.title || t("Archive not in library")}{" "}
                       <span aria-hidden="true">·</span>{" "}
@@ -462,7 +474,7 @@ export default function Collections({
                   </div>
                   <button
                     disabled={readOnly}
-                    onClick={() => setEdit({ ...item, tags: [...item.tags] })}
+                    onClick={() => setEdit({ ...item, tagsText: item.tags.join(", ") })}
                   >
                     {t("Edit note and tags")}
                   </button>
@@ -553,13 +565,8 @@ export default function Collections({
             <label className="field">
               {t("Tags, separated by commas")}
               <input
-                value={edit.tags.join(", ")}
-                onChange={(e) =>
-                  setEdit({
-                    ...edit,
-                    tags: e.target.value.split(",").map((v) => v.trimStart()),
-                  })
-                }
+                value={edit.tagsText}
+                onChange={(e) => setEdit({ ...edit, tagsText: e.target.value })}
                 placeholder={t("research, travel, favorites")}
               />
             </label>

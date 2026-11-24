@@ -22,6 +22,7 @@ interface Request {
   base: number;
   offset: number;
   starting: boolean;
+  startedVoice?: string;
   started: boolean;
   timer?: number;
 }
@@ -59,6 +60,7 @@ export function useNativeSpeech(options: Options) {
   const listenerReady = useRef<Promise<void> | null>(null);
   const [pending, setPending] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [startAdmitted, setStartAdmitted] = useState(false);
   const report = useCallback((error: unknown) => {
     if (alive.current) latest.current.onError(error);
   }, []);
@@ -79,9 +81,10 @@ export function useNativeSpeech(options: Options) {
     let stopped = false;
     try {
       if (stop) {
-        const result = await api<{ offset: number; stopped: boolean }>("mobile_speech_stop", args);
+        const result = await api<{ offset?: number; active_offset?: number; stopped: boolean }>("mobile_speech_stop", args);
         stopped = result.stopped;
-        if (Number.isSafeInteger(result.offset) && result.offset >= 0) offset = Math.max(offset, result.offset);
+        const stoppedAt = result.active_offset ?? result.offset;
+        if (Number.isSafeInteger(stoppedAt) && (stoppedAt ?? -1) >= 0) offset = Math.max(offset, stoppedAt!);
       }
     } finally {
       await api("mobile_speech_retire", args);
@@ -95,6 +98,7 @@ export function useNativeSpeech(options: Options) {
     if (alive.current) {
       setPending(false);
       setPaused(false);
+      setStartAdmitted(false);
       latest.current.onProgress(null);
     }
     if (request) {
@@ -110,6 +114,11 @@ export function useNativeSpeech(options: Options) {
     window.clearTimeout(request.timer);
     request.starting = true;
     request.text = text;
+    request.startedVoice = request.preferences.voice;
+    // Rust admits the session before its start acknowledgement can return; keep
+    // the shell's retention aligned across that in-flight window. The catch
+    // below clears it when the start is refused.
+    setStartAdmitted(true);
     try {
       await api("mobile_speech_start", {
         id: request.id, token: request.token,
@@ -118,12 +127,15 @@ export function useNativeSpeech(options: Options) {
         privacyGeneration: request.context.privacyGeneration,
         text: text.slice(request.base),
       });
-      if (valid(request) && current.current === request && !request.started) {
-        request.timer = window.setTimeout(() => {
-          if (current.current !== request || request.started) return;
-          report(new Error(t("Read-aloud did not start. Check the selected voice and device volume, or download the natural voice model.")));
-          void stop();
-        }, 45_000);
+      if (valid(request) && current.current === request) {
+        setStartAdmitted(true);
+        if (!request.started) {
+          request.timer = window.setTimeout(() => {
+            if (current.current !== request || request.started) return;
+            report(new Error(t("Read-aloud did not start. Check the selected voice and device volume, or download the natural voice model.")));
+            void stop();
+          }, 45_000);
+        }
       }
       // Native callbacks, never the admission acknowledgement, report playback.
       if (!valid(request)) await retire(request, true);
@@ -132,6 +144,8 @@ export function useNativeSpeech(options: Options) {
         current.current = null;
         if (alive.current) {
           setPending(false);
+          setPaused(false);
+          setStartAdmitted(false);
           latest.current.onSpeaking(false);
           latest.current.onProgress(null);
           report(error);
@@ -147,6 +161,7 @@ export function useNativeSpeech(options: Options) {
     const revision = ++serial.current;
     const previous = current.current;
     current.current = null;
+    setStartAdmitted(false);
     if (alive.current) latest.current.onProgress(null);
     if (previous) {
       try { await retire(previous, true); } catch (error) { report(error); return; }
@@ -163,6 +178,7 @@ export function useNativeSpeech(options: Options) {
     current.current = request;
     setPending(true);
     setPaused(false);
+    setStartAdmitted(false);
     latest.current.onSpeaking(false);
     try {
       const prepared = await api<{ id: string; token: string }>("mobile_speech_prepare", {
@@ -188,6 +204,8 @@ export function useNativeSpeech(options: Options) {
         current.current = null;
         if (alive.current) {
           setPending(false);
+          setPaused(false);
+          setStartAdmitted(false);
           latest.current.onSpeaking(false);
           latest.current.onProgress(null);
           report(error);
@@ -214,10 +232,11 @@ export function useNativeSpeech(options: Options) {
     position: { seconds?: number; offset?: number } = {}) => {
     const request = current.current;
     if (!request?.token || !valid(request)) return;
-    // Pause, previous/next and seek may not emit a new native state before the
-    // next boundary; clear the old sentence immediately so paint cannot imply
-    // that stale text is still being spoken.
-    if (command !== "mobile_speech_resume") latest.current.onProgress(null);
+    const kokoro = request.startedVoice?.startsWith("kokoro:") ?? false;
+    // System voices may not emit a new range before the next boundary, so clear
+    // stale paint immediately. Kokoro owns pause/seek paint through its worker
+    // state and must not flash an empty highlight on acknowledgement.
+    if (!kokoro && command !== "mobile_speech_resume") latest.current.onProgress(null);
     try {
       const result = await api<{ paused?: boolean; offset?: number }>(command, {
         id: request.id, token: request.token,
@@ -229,7 +248,7 @@ export function useNativeSpeech(options: Options) {
       if (!alive.current || current.current !== request) return;
       if (Number.isSafeInteger(result.offset) && (result.offset ?? -1) >= 0)
         request.offset = result.offset!;
-      if (command === "mobile_speech_pause") setPaused(true);
+      if (command === "mobile_speech_pause" && !kokoro) setPaused(true);
       if (command === "mobile_speech_resume" && result.paused === false) setPaused(false);
       // Resume/seek acknowledgements are the only immediate position proof when
       // the engine emits its next range callback later (or not at all).
@@ -253,6 +272,7 @@ export function useNativeSpeech(options: Options) {
     if (!request.starting || request.text === null) return;
     const revision = ++serial.current;
     current.current = null;
+    setStartAdmitted(false);
     if (alive.current) latest.current.onProgress(null);
     try {
       const stopped = await retire(request, true);
@@ -311,6 +331,7 @@ export function useNativeSpeech(options: Options) {
             current.current = null;
             setPending(false);
             setPaused(false);
+            setStartAdmitted(false);
             latest.current.onSpeaking(false);
           }
           return;
@@ -323,16 +344,14 @@ export function useNativeSpeech(options: Options) {
         setPending(false);
         setPaused(paused);
         latest.current.onSpeaking(payload.speaking);
-        if (payload.speaking) {
-          if (offset !== null)
-            latest.current.onProgress(request.base + offset);
+        if (payload.speaking || paused) {
+          if (offset !== null) latest.current.onProgress(request.base + offset);
         } else {
           latest.current.onProgress(null);
-          if (!paused) {
-            current.current = null;
-            if (payload.error) report(new Error(payload.error));
-            void retire(request, false).catch(report);
-          }
+          current.current = null;
+          setStartAdmitted(false);
+          if (payload.error) report(new Error(payload.error));
+          void retire(request, false).catch(report);
         }
       });
       if (cancelled) { remove(); return; }
@@ -387,5 +406,6 @@ export function useNativeSpeech(options: Options) {
   useEffect(() => {
     if (isNative) void stop();
   }, [options.contextKey, stop]);
-  return { pending, paused, begin, stop, pause, resume, previous, next, rewind, forward, seek, acceptText, preferences };
+  const kokoroActive = Boolean(current.current?.started && current.current.startedVoice?.startsWith("kokoro:"));
+  return { pending, paused, startAdmitted, kokoroActive, begin, stop, pause, resume, previous, next, rewind, forward, seek, acceptText, preferences };
 }

@@ -43,7 +43,6 @@ pub(crate) struct Projection {
     /// Job the native activity is showing, as last requested.
     tracked: Option<String>,
     status: Option<String>,
-    downloaded: Option<u64>,
     sent: Option<Instant>,
     /// A clear has already been delivered; nothing is shown.
     clear: bool,
@@ -58,7 +57,6 @@ pub(crate) struct Projection {
 static PROJECTION: Mutex<Projection> = Mutex::new(Projection {
     tracked: None,
     status: None,
-    downloaded: None,
     sent: None,
     clear: false,
     idle: false,
@@ -94,7 +92,6 @@ impl Projection {
         Self {
             tracked: None,
             status: None,
-            downloaded: None,
             sent: None,
             clear: false,
             idle: false,
@@ -106,19 +103,23 @@ impl Projection {
     fn clear(&mut self) -> Value {
         self.tracked = None;
         self.status = None;
-        self.downloaded = None;
         self.sent = None;
         self.clear = true;
         self.idle = true;
         json!({"state": "clear"})
     }
 
-    /// Decide what, if anything, the native activity should be told now.
-    pub(crate) fn decide(
+    #[cfg(test)]
+    fn decide(&mut self, suppressed: bool, jobs: &[DownloadJob], locale: &Localizer) -> Option<Value> {
+        self.decide_with(suppressed, jobs, |job, status| snapshot(job, status, locale))
+    }
+
+    /// Resolve locale only when a native snapshot will actually be published.
+    fn decide_with(
         &mut self,
         suppressed: bool,
         jobs: &[DownloadJob],
-        locale: &Localizer,
+        payload: impl FnOnce(&DownloadJob, &str) -> Value,
     ) -> Option<Value> {
         if suppressed {
             if self.clear {
@@ -134,16 +135,14 @@ impl Projection {
                 None => {
                     self.tracked = None;
                     self.status = None;
-                    self.downloaded = None;
                     self.sent = None;
                     self.idle = true;
                     return Some(json!({"state": "dismiss", "jobId": id}));
                 }
                 Some(job) if TERMINAL.contains(&job.status.as_str()) => {
-                    let payload = snapshot(job, "terminal", locale);
+                    let payload = payload(job, "terminal");
                     self.tracked = None;
                     self.status = None;
-                    self.downloaded = None;
                     self.sent = None;
                     self.idle = true;
                     return Some(payload);
@@ -164,17 +163,15 @@ impl Projection {
         self.idle = false;
 
         let changed = self.tracked.as_deref() != Some(job.id.as_str())
-            || self.status.as_deref() != Some(job.status.as_str())
-            || self.downloaded != Some(job.downloaded);
+            || self.status.as_deref() != Some(job.status.as_str());
         let due = self.sent.is_none_or(|at| at.elapsed() >= REFRESH);
         if !changed && !due {
             return None;
         }
         self.tracked = Some(job.id.clone());
         self.status = Some(job.status.clone());
-        self.downloaded = Some(job.downloaded);
         self.sent = Some(Instant::now());
-        Some(snapshot(job, "active", locale))
+        Some(payload(job, "active"))
     }
 
     /// A failed native call must not turn into a per-tick storm.
@@ -309,7 +306,9 @@ impl crate::service::Service {
                 .lock()
                 .map_err(|_| "Live Activity projection is unavailable")?;
             let suppressed = suppressed || !notifications_available(&mut projection);
-            with_app_localizer(&settings.locale, |locale| projection.decide(suppressed, &jobs, locale))
+            projection.decide_with(suppressed, &jobs, |job, status| {
+                with_app_localizer(&settings.locale, |locale| snapshot(job, status, locale))
+            })
         };
         let Some(payload) = payload else { return Ok(()); };
         if let Err(error) = self.mobile_call("liveActivity", payload).await {
@@ -421,6 +420,8 @@ mod tests {
         assert_eq!(projection.decide(false, &jobs, &locale), None);
 
         jobs[0].downloaded = 250;
+        assert_eq!(projection.decide(false, &jobs, &locale), None);
+        projection.sent = Some(Instant::now() - REFRESH);
         let update = projection.decide(false, &jobs, &locale).expect("progress");
         assert_eq!(update["downloaded"], json!(250));
 

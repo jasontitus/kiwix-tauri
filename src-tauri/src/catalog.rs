@@ -9,8 +9,8 @@
 use futures_util::StreamExt;
 use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::sync::LazyLock;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::{Arc, LazyLock, Mutex, Weak};
 use std::time::Duration;
 use url::Url;
 
@@ -445,43 +445,107 @@ fn parse_facets(
     Ok(facets)
 }
 
+const MAX_THUMBNAIL_BYTES: usize = 256 * 1024;
+const MAX_THUMBNAILS_IN_FLIGHT: usize = 4;
+const MAX_CACHED_THUMBNAILS: usize = 64;
+
+type Thumbnail = Result<Option<Arc<String>>, String>;
+
+#[derive(Default)]
+struct ThumbnailState {
+    cached: VecDeque<(Arc<str>, Arc<String>)>,
+    pending: HashMap<Arc<str>, Weak<ThumbnailFlight>>,
+}
+
+struct ThumbnailCache {
+    state: Arc<Mutex<ThumbnailState>>,
+    network: tokio::sync::Semaphore,
+}
+
+struct ThumbnailFlight {
+    key: Arc<str>,
+    state: Weak<Mutex<ThumbnailState>>,
+    result: tokio::sync::OnceCell<Thumbnail>,
+}
+
+impl Drop for ThumbnailFlight {
+    fn drop(&mut self) {
+        let Some(state) = self.state.upgrade() else { return };
+        let mut state = state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.pending.get(&self.key).is_some_and(|flight| std::ptr::eq(flight.as_ptr(), self)) {
+            state.pending.remove(&self.key);
+        }
+    }
+}
+
+impl ThumbnailCache {
+    fn new() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ThumbnailState::default())),
+            network: tokio::sync::Semaphore::new(MAX_THUMBNAILS_IN_FLIGHT),
+        }
+    }
+
+    async fn fetch(
+        &self, url: &str, loopback: bool, admit: impl Fn() -> Result<(), String>,
+    ) -> Result<Option<String>, String> {
+        admit()?;
+        let url = checked_url(url, loopback)?;
+        let flight = {
+            let mut state = self.state.lock().map_err(|_| "Thumbnail cache unavailable")?;
+            if let Some(index) = state.cached.iter().rposition(|(key, _)| &**key == url.as_str()) {
+                let item = state.cached.remove(index).expect("Known cached thumbnail");
+                let value = Arc::clone(&item.1);
+                state.cached.push_back(item);
+                drop(state);
+                return Ok(Some(value.as_ref().clone()));
+            }
+            if let Some(flight) = state.pending.get(url.as_str()).and_then(Weak::upgrade) {
+                flight
+            } else {
+                let key: Arc<str> = Arc::from(url.as_str());
+                let flight = Arc::new(ThumbnailFlight {
+                    key: key.clone(), state: Arc::downgrade(&self.state), result: tokio::sync::OnceCell::new(),
+                });
+                state.pending.insert(key, Arc::downgrade(&flight));
+                flight
+            }
+        };
+        // Equal URLs wait on the same initializer. Retirement of its caller
+        // does not publish a response or cache its admission error for others.
+        let result = flight.result.get_or_try_init(|| async {
+            let _permit = self.network.acquire().await.map_err(|_| "Thumbnail proxy is unavailable".to_owned())?;
+            admit()?;
+            let result: Thumbnail = async {
+                let response = http_client(loopback)?.get(url).timeout(Duration::from_secs(60)).send().await
+                    .map_err(|e| format!("Fetching catalog thumbnail: {e}"))?;
+                let bytes = bounded_body(response, MAX_THUMBNAIL_BYTES).await?;
+                Ok(raster_data_url(&bytes).map(Arc::new))
+            }.await;
+            admit()?;
+            if let Ok(Some(value)) = &result {
+                let mut state = self.state.lock().map_err(|_| "Thumbnail cache unavailable".to_owned())?;
+                if state.cached.len() == MAX_CACHED_THUMBNAILS { state.cached.pop_front(); }
+                state.cached.push_back((flight.key.clone(), value.clone()));
+            }
+            Ok::<_, String>(result)
+        }).await?;
+        admit()?;
+        result.as_ref().map(|value| value.as_ref().map(|value| value.as_ref().clone())).map_err(Clone::clone)
+    }
+}
+
 /// Native-only, bounded raster proxy: untrusted feeds never gain a browser request.
-pub async fn fetch_thumbnail(url: &str) -> Result<Option<String>, String> {
-    use std::sync::{LazyLock, Mutex};
-    static CACHE: LazyLock<Mutex<std::collections::VecDeque<(String, String)>>> =
-        LazyLock::new(|| Mutex::new(std::collections::VecDeque::new()));
-    let url = checked_url(url, false)?;
-    let cache = &*CACHE;
-    if let Some(value) = cache
-        .lock()
-        .map_err(|_| "Thumbnail cache unavailable")?
-        .iter()
-        .find(|(key, _)| key == url.as_str())
-        .map(|(_, value)| value.clone())
-    {
-        return Ok(Some(value));
-    }
-    let response = http_client(false)?
-        .get(url.clone())
-        .send()
-        .await
-        .map_err(|e| format!("Fetching catalog thumbnail: {e}"))?;
-    let bytes = bounded_body(response, 256 * 1024).await?;
-    let Some(value) = raster_data_url(&bytes) else {
-        return Ok(None);
-    };
-    let mut cache = cache.lock().map_err(|_| "Thumbnail cache unavailable")?;
-    if cache.len() >= 64 {
-        cache.pop_front();
-    }
-    cache.push_back((url.to_string(), value.clone()));
-    Ok(Some(value))
+/// The request has no user locale header, so its URL fully identifies the image input.
+pub async fn fetch_thumbnail(url: &str, admit: impl Fn() -> Result<(), String>) -> Result<Option<String>, String> {
+    static CACHE: LazyLock<ThumbnailCache> = LazyLock::new(ThumbnailCache::new);
+    CACHE.fetch(url, false, admit).await
 }
 
 /// Bounded, inert image payload shared by catalog and offline article previews.
 pub(crate) fn raster_data_url(bytes: &[u8]) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    if bytes.len() > 256 * 1024 {
+    if bytes.len() > MAX_THUMBNAIL_BYTES {
         return None;
     }
     let mime = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -889,6 +953,61 @@ fn parse_catalog(xml: &str, base: &Url) -> Result<CatalogPage, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn simultaneous_thumbnail_failures_share_one_request_and_allow_retry() {
+        use axum::{http::StatusCode, routing::get, Router};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let requests = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let app = Router::new().route("/image", get({
+            let (requests, started, release) = (requests.clone(), started.clone(), release.clone());
+            move || {
+                let (requests, started, release) = (requests.clone(), started.clone(), release.clone());
+                async move {
+                    if requests.fetch_add(1, Ordering::SeqCst) == 0 {
+                        started.notify_one();
+                        release.notified().await;
+                        (StatusCode::SERVICE_UNAVAILABLE, &b"unavailable"[..])
+                    } else {
+                        (StatusCode::OK, &b"\x89PNG\r\n\x1a\n"[..])
+                    }
+                }
+            }
+        }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/image", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let cache = ThumbnailCache::new();
+        let wait_for_flight = async {
+            started.notified().await;
+            let state = cache.state.lock().unwrap();
+            assert_eq!(state.pending[url.as_str()].strong_count(), 2);
+            release.notify_one();
+        };
+        let (first, second, ()) = tokio::join!(cache.fetch(&url, true, || Ok(())), cache.fetch(&url, true, || Ok(())), wait_for_flight);
+        assert!(first.as_ref().unwrap_err().contains("503"));
+        assert_eq!(first, second);
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
+        let retry = cache.fetch(&url, true, || Ok(())).await.unwrap().unwrap();
+        assert!(retry.starts_with("data:image/png;base64,"));
+        assert_eq!(cache.fetch(&url, true, || Ok(())).await.unwrap(), Some(retry));
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+
+        let queued = format!("{url}?queued");
+        let permits = cache.network.acquire_many(MAX_THUMBNAILS_IN_FLIGHT as u32).await.unwrap();
+        let retired = std::cell::Cell::new(false);
+        let mut request = std::pin::pin!(cache.fetch(&queued, true, || {
+            if retired.get() { Err("Thumbnail request retired".into()) } else { Ok(()) }
+        }));
+        assert!(futures_util::poll!(&mut request).is_pending());
+        retired.set(true);
+        drop(permits);
+        assert_eq!(request.await.unwrap_err(), "Thumbnail request retired");
+        assert_eq!(requests.load(Ordering::SeqCst), 2, "retired queued work must not fetch");
+        server.abort();
+    }
 
     #[test]
     fn official_torrent_offers_require_provenance_and_an_official_artifact() {

@@ -186,6 +186,42 @@ async fn reader_endpoints_keep_host_origin_token_and_live_scope_authority() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[tokio::test]
+async fn repeated_no_match_suggestions_do_not_flush_the_archive_cache() {
+    let root = std::env::temp_dir().canonicalize().unwrap().join(format!("kiwix-lan-suggest-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let (store, book) = tests::library_store(&fixture(), &root);
+    let mut extra = Vec::new();
+    for name in ["delimiters", "indexed_search", "large_article", "main_path", "media", "no_main_page", "preview", "zimit_warc"] {
+        let fixture = fixture().with_file_name(format!("{name}.zim"));
+        let path = root.join(format!("{name}.zim"));
+        std::fs::copy(fixture, &path).unwrap();
+        let mut other = book.clone();
+        other.metadata = Archive::open(&path).unwrap().metadata().unwrap();
+        other.path = path.to_string_lossy().into_owned();
+        other.installation_id = crate::store::new_installation_id();
+        extra.push(other);
+    }
+    let count = 1 + extra.len();
+    assert!(count > LIBRARY_ARCHIVE_CACHE);
+    store.update(|state| {
+        state.books.extend(extra);
+        Ok(())
+    }).unwrap();
+    let state = state(store);
+    for (pass, prefix) in ["qzqxnoarticleone", "qzqxnoarticletwo"].into_iter().enumerate() {
+        let uri = format!("/secret/suggest?q={prefix}").parse().unwrap();
+        let response = library_request(State(state.clone()), Method::GET, uri, headers(), Body::empty()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let value: Value = serde_json::from_slice(&bytes(response).await).unwrap();
+        assert_eq!(value["suggestions"], json!([]));
+        assert_eq!(value["errors"], json!([]));
+        assert_eq!(state.archives.opens(), count + pass * (count - LIBRARY_ARCHIVE_CACHE));
+    }
+    drop(state);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn retained_download_refuses_same_content_path_replacement() {
     let root = std::env::temp_dir().canonicalize().unwrap().join(format!("kiwix-sharing-replacement-{}", Uuid::new_v4()));
@@ -331,6 +367,20 @@ async fn protected_browser_and_native_bootstrap_never_issue_before_pin_authentic
     assert_eq!(value["name"], "Protected library");
     let mut form = headers();
     form.insert("content-type", "application/x-www-form-urlencoded".parse().unwrap());
+    let response = library_request(State(state.clone()), Method::POST, uri.clone(), form.clone(), Body::from("pin=000000")).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.headers()["content-type"], "text/html; charset=utf-8");
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert!(!response.headers().contains_key("set-cookie"));
+    assert!(!response.headers().contains_key("location"));
+    let html = String::from_utf8(bytes(response).await).unwrap();
+    assert!(html.contains("The PIN was not accepted. Try again."));
+    assert!(html.contains("type=\"password\""));
+    assert!(html.contains("role=\"alert\""));
+    assert!(html.contains("aria-describedby=\"pin-error\""));
+    assert!(!html.contains(&state.token));
+    assert!(!html.contains("000000"));
+    assert!(!html.contains("493781"));
     let response = library_request(State(state.clone()), Method::POST, uri, form, Body::from("pin=493781")).await;
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
     assert_eq!(response.headers()["location"], "/secret/");

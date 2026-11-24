@@ -43,6 +43,8 @@ struct Registration {
     /// True when the native registration is only an ownership capability for
     /// the cross-platform Kokoro engine; no native synthesizer was started.
     kokoro: bool,
+    #[cfg(mobile)]
+    pause_on_start: bool,
 }
 impl Registration {
     fn retire_for_event(&mut self, valid: bool, speaking: bool, paused: bool) -> bool {
@@ -66,6 +68,12 @@ struct State {
 impl State {
     fn blocked(&self, owner: &Owner) -> bool {
         self.blocks.values().any(|scope| scope.matches(owner))
+    }
+    #[cfg(any(mobile, test))]
+    fn notification_owner(&self, native_id: &str, activity: bool) -> Option<&Registration> {
+        self.registrations.get(native_id).filter(|entry|
+            matches!(entry.phase, Phase::Starting | Phase::Started)
+                && entry.owner.window == "main" && entry.token.is_some() && (!activity || entry.kokoro))
     }
     /// Restore only the dormant native reader owner, preserving any exact
     /// started speech capability without admitting a new/replacement source.
@@ -104,6 +112,8 @@ impl State {
         self.registrations.insert(native_id.clone(), Registration {
             id: id.into(), owner, token: None, ordinal: self.next,
             phase: Phase::Preparing, text_length: 0, kokoro: false,
+            #[cfg(mobile)]
+            pause_on_start: false,
         });
         Ok(native_id)
     }
@@ -155,16 +165,18 @@ impl State {
         false
     }
 }
-/// A started read-aloud session keeps its source across background sensor
-/// suspension; only a session without a live capability is retired.
-#[cfg_attr(any(not(mobile), target_os = "android"), allow(dead_code))]
-pub(crate) fn background_retires_speech(retained: bool) -> bool { !retained }
 
 #[derive(Clone, Default)]
-pub(super) struct SpeechManager(Arc<Mutex<State>>);
+pub(super) struct SpeechManager {
+    state: Arc<Mutex<State>>,
+    #[cfg(target_os = "ios")]
+    activity: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<Value>>>>,
+    #[cfg(mobile)]
+    engine_transport: Arc<tokio::sync::Mutex<()>>,
+}
 impl SpeechManager {
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.0.lock().unwrap_or_else(|error| error.into_inner())
+        self.state.lock().unwrap_or_else(|error| error.into_inner())
     }
     fn block(&self, scope: Scope) -> (Retirement, Vec<Capability>) {
         let mut state = self.lock();
@@ -222,28 +234,27 @@ mod transport {
             let manager = self.speech.clone();
             tauri::async_runtime::spawn(async move {
                 for capability in capabilities {
+                    if neural.iter().any(|entry| entry.native_id == capability.native_id) {
+                        let _ = app.kiwix_mobile().call("speechEngineStop", json!({"id": capability.native_id})).await;
+                    }
                     if let Err(error) = cleanup(&app, &manager, &capability).await {
                         let _ = app.emit_to("main", "kiwix-mobile-error", json!({"operation":"speech-retire","error":error}));
                     }
                 }
-                if !neural.is_empty() {
-                    let _ = app.kiwix_mobile().call("speechEngineStop", json!({})).await;
-                    let _ = app.kiwix_mobile().call("speechEngineNowPlaying", json!({"active": false})).await;
-                }
             });
         }
-        /// Mirror the Rust Kokoro transport into the iOS Now Playing card.
-        /// Android already has a MediaSession owned by SpeechPlayback.
-        async fn engine_now_playing(&self, active: bool, speaking: bool, title: Option<&str>, subtitle: Option<&str>) {
-            #[cfg(target_os = "ios")]
-            {
-                let _ = self.mobile_call("speechEngineNowPlaying", json!({
-                    "active": active, "speaking": speaking,
-                    "title": title, "subtitle": subtitle,
-                })).await;
-            }
-            #[cfg(not(target_os = "ios"))]
-            { let _ = (active, speaking, title, subtitle); }
+        async fn engine_transport(&self, id: &str, token: &str, command: crate::service::kokoro::Command) -> Result<(), String> {
+            use crate::service::kokoro::Command;
+            let _serial = self.speech.engine_transport.lock().await;
+            let update = |paused: bool| self.mobile_call("speechEngineUpdate", json!({
+                "id": id, "speaking": !paused, "paused": paused, "canPrevious": true,
+            }));
+            // Reacquire native playback admission before resuming the worker.
+            if matches!(command, Command::Resume) { update(false).await?; }
+            let pause = matches!(command, Command::Pause);
+            if !self.kokoro.command(id, token, command) { return Err("SPEECH_SESSION_RETIRED".into()); }
+            if pause { update(true).await?; }
+            Ok(())
         }
 
         /// Mirror the Kokoro player onto the read-aloud Live Activity. This is
@@ -251,20 +262,33 @@ mod transport {
         /// must never become a reader error.
         fn read_aloud_activity(&self, payload: Value) {
             #[cfg(target_os = "ios")]
-            let payload = if self.store.private_mode().unwrap_or(true) {
-                json!({"state": "clear"})
-            } else {
-                payload
-            };
-            #[cfg(target_os = "ios")]
             {
+                let payload = if self.store.settings().is_ok_and(|s| !s.private_mode && !s.read_only) {
+                    payload
+                } else {
+                    json!({"state": "clear"})
+                };
+                let mut queue = self.speech.activity.lock().unwrap_or_else(|error| error.into_inner());
+                let payload = if let Some(sender) = queue.as_ref() {
+                    match sender.send(payload) {
+                        Ok(()) => return,
+                        Err(error) => error.0,
+                    }
+                } else { payload };
                 let app = match self.speech_app() {
                     Ok(app) => app,
                     Err(error) => { eprintln!("Kiwix read-aloud activity: {error}"); return; }
                 };
+                let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+                let _ = sender.send(payload);
+                *queue = Some(sender);
                 tauri::async_runtime::spawn(async move {
-                    if let Err(error) = app.kiwix_mobile().call("readAloudActivity", payload).await {
-                        eprintln!("Kiwix read-aloud activity: {error}");
+                    // A registration publishes updates under the speech gate.
+                    // Preserve that order across native asynchronous calls.
+                    while let Some(payload) = receiver.recv().await {
+                        if let Err(error) = app.kiwix_mobile().call("readAloudActivity", payload).await {
+                            eprintln!("Kiwix read-aloud activity: {error}");
+                        }
                     }
                 });
             }
@@ -340,14 +364,6 @@ mod transport {
                 matches!(entry.phase, Phase::Starting | Phase::Started) && entry.token.is_some()
             })
         }
-        fn speech_active_capability(&self) -> Option<(String, String, Owner)> {
-            let state = self.speech.lock();
-            state.registrations.iter()
-                .filter(|(_, entry)| matches!(entry.phase, Phase::Starting | Phase::Started)
-                    && entry.token.is_some() && entry.owner.window == "main")
-                .max_by_key(|(_, entry)| entry.ordinal)
-                .map(|(native_id, entry)| (native_id.clone(), entry.token.clone().unwrap(), entry.owner.clone()))
-        }
         async fn speech_restore_reader_owner(&self, owner: &Owner, foreground_transition: Option<u64>) -> Result<Option<Value>, String> {
             self.speech_validate_retained_identity(owner)?;
             self.ensure_window_active(&owner.window)?;
@@ -379,7 +395,6 @@ mod transport {
         }
         /// Caller holds native lifecycle serialization. Restore before active
         /// publication so a native TTS event cannot observe an ownership gap.
-        #[cfg(target_os = "android")]
         pub(in crate::service) async fn mobile_restore_retained_reader(&self, generation: u64) -> Result<(), String> {
             let sensors = self.sensor_manager("main");
             let Some(retained) = sensors.retained_session() else { return Ok(()); };
@@ -456,17 +471,19 @@ mod transport {
                         json!({"id":id,"speaking":false,"offset":0,"stopped":false})
                     } else { json!({"id":id,"retired":false}) });
                 };
+                let offset = self.kokoro.active_offset(&capability.native_id, &capability.token).map(|offset| offset as u64);
                 if kokoro {
                     self.kokoro.stop(&capability.native_id, &capability.token);
-                    let _ = self.mobile_call("speechEngineStop", json!({})).await;
-                    self.engine_now_playing(false, false, None, None).await;
                     self.read_aloud_activity(json!({"state": "terminal", "sessionId": capability.native_id}));
+                    let _ = self.mobile_call("speechEngineStop", json!({"id": capability.native_id})).await;
                 }
                 let result = cleanup(&self.speech_app()?, &self.speech, &capability).await?;
                 let service = self.clone();
                 tauri::async_runtime::spawn(async move { service.mobile_speech_released().await; });
                 return Ok(if command == "mobile_speech_stop" {
-                    json!({"id":id,"speaking":false,"offset":result.get("offset").and_then(Value::as_u64).unwrap_or(0),"stopped":result.get("stopped").and_then(Value::as_bool).unwrap_or(false)})
+                    json!({"id":id,"speaking":false,
+                        "offset":offset.or_else(|| result.get("offset").and_then(Value::as_u64)).unwrap_or(0),
+                        "stopped":offset.is_some() || result.get("stopped").and_then(Value::as_bool).unwrap_or(false)})
                 } else { json!({"id":id,"retired":true}) });
             }
             if matches!(command, "mobile_speech_pause" | "mobile_speech_resume" | "mobile_speech_previous" |
@@ -477,10 +494,11 @@ mod transport {
                     let state = self.speech.lock();
                     state.owned(label, id, token).and_then(|native_id| {
                         state.registrations.get(&native_id)
-                            .map(|entry| (native_id, entry.owner.clone(), entry.text_length, entry.kokoro))
+                            .filter(|entry| entry.phase == Phase::Started)
+                            .map(|entry| (native_id, entry.text_length, entry.kokoro))
                     })
                 };
-                let Some((native_id, _owner, text_length, kokoro)) = owned else { return Err("SPEECH_SESSION_RETIRED".into()); };
+                let Some((native_id, text_length, kokoro)) = owned else { return Err("SPEECH_SESSION_RETIRED".into()); };
                 // Transport commands are authorized by the unguessable session
                 // token and the active engine identity. Re-validating the reader
                 // source here made pause fail when the frame/sensor state was in
@@ -504,31 +522,8 @@ mod transport {
                         "mobile_speech_forward" => crate::service::kokoro::Command::Forward(seconds.unwrap_or(15.0)),
                         _ => crate::service::kokoro::Command::Seek(position.unwrap_or(0)),
                     };
-                    if !self.kokoro.command(&native_id, token, transport) {
-                        return Err("SPEECH_SESSION_RETIRED".into());
-                    }
-                    let paused = command == "mobile_speech_pause";
-                    if matches!(command, "mobile_speech_pause" | "mobile_speech_resume") {
-                        let _ = self.mobile_call("speechEngineUpdate", json!({
-                            "speaking": !paused, "paused": paused, "canPrevious": true,
-                        })).await;
-                        self.engine_now_playing(true, !paused, None, None).await;
-                        let locale = crate::localization::Localizer::for_app(&self.store.settings()?.locale);
-                        let status_label = if paused {
-                            locale.text("Paused", &[])
-                        } else {
-                            locale.text("Reading aloud", &[])
-                        };
-                        self.read_aloud_activity(json!({
-                            "state": "active", "sessionId": native_id,
-                            "status": if paused { "paused" } else { "reading" },
-                            "statusLabel": status_label,
-                            "offset": self.kokoro.active_offset(&native_id, token).unwrap_or(0),
-                            "total": text_length,
-                        }));
-                    }
-                    let offset = self.kokoro.active_offset(&native_id, token).unwrap_or(0);
-                    return Ok(json!({"id":id,"paused":command == "mobile_speech_pause","offset":offset}));
+                    self.engine_transport(&native_id, token, transport).await?;
+                    return Ok(json!({"id":id,"accepted":true}));
                 }
                 let native: &'static str = match command {
                     "mobile_speech_pause" => "speechPause",
@@ -577,10 +572,10 @@ mod transport {
                 if !self.mobile_active() { return Err("SPEECH_FOREGROUND_REQUIRED".into()); }
                 if !self.store.private_mode()? && !self.store.read_only()? {
                     self.kokoro.ensure_performance_probe();
-                }
-                if self.kokoro.usable() {
-                    if let Some(voices) = result.get_mut("voices").and_then(Value::as_array_mut) {
-                        voices.extend(crate::service::kokoro::voice_entries());
+                    if self.kokoro.usable() {
+                        if let Some(voices) = result.get_mut("voices").and_then(Value::as_array_mut) {
+                            voices.extend(crate::service::kokoro::voice_entries());
+                        }
                     }
                 }
                 return Ok(result);
@@ -648,12 +643,16 @@ mod transport {
             for key in ["text", "lang", "voice", "rate"] {
                 payload.insert(key.into(), fields.remove(key).ok_or_else(|| format!("Missing speech argument: {key}"))?);
             }
-            if let Some(title) = fields.remove("title") {
-                payload.insert("title".into(), title);
+            let settings = self.store.settings()?;
+            if !settings.private_mode && !settings.read_only {
+                if let Some(title) = fields.remove("title").and_then(|title| title.as_str().map(
+                    |value| value.trim().chars().take(160).collect::<String>())).filter(|title| !title.is_empty()) {
+                    payload.insert("title".into(), json!(title));
+                }
             }
             payload.insert("id".into(), json!(native_id));
             payload.insert("token".into(), json!(token));
-            let locale = crate::localization::Localizer::for_app(&self.store.settings()?.locale);
+            let locale = crate::localization::Localizer::for_app(&settings.locale);
             payload.insert("labels".into(), json!({
                 "title": locale.text("Reading aloud", &[]),
                 "pause": locale.text("Pause", &[]),
@@ -664,6 +663,15 @@ mod transport {
                 "rewind": locale.text("Rewind 15 seconds", &[]),
                 "forward": locale.text("Forward 15 seconds", &[]),
             }));
+            let neural = payload.get("voice").and_then(Value::as_str)
+                .is_some_and(|voice| voice.starts_with("kokoro:"));
+            if neural && (settings.private_mode || settings.read_only) {
+                return Err("Natural voices are off in private and read-only mode; choose a system voice".into());
+            }
+            if neural && !payload.get("lang").and_then(Value::as_str)
+                .is_some_and(|language| language.to_ascii_lowercase().starts_with("en")) {
+                return Err("Natural voices are only available for English; choose an installed system voice".into());
+            }
             let capability = Capability { native_id: native_id.clone(), token };
             let retired = {
                 let mut state = self.speech.lock();
@@ -674,7 +682,10 @@ mod transport {
                     return Err("SPEECH_SESSION_RETIRED".into());
                 }
                 match state.begin_start(&capability.native_id, &owner, length) {
-                    Ok(retired) => retired,
+                    Ok(retired) => {
+                        state.registrations.get_mut(&capability.native_id).unwrap().kokoro = neural;
+                        retired
+                    }
                     Err(error) => {
                         state.registrations.get_mut(&capability.native_id).unwrap().phase = Phase::Retiring;
                         drop(state);
@@ -684,74 +695,66 @@ mod transport {
                 }
             };
             self.speech_cleanup(retired);
-            let neural = payload.get("voice").and_then(Value::as_str)
-                .is_some_and(|voice| voice.starts_with("kokoro:"));
             if neural {
-                let language = payload.get("lang").and_then(Value::as_str).unwrap_or_default();
-                if !language.to_ascii_lowercase().starts_with("en") {
-                    if let Some(entry) = self.speech.lock().registrations.get_mut(&capability.native_id) {
-                        entry.phase = Phase::Retiring;
-                    }
-                    self.speech_cleanup(vec![capability.clone()]);
-                    return Err("Natural voices are only available for English; choose an installed system voice".into());
-                }
-            }
-            let response = if neural {
-                let voice = payload.get("voice").and_then(Value::as_str).unwrap_or_default().to_string();
-                let rate = payload.get("rate").and_then(Value::as_f64).unwrap_or(1.0);
-                let text = payload.get("text").and_then(Value::as_str).unwrap_or_default().to_string();
-                let title = payload.get("title").and_then(Value::as_str).unwrap_or_default()
-                    .chars().take(160).collect::<String>();
-                let labels = payload.get("labels").cloned().unwrap_or(Value::Null);
-                let reading_label = labels.get("title").and_then(Value::as_str)
-                    .unwrap_or("Reading aloud").to_string();
-                let paused_label = labels.get("paused").and_then(Value::as_str)
-                    .unwrap_or("Paused").to_string();
-                let now_playing_title = labels.get("title").and_then(Value::as_str).map(str::to_owned);
-                let now_playing_voice = voice.clone();
-                let activity_title = if title.is_empty() { reading_label.clone() } else { title };
-                let activity_voice = voice.clone();
-                let audio = self.mobile_call("speechEngineStart", json!({"labels": labels})).await;
-                if let Err(error) = audio {
-                    self.kokoro.stop(&capability.native_id, &capability.token);
-                    let _ = self.mobile_call("speechEngineStop", json!({})).await;
-                    Err(error)
-                } else {
-                let (events, receiver) = tokio::sync::mpsc::unbounded_channel();
-                let result = self.kokoro.start(crate::service::kokoro::StartRequest {
-                    id: capability.native_id.clone(), token: capability.token.clone(), text, voice, rate,
-                    title: activity_title.clone(), reading_label: reading_label.clone(),
-                    paused_label: paused_label.clone(),
-                }, events);
-                if result.is_ok() {
-                    // Request while the app is still foreground; ActivityKit
-                    // refuses a new activity from a background process.
-                    self.read_aloud_activity(json!({
-                        "state": "active", "sessionId": capability.native_id,
-                        "title": activity_title, "voice": activity_voice,
-                        "status": "reading", "statusLabel": reading_label,
+                let string_value = |value| match value { Some(Value::String(value)) => Some(value), _ => None };
+                let voice = string_value(payload.remove("voice")).unwrap_or_default();
+                let name = crate::service::kokoro::voice_name(&voice).ok_or("Unknown natural voice")?;
+                let rate = payload.remove("rate").and_then(|value| value.as_f64())
+                    .filter(|rate| (0.25..=2.0).contains(rate)).ok_or("SPEECH_INVALID_REQUEST")?;
+                let text = string_value(payload.remove("text")).unwrap_or_default();
+                let labels = payload.remove("labels").unwrap_or(Value::Null);
+                let reading_label = labels.get("title").and_then(Value::as_str).unwrap_or("Reading aloud").to_string();
+                let paused_label = labels.get("paused").and_then(Value::as_str).unwrap_or("Paused").to_string();
+                let title = string_value(payload.remove("title")).unwrap_or_else(|| reading_label.clone());
+                self.mobile_call("speechEngineStart", json!({
+                    "id": native_id, "token": capability.token, "title": title, "subtitle": name, "labels": labels,
+                })).await?;
+                let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+                let admitted = (|| -> Result<bool, String> {
+                    // Native admission can race a source retirement. Publish
+                    // the player and its initial projection only while owning
+                    // this exact capability, ordered before its terminal event.
+                    let mut state = self.speech.lock();
+                    self.speech_validate(&owner)?;
+                    let entry = state.registrations.get(&native_id).filter(|entry|
+                        entry.phase == Phase::Starting && entry.token.as_deref() == Some(capability.token.as_str()))
+                        .ok_or("SPEECH_SESSION_RETIRED")?;
+                    let paused = entry.pause_on_start;
+                    let initial = json!({
+                        "state": "start", "sessionId": native_id, "title": title, "voice": name,
+                        "status": if paused { "paused" } else { "reading" },
+                        "statusLabel": if paused { &paused_label } else { &reading_label },
                         "offset": 0, "total": length,
-                    }));
-                    self.engine_now_playing(true, true, now_playing_title.as_deref(), Some(&now_playing_voice)).await;
-                    let service = self.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let mut receiver = receiver;
-                        while let Some(event) = receiver.recv().await {
-                            service.mobile_speech_event(event);
-                        }
                     });
+                    self.kokoro.start(crate::service::kokoro::StartRequest {
+                        id: native_id.clone(), token: capability.token.clone(), text, voice, rate,
+                        reading_label, paused_label,
+                    }, events, paused)?;
+                    state.finish_start(&native_id);
+                    self.read_aloud_activity(initial);
+                    Ok(paused)
+                })();
+                let paused = match admitted {
+                    Ok(paused) => paused,
+                    Err(error) => {
+                        let _ = self.mobile_call("speechEngineStop", json!({"id": native_id})).await;
+                        return Err(error);
+                    }
+                };
+                let service = self.clone();
+                tauri::async_runtime::spawn(async move {
+                    while let Some(event) = receiver.recv().await { service.mobile_speech_event(event); }
+                });
+                if paused {
+                    let _ = self.engine_transport(&native_id, &capability.token, crate::service::kokoro::Command::Pause).await;
                 }
-                if result.is_err() { let _ = self.mobile_call("speechEngineStop", json!({})).await; }
-                result.map(|_| json!({"id":native_id,"accepted":true}))
-                }
-            } else {
-                self.mobile_call("speechStart", Value::Object(payload)).await
-            };
+                return Ok(json!({"id":id,"accepted":true}));
+            }
+            let response = self.mobile_call("speechStart", Value::Object(payload)).await;
             let admission = {
                 let mut state = self.speech.lock();
                 let valid = self.speech_validate(&owner);
                 if response.is_ok() && valid.is_ok() && state.finish_start(&capability.native_id) {
-                    if let Some(entry) = state.registrations.get_mut(&capability.native_id) { entry.kokoro = neural; }
                     Ok(())
                 } else {
                     if let Some(entry) = state.registrations.get_mut(&capability.native_id) { entry.phase = Phase::Retiring; }
@@ -759,12 +762,6 @@ mod transport {
                 }
             };
             if let Err(error) = admission {
-                if neural {
-                    self.read_aloud_activity(json!({
-                        "state": "terminal", "sessionId": capability.native_id,
-                    }));
-                    self.kokoro.stop(&capability.native_id, &capability.token);
-                }
                 self.speech_cleanup(vec![capability]);
                 return Err(error);
             }
@@ -773,7 +770,6 @@ mod transport {
         /// Retire the reader-visible session before its model files disappear.
         pub(crate) fn mobile_speech_model_deleted(self: &Arc<Self>) {
             if let Some((native_id, _token)) = self.kokoro.active_identity() {
-                self.read_aloud_activity(json!({"state": "terminal", "sessionId": native_id}));
                 self.mobile_speech_event(json!({
                     "id": native_id, "speaking": false, "paused": false, "offset": 0,
                 }));
@@ -806,24 +802,17 @@ mod transport {
                     // Keep ownership locked through forwarding. A simultaneous
                     // teardown cannot retire then receive an old speaking=true.
                     mobile::emit(self, "mobile-speech-state", forwarded);
-                    let status = if paused { "paused" } else { "reading" };
-                    let state = if !speaking && !paused { "terminal" } else { "active" };
-                    self.read_aloud_activity(json!({
-                        "state": state, "sessionId": native_id,
-                        "title": payload.get("title"), "voice": payload.get("voice"),
-                        "status": status, "statusLabel": payload.get("statusLabel"),
-                        "offset": offset, "total": payload.get("total"),
-                    }));
+                    if entry.kokoro && (speaking || paused) {
+                        self.read_aloud_activity(json!({
+                            "state": "active", "sessionId": native_id,
+                            "status": if paused { "paused" } else { "reading" },
+                            "statusLabel": payload.get("statusLabel"),
+                            "offset": offset, "total": entry.text_length,
+                        }));
+                    }
                 }
             }
             if let Some(capability) = cleanup { self.speech_cleanup(vec![capability]); }
-            if released {
-                let service = self.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = service.mobile_call("speechEngineStop", json!({})).await;
-                    service.engine_now_playing(false, false, None, None).await;
-                });
-            }
             if released {
                 let service = self.clone();
                 tauri::async_runtime::spawn(async move { service.mobile_speech_released().await; });
@@ -835,87 +824,58 @@ mod transport {
         pub(crate) fn mobile_speech_action(self: &Arc<Self>, payload: Value) {
             let Some(action) = payload.get("action").and_then(Value::as_str)
                 .filter(|action| matches!(*action, "play" | "pause" | "stop" | "previous" | "next" | "rewind" | "forward")) else { return; };
+            let Some(id) = payload.get("sessionId").and_then(Value::as_str) else { return; };
+            let activity = payload.get("activity").and_then(Value::as_bool) == Some(true);
+            let (capability, owner, kokoro) = {
+                let mut state = self.speech.lock();
+                let Some(entry) = state.notification_owner(id, activity) else { return; };
+                if entry.kokoro && entry.phase == Phase::Starting && action == "pause" {
+                    state.registrations.get_mut(id).unwrap().pause_on_start = true;
+                    return;
+                }
+                let Some(token) = entry.token.clone() else { return; };
+                (Capability { native_id: id.to_owned(), token }, entry.owner.clone(), entry.kokoro)
+            };
+            if action == "stop" {
+                // The Rust worker exits silently on Stop. Retire the exact
+                // registration and tell the owning reader before native cleanup.
+                let offset = self.kokoro.active_offset(&capability.native_id, &capability.token).unwrap_or(0);
+                self.mobile_speech_event(json!({
+                    "id": capability.native_id, "speaking": false, "paused": false, "offset": offset,
+                }));
+                return;
+            }
             let service = self.clone();
             let action = action.to_string();
             tauri::async_runtime::spawn(async move {
-                if let Err(error) = service.clone().speech_notification_action(&action).await {
-                    mobile::error(&service, "speech-action", error);
+                if let Err(error) = service.speech_notification_action(&capability, &owner, kokoro, &action).await {
+                    let current = service.speech.lock().registrations.get(&capability.native_id)
+                        .is_some_and(|entry| entry.phase == Phase::Started);
+                    if current { mobile::error(&service, "speech-action", error); }
                 }
             });
         }
-        async fn speech_notification_action(self: Arc<Self>, action: &str) -> Result<(), String> {
-            let Some((native_id, token, owner)) = self.speech_active_capability() else {
-                self.read_aloud_activity(json!({"state": "clear"}));
+
+        async fn speech_notification_action(&self, capability: &Capability, owner: &Owner, kokoro: bool, action: &str) -> Result<(), String> {
+            self.speech_validate_retained(owner).await?;
+            let Capability { native_id, token } = capability;
+            if !self.speech.lock().registrations.get(native_id).is_some_and(|entry|
+                matches!(entry.phase, Phase::Starting | Phase::Started) && entry.token.as_deref() == Some(token.as_str())) {
                 return Ok(());
-            };
-            let capability = Capability { native_id: native_id.clone(), token: token.clone() };
-            let kokoro = self.speech.lock().registrations.get(&native_id).is_some_and(|entry| entry.kokoro);
+            }
             if kokoro {
-                if action == "stop" {
-                    // The Rust worker exits silently on Command::Stop, unlike
-                    // NativeSpeech. Retire first, then publish the terminal
-                    // state so a concurrent frontend retire cannot race the
-                    // native cleanup. The header, highlight and media
-                    // exemption must not remain stuck.
-                    let request_id = self.speech.lock().registrations
-                        .get(&native_id).map(|entry| entry.id.clone());
-                    self.kokoro.stop(&native_id, &token);
-                    let _ = self.mobile_call("speechEngineStop", json!({})).await;
-                    self.engine_now_playing(false, false, None, None).await;
-                    self.read_aloud_activity(json!({"state": "terminal", "sessionId": native_id}));
-                    let result = match self.speech_app() {
-                        Ok(app) => cleanup(&app, &self.speech, &capability).await,
-                        Err(error) => Err(error),
-                    };
-                    if let Some(request_id) = request_id {
-                        mobile::emit(&self, "mobile-speech-state", json!({
-                            "id": request_id, "speaking": false, "paused": false, "offset": 0,
-                        }));
-                    }
-                    self.clone().mobile_speech_released().await;
-                    if let Err(error) = result { eprintln!("Kiwix speech-action stop cleanup: {error}"); }
-                    return Ok(());
-                } else {
-                    self.speech_validate_retained(&owner).await?;
-                    let command = match action {
-                        "play" => crate::service::kokoro::Command::Resume,
-                        "pause" => crate::service::kokoro::Command::Pause,
-                        "previous" => crate::service::kokoro::Command::Previous,
-                        "next" => crate::service::kokoro::Command::Next,
-                        "rewind" => crate::service::kokoro::Command::Rewind(15.0),
-                        "forward" => crate::service::kokoro::Command::Forward(15.0),
-                        _ => return Ok(()),
-                    };
-                    if !self.kokoro.command(&native_id, &token, command) {
-                        return Err("SPEECH_SESSION_RETIRED".into());
-                    }
-                    let paused = action == "pause";
-                    if action == "pause" || action == "play" {
-                        let _ = self.mobile_call("speechEngineUpdate", json!({
-                            "speaking": !paused, "paused": paused, "canPrevious": true,
-                        })).await;
-                        self.engine_now_playing(true, !paused, None, None).await;
-                        let text_length = self.speech.lock().registrations
-                            .get(&native_id).map(|entry| entry.text_length).unwrap_or(0);
-                        let locale = crate::localization::Localizer::for_app(&self.store.settings()?.locale);
-                        self.read_aloud_activity(json!({
-                            "state": "active", "sessionId": native_id,
-                            "status": if paused { "paused" } else { "reading" },
-                            "statusLabel": if paused { locale.text("Paused", &[]) } else { locale.text("Reading aloud", &[]) },
-                            "offset": self.kokoro.active_offset(&native_id, &token).unwrap_or(0),
-                            "total": text_length,
-                        }));
-                    }
-                    return Ok(());
-                }
+                use crate::service::kokoro::Command;
+                let command = match action {
+                    "play" => Command::Resume,
+                    "pause" => Command::Pause,
+                    "previous" => Command::Previous,
+                    "next" => Command::Next,
+                    "rewind" => Command::Rewind(15.0),
+                    "forward" => Command::Forward(15.0),
+                    _ => return Ok(()),
+                };
+                return self.engine_transport(native_id, token, command).await;
             }
-            if action == "stop" {
-                let app = self.speech_app()?;
-                let result = cleanup(&app, &self.speech, &capability).await;
-                self.clone().mobile_speech_released().await;
-                return result.map(|_| ());
-            }
-            self.speech_validate_retained(&owner).await?;
             let command: &'static str = match action {
                 "play" => "speechResume",
                 "pause" => "speechPause",
@@ -925,13 +885,7 @@ mod transport {
                 "forward" => "speechForward",
                 _ => return Ok(()),
             };
-            if let Err(error) = self.mobile_call(command, json!({"id":native_id,"token":token})).await {
-                let app = self.speech_app()?;
-                let _ = cleanup(&app, &self.speech, &capability).await;
-                self.clone().mobile_speech_released().await;
-                return Err(error);
-            }
-            Ok(())
+            self.mobile_call(command, json!({"id": native_id, "token": token})).await.map(|_| ())
         }
 
         /// iOS and Android retain reader origins while read-aloud holds the
@@ -1140,8 +1094,7 @@ mod transport {
                 if !self.kokoro.command(&native_id, token, transport) {
                     return Err("SPEECH_SESSION_RETIRED".into());
                 }
-                let offset = self.kokoro.active_offset(&native_id, token).unwrap_or(0);
-                return Ok(json!({"id":id,"paused":command == "mobile_speech_pause","offset":offset}));
+                return Ok(json!({"id":id,"accepted":true}));
             }
             self.ensure_window_active(label)?;
             self.ensure_generation(&args)?;
@@ -1191,7 +1144,6 @@ mod transport {
             }
             let rate = args.get("rate").and_then(Value::as_f64).filter(|rate| rate.is_finite() && *rate > 0.0)
                 .ok_or("Missing speech argument: rate")?;
-            let title = args.get("title").and_then(Value::as_str).unwrap_or_default().chars().take(160).collect::<String>();
             let locale = crate::localization::Localizer::for_app(&self.store.settings()?.locale);
             let reading_label = locale.text("Reading aloud", &[]);
             let paused_label = locale.text("Paused", &[]);
@@ -1232,8 +1184,8 @@ mod transport {
             let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
             let started = self.kokoro.start(crate::service::kokoro::StartRequest {
                 id: capability.native_id.clone(), token: capability.token.clone(), text: speech.to_string(), voice, rate,
-                title: if title.is_empty() { reading_label.clone() } else { title }, reading_label, paused_label,
-            }, events);
+                reading_label, paused_label,
+            }, events, false);
             let admission = {
                 let mut state = self.speech.lock();
                 let valid = self.speech_validate(&owner);
@@ -1318,6 +1270,21 @@ mod tests {
         assert!(state.owned("other-window", "same-root-id", &old.token).is_none());
     }
     #[test]
+    fn obsolete_activity_action_cannot_target_new_or_system_speech() {
+        let mut state = State::default();
+        let (old, _) = prepared(&mut state, "old");
+        state.begin_start(&old, &owner("session"), 10).unwrap();
+        state.registrations.get_mut(&old).unwrap().kokoro = true;
+        assert!(state.notification_owner(&old, true).is_some());
+
+        let (new, _) = prepared(&mut state, "new");
+        state.begin_start(&new, &owner("session"), 10).unwrap();
+        assert!(state.notification_owner(&old, true).is_none());
+        assert!(state.notification_owner(&new, true).is_none());
+        assert!(state.notification_owner(&new, false).is_some());
+    }
+
+    #[test]
     fn source_retirement_blocks_replacement_admission_and_preserves_pending_slot() {
         let manager = SpeechManager::default();
         let pending = manager.lock().reserve("pending", owner("session")).unwrap();
@@ -1346,11 +1313,6 @@ mod tests {
         assert!(state.reserve("overflow", owner("session")).is_err());
         assert_eq!(state.registrations.len(), 8);
     }
-    #[test]
-    fn background_preserves_only_a_started_speech_capability() {
-        assert!(!background_retires_speech(true));
-        assert!(background_retires_speech(false));
-    }
 
     #[test]
     fn retained_reader_restore_preserves_started_speech_and_rejects_replacement_or_retired_owners() {
@@ -1370,6 +1332,8 @@ mod tests {
         assert!(state.begin_start(&native_id, &owner, 100).unwrap().is_empty());
         assert!(state.finish_start(&native_id));
         sensors.suspend(owner.generation); // Production mobile background deactivation.
+        // A duplicate background callback must not erase the dormant owner.
+        sensors.suspend(owner.generation);
         assert!(!sensors.owns_session(&owner.session, &owner.archive, &owner.installation, &owner.origin));
         let mut foreground = false;
         state.restore_before_foreground(&owner, &sensors, || {

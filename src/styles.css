@@ -2406,7 +2406,7 @@ kbd {
     content: "";
     position: absolute;
     inset-block-end: 3px;
-    inset-inline-start: 50%;
+    left: 50%;
     width: 4px;
     height: 4px;
     border-radius: 50%;

@@ -5,14 +5,21 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -65,6 +72,7 @@ internal object SpeechPlayback {
     const val ACTION_REWIND = "org.kiwix.mobile.SPEECH_REWIND"
     const val ACTION_FORWARD = "org.kiwix.mobile.SPEECH_FORWARD"
     private const val CHANNEL = "kiwix-speech"
+    const val EXTRA_SESSION = "speechSession"
     private const val NOTIFICATION = 7402
 
     private var context: Context? = null
@@ -74,19 +82,54 @@ internal object SpeechPlayback {
     private var paused = false
     private var canPrevious = false
     private var running = false
+    private var owner: String? = null
+    private var serviceOwner = java.lang.ref.WeakReference<Service>(null)
+    private var title = ""
+    private var subtitle: String? = null
+    private var external = false
+    private var noisy: BroadcastReceiver? = null
+    private var audioFocus: AudioManager.OnAudioFocusChangeListener? = null
+    private var focusRequest: AudioFocusRequest? = null
 
     /** Set by the plugin. Routes a transport action back through Rust. */
-    var dispatch: ((String) -> Unit)? = null
+    var dispatch: ((String, String) -> Unit)? = null
 
-    fun start(context: Context, labels: SpeechLabels, speaking: Boolean, canPrevious: Boolean): Boolean {
+    fun start(context: Context, id: String, labels: SpeechLabels, speaking: Boolean, canPrevious: Boolean,
+              title: String = labels.title, subtitle: String? = null, external: Boolean = false): Boolean {
         checkMain()
         val app = context.applicationContext
+        releaseAudio()
+        releaseSession()
+        owner = id
         this.context = app
         this.labels = labels
+        this.title = title
+        this.subtitle = subtitle
+        this.external = external
         this.speaking = speaking
         this.paused = !speaking
         this.canPrevious = canPrevious
-        ensureChannel(app)
+        if (external && !acquireFocus(app, id)) {
+            stop(app, id)
+            return false
+        }
+        if (external) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) dispatchAction(id, "pause")
+                }
+            }
+            try {
+                ContextCompat.registerReceiver(app, receiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+                    ContextCompat.RECEIVER_NOT_EXPORTED)
+                noisy = receiver
+            } catch (_: Exception) {
+                stop(app, id)
+                return false
+            }
+        }
+        try { ensureChannel(app) }
+        catch (_: Exception) { stop(app, id); return false }
         if (!running) {
             running = true
             val intent = Intent(app, KiwixSpeechService::class.java).setAction(ACTION_START)
@@ -103,34 +146,41 @@ internal object SpeechPlayback {
                     ContextCompat.startForegroundService(app, intent)
                 }
             } catch (_: Exception) {
-                running = false
-                this.context = null
+                stop(app, id)
                 return false
             }
         }
         try {
             publish()
         } catch (_: Exception) {
-            running = false
-            this.context = null
-            app.stopService(Intent(app, KiwixSpeechService::class.java))
+            stop(app, id)
             return false
         }
         return true
     }
 
-    fun update(speaking: Boolean, paused: Boolean, canPrevious: Boolean) {
+    fun update(id: String, speaking: Boolean, paused: Boolean, canPrevious: Boolean): Boolean {
         checkMain()
-        if (!running) return
-        if (this.speaking == speaking && this.paused == paused && this.canPrevious == canPrevious) return
+        val app = context ?: return false
+        if (!running || owner != id) return false
+        if (external) {
+            if (paused) releaseFocus(app)
+            else if (!acquireFocus(app, id)) return false
+        }
+        if (this.speaking == speaking && this.paused == paused && this.canPrevious == canPrevious) return true
         this.speaking = speaking
         this.paused = paused
         this.canPrevious = canPrevious
         publish()
+        return true
     }
 
-    fun stop(context: Context) {
+    fun stop(context: Context, id: String) {
         checkMain()
+        if (owner != id) return
+        owner = null
+        serviceOwner.clear()
+        releaseAudio()
         val app = context.applicationContext
         if (running) {
             running = false
@@ -160,37 +210,83 @@ internal object SpeechPlayback {
                 service, NOTIFICATION, notification(service),
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
             )
+            serviceOwner = java.lang.ref.WeakReference(service)
             return true
-        } catch (error: Exception) {
+        } catch (_: Exception) {
             // Android 12+ can reject foreground admission after a background
             // transition. Fail closed: retire the service and let Rust stop
             // the speech session instead of crashing the process.
-            running = false
-            context = null
-            releaseSession()
+            val id = owner
+            if (id != null) {
+                stop(service, id)
+                dispatch?.invoke(id, "stop")
+            }
             service.stopSelf()
-            dispatch?.invoke("stop")
             return false
         }
     }
 
-    internal fun dispatchAction(action: String) {
-        if (running) dispatch?.invoke(action)
+    internal fun dispatchAction(id: String?, action: String) {
+        if (id != null && running && owner == id) dispatch?.invoke(id, action)
     }
 
     /** The service disappeared without an explicit stop: release playback. */
-    internal fun onServiceDestroyed() {
-        if (!running) return
-        running = false
-        releaseSession()
-        dispatch?.invoke("stop")
+    internal fun onServiceDestroyed(service: Service) {
+        if (serviceOwner.get() !== service) return
+        val app = context ?: return
+        val id = owner ?: return
+        stop(app, id)
+        dispatch?.invoke(id, "stop")
     }
 
-    internal fun onTaskRemoved() {
-        if (!running) return
-        dispatchAction("stop")
-        running = false
-        releaseSession()
+    internal fun onTaskRemoved(service: Service) = onServiceDestroyed(service)
+
+    private fun acquireFocus(app: Context, id: String): Boolean {
+        if (audioFocus != null) return true
+        val manager = app.getSystemService(AudioManager::class.java) ?: return false
+        val listener = object : AudioManager.OnAudioFocusChangeListener {
+            override fun onAudioFocusChange(change: Int) {
+                if (audioFocus === this && change < 0) dispatchAction(id, "pause")
+            }
+        }
+        return try {
+            val granted = if (Build.VERSION.SDK_INT >= 26) {
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setWillPauseWhenDucked(true)
+                    .setOnAudioFocusChangeListener(listener, Handler(Looper.getMainLooper()))
+                    .build()
+                (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+                    .also { if (it) focusRequest = request }
+            } else {
+                @Suppress("DEPRECATION")
+                manager.requestAudioFocus(listener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) ==
+                    AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            }
+            if (granted) audioFocus = listener
+            granted
+        } catch (_: Exception) { false }
+    }
+
+    private fun releaseFocus(app: Context) {
+        val listener = audioFocus ?: return
+        val request = focusRequest
+        audioFocus = null
+        focusRequest = null
+        val manager = app.getSystemService(AudioManager::class.java) ?: return
+        if (Build.VERSION.SDK_INT >= 26 && request != null) manager.abandonAudioFocusRequest(request)
+        else {
+            @Suppress("DEPRECATION")
+            manager.abandonAudioFocus(listener)
+        }
+    }
+
+    private fun releaseAudio() {
+        val app = context ?: return
+        releaseFocus(app)
+        noisy?.let { app.unregisterReceiver(it) }
+        noisy = null
     }
 
     private fun publish(notify: Boolean = true) {
@@ -198,8 +294,8 @@ internal object SpeechPlayback {
         val media = ensureSession(app)
         media.setMetadata(
             MediaMetadata.Builder()
-                .putString(MediaMetadata.METADATA_KEY_TITLE, labels.title)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, app.applicationInfo.loadLabel(app.packageManager).toString())
+                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle ?: app.applicationInfo.loadLabel(app.packageManager).toString())
                 .build(),
         )
         val state = when {
@@ -219,19 +315,20 @@ internal object SpeechPlayback {
 
     private fun ensureSession(context: Context): MediaSession {
         session?.let { return it }
+        val id = owner
         val created = MediaSession(context, "KiwixReadAloud").apply {
             setFlags(
                 MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
                     MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS,
             )
             setCallback(object : MediaSession.Callback() {
-                override fun onPlay() = dispatchAction("play")
-                override fun onPause() = dispatchAction("pause")
-                override fun onStop() = dispatchAction("stop")
-                override fun onSkipToPrevious() = dispatchAction("previous")
-                override fun onSkipToNext() = dispatchAction("next")
-                override fun onRewind() = dispatchAction("rewind")
-                override fun onFastForward() = dispatchAction("forward")
+                override fun onPlay() = dispatchAction(id, "play")
+                override fun onPause() = dispatchAction(id, "pause")
+                override fun onStop() = dispatchAction(id, "stop")
+                override fun onSkipToPrevious() = dispatchAction(id, "previous")
+                override fun onSkipToNext() = dispatchAction(id, "next")
+                override fun onRewind() = dispatchAction(id, "rewind")
+                override fun onFastForward() = dispatchAction(id, "forward")
             })
             isActive = true
         }
@@ -270,7 +367,7 @@ internal object SpeechPlayback {
         builder
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(context.applicationInfo.loadLabel(context.packageManager).toString())
-            .setContentText(labels.title)
+            .setContentText(title.ifEmpty { labels.title })
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -304,10 +401,15 @@ internal object SpeechPlayback {
     private fun action(
         context: Context, icon: Int, title: String, action: String, request: Int,
     ): Notification.Action {
+        // PendingIntent identity includes the session. Updating extras on a
+        // reused intent would let an old notification control its replacement.
         val intent = Intent(context, KiwixSpeechService::class.java).setAction(action)
+        owner?.let { id ->
+            intent.data = android.net.Uri.Builder().scheme("kiwix-speech").authority("transport").appendPath(id).build()
+            intent.putExtra(EXTRA_SESSION, id)
+        }
         val pending = PendingIntent.getService(
-            context, request, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            context, request, intent, PendingIntent.FLAG_IMMUTABLE,
         )
         return Notification.Action.Builder(Icon.createWithResource(context, icon), title, pending).build()
     }

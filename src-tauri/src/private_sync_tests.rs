@@ -84,6 +84,17 @@ async fn oversized_raw_or_authenticated_lengths_fail_before_payload_allocation()
     client.stream.write_u32(65_536).await.unwrap();
     assert!(host.receive_chunk().await.is_err());
 }
+
+#[tokio::test]
+async fn control_messages_cannot_claim_the_snapshot_budget() {
+    let a = Profile::new();
+    let b = Profile::new();
+    let (mut client, mut host) = connected(a.identity(), b.identity()).await;
+    client.send_chunk(&((MAX_CONTROL_MESSAGE + 1) as u32).to_be_bytes()).await.unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(1), host.receive_control())
+        .await.expect("oversized control headers are rejected without waiting for the body");
+    assert!(matches!(result, Err(error) if error.contains("transfer bound")));
+}
 #[tokio::test]
 async fn public_http_client_cannot_enter_noise_endpoint() {
     let profile = Profile::new(); let identity = profile.identity();

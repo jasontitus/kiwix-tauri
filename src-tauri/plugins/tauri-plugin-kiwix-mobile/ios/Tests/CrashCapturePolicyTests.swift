@@ -3,6 +3,22 @@ import XCTest
 @testable import KiwixMobile
 
 final class CrashCapturePolicyTests: XCTestCase {
+  func testReportTextRedactsReaderLocationsAndNonHTTPURLs() {
+    let text = CrashIntake.redact("""
+      HTTP://book-uuid-nonce.localhost.:9/A/Pri)vate_Page
+      http://127.0.0.2:9/A/Private http://[::1]:9/A/Private
+      https://example.org/book-uuid/%2Ekiwix/token/A/Private
+      path=/book-uuid/A/Private relative=/.kiwix/token/A/Private
+      ZIM://book-uuid/A/Private MAILTO:private@example.org
+      content://provider/Private file:///Documents/Private%20Notes.txt
+      custom://host/Private https://user:pass@example.org/read?q=private#private
+      """)
+    XCTAssertEqual(text, """
+      [reader-url] [reader-url] [reader-url] [reader-url] path=[path] relative=[path] \
+      [url] [url] [url] [url] [url] https://example.org/read
+      """)
+  }
+
   func testReadOnlyCutoverDrainsWritesAndRejectsLaterCapture() {
     CrashIntake.setEnabled(true)
     defer { CrashIntake.setEnabled(false) }

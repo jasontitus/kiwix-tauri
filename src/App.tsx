@@ -1,4 +1,5 @@
 import {
+  Component,
   lazy,
   Suspense,
   useCallback,
@@ -7,7 +8,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type ErrorInfo,
   type ReactElement,
+  type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -58,7 +61,7 @@ import {
   retireReaderStorageGeneration,
 } from "./reader-storage";
 import type { Book, DownloadAdmission, DownloadJob, DownloadNotificationAction, DownloadTarget, ImportResult, MapJob, Snapshot, Tab, TabLocation } from "./types";
-import { readyDownloadBooks } from "./download-state";
+import { downloadStatusDecision, readyDownloadBooks } from "./download-state";
 import { insertTab, removeReopened } from "./tab-stack";
 import { translateBookmarkDrafts, translateLocation, translateTabs } from "./reference-transitions";
 import { privateSyncRequest } from "./private-sync-api";
@@ -202,6 +205,28 @@ function waitForSessionOperation<T>(pending: Promise<T>): Promise<T> {
   });
 }
 
+/** Keep one pane's render or chunk failure from replacing the whole shell. */
+class PaneBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(error, info.componentStack);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="startup-state">
+        <ErrorNotice
+          message={errorText(this.state.error)}
+          onRetry={() => this.setState({ error: null })}
+        />
+      </div>
+    );
+  }
+}
+
 // Removing an iframe does not run the archive's pagehide handlers. Keep the old
 // keyed reader mounted until a real document navigation has handed off its writes.
 function ReaderHost({ reader }: { reader: ReactElement | null }) {
@@ -229,7 +254,7 @@ function ReaderHost({ reader }: { reader: ReactElement | null }) {
     retiring.current = true;
     mustRemount.current = true;
     setFailure("");
-    void retireReaderDocuments().then(
+    void retireReaderDocuments({ discardQuarantine: true }).then(
       () => {
         retained.current = desired.current;
         retiring.current = false;
@@ -285,6 +310,13 @@ export default function App() {
     () => window.matchMedia("(max-width: 540px)"),
     [],
   );
+  const [isNarrowReaderChrome, setNarrowReaderChrome] = useState(() => narrowReaderChrome.matches);
+  useEffect(() => {
+    const update = () => setNarrowReaderChrome(narrowReaderChrome.matches);
+    narrowReaderChrome.addEventListener("change", update);
+    update();
+    return () => narrowReaderChrome.removeEventListener("change", update);
+  }, [narrowReaderChrome]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [pane, setPane] = useState<Pane>("library");
   const hydrated = useRef(false);
@@ -379,6 +411,13 @@ export default function App() {
   const [error, setError] = useState<{ message: string; severity: ErrorSeverity } | null>(null);
   const [initialError, setInitialError] = useState("");
   const [startupNoticeDismissed, setStartupNoticeDismissed] = useState(false);
+  const [pageVisible, setPageVisible] = useState(document.visibilityState === "visible");
+  useEffect(() => {
+    const update = () => setPageVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
   const [importing, setImporting] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [quitting, setQuitting] = useState(false);
@@ -715,14 +754,14 @@ export default function App() {
   const showTechnicalErrors = useRef(false);
   showTechnicalErrors.current = snapshot?.settings.showTechnicalErrors === true;
   const onError = useCallback(
-    (value: unknown, severity: ErrorSeverity = "blocking") => {
+    (value: unknown, severity: ErrorSeverity = "blocking", showGlobally = true) => {
       const render = reportError(
         diagnostics,
         value,
         severity,
         showTechnicalErrors.current,
       );
-      if (render) setError({ message: errorText(value), severity: normalizeSeverity(severity) });
+      if (render && showGlobally) setError({ message: errorText(value), severity: normalizeSeverity(severity) });
     },
     [],
   );
@@ -1031,14 +1070,19 @@ export default function App() {
   // Downloads owns its visible progress polling. Keep only user-started work
   // observed elsewhere so completion never steals the current reading surface.
   useEffect(() => {
-    if (!watchedDownloads.length || pane === "downloads" || mobileSuspended || quitting) return;
+    if (!watchedDownloads.length || pane === "downloads" || mobileSuspended || quitting || !pageVisible) return;
     let cancelled = false;
     let timer: number | undefined;
     async function poll() {
       const current = watchedDownloads.filter((entry) => isPrivacyPolicyContextCurrent(entry.privacy));
       if (!current.length) {
-        timer = window.setTimeout(() => void poll(), 1500);
+        setWatchedDownloads((previous) =>
+          previous.filter((entry) => isPrivacyPolicyContextCurrent(entry.privacy)));
         return;
+      }
+      if (current.length !== watchedDownloads.length) {
+        setWatchedDownloads((previous) =>
+          previous.filter((entry) => isPrivacyPolicyContextCurrent(entry.privacy)));
       }
       const [downloads, map] = await Promise.allSettled([
         current.some((entry) => entry.target.kind === "download")
@@ -1056,7 +1100,8 @@ export default function App() {
           : map.status === "fulfilled" && map.value?.id === entry.target.id ? map.value : null;
         return job && isPrivacyPolicyContextCurrent(entry.privacy) ? [{ ...entry, job }] : [];
       });
-      if (matched.some(({ job }) => job.importState === "imported")) await refresh();
+      let refreshed = true;
+      if (matched.some(({ job }) => job.importState === "imported")) refreshed = await refresh() !== false;
       if (cancelled) return;
       // One library scan per ready job, reused by both the check and the update.
       const ready: { target: DownloadTarget; books: Book[] }[] = [];
@@ -1072,11 +1117,31 @@ export default function App() {
         setWatchedDownloads((previous) => previous.filter((entry) =>
           !ready.some(({ target }) => target.kind === entry.target.kind && target.id === entry.target.id)));
       }
+      const missing = current.filter(({ target }) => target.kind === "download"
+        ? downloads.status === "fulfilled" && !downloadJobs?.has(target.id)
+        : map.status === "fulfilled" && map.value?.id !== target.id);
+      if (missing.length) {
+        setWatchedDownloads((previous) => previous.filter((entry) =>
+          !missing.some(({ target }) =>
+            target.kind === entry.target.kind && target.id === entry.target.id)));
+      }
+      const finished = matched.filter(({ job }) => {
+        const decision = downloadStatusDecision(
+          job, readyDownloadBooks(job, mobileBooks.current).length > 0, false);
+        const kind = typeof decision === "string" ? decision : decision.kind;
+        return job.status === "failed" || kind === "cancelled" || kind === "failed" ||
+          (kind === "unavailable" && refreshed);
+      });
+      if (finished.length) {
+        setWatchedDownloads((previous) => previous.filter((entry) =>
+          !finished.some(({ target }) =>
+            target.kind === entry.target.kind && target.id === entry.target.id)));
+      }
       if (!cancelled) timer = window.setTimeout(() => void poll(), 1500);
     }
     void poll();
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [watchedDownloads, pane, mobileSuspended, quitting, refresh]);
+  }, [watchedDownloads, pane, mobileSuspended, quitting, pageVisible, refresh]);
   privacyRetry.current.run = () => void refresh();
   useEffect(() => {
     mounted.current = true;
@@ -2899,7 +2964,7 @@ export default function App() {
   // Keep hidden chrome bound to the document, not to lifecycle revisions:
   // a foreground/interaction reconcile after a scroll must not pull it back.
   const readerChromeOwner = `${current?.id || ""}:${currentBook?.installationId || ""}:${workspaceEpoch}`;
-  const readerChromeHidden = !isDesktop && narrowReaderChrome.matches &&
+  const readerChromeHidden = !isDesktop && isNarrowReaderChrome &&
     pane === "reader" && !quitting &&
     !mobileSuspended && mobileInteraction.interactive && !mobileTabsOpen &&
     readerChrome?.owner === readerChromeOwner && readerChrome.hidden;
@@ -3001,7 +3066,7 @@ export default function App() {
                   if (item.id === "nearby") setNearbyDiscoveryIntent((intent) => intent + 1);
                   navigate(item.id);
                 }}
-                aria-label={item.label}
+                aria-label={item.count ? `${item.label}, ${formatNumber(item.count)}` : item.label}
                 title={item.label}
                 aria-current={pane === item.id ? "page" : undefined}
               >
@@ -3388,7 +3453,7 @@ export default function App() {
           {importing && (
             <div className="import-progress" role="status">
               <Upload size={16} />
-              {t("Importing archives… Your original files stay in place.")}
+              {t("Importing archives…")}
             </div>
           )}
           {pane !== "downloads" && !mobileSuspended && completedVisible.length > 0 && (
@@ -3431,6 +3496,7 @@ export default function App() {
               )
             ) : (
               <>
+                <PaneBoundary key={pane}>
                 {pane === "library" && (
                   <Library
                     {...{
@@ -3586,6 +3652,7 @@ export default function App() {
                   />
                 )}
                 </Suspense>
+                </PaneBoundary>
                 <ReaderHost
                   reader={
                     pane === "reader" && current && !quitting ? (
@@ -3691,10 +3758,10 @@ export default function App() {
                             return;
                           openReaderTab(location);
                         }}
-                        onError={(value, severity) => {
+                        onError={(value, severity, showGlobally) => {
                           // Reader owns a visible reconnect/reload notice for
                           // temporary absence of this exact retained source.
-                          if (!isProviderUnavailableFor(value, currentBook)) onError(value, severity);
+                          if (!isProviderUnavailableFor(value, currentBook)) onError(value, severity, showGlobally);
                         }}
                         onOpenLibrary={() => setPane("library")}
                       />
@@ -3711,7 +3778,7 @@ export default function App() {
                 : t("Connecting to local service…")}
             </span>
             {isMobile && documentProgress !== null && (
-              <span role="status">{t("{count} bytes copied", { count: documentProgress })}</span>
+              <span role="status">{t("{size} copied", { size: formatBytes(documentProgress) })}</span>
             )}
           </footer>
         </div>
@@ -3738,8 +3805,9 @@ export default function App() {
           />
         )}
       </div>
-      {snapshot && !quitting && !mobileSuspended && (
+      {snapshot && !quitting && (
         <CrashReportPrompt
+          available={!mobileSuspended}
           books={snapshot.books}
           readOnly={snapshot.settings.readOnly}
           onError={onError}

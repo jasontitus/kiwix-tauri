@@ -369,6 +369,10 @@ impl Service {
     pub(crate) fn mobile_audio_event(self: &Arc<Self>, payload: &Value) {
         let Some(event) = payload.get("event").and_then(Value::as_str) else { return; };
         if !matches!(event, "interruption-began" | "route-unavailable" | "session-failed") { return; }
+        if let Some(id) = payload.get("sessionId").and_then(Value::as_str) {
+            let action = if event == "session-failed" { "stop" } else { "pause" };
+            self.mobile_speech_action(json!({"action": action, "sessionId": id}));
+        }
         self.mobile.reader_audible.store(false, Ordering::SeqCst);
         self.mobile.reader_picture_in_picture.store(false, Ordering::SeqCst);
         let service = self.clone();
@@ -1310,30 +1314,9 @@ impl Service {
             _ => Err(format!("Unknown mobile command: {command}")),
         }
     }
-    /// Retire live sensor authority on lifecycle changes, not the installation's
-    /// remembered decision. Actual privacy-policy changes clear decisions separately.
-    pub(crate) fn mobile_deactivate_sensors(&self) {
-        // A started read-aloud session owns its reader document across
-        // background suspension on both platforms. Its terminal state retires
-        // the source; sensor revocation must not cut off audio that does not
-        // use that sensor. Privacy/read-only transitions retire speech
-        // separately through mobile_speech_lifecycle.
-        #[cfg(not(target_os = "android"))]
-        if super::mobile_speech::background_retires_speech(self.mobile_speech_retained()) {
-            let _speech = self.mobile_speech_block(super::mobile_speech::Scope::All);
-        }
-        if let Ok(managers) = self.sensors.lock() {
-            for manager in managers.values() { manager.deactivate(); }
-        }
-    }
-    /// Background drops all live sensor authority but retains a dormant exact
-    /// owner. A started speech session keeps its source until its terminal
-    /// state; prepared-only sessions are retired here.
-    fn mobile_suspend_sensors(&self) {
-        #[cfg(not(target_os = "android"))]
-        if super::mobile_speech::background_retires_speech(self.mobile_speech_retained()) {
-            let _speech = self.mobile_speech_block(super::mobile_speech::Scope::All);
-        }
+    /// Revoke live sensor access, retaining only the exact dormant reader.
+    /// Installation/privacy/source retirement clears that owner separately.
+    pub(crate) fn mobile_suspend_sensor_owners(&self) {
         if let Ok(managers) = self.sensors.lock() {
             let generation = self.launch_generation();
             for manager in managers.values() { manager.suspend(generation); }
@@ -1355,7 +1338,6 @@ impl Service {
             } else { false }
         } else { false };
         if matches {
-            self.mobile_deactivate_sensors();
             if let Some(manager) = self.localswarm.get() { manager.interrupt(); }
             let maps = self.maps.lock().ok().and_then(|maps| maps.clone());
             if let Some(manager) = maps {
@@ -1406,18 +1388,28 @@ impl Service {
             }
         } else { Ok(()) };
         let activity = if foreground { self.mobile_local_transfer_active().await } else { Ok(false) };
-        self.mobile_call("localTransferState", json!({"active": activity.as_ref().copied().unwrap_or(false)})).await?;
+        self.mobile_publish_local_transfer(activity.as_ref().copied().unwrap_or(false)).await?;
         policy.and(activity.map(|_| ()))
     }
     #[cfg(target_os = "ios")]
+    async fn mobile_publish_local_transfer(&self, active: bool) -> Result<(), String> {
+        let mut sent = self.mobile.local_transfer_snapshot.lock().await;
+        if *sent == Some(active) { return Ok(()); }
+        // A rejected/cancelled bridge call may already have reached native.
+        *sent = None;
+        self.mobile_call("localTransferState", json!({"active": active})).await?;
+        *sent = Some(active);
+        Ok(())
+    }
+    #[cfg(target_os = "ios")]
     pub(super) async fn mobile_release_transfer_lifetime(&self) -> Result<(), String> {
-        let idle = self.mobile_call("localTransferState", json!({"active": false})).await;
+        let idle = self.mobile_publish_local_transfer(false).await;
         let token = self.mobile.state.lock().map_err(|_| "Mobile lifecycle unavailable")?.checkpoint.take();
         let checkpoint = match token {
             Some(token) => self.mobile_call("endCheckpoint", json!({"token": token})).await.map(|_| ()),
             None => Ok(()),
         };
-        idle.map(|_| ()).and(checkpoint)
+        idle.and(checkpoint)
     }
     #[cfg(target_os = "ios")]
     async fn mobile_end_checkpoint(&self, token: Option<u64>) -> Result<(), String> {
@@ -1631,7 +1623,6 @@ impl Service {
             if let Some(manager) = self.localswarm.get() {
                 manager.set_sharing_admission(!settings.private_mode && !settings.read_only).await;
             }
-            #[cfg(target_os = "android")]
             if let Err(error) = self.mobile_restore_retained_reader(generation).await { errors.push(error); }
             let mut state = self.mobile.state.lock().map_err(|_| "Mobile lifecycle unavailable")?;
             if generation != state.generation || !state.desired_active { return Ok(()); }
@@ -1683,14 +1674,18 @@ impl Service {
             }
         };
         let Some((request_id, deadline)) = current else {
-            let errors:Vec<String>=checkpoint_error.into_iter().collect();
             #[cfg(target_os = "ios")]
-            let mut errors = errors;
+            // Native may already have discarded the reservation on resume.
+            // Failure to begin an obsolete checkpoint isn't a user error.
+            let mut errors = Vec::<String>::new();
             #[cfg(target_os="ios")]
             if let Some(token)=checkpoint {
                 if let Err(error)=self.mobile_call("endCheckpoint",json!({"token":token})).await { errors.push(error); }
             }
-            return if errors.is_empty() {Ok(())} else {Err(errors.join("; "))};
+            #[cfg(target_os = "ios")]
+            return if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) };
+            #[cfg(not(target_os = "ios"))]
+            return Ok(());
         };
         #[cfg(target_os = "ios")]
         let mut grace_deadline = None;
@@ -1760,7 +1755,7 @@ impl Service {
         };
         let mut errors = Vec::new();
         if let Some(request) = request {
-            if let Some(error) = request.error { errors.push(error); }
+            if let Some(error) = request.error.filter(|_| !superseded) { errors.push(error); }
             else if !request.acknowledged && !superseded {
                 errors.push("Reader storage did not acknowledge the finite background checkpoint deadline".into());
             }
@@ -1776,7 +1771,8 @@ impl Service {
             }
             return if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) };
         }
-        self.mobile_suspend_sensors();
+        #[cfg(not(target_os = "ios"))]
+        self.mobile_suspend_sensor_owners();
         self.retire_private_sync();
         if let Err(error) = self.nearby_retire().await { errors.push(error); }
         #[cfg(target_os = "ios")]

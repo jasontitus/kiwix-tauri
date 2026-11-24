@@ -104,11 +104,8 @@ async fn cancellation_wakes_pending_socket_io_and_stays_cancelled() {
         .await
         .unwrap();
     let (socket, _) = listener.accept().await.unwrap();
-    let mut socket = SharingIo {
-        socket,
-        stopped: Box::pin(cancellation.clone().cancelled()),
-        cancelled: false,
-    };
+    let permit = cancellation.0.connections.clone().try_acquire_owned().unwrap();
+    let mut socket = SharingIo::new(socket, &cancellation, permit, SHARING_IDLE_TIMEOUT);
     let reading = tokio::spawn(async move {
         let mut byte = [0];
         assert_eq!(
@@ -128,6 +125,28 @@ async fn cancellation_wakes_pending_socket_io_and_stays_cancelled() {
         .unwrap()
         .unwrap();
     drop(client);
+}
+
+#[tokio::test]
+async fn sharing_socket_releases_capacity_after_idle_timeout() {
+    let cancellation = SharingCancellation::new();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut client = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+    let (socket, _) = listener.accept().await.unwrap();
+    let permit = cancellation.0.connections.clone().try_acquire_owned().unwrap();
+    let mut socket = SharingIo::new(socket, &cancellation, permit, Duration::from_millis(250));
+    let initial_deadline = socket.idle.deadline();
+    client.write_all(b"progress").await.unwrap();
+    let mut body = [0; 8];
+    socket.read_exact(&mut body).await.unwrap();
+    assert_eq!(&body, b"progress");
+    assert!(socket.idle.deadline() > initial_deadline);
+    assert_eq!(cancellation.0.connections.available_permits(), SHARING_MAX_CONNECTIONS - 1);
+    let error = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut body))
+        .await.unwrap().unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    drop(socket);
+    assert_eq!(cancellation.0.connections.available_permits(), SHARING_MAX_CONNECTIONS);
 }
 
 #[tokio::test]

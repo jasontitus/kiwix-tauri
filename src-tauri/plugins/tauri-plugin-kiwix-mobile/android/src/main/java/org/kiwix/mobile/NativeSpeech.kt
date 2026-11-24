@@ -111,7 +111,7 @@ internal class NativeSpeech(
         current = request
         // The media service is foreground admission for the whole session, so
         // it starts before engine initialization can wait on the system TTS.
-        if (!SpeechPlayback.start(context, labels, speaking = true, canPrevious = false)) {
+        if (!SpeechPlayback.start(context, request.id, labels, speaking = true, canPrevious = false)) {
             finish(request, "SPEECH_FOREGROUND_REQUIRED")
             return
         }
@@ -121,6 +121,15 @@ internal class NativeSpeech(
             if (current !== request) return@post
             if (ready) begin(request) else ensureEngine()
         }
+    }
+
+    fun admitExternal(id: String, token: String): Boolean {
+        val registration = registrations[id]?.takeIf { it.capability == token } ?: return false
+        if (!foreground() || registration.status != Status.PREPARED || registration.ordinal < latestStarted) return false
+        registration.status = Status.STARTED
+        latestStarted = registration.ordinal
+        forceStop(keepPlayback = true)
+        return true
     }
 
     fun stop(invoke: Invoke) {
@@ -272,6 +281,15 @@ internal class NativeSpeech(
 
     fun cancelAll(error: String) {
         forceStop(error)
+        // External Kokoro is not `current`; its registration is the only owner
+        // that can stop the application-scoped playback service. Emit a
+        // terminal state so Rust retires the exact capability and reader.
+        for (registration in registrations.values.filter { it.status == Status.STARTED }) {
+            registration.status = Status.CANCELLED
+            SpeechPlayback.stop(context, registration.id)
+            emit(JSObject().put("id", registration.id).put("speaking", false)
+                .put("offset", registration.offset).put("paused", false).put("error", error))
+        }
         // Unknown capabilities reject Start too: clearing does not permit resurrection.
         registrations.clear()
     }
@@ -287,7 +305,7 @@ internal class NativeSpeech(
         session.invoke = null
         val stopError = haltEngine()
         state(session, false, error ?: stopError)
-        if (!keepPlayback) SpeechPlayback.stop(context)
+        if (!keepPlayback) SpeechPlayback.stop(context, session.id)
     }
 
     fun shutdown(): String? {
@@ -515,7 +533,7 @@ internal class NativeSpeech(
         session.invoke = null
         if (error != null) haltEngine()
         state(session, false, error)
-        SpeechPlayback.stop(context)
+        SpeechPlayback.stop(context, session.id)
     }
 
     private fun haltEngine(): String? {
@@ -545,7 +563,7 @@ internal class NativeSpeech(
         lastState = payload
         emit(payload)
         if (current === session) {
-            SpeechPlayback.update(speaking, paused, session.offset > 0)
+            SpeechPlayback.update(session.id, speaking, paused, session.offset > 0)
         }
     }
 

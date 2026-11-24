@@ -16,7 +16,7 @@ use std::{
 };
 use uuid::Uuid;
 
-pub(crate) const MAX_BYTES: u64 = 8 * 1024 * 1024;
+pub(crate) const MAX_BYTES: u64 = 64 * 1024 * 1024;
 pub(crate) const MAX_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 pub(crate) const MAX_ENTRIES: usize = 4096;
 
@@ -77,7 +77,8 @@ impl MapChunkCache {
             failure: None,
         };
         // Streaming admission keeps metadata bounded even for a very large old
-        // cache. Restart order need not be stable: FIFO, not persisted LRU.
+        // cache. Access recency is tracked only in memory; restart order is
+        // unspecified and reading a cache entry never writes metadata to disk.
         loop {
             check()?;
             state.entries.clear();
@@ -133,7 +134,9 @@ impl MapChunkCache {
     }
 
     pub(crate) fn open_chunk(&mut self, name: &str) -> Result<Option<File>, String> {
-        let length = named_length(name).ok_or("Invalid map chunk cache name")?;
+        // A cache name that is not a content digest is a miss, not a reason to
+        // fail composition before its low-disk admission can speak.
+        let Some(length) = named_length(name) else { return Ok(None); };
         let mut state = self.lock()?;
         let Some(metadata) = state.metadata(name)? else {
             state.forget(name);
@@ -163,10 +166,13 @@ impl MapChunkCache {
             }
             Err(error) => return Err(format!("Cannot open map chunk cache entry: {error}")),
         };
-        let metadata = file.metadata().map_err(|e| format!("Cannot inspect map chunk cache entry: {e}"))?;
-        if !metadata.is_file() || metadata.len() != length {
+        let opened = file.metadata().map_err(|e| format!("Cannot inspect map chunk cache entry: {e}"))?;
+        if !opened.is_file() || opened.len() != length
+            || opened.dev() != metadata.dev() || opened.ino() != metadata.ino()
+        {
             return Ok(None);
         }
+        state.promote(name);
         Ok(Some(file.into_std()))
     }
 
@@ -219,6 +225,14 @@ impl CacheState {
         if let Some(index) = self.entries.iter().position(|entry| entry.name == name) {
             let entry = self.entries.remove(index).expect("Known cache entry index");
             self.bytes -= entry.bytes;
+        }
+    }
+
+    fn promote(&mut self, name: &str) {
+        if let Some(index) = self.entries.iter().rposition(|entry| entry.name == name) {
+            if index + 1 == self.entries.len() { return; }
+            let entry = self.entries.remove(index).expect("Known cache entry index");
+            self.entries.push_back(entry);
         }
     }
 
@@ -302,28 +316,45 @@ impl CacheState {
             options.mode(0o600);
         }
         let temp_name = format!("{name}.{}.part", Uuid::new_v4());
-        let mut file = self.directory.open_with(&temp_name, &options)
-            .map_err(|e| format!("Cannot create map chunk cache temporary: {e}"))?.into_std();
-        let mut temporary = Temporary { directory: &self.directory, name: Some(temp_name) };
+        let file = self.directory.open_with(&temp_name, &options)
+            .map_err(|e| format!("Cannot create map chunk cache temporary: {e}"))?;
+        let identity = file.metadata().map_err(|e| format!("Cannot inspect map chunk cache temporary: {e}"))?;
+        let temp_identity = (identity.dev(), identity.ino());
+        let mut file = file.into_std();
+        let mut temporary = Temporary { directory: &self.directory, name: Some(temp_name), identity };
         let result = (|| {
             let temp_name = temporary.name.as_ref().expect("Owned cache temporary");
             crate::mobile_backup::exclude_payload(&file, &self.path.join(temp_name))?;
             write(&mut file, bytes).map_err(|e| format!("Cannot write map chunk cache: {e}"))?;
-            file.sync_all().map_err(|e| format!("Cannot sync map chunk cache: {e}"))?;
-            // Close before cleanup/rename, including on Windows. An early
-            // return also drops the closure-owned file before cleanup below.
-            drop(file);
-            if self.metadata(name)?.is_some_and(|metadata| !metadata.is_file()) {
-                return Err("Map chunk cache publication name became non-regular".into());
-            }
-            self.directory.rename(temp_name, &self.directory, name)
-                .map_err(|e| format!("Cannot publish map chunk cache: {e}"))?;
+            // Disposable bytes are rechecked by SHA-256 on every use. Publish
+            // only the complete owned inode, without forcing it to stable disk.
+            let verified = crate::publication::VerifiedFile::new(file, bytes.len() as u64)
+                .map_err(|e| format!("Cannot verify map chunk cache temporary: {e}"))?;
+            self.unchanged()?;
+            crate::publication::publish_verified_noreplace_in(
+                &self.directory, Path::new(temp_name), Path::new(name), &verified,
+            ).map_err(|e| format!("Cannot publish map chunk cache: {e}"))?;
             Ok(())
         })();
         if let Err(error) = result {
             let error = temporary.cleanup_error(error);
+            // A rename can succeed before its post-check fails. The source name
+            // is gone, so account the published leaf instead of leaving bytes
+            // outside the ledger, then fail the cache closed.
+            let orphan = if temporary.name.is_none() { self.metadata(name) } else { Ok(None) };
+            let metadata_failed = orphan.is_err();
+            let orphaned = orphan.ok().flatten()
+                .is_some_and(|metadata| metadata.is_file()
+                    && metadata.len() == bytes.len() as u64
+                    && (metadata.dev(), metadata.ino()) == temp_identity);
             if temporary.name.is_some() {
                 self.bytes += bytes.len() as u64;
+                self.failure = Some(error.clone());
+            } else if orphaned {
+                self.entries.push_back(Entry { name: name.to_owned(), bytes: bytes.len() as u64 });
+                self.bytes += bytes.len() as u64;
+                self.failure = Some(error.clone());
+            } else if metadata_failed {
                 self.failure = Some(error.clone());
             }
             return Err(error);
@@ -338,15 +369,31 @@ impl CacheState {
 struct Temporary<'a> {
     directory: &'a Dir,
     name: Option<String>,
+    identity: cap_std::fs::Metadata,
 }
 
 impl Temporary<'_> {
     fn cleanup_error(&mut self, original: String) -> String {
         let Some(name) = self.name.as_ref() else { return original };
-        match self.directory.remove_file(name) {
+        match self.remove_if_owned(name) {
             Ok(()) => { self.name = None; original }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => { self.name = None; original }
             Err(error) => format!("{original}; cannot remove owned map cache temporary {name}: {error}"),
+        }
+    }
+
+    fn remove_if_owned(&self, name: &str) -> io::Result<()> {
+        match self.directory.symlink_metadata(name) {
+            Ok(current) if current.is_file() && current.dev() == self.identity.dev()
+                && current.ino() == self.identity.ino() =>
+            {
+                match self.directory.remove_file(name) {
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                    result => result,
+                }
+            }
+            Ok(_) => Err(io::Error::other("Map chunk cache temporary changed identity")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
         }
     }
 }
@@ -354,7 +401,7 @@ impl Temporary<'_> {
 impl Drop for Temporary<'_> {
     fn drop(&mut self) {
         if let Some(name) = self.name.as_ref() {
-            let _ = self.directory.remove_file(name);
+            let _ = self.remove_if_owned(name);
         }
     }
 }
@@ -457,11 +504,36 @@ mod tests {
         drop(cache);
         assert_eq!(fixture.cache(4, 1).bytes().unwrap(), 3);
         assert_eq!(fixture.count_and_bytes(), (1, 3));
-        let oversized = fixture.0.join(name(80, MAX_ENTRY_BYTES));
-        File::create(&oversized).unwrap().set_len(MAX_ENTRY_BYTES).unwrap();
-        let production_cache = MapChunkCache::open(&fixture.0, || Ok(())).unwrap();
-        assert!(!oversized.exists());
-        assert!(production_cache.bytes().unwrap() <= MAX_BYTES);
+    }
+
+    #[tokio::test]
+    async fn production_cache_reuses_a_maximum_sized_chunk() {
+        let fixture = Fixture::new();
+        let mut cache = MapChunkCache::open(&fixture.0, || Ok(())).unwrap();
+        let chunk = name(1, MAX_ENTRY_BYTES);
+        let bytes = Arc::new(vec![0x5a; MAX_ENTRY_BYTES as usize]);
+        assert!(cache.store(&chunk, bytes, || Ok(())).await.unwrap());
+        drop(cache);
+
+        let mut reopened = MapChunkCache::open(&fixture.0, || Ok(())).unwrap();
+        let mut file = reopened.open_chunk(&chunk).unwrap().unwrap();
+        assert_eq!(reopened.bytes().unwrap(), MAX_ENTRY_BYTES);
+        let mut first = [0];
+        file.read_exact(&mut first).unwrap();
+        assert_eq!(first, [0x5a]);
+    }
+
+    #[test]
+    fn resident_reads_promote_without_demoting_other_recent_entries() {
+        let fixture = Fixture::new();
+        let mut cache = fixture.cache(9, 3);
+        for index in 1..=3 { store(&cache, index, b"abc"); }
+        assert!(cache.open_chunk(&name(1, 3)).unwrap().is_some());
+        store(&cache, 4, b"def");
+        assert!(cache.open_chunk(&name(2, 3)).unwrap().is_none());
+        for index in [1, 3, 4] {
+            assert!(cache.open_chunk(&name(index, 3)).unwrap().is_some());
+        }
     }
 
     #[test]

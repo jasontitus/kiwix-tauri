@@ -88,7 +88,8 @@ internal class DeviceZimScan(private val context: Context, private val externalD
         val entries = JSArray()
         for (archive in archives) {
             val token = UUID.randomUUID().toString()
-            tokens[token] = archive
+            cancellation.throwIfCanceled()
+            synchronized(tokens) { tokens[token] = archive }
             entries.put(JSObject().apply {
                 put("token", token)
                 put("name", archive.name)
@@ -107,7 +108,7 @@ internal class DeviceZimScan(private val context: Context, private val externalD
 
     fun open(token: String, persistent: Boolean, cancellation: CancellationSignal): JSObject {
         if (runCatching { UUID.fromString(token) }.isFailure) throw NativeDocumentError("SCAN_RESULT_EXPIRED")
-        val archive = tokens[token] ?: throw NativeDocumentError("SCAN_RESULT_EXPIRED")
+        val archive = synchronized(tokens) { tokens[token] } ?: throw NativeDocumentError("SCAN_RESULT_EXPIRED")
         if (!archive.readable || archive.problem != null)
             throw NativeDocumentError("SCANNED_ARCHIVE_UNAVAILABLE")
         // Candidate discovery never opens descriptors. Readability and the

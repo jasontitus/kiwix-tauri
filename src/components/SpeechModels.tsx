@@ -3,22 +3,26 @@ import { useVoiceModelStatus, type RetainedVoiceFiles } from "./useVoiceModelSta
 import { Download, RefreshCw, Trash2 } from "lucide-react";
 import { api, isNative } from "../api";
 import { formatBytes, t } from "../i18n";
+import { useDocumentVisible } from "./UI";
 
 /**
  * The standard edition downloads the pinned model on request. An offline
  * Android edition can install the same files from its signed package.
  */
-export default function SpeechModels() {
-  const { status, readError, refresh } = useVoiceModelStatus(isNative);
+export default function SpeechModels({ active = true }: { active?: boolean }) {
+  const visible = useDocumentVisible();
+  const enabled = isNative && active && visible;
+  const { status, readError, refresh } = useVoiceModelStatus(enabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!enabled) return;
     const preparing = status?.downloading;
     if ((!status?.available || status.performance !== "unknown" || status.performanceError) && !preparing) return;
     const timer = window.setInterval(() => { void refresh(); }, 1500);
     return () => window.clearInterval(timer);
-  }, [refresh, status?.available, status?.downloading, status?.performance, status?.performanceError]);
+  }, [enabled, refresh, status?.available, status?.downloading, status?.performance, status?.performanceError]);
 
   async function download() {
     if (busy) return;

@@ -712,9 +712,11 @@ fn failed_final_history_write_preserves_publication_and_recovers_on_restart() {
     // The first write records the recovery intent. Only the post-rename write fails.
     FAIL_JOURNAL_GENERATION.set(Some(manager.inner.journal_generation.load(Ordering::Relaxed) + 2));
     let digest = hex::encode(sha2::Sha256::digest(&bytes));
+    let file = File::open(&part).unwrap();
+    let identity = file_identity(&file).unwrap();
     assert_eq!(
-        finalize::publish_verified_download(&manager.inner, &id, File::open(&part).unwrap(),
-            bytes.len() as u64, &digest, FinalizeMode::Startup).unwrap(),
+        finalize::publish_verified_download(&manager.inner, &id, file,
+            bytes.len() as u64, &digest, identity, FinalizeMode::Startup).unwrap(),
         Outcome::Complete,
     );
     let job = manager.inner.snapshot(&id).unwrap().job;
@@ -2734,6 +2736,7 @@ struct TestRangeState {
     /// While `Some(false)`, every range response stops after a durable
     /// checkpoint until `TestRangeServer::release` (see `hold_mid_range`).
     hold: Option<watch::Sender<bool>>,
+    truncate_once: Option<(u16, u64)>,
 }
 
 struct TestRangeServer {
@@ -2834,7 +2837,10 @@ async fn handle_test_connection(
         let _ = socket.shutdown().await;
         return;
     }
-    let requested = test_range_bounds(&lower);
+    let requested = test_range_bounds(&lower).or_else(|| lower.lines().find_map(|line| {
+        let start = line.strip_prefix("range: bytes=")?.strip_suffix('-')?.parse().ok()?;
+        Some((start, body.len() as u64 - 1))
+    }));
     let if_range = lower
         .lines()
         .find_map(|line| line.strip_prefix("if-range:"))
@@ -2878,7 +2884,17 @@ async fn handle_test_connection(
     if status != 206 || hold.as_ref().is_some_and(|released| *released.borrow()) {
         hold = None;
     }
-    for (index, chunk) in body[start as usize..=end as usize].chunks(16 * 1024).enumerate() {
+    let mut payload = &body[start as usize..=end as usize];
+    {
+        let mut state = state.lock().unwrap();
+        if state.truncate_once == Some((status, start)) {
+            state.truncate_once = None;
+            // Keep the full Content-Length header: the HTTP client reports
+            // the incomplete body as a stream error, not a normal EOF.
+            payload = &payload[..16 * 1024];
+        }
+    }
+    for (index, chunk) in payload.chunks(16 * 1024).enumerate() {
         if let Some(released) = hold.as_mut() {
             match index {
                 // The worker syncs on the first read after SYNC_INTERVAL.
@@ -2915,6 +2931,7 @@ async fn test_range_server(
         requests: Vec::new(),
         metalink: false,
         hold: None,
+        truncate_once: None,
     }));
     let server_state = Arc::clone(&state);
     let base = format!("http://{address}");
@@ -2989,6 +3006,60 @@ async fn segmented_download_is_byte_exact_and_verifies_integrity() {
         server.range_requests().len() >= SEGMENT_COUNT,
         "expected one range request per segment"
     );
+    server.task.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn interrupted_segment_resumes_with_its_validated_range() {
+    let body = zim_bytes(b't', 4 * 1024 * 1024);
+    let server = test_range_server(body.clone(), "\"stable\"", Duration::ZERO).await;
+    server.state.lock().unwrap().truncate_once = Some((206, 0));
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let job = manager
+        .start(server.archive_url.clone(), root.clone(), Some("fixture.zim".into()), Some(body.len() as u64), None)
+        .await
+        .unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(fs::read(&job.destination).unwrap(), body);
+
+    let requests = server.range_requests();
+    let (_, end) = requests.iter().filter_map(|request| test_range_bounds(request))
+        .find(|(start, _)| *start == 0).expect("first segment was requested");
+    let resumed = requests.iter().find(|request| test_range_bounds(request) == Some((16 * 1024, end)))
+        .expect("segment resumes at the first missing byte");
+    assert!(resumed.contains("\r\nif-range: \"stable\"\r\n"));
+    server.task.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn interrupted_single_stream_resumes_with_if_range() {
+    let body = zim_bytes(b't', 96 * 1024);
+    let server = test_range_server(body.clone(), "\"stable\"", Duration::ZERO).await;
+    server.state.lock().unwrap().truncate_once = Some((200, 0));
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let job = manager
+        .start(server.archive_url.clone(), root.clone(), Some("fixture.zim".into()), Some(body.len() as u64), None)
+        .await
+        .unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(fs::read(&job.destination).unwrap(), body);
+
+    let requests = server.range_requests();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].contains("\r\nrange: bytes=16384-\r\n"));
+    assert!(requests[0].contains("\r\nif-range: \"stable\"\r\n"));
     server.task.abort();
     drop(manager);
     drop(store);
@@ -3970,7 +4041,8 @@ async fn native_adoption_pause_and_restart_reuse_the_synced_owned_prefix() {
     let manager = DownloadManager::new(
         data_dir.clone(), store.clone(), crate::update_admission::AdmissionGate::default(),
     ).unwrap();
-    let bytes = zim_bytes(b'n', WRITE_BUDGET * 2 + 4096);
+    let interrupted_at = SPACE_CHECK_INTERVAL;
+    let bytes = zim_bytes(b'n', interrupted_at as usize + WRITE_BUDGET + 4096);
     let id = Uuid::new_v4().to_string();
     let stored = native_stored(&root, &id, &bytes);
     let (destination, part) = paths(&stored.job).unwrap();
@@ -3983,7 +4055,7 @@ async fn native_adoption_pause_and_restart_reuse_the_synced_owned_prefix() {
     let stage = native_stage(&root, &bytes);
     let (entered, entering) = tokio::sync::oneshot::channel();
     let (release, releasing) = std::sync::mpsc::sync_channel(1);
-    *manager.inner.native_copy_gate.lock().unwrap() = Some(FinalizeGate { entered, release: releasing });
+    *manager.inner.native_copy_gate.lock().unwrap() = Some((interrupted_at, FinalizeGate { entered, release: releasing }));
     let owner = Arc::clone(&manager.inner);
     let copy_id = id.clone();
     let copying = tokio::task::spawn_blocking(move || {
@@ -3991,6 +4063,10 @@ async fn native_adoption_pause_and_restart_reuse_the_synced_owned_prefix() {
         (stage, result)
     });
     tokio::time::timeout(Duration::from_secs(10), entering).await.unwrap().unwrap();
+    // The first space probe has completed, but a probe alone never persists
+    // an adoption checkpoint. The stop below must still flush exactly here.
+    assert_eq!(manager.inner.snapshot(&id).unwrap().native.unwrap().copied, 0);
+    assert_eq!(fs::metadata(&part).unwrap().len(), interrupted_at);
     manager.inner.update(&id, |stored| {
         stored.job.status = "paused".into();
         stored.job.interrupted = false;
@@ -3998,9 +4074,9 @@ async fn native_adoption_pause_and_restart_reuse_the_synced_owned_prefix() {
     release.send(()).unwrap();
     let (stage, result) = copying.await.unwrap();
     assert_eq!(result.unwrap(), Some(Signal::Pause));
-    assert_eq!(manager.inner.native_copy_bytes.load(Ordering::SeqCst), WRITE_BUDGET as u64);
-    assert_eq!(manager.inner.snapshot(&id).unwrap().native.unwrap().copied, WRITE_BUDGET as u64);
-    assert_eq!(fs::metadata(&part).unwrap().len(), WRITE_BUDGET as u64);
+    assert_eq!(manager.inner.native_copy_bytes.load(Ordering::SeqCst), interrupted_at);
+    assert_eq!(manager.inner.snapshot(&id).unwrap().native.unwrap().copied, interrupted_at);
+    assert_eq!(fs::metadata(&part).unwrap().len(), interrupted_at);
     assert!(!destination.exists());
     drop(manager);
     let manager = DownloadManager::new(
@@ -4009,7 +4085,7 @@ async fn native_adoption_pause_and_restart_reuse_the_synced_owned_prefix() {
     assert_eq!(manager.inner.snapshot(&id).unwrap().job.status, "paused");
     manager.inner.update(&id, |stored| stored.job.status = "verifying".into()).unwrap();
     assert_eq!(copy_native_completion(&manager.inner, &id, &stage).unwrap(), None);
-    assert_eq!(manager.inner.native_copy_bytes.load(Ordering::SeqCst), bytes.len() as u64 - WRITE_BUDGET as u64);
+    assert_eq!(manager.inner.native_copy_bytes.load(Ordering::SeqCst), bytes.len() as u64 - interrupted_at);
     let adopted_part = part_identity(&fs::metadata(&part).unwrap()).unwrap();
     assert_eq!(adopted_part.device, original_part.device);
     assert_eq!(adopted_part.inode, original_part.inode);

@@ -180,6 +180,45 @@ export function useSettingsAutosave(settings: Settings, handlers: Handlers) {
   return { draft, change, input, flush: flushDrafts };
 }
 
+function preferenceLabel(key: Key): string {
+  switch (key) {
+    case "theme": return t("Application theme");
+    case "locale": return t("Interface language");
+    case "readerTheme": return t("Reader appearance");
+    case "fontFamily": return t("Reader font");
+    case "fontSize": return t("Font size");
+    case "zoom": return t("Page zoom (%)");
+    case "expandSections": return t("Automatically expand article sections");
+    case "linkPreviews": return t("Show article previews for links");
+    case "restoreSession": return t("Restore open tabs when the app starts");
+    case "openNewTabInBackground": return t("Open links in a background tab");
+    case "historyEnabled": return t("Remember reading history and position");
+    case "spellingEnabled": return t("Offer spelling suggestions for searches (opt-in)");
+    case "externalLinks": return t("External links");
+    case "completionNotifications": return t("Notify when an archive is verified and added to the library");
+    case "allowMeteredDownloads": return t("Allow cellular and metered downloads");
+    case "backupArchives": return t("Include app-owned archives in iOS backups");
+    case "downloadDirectory": return t("Download directory");
+    case "trashDeletedFiles": return t("Move deleted archive files to Trash instead of deleting permanently");
+    case "monitorDirectories": return t("Monitored folders");
+    case "catalogUrl": return t("Archive catalog URL");
+    case "mapCatalogUrl": return t("StreetZim catalog URL");
+    case "mapProxyUrl": return t("Map proxy URL");
+    case "showTechnicalErrors": return t("Show technical error details");
+    case "privateMode": return t("Private reading mode");
+    case "readOnly": return t("Strict read-only mode");
+    case "agentConnector": return t("Agent connector");
+    case "downloadLimit": return t("Download bandwidth limit (bytes/s)");
+    case "uploadLimit": return t("Upload bandwidth limit (bytes/s)");
+    case "autoResumeDownloads": return t("Automatically resume unfinished downloads at startup");
+    case "opdsSources": return t("Additional OPDS catalog sources, one URL per line");
+    case "diagnosticsEnabled": return t("Enable local diagnostic logging");
+    case "logLevel": return t("Diagnostic detail");
+    case "sharingName": return t("Device name");
+    default: return t("Settings");
+  }
+}
+
 export function SettingsSaveStatus() {
   useSyncExternalStore(subscribe, snapshot);
   const failuresByKey = new Map([...failedEdits].filter(([, edit]) => edit.phase === "error"));
@@ -195,7 +234,7 @@ export function SettingsSaveStatus() {
       confirming ? t("Review the preference change to save it.") :
       hasSaved ? t("Preferences saved") : t("Changes are saved automatically.")}</span>
     {failures.length > 0 && <div role="alert">
-      {failures.map(([key, edit]) => <p key={key}>{key}: {errorText(edit.error)}</p>)}
+      {failures.map(([key, edit]) => <p key={key}>{preferenceLabel(key)}: {errorText(edit.error)}</p>)}
       {failedEdits.size > 0 &&
         <button type="button" onClick={retryFailedSettings}>{t("Retry saving")}</button>}
     </div>}

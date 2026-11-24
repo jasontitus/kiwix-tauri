@@ -41,12 +41,13 @@ import {
   Plus,
   Printer,
   Search,
-  Settings2,
   Share2,
   ShieldAlert,
   ShieldCheck,
   Shuffle,
   Square,
+  Type,
+  Volume2,
   X,
 } from "lucide-react";
 import {
@@ -93,6 +94,7 @@ import {
 } from "../sensor-policy";
 import {
   canNavigateReaderStorage,
+  discardQuarantinedReaderStorage,
   quarantineReaderStorage,
   registerReaderStorage,
   retireReaderDocuments,
@@ -155,7 +157,7 @@ export type ReaderProps = {
   // The frame's privacy generation travels with the request so the root can
   // refuse or re-establish stale authority instead of trusting a session copy.
   onOpenInNewTab: (location: TabLocation, generation: number) => void;
-  onError: (error: unknown, severity?: ErrorSeverity) => void;
+  onError: (error: unknown, severity?: ErrorSeverity, showGlobally?: boolean) => void;
   onOpenLibrary?: () => void;
   onShortcutHandler?: (handler: ((action: string) => void) | null) => void;
   /** The root can flush the trailing scroll before closing or snapshotting the tab. */
@@ -263,6 +265,7 @@ export type ReaderWorkspace = {
   query: string;
   searchMode: "title" | "fulltext";
   searchBooks: string[];
+  searchScopeInitialized: boolean;
   searchResults: SearchResults | null;
   searchOffset: number;
   searchError: string;
@@ -282,6 +285,7 @@ export function createReaderWorkspace(): ReaderWorkspace {
     query: "",
     searchMode: "title",
     searchBooks: [],
+    searchScopeInitialized: false,
     searchResults: null,
     searchOffset: 0,
     searchError: "",
@@ -684,22 +688,19 @@ function Dialog({
   dismissOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const returnFocus = useRef<HTMLElement | null>(null);
   // Keep the ownership check from this dialog's mount, including its reader
   // tab/interaction revision, rather than adopting a later destination.
   const focusOwner = useRef(canRestoreFocus);
   useEffect(() => {
     const dialog = ref.current;
-    const owner = dialog?.closest(".reader-workspace");
-    returnFocus.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    dialog?.showModal();
+    if (!dialog) return;
+    const owner = dialog.closest(".reader-workspace");
+    const target = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!dialog.open) dialog.showModal();
     return () => {
-      const target = returnFocus.current;
       const focused = document.activeElement;
-      if (!dialog || !owner?.isConnected || !focusOwner.current() ||
+      if (dialog.open) dialog.close();
+      if (!owner?.isConnected || !focusOwner.current() ||
           !target?.isConnected || !owner.contains(target) ||
           target.closest("[inert], [hidden]") || target.matches(":disabled") ||
           !target.getClientRects().length ||
@@ -1050,6 +1051,7 @@ export default function Reader(props: ReaderProps) {
   ) => {
     latest.current.onWorkspaceChange((previous) => ({
       ...previous,
+      searchScopeInitialized: true,
       searchBooks:
         typeof value === "function" ? value(previous.searchBooks) : value,
     }));
@@ -1411,10 +1413,8 @@ export default function Reader(props: ReaderProps) {
       latest.current.onError(value, severity);
       return;
     }
-    latest.current.onError(value, severity);
-    // The root records every failure. The in-reader band follows the same
-    // visibility rule as the global band: blocking always, recoverable only
-    // when the user asked for technical details.
+    // The root records the failure; the active reader owns its visible notice.
+    latest.current.onError(value, severity, false);
     if (shouldRenderError(severity, latest.current.settings.showTechnicalErrors))
       setError(message(value));
     // A refused generation is not a user error and not a dead end: the reader
@@ -1647,11 +1647,15 @@ export default function Reader(props: ReaderProps) {
   // read-aloud is an audible surface even though no media element exists.
   const publishMedia = useCallback(() => {
     latest.current.onMediaState?.({
-      audible: frameMedia.current.audible ||
-        (isMobile && (speaking || nativeSpeech.pending || nativeSpeech.paused)),
-      pictureInPicture: frameMedia.current.pictureInPicture,
+      // Rust retains an exact started capability. Android has no archive-media
+      // exemption, so only an admitted speech start keeps its reader; iOS also
+      // retains pending speech and archive media through its native exemption.
+      audible: speaking || nativeSpeech.paused ||
+        (isAndroid && nativeSpeech.startAdmitted) ||
+        (isIOS && (frameMedia.current.audible || nativeSpeech.pending || nativeSpeech.startAdmitted)),
+      pictureInPicture: isIOS && frameMedia.current.pictureInPicture,
     });
-  }, [speaking, nativeSpeech.pending, nativeSpeech.paused]);
+  }, [speaking, nativeSpeech.pending, nativeSpeech.paused, nativeSpeech.startAdmitted]);
   useEffect(() => { publishMedia(); }, [publishMedia]);
   // Retire the shell's audible exemption when the reader leaves the screen.
   // WebKit owns archive audio activation and release; this is bookkeeping,
@@ -1994,22 +1998,30 @@ export default function Reader(props: ReaderProps) {
       // the DOM alive. Restore that exact owner, never a fresh reader session.
       void lifecycle(async () => {
         if (!current()) return;
-        const status = await api<SensorStatus>(isAndroid ? "mobile_speech_restore_reader" : "sensor_activate", {
+        const status = await api<SensorStatus>("mobile_speech_restore_reader", {
           sessionId: retained.sessionId, archiveId: retained.location.bookId,
           installationId: retained.installationId,
           origin: retained.location.origin, privacyGeneration: retained.privacyGeneration,
         }, current);
-        if (!current()) {
-          // Android restoration is atomic with native lifecycle retirement;
-          // ordinary deactivation would also stop its retained speech.
-          if (!isAndroid) await api("sensor_deactivate", { sessionId: retained.sessionId });
-          return;
-        }
+        // Native restoration is fenced by the exact retained session. A late
+        // reply cannot deactivate a newer foreground owner.
+        if (!current()) return;
         retained.status = status;
         retainedActivation.current = null;
         setFrame((previous) => previous?.frameId === retained.frameId ? { ...previous, status } : previous);
         setFrameReady(true);
-      }).catch((value) => { if (current()) report(value); });
+      }).catch((value) => {
+        if (!current()) return;
+        // The retained owner is gone (or Rust never retained it). Drop the
+        // stale activation and run a normal fresh open instead of leaving the
+        // frame permanently unready.
+        retainedActivation.current = null;
+        resolvedKey.current = "";
+        setFrame(null);
+        setFrameReady(false);
+        setReload((value) => value + 1);
+        report(value);
+      });
       return () => { cancelled = true; };
     }
     // A destination accepted while the document was stale is replayed once,
@@ -2576,11 +2588,12 @@ export default function Reader(props: ReaderProps) {
     const voiceURI = (isMobile || neural) && !matchingSpeechVoices(speechContext.current.voices, language)
       .some((candidate) => candidate.voiceURI === voice?.voiceURI) ? "" : voice?.voiceURI ?? "";
     const options = { lang: language, rate: preference.rate, voice: voiceURI };
-    if (isMobile) { void nativeSpeech.preferences(options); return; }
+    const nativeOptions = { ...options, title: tabRef.current.title };
+    if (isMobile) { void nativeSpeech.preferences(nativeOptions); return; }
     // Desktop: each engine applies its own preferences live; a change that
     // moves reading to the other engine stops it (the next play uses it).
     if (nativeReadingRef.current) {
-      if (neural && voiceURI) void nativeSpeech.preferences(options);
+      if (neural && voiceURI) void nativeSpeech.preferences(nativeOptions);
       else void nativeSpeech.stop();
       return;
     }
@@ -4519,9 +4532,8 @@ export default function Reader(props: ReaderProps) {
   const openSearch = useCallback(() => {
     const ownerTab = tabRef.current.id;
     const revision = latest.current.interactionRevision;
-    if (tabRef.current.bookId && latest.current.workspace.panel !== "search") {
+    if (tabRef.current.bookId && !latest.current.workspace.searchScopeInitialized) {
       setSearchBooks([tabRef.current.bookId]);
-      invalidateSearch();
     }
     setPanel("search");
     requestAnimationFrame(() => {
@@ -5312,7 +5324,7 @@ export default function Reader(props: ReaderProps) {
               setPanel(panel === "appearance" ? null : "appearance")
             }
           >
-            <Settings2 size={18} />
+            <Type size={18} />
           </IconButton>
           <IconButton
             label={readingSpeech
@@ -5338,7 +5350,7 @@ export default function Reader(props: ReaderProps) {
             disabled={!frameReady}
             onClick={() => setPanel(panel === "speech" ? null : "speech")}
           >
-            <Settings2 size={18} />
+            <Volume2 size={18} />
           </IconButton>
           {frame && !isHtml(frame.location.mime) && (
             <IconButton
@@ -5561,6 +5573,7 @@ export default function Reader(props: ReaderProps) {
           <button
             type="button"
             onClick={() => {
+              discardQuarantinedReaderStorage();
               leaveDocument();
               resolvedKey.current = "";
               setReload((value) => value + 1);
@@ -5719,8 +5732,8 @@ export default function Reader(props: ReaderProps) {
                   })}
                   <input
                     type="range"
-                    min="12"
-                    max="32"
+                    min="10"
+                    max="48"
                     step="1"
                     value={readerSettings.fontSize}
                     onChange={(event) =>
@@ -5986,10 +5999,8 @@ export default function Reader(props: ReaderProps) {
                       <ChevronLeft size={16} />
                       {t("Previous paragraph")}
                     </button>
-                    {/* Android's engine and desktop Kokoro (the only native reader
-                        on desktop) both implement next and ±15 s; iOS's system
-                        voice bridge has only previous. */}
-                    {(isAndroid || isDesktop) && (
+                    {/* iOS system voices support only previous; Kokoro owns all transports. */}
+                    {(isAndroid || isDesktop || nativeSpeech.kokoroActive) && (
                       <>
                         <button type="button" onClick={() => void nativeSpeech.next()}>
                           <ChevronRight size={16} />{t("Next paragraph")}

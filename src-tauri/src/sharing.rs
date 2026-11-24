@@ -46,7 +46,7 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{TcpListener, TcpStream},
-    sync::{watch, Semaphore},
+    sync::{watch, OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
 };
 use uuid::Uuid;
@@ -71,6 +71,8 @@ const LIBRARY_ARCHIVE_CACHE: usize = 8;
 const LIBRARY_AVAILABILITY_TTL: Duration = Duration::from_secs(2);
 const LIBRARY_AVAILABILITY_MAX: usize = 8192;
 const BOOTSTRAP_BODY_BYTES: usize = 256;
+const SHARING_MAX_CONNECTIONS: usize = 128;
+const SHARING_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 const PIN_ATTEMPTS: usize = 5;
 const PIN_WINDOW: Duration = Duration::from_secs(30);
 /// A spent PIN budget locks the form for this long, doubling on each new
@@ -281,6 +283,7 @@ struct CancellationState {
     workers: Arc<ArchiveWorkers>,
     search_cancel: tokio_util::sync::CancellationToken,
     searches: Arc<Semaphore>,
+    connections: Arc<Semaphore>,
 }
 impl SharingCancellation {
     fn new() -> Self {
@@ -291,6 +294,7 @@ impl SharingCancellation {
             workers: Arc::new(ArchiveWorkers::default()),
             search_cancel: tokio_util::sync::CancellationToken::new(),
             searches: Arc::new(Semaphore::new(2)),
+            connections: Arc::new(Semaphore::new(SHARING_MAX_CONNECTIONS)),
         }))
     }
     fn is_cancelled(&self) -> bool {
@@ -340,15 +344,16 @@ impl axum::serve::Listener for SharingListener {
     type Addr = SocketAddr;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-        let (socket, address) = axum::serve::Listener::accept(&mut self.listener).await;
-        (
-            SharingIo {
-                socket,
-                stopped: Box::pin(self.cancellation.clone().cancelled()),
-                cancelled: false,
-            },
-            address,
-        )
+        loop {
+            let (socket, address) = axum::serve::Listener::accept(&mut self.listener).await;
+            if let Ok(permit) = self.cancellation.0.connections.clone().try_acquire_owned() {
+                return (SharingIo::new(socket, &self.cancellation, permit, SHARING_IDLE_TIMEOUT), address);
+            }
+            // Do not let one listener queue an unbounded number of sockets
+            // or spin while the session's active connections are saturated.
+            drop(socket);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     fn local_addr(&self) -> io::Result<Self::Addr> {
@@ -360,17 +365,37 @@ impl axum::serve::Listener for SharingListener {
 /// (for example, a download blocked by TCP backpressure).
 struct SharingIo {
     socket: TcpStream,
+    _permit: OwnedSemaphorePermit,
+    idle_period: Duration,
+    idle: Pin<Box<tokio::time::Sleep>>,
     stopped: Pin<Box<dyn Future<Output = ()> + Send>>,
     cancelled: bool,
 }
 impl SharingIo {
-    fn poll_stopped(&mut self, cx: &mut Context<'_>) -> io::Result<()> {
+    fn new(socket: TcpStream, cancellation: &SharingCancellation, permit: OwnedSemaphorePermit, idle_period: Duration) -> Self {
+        Self {
+            socket,
+            _permit: permit,
+            idle_period,
+            idle: Box::pin(tokio::time::sleep(idle_period)),
+            stopped: Box::pin(cancellation.clone().cancelled()),
+            cancelled: false,
+        }
+    }
+
+    fn progressed(&mut self) {
+        self.idle.as_mut().reset(tokio::time::Instant::now() + self.idle_period);
+    }
+
+    fn poll_available(&mut self, cx: &mut Context<'_>) -> io::Result<()> {
         if self.cancelled || self.stopped.as_mut().poll(cx).is_ready() {
             self.cancelled = true;
             Err(io::Error::new(
                 io::ErrorKind::ConnectionAborted,
                 "Sharing stopped",
             ))
+        } else if self.idle.as_mut().poll(cx).is_ready() {
+            Err(io::Error::new(io::ErrorKind::TimedOut, "Sharing connection is idle"))
         } else {
             Ok(())
         }
@@ -382,10 +407,15 @@ impl AsyncRead for SharingIo {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        if let Err(error) = self.poll_stopped(cx) {
+        if let Err(error) = self.poll_available(cx) {
             return Poll::Ready(Err(error));
         }
-        Pin::new(&mut self.socket).poll_read(cx, buf)
+        let before = buf.filled().len();
+        let result = Pin::new(&mut self.socket).poll_read(cx, buf);
+        if matches!(result, Poll::Ready(Ok(()))) && buf.filled().len() > before {
+            self.progressed();
+        }
+        result
     }
 }
 impl AsyncWrite for SharingIo {
@@ -394,13 +424,17 @@ impl AsyncWrite for SharingIo {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        if let Err(error) = self.poll_stopped(cx) {
+        if let Err(error) = self.poll_available(cx) {
             return Poll::Ready(Err(error));
         }
-        Pin::new(&mut self.socket).poll_write(cx, buf)
+        let result = Pin::new(&mut self.socket).poll_write(cx, buf);
+        if matches!(result, Poll::Ready(Ok(written)) if written > 0) {
+            self.progressed();
+        }
+        result
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        if let Err(error) = self.poll_stopped(cx) {
+        if let Err(error) = self.poll_available(cx) {
             return Poll::Ready(Err(error));
         }
         Pin::new(&mut self.socket).poll_flush(cx)
@@ -684,13 +718,18 @@ fn library_archive(book: &LibraryBook) -> Result<Arc<Archive>, ResolveError> {
         .ok_or_else(|| {
             ResolveError::gone("This archive is no longer in the library")
         })?;
-    library_archive_checked(book, &current)
+    library_archive_checked(book, &current, LibraryArchiveAccess::Direct)
+}
+
+enum LibraryArchiveAccess {
+    Direct,
+    Search,
 }
 
 /// Resolve a cached or fresh handle from a live library record the caller has
 /// already read, so listing the library does not scan the store again per
 /// archive.
-fn library_archive_checked(book: &LibraryBook, current: &Book) -> Result<Arc<Archive>, ResolveError> {
+fn library_archive_checked(book: &LibraryBook, current: &Book, access: LibraryArchiveAccess) -> Result<Arc<Archive>, ResolveError> {
     if !current.available {
         return Err(ResolveError::gone(
             "This archive is no longer available in the library",
@@ -708,18 +747,19 @@ fn library_archive_checked(book: &LibraryBook, current: &Book) -> Result<Arc<Arc
             .cached
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if let Some(index) = cached.iter().position(|item| {
-            item.id == book.id
-                && item.installation_id == book.installation_id
+        if let Some(index) = cached.iter().position(|item| item.id == book.id) {
+            let item = cached.remove(index).expect("cached library archive");
+            if item.installation_id == book.installation_id
                 && item.path == book.path
                 && stamp.as_ref().is_none_or(|(size, modified)| {
                     item.size == *size && item.modified == *modified
                 })
-        }) {
-            let item = cached.remove(index).expect("cached library archive");
-            let archive = item.archive.clone();
-            cached.push_back(item);
-            return Ok(archive);
+            {
+                let archive = item.archive.clone();
+                cached.push_back(item);
+                return Ok(archive);
+            }
+            // A stale handle must not indefinitely occupy a warmed search slot.
         }
     }
     book.archives.record_open();
@@ -745,7 +785,15 @@ fn library_archive_checked(book: &LibraryBook, current: &Book) -> Result<Arc<Arc
         .cached
         .lock()
         .unwrap_or_else(|error| error.into_inner());
+    // Two concurrent searches can open the same miss before either inserts.
+    // Keep one cache slot per archive without accepting another request's stamp.
+    cached.retain(|item| item.id != book.id);
     if cached.len() >= LIBRARY_ARCHIVE_CACHE {
+        if matches!(access, LibraryArchiveAccess::Search) {
+            // An all-library query may walk every archive in a fixed order.
+            // Its misses must not evict the handles the next query can reuse.
+            return Ok(archive);
+        }
         cached.pop_front();
     }
     cached.push_back(CachedLibraryArchive {
@@ -773,6 +821,7 @@ fn library_archive_record(
             archives: state.archives.clone(),
         },
         book,
+        LibraryArchiveAccess::Search,
     )
 }
 
@@ -1533,33 +1582,48 @@ fn inventory(state: &LibraryIndex) -> Result<Vec<Value>, String> {
     })).collect())
 }
 
-fn bootstrap_page(state: &LibraryIndex, headers: &HeaderMap) -> Response {
+fn bootstrap_page(state: &LibraryIndex, headers: &HeaderMap, status: StatusCode, pin_error: Option<&str>) -> Response {
     let locale = match request_locale(&state.store, headers) {
         Ok(locale) => locale,
         Err(error) => return (StatusCode::INTERNAL_SERVER_ERROR, error).into_response(),
     };
     let t = |text: &str| escape(&locale.text(text, &[]));
     let action = if state.session.locked() {
-        format!("<form method=\"post\" action=\"/nearby/{}\"><label for=\"pin\">{}</label><input id=\"pin\" name=\"pin\" type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]{{{PIN_MIN_DIGITS},{PIN_MAX_DIGITS}}}\" minlength=\"{PIN_MIN_DIGITS}\" maxlength=\"{PIN_MAX_DIGITS}\" autocomplete=\"off\" required><button type=\"submit\">{}</button></form>",
+        let (error, invalid) = match pin_error {
+            Some(message) => (format!("<p id=\"pin-error\" role=\"alert\">{}</p>", t(message)), " aria-invalid=\"true\" aria-describedby=\"pin-error\""),
+            None => (String::new(), ""),
+        };
+        format!("{error}<form method=\"post\" action=\"/nearby/{}\"><label for=\"pin\">{}</label><input id=\"pin\" name=\"pin\" type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]{{{PIN_MIN_DIGITS},{PIN_MAX_DIGITS}}}\" minlength=\"{PIN_MIN_DIGITS}\" maxlength=\"{PIN_MAX_DIGITS}\" autocomplete=\"off\"{invalid} required><button type=\"submit\">{}</button></form>",
             state.session.id, t("Sharing PIN"), t("Open shared library"))
     } else {
         format!("<a href=\"/{}/\" rel=\"noreferrer\">{}</a>", state.token, t("Open shared library"))
     };
-    page(format!("<!doctype html><html lang=\"{}\" dir=\"{}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{}</title><style>body{{max-width:38rem;margin:10vh auto;padding:2rem;background:#f6f2e8;color:#183b35;font:19px/1.6 Georgia,serif}}h1{{border-top:8px solid;padding-top:1rem}}label{{display:block}}input,button,a{{font:inherit;padding:.5rem}}a{{color:inherit}}</style></head><body><h1>{}</h1><p>{}</p>{}</body></html>",
+    let mut response = page(format!("<!doctype html><html lang=\"{}\" dir=\"{}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{}</title><style>body{{max-width:38rem;margin:10vh auto;padding:2rem;background:#f6f2e8;color:#183b35;font:19px/1.6 Georgia,serif}}h1{{border-top:8px solid;padding-top:1rem}}label{{display:block}}input,button,a{{font:inherit;padding:.5rem}}a{{color:inherit}}</style></head><body><h1>{}</h1><p>{}</p>{}</body></html>",
         escape(locale.lang()), escape(locale.dir()), t(state.session.name()), t(state.session.name()),
-        t("Read-only sharing over an unencrypted local connection. Use only a trusted network."), action))
+        t("Read-only sharing over an unencrypted local connection. Use only a trusted network."), action));
+    *response.status_mut() = status;
+    response
 }
 
 async fn bootstrap_request(state: &LibraryIndex, method: Method, uri: &Uri, headers: &HeaderMap, body: Body) -> Response {
     if uri.query().is_some() { return (StatusCode::BAD_REQUEST, "Unexpected bootstrap query").into_response(); }
-    if method == Method::GET { return bootstrap_page(state, headers); }
+    if method == Method::GET { return bootstrap_page(state, headers, StatusCode::OK, None); }
     if method != Method::POST { return deny(); }
     if headers.get_all("sec-fetch-site").iter().any(|value| value.as_bytes().eq_ignore_ascii_case(b"cross-site")) {
         return deny();
     }
+    let content_type = headers.get("content-type").and_then(|value| value.to_str().ok())
+        .unwrap_or("application/json").split(';').next().unwrap_or("").trim();
+    let browser_form = content_type == "application/x-www-form-urlencoded";
     if state.session.locked() && !state.session.attempt() {
         let retry = state.session.retry_after().to_string();
-        return (StatusCode::TOO_MANY_REQUESTS, [("Retry-After", retry)], "Too many PIN attempts; try again shortly").into_response();
+        const LOCKED_OUT: &str = "Too many PIN attempts; try again shortly";
+        if browser_form {
+            let mut response = bootstrap_page(state, headers, StatusCode::TOO_MANY_REQUESTS, Some(LOCKED_OUT));
+            response.headers_mut().insert("Retry-After", retry.parse().expect("number of seconds"));
+            return response;
+        }
+        return (StatusCode::TOO_MANY_REQUESTS, [("Retry-After", retry)], LOCKED_OUT).into_response();
     }
     if headers.get_all("content-length").iter().any(|value| {
         value.to_str().ok().and_then(|value| value.parse::<usize>().ok()).is_none_or(|length| length > BOOTSTRAP_BODY_BYTES)
@@ -1571,9 +1635,6 @@ async fn bootstrap_request(state: &LibraryIndex, method: Method, uri: &Uri, head
         Ok(Err(_)) => return (StatusCode::PAYLOAD_TOO_LARGE, "Bootstrap body is too large").into_response(),
         Err(_) => return (StatusCode::REQUEST_TIMEOUT, "Bootstrap body timed out").into_response(),
     };
-    let content_type = headers.get("content-type").and_then(|value| value.to_str().ok())
-        .unwrap_or("application/json").split(';').next().unwrap_or("").trim();
-    let browser_form = content_type == "application/x-www-form-urlencoded";
     let credentials: BootstrapCredentials = if browser_form {
         let mut pin = None;
         for (key, value) in url::form_urlencoded::parse(&bytes) {
@@ -1589,7 +1650,12 @@ async fn bootstrap_request(state: &LibraryIndex, method: Method, uri: &Uri, head
     } else {
         return (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Use JSON or a PIN form").into_response();
     };
-    if !state.session.authenticates(credentials.pin.as_deref()) { return deny(); }
+    if !state.session.authenticates(credentials.pin.as_deref()) {
+        if browser_form {
+            return bootstrap_page(state, headers, StatusCode::FORBIDDEN, Some("The PIN was not accepted. Try again."));
+        }
+        return deny();
+    }
     // A correct PIN restores the initial budget instead of carrying a lockout
     // escalation into the rest of the session.
     state.session.succeeded();

@@ -400,7 +400,7 @@ pub(super) async fn download(
     token: &CancellationToken,
     factory: &ConfinedFactory,
     seed: &WebSeedTorrent,
-    progress: &(dyn Fn(u64, u64) + Sync),
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
 ) -> Result<(), String> {
     let mut force_redownload = false;
     for attempt in 0..3 {
@@ -411,7 +411,7 @@ pub(super) async fn download(
                 // The bytes looked complete but failed piece verification.
                 // Discard them and acquire once from scratch.
                 reset_files(factory, seed)?;
-                progress(0, seed.total);
+                progress(0, seed.total, 0.0);
                 force_redownload = true;
             }
             Err(SeedError::Transport(_)) if attempt < 2 => {
@@ -443,7 +443,7 @@ async fn download_once(
     token: &CancellationToken,
     factory: &ConfinedFactory,
     seed: &WebSeedTorrent,
-    progress: &(dyn Fn(u64, u64) + Sync),
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
     force_redownload: bool,
 ) -> Result<(), SeedError> {
     let client = reqwest::Client::builder()
@@ -526,7 +526,7 @@ async fn download_once(
         handle.set_len(file.length).map_err(display)?;
         handle.sync_all().map_err(display)?;
         completed = completed.saturating_add(file.length);
-        progress(completed, seed.total);
+        progress(completed, seed.total, 0.0);
         files.push(Some(handle));
     }
     if token.is_cancelled() {
@@ -544,7 +544,7 @@ async fn download_once(
         return Ok(());
     }
     result.map_err(SeedError::Verify)?;
-    progress(seed.total, seed.total);
+    progress(seed.total, seed.total, 0.0);
     Ok(())
 }
 
@@ -558,8 +558,8 @@ async fn download_file(
     length: u64,
     completed: u64,
     total: u64,
-    progress: &(dyn Fn(u64, u64) + Sync),
-) -> Result<u64, String> {
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
+) -> Result<(), String> {
     let mut request = client
         .get(url.clone())
         .header(reqwest::header::ACCEPT_ENCODING, "identity");
@@ -567,11 +567,10 @@ async fn download_file(
         request = request.header(reqwest::header::RANGE, format!("bytes={current}-"));
     }
     let response = tokio::select! {
-        _ = token.cancelled() => return Ok(0),
+        _ = token.cancelled() => return Ok(()),
         result = request.send() => result.map_err(display)?,
     };
     let status = response.status();
-    let mut written = 0u64;
     let mut write_offset = current;
     if status == reqwest::StatusCode::PARTIAL_CONTENT {
         let start = response
@@ -590,7 +589,7 @@ async fn download_file(
             write_offset = 0;
         }
     } else if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE && current == length {
-        return Ok(0);
+        return Ok(());
     } else {
         return Err(format!("Web seed returned HTTP {status}"));
     }
@@ -605,10 +604,12 @@ async fn download_file(
     }
     let mut stream = response.bytes_stream();
     let mut offset = write_offset;
+    let mut sample_offset = offset;
     let mut last_progress = Instant::now();
+    progress(completed.saturating_add(offset), total, 0.0);
     loop {
         let chunk = tokio::select! {
-            _ = token.cancelled() => return Ok(written),
+            _ = token.cancelled() => return Ok(()),
             chunk = stream.next() => chunk,
         };
         let Some(chunk) = chunk else {
@@ -620,13 +621,16 @@ async fn download_file(
         }
         writer.write_all(&chunk).map_err(display)?;
         offset = offset.saturating_add(chunk.len() as u64);
-        written = written.saturating_add(chunk.len() as u64);
-        if last_progress.elapsed() >= Duration::from_millis(250) {
-            progress(completed.saturating_add(written), total);
-            last_progress = Instant::now();
+        let now = Instant::now();
+        let elapsed = now.duration_since(last_progress);
+        if elapsed >= Duration::from_millis(250) {
+            let speed = (offset - sample_offset) as f64 / elapsed.as_secs_f64();
+            progress(completed.saturating_add(offset), total, speed);
+            sample_offset = offset;
+            last_progress = now;
         }
     }
-    Ok(written)
+    Ok(())
 }
 
 fn verify_pieces(
@@ -840,12 +844,62 @@ mod tests {
             dirs: Arc::new(Mutex::new(HashSet::new())),
             owner: None,
         };
-        download(&CancellationToken::new(), &factory, &seed, &|_, _| {})
+        download(&CancellationToken::new(), &factory, &seed, &|_, _, _| {})
             .await
             .unwrap();
         assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), body);
         server.join().unwrap();
         let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn web_seed_resume_reports_retained_bytes_and_only_new_bytes_in_rate() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let body = b"0123456789";
+        for honors_range in [true, false] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = Url::parse(&format!("http://{}/map.zim", listener.local_addr().unwrap())).unwrap();
+            let (release, reported) = tokio::sync::oneshot::channel();
+            let server = tokio::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    request.push(stream.read_u8().await.unwrap());
+                }
+                assert!(String::from_utf8(request).unwrap().to_ascii_lowercase().contains("\r\nrange: bytes=4-\r\n"));
+                let (header, offset): (&[u8], _) = if honors_range {
+                    (b"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 4-9/10\r\nContent-Length: 6\r\n\r\n", 4)
+                } else {
+                    (b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n", 0)
+                };
+                stream.write_all(header).await.unwrap();
+                // Ensure the measured body interval starts after the baseline.
+                reported.await.unwrap();
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                stream.write_all(&body[offset..]).await.unwrap();
+            });
+            let path = std::env::temp_dir().join(format!("kiwix-webseed-resume-{}", Uuid::new_v4()));
+            let mut file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path).unwrap();
+            file.write_all(&body[..4]).unwrap();
+            let samples = Mutex::new(Vec::new());
+            let release = Mutex::new(Some(release));
+            let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().unwrap();
+            download_file(&client, &CancellationToken::new(), &url, &file, 4, 10, 5, 15, &|done, total, rate| {
+                samples.lock().unwrap().push((done, total, rate));
+                if let Some(release) = release.lock().unwrap().take() { release.send(()).unwrap(); }
+            }).await.unwrap();
+            server.await.unwrap();
+            let samples = samples.into_inner().unwrap();
+            assert_eq!(samples[0], (if honors_range { 9 } else { 5 }, 15, 0.0));
+            let &(done, total, rate) = samples.last().unwrap();
+            assert_eq!((done, total), (15, 15));
+            let new_bytes = if honors_range { 6.0 } else { 10.0 };
+            assert!(rate > 0.0 && rate <= new_bytes / 0.250, "impossible rate for new bytes: {rate}");
+            assert_eq!(std::fs::read(&path).unwrap().as_slice(), body);
+            drop(file);
+            std::fs::remove_file(path).unwrap();
+        }
     }
 
     #[tokio::test]
@@ -935,7 +989,7 @@ mod tests {
             dirs: Arc::new(Mutex::new(HashSet::new())),
             owner: None,
         };
-        download(&CancellationToken::new(), &factory, &seed, &|_, _| {})
+        download(&CancellationToken::new(), &factory, &seed, &|_, _, _| {})
             .await
             .unwrap();
         assert_eq!(std::fs::read(temp.join("a.bin")).unwrap(), first);

@@ -20,11 +20,13 @@ struct NativeSpeechStartArgs: Decodable {
   let voice: String
   let rate: Double
   let labels: NativeSpeechLabels?
+  let title: String?
 
   init(id: String, token: String, text: String, lang: String, voice: String,
-       rate: Double, labels: NativeSpeechLabels? = nil) {
+       rate: Double, labels: NativeSpeechLabels? = nil, title: String? = nil) {
     self.id = id; self.token = token; self.text = text; self.lang = lang
     self.voice = voice; self.rate = rate; self.labels = labels
+    self.title = title
   }
 }
 struct NativeSpeechPrepareArgs: Decodable { let id: String }
@@ -42,9 +44,8 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
   private let availableVoices: () -> [AVSpeechSynthesisVoice]
   private var synthesizer: AVSpeechSynthesizer?
   private var current: Session?
-  #if canImport(NowPlaying)
-  private var nowPlaying: AnyObject?
-  #endif
+  private var nowPlaying: (any SpeechNowPlayingController)?
+  private let retireExternal: () -> Void
   private var registrations: [String: Registration] = [:]
   private var nextRegistration = 0
   private var latestStarted = 0
@@ -75,6 +76,7 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
     let voice: AVSpeechSynthesisVoice
     let rate: Float
     var offset = 0
+    var lastProgress: TimeInterval = 0
     var paused = false
     var chunkStart = 0
     var chunkEnd = 0
@@ -86,10 +88,12 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
 
   init(foreground: @escaping () -> Bool, setSpeechActive: @escaping (Bool) -> Bool,
        setSpeechPaused: @escaping (Bool) -> Bool = { _ in true },
+       retireExternal: @escaping () -> Void = {},
        makeSynthesizer: @escaping () -> AVSpeechSynthesizer = { AVSpeechSynthesizer() },
        availableVoices: @escaping () -> [AVSpeechSynthesisVoice] = { NativeSpeech.installedVoices() },
        emit: @escaping (JSObject) -> Void) {
     self.foreground = foreground; self.setSpeechActive = setSpeechActive
+    self.retireExternal = retireExternal
     self.setSpeechPaused = setSpeechPaused; self.emit = emit
     self.makeSynthesizer = makeSynthesizer; self.availableVoices = availableVoices
     super.init()
@@ -199,6 +203,7 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
     registration.status = .started
     latestStarted = registration.ordinal
     forceStop()
+    retireExternal()
     guard setSpeechActive(true) else {
       registration.status = .cancelled
       reject(invoke, "SPEECH_AUDIO_SESSION_FAILED"); return
@@ -215,9 +220,19 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
                    max(AVSpeechUtteranceMinimumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * Float(args.rate)))
     let session = Session(registration: registration, text: args.text, voice: selected, rate: rate)
     current = session
-    startNowPlaying(session, labels: args.labels, voice: selected)
+    startNowPlaying(session, title: args.title ?? args.labels?.title, voice: selected)
     queueChunk(session)
     invoke.resolve(["id": args.id, "accepted": true])
+  }
+
+  func admitExternal(_ args: NativeSpeechSessionArgs) -> Bool {
+    guard foreground(), let registration = registrations[args.id],
+          registration.capability == args.token, registration.status == .prepared,
+          registration.ordinal >= latestStarted else { return false }
+    registration.status = .started
+    latestStarted = registration.ordinal
+    forceStop()
+    return true
   }
 
   private func ownedSession(_ args: NativeSpeechSessionArgs, invoke: Invoke) -> Session? {
@@ -421,8 +436,11 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString range: NSRange,
                          utterance: AVSpeechUtterance) {
     handle(synthesizer, utterance) { [weak self] session in
-      guard range.location != NSNotFound, range.location <= session.chunkEnd - session.chunkStart else { return }
+      guard !session.paused, range.location != NSNotFound, range.location <= session.chunkEnd - session.chunkStart else { return }
       session.offset = max(session.offset, session.chunkStart + range.location)
+      let now = ProcessInfo.processInfo.systemUptime
+      guard now - session.lastProgress >= 0.10 else { return }
+      session.lastProgress = now
       self?.state(session, speaking: true)
     }
   }
@@ -444,42 +462,30 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
     handle(synthesizer, utterance) { [weak self] _ in self?.forceStop(error: "SPEECH_INTERRUPTED") }
   }
 
-  private var hasNowPlaying: Bool {
-    #if canImport(NowPlaying)
-    if #available(iOS 27.0, *), nowPlaying != nil { return true }
-    #endif
-    return false
-  }
+  private var hasNowPlaying: Bool { nowPlaying != nil }
 
-  private func startNowPlaying(_ session: Session, labels: NativeSpeechLabels?, voice: AVSpeechSynthesisVoice) {
-    #if canImport(NowPlaying)
-    if #available(iOS 27.0, *) {
-      MainActor.assumeIsolated {
-        stopNowPlaying()
-        let controller = SpeechNowPlaying(
-          id: session.id,
-          title: labels?.title ?? "Reading aloud",
-          subtitle: voice.name,
-          onPlay: { [weak self] in _ = self?.resumeCurrent() },
-          onPause: { [weak self] in self?.pauseCurrent() },
-          onPrevious: { [weak self] in self?.previousCurrent() },
-          onStop: { [weak self] in self?.forceStop() })
-        nowPlaying = controller
-        controller.activate()
+  private func startNowPlaying(_ session: Session, title: String?, voice: AVSpeechSynthesisVoice) {
+    MainActor.assumeIsolated {
+      stopNowPlaying()
+      let controller = makeSpeechNowPlaying(
+        id: session.id, title: title ?? "Reading aloud", subtitle: voice.name, advanced: false
+      ) { [weak self, weak session] action in
+        guard let self, let session, self.current === session else { return }
+        switch action {
+        case "play": _ = self.resumeCurrent()
+        case "pause": self.pauseCurrent()
+        case "previous": self.previousCurrent()
+        case "stop": self.forceStop()
+        default: break
+        }
       }
+      nowPlaying = controller
+      controller.activate()
     }
-    #endif
   }
 
   private func stopNowPlaying() {
-    #if canImport(NowPlaying)
-    if #available(iOS 27.0, *) {
-      MainActor.assumeIsolated {
-        (nowPlaying as? SpeechNowPlaying)?.stop()
-        nowPlaying = nil
-      }
-    }
-    #endif
+    MainActor.assumeIsolated { nowPlaying?.stop(); nowPlaying = nil }
   }
 
   private func deactivateAudio() {
@@ -491,13 +497,7 @@ final class NativeSpeech: NSObject, AVSpeechSynthesizerDelegate {
     var data: JSObject = ["id": session.id, "speaking": speaking,
                           "paused": session.paused, "offset": session.offset]
     if let error = error { data["error"] = error }
-    #if canImport(NowPlaying)
-    if #available(iOS 27.0, *) {
-      MainActor.assumeIsolated {
-        (nowPlaying as? SpeechNowPlaying)?.setPlaying(speaking && !session.paused)
-      }
-    }
-    #endif
+    MainActor.assumeIsolated { nowPlaying?.setPlaying(speaking && !session.paused) }
     emit(data)
   }
   private func validID(_ id: String) -> Bool {

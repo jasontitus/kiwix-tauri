@@ -165,7 +165,7 @@ export default function Downloads({
   ) & { privacy: PrivacyContext; notificationRequestId?: string; notificationPhase?: DownloadNotificationAction["phase"] } | null>(null);
   const [shareBusy, setShareBusy] = useState<string | null>(null);
   async function shareBook(book: Book) {
-    if (shareBusy || settings.readOnly) return;
+    if (shareBusy || settings.readOnly || settings.privateMode) return;
     setShareBusy(book.installationId);
     try {
       await shareArchive(book.id, book.installationId);
@@ -308,7 +308,7 @@ export default function Downloads({
       live = live || values.some((job) =>
         !terminalStatus(job.status) || job.seeding === true ||
         ["queued", "verifying", "ready"].includes(job.importState || ""));
-      return live && document.visibilityState !== "hidden";
+      return live;
     } catch (e) {
       if (alive.current && id === request.current && privacy && isPrivacyContextCurrent(privacy)) setError(errorText(e));
     } finally {
@@ -337,20 +337,19 @@ export default function Downloads({
     let stopped = false;
     let ticking = false;
     async function tick() {
-      if (ticking) return;
+      if (stopped || ticking || document.visibilityState === "hidden") return;
       ticking = true;
-      // Only a transfer, import or edition still in flight needs a fast poll;
-      // an idle or hidden pane refreshes slowly, and every action refreshes
-      // directly.
+      // Only a transfer, import or edition in flight needs the fast poll.
       const live = await load();
       ticking = false;
-      if (!stopped) timer = window.setTimeout(tick, live === false ? IDLE_POLL_MS : ACTIVE_POLL_MS);
+      if (!stopped && !document.hidden)
+        timer = window.setTimeout(tick, live ? ACTIVE_POLL_MS : IDLE_POLL_MS);
     }
     // Returning to the window must not wait out an idle interval.
     function onVisibility() {
-      if (stopped || document.visibilityState === "hidden") return;
+      if (stopped) return;
       window.clearTimeout(timer);
-      void tick();
+      if (document.visibilityState !== "hidden") void tick();
     }
     document.addEventListener("visibilitychange", onVisibility);
     void tick();
@@ -635,6 +634,7 @@ export default function Downloads({
     }
   }
   async function seed(job: DownloadJob) {
+    if (settings.privateMode) return;
     const enabled = !job.seeding;
     if (
       enabled &&
@@ -1235,7 +1235,7 @@ export default function Downloads({
                       </button>
                       {canShareSystem && (
                         <button className="download-open" type="button"
-                          disabled={settings.readOnly || shareBusy === book.installationId}
+                          disabled={settings.readOnly || settings.privateMode || shareBusy === book.installationId}
                           onClick={() => void shareBook(book)}>
                           <Share2 size={24} />{t("Share")}
                         </button>
@@ -1312,7 +1312,7 @@ export default function Downloads({
                     <div className="download-actions">
                       <button
                         onClick={() => seed(job)}
-                        disabled={working !== null || settings.readOnly}
+                        disabled={working !== null || settings.readOnly || settings.privateMode}
                       >
                         <Upload size={16} aria-hidden="true" />
                         {shared

@@ -1033,6 +1033,7 @@ pub(super) async fn connect_addresses(addresses: &[SocketAddr], cancel: &Cancell
 }
 
 pub type ChunkReader = Arc<dyn Fn(u32) -> Result<Vec<u8>, String> + Send + Sync>;
+pub(super) type SeedSourceFailure = Arc<dyn Fn(&str) + Send + Sync>;
 // The high bit closes admission; lower bits count sessions that have requested
 // authenticated payload. One atomic transition prevents an inspected, idle peer
 // from starting a new transfer after background admission has been closed.
@@ -1169,13 +1170,14 @@ struct SeedPublication {
     peer_id: String,
     pin: Option<String>,
     reader: ChunkReader,
+    on_source_failure: Option<SeedSourceFailure>,
     budget: Arc<RateBudget>,
     frame: Arc<Vec<u8>>,
     stats: Arc<SeedStats>,
 }
 
-pub async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>, reader: ChunkReader,
-    upload_budget: Arc<RateBudget>, cancel: CancellationToken) -> Result<SeedServer, String>
+pub(super) async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>, reader: ChunkReader,
+    upload_budget: Arc<RateBudget>, cancel: CancellationToken, on_source_failure: Option<SeedSourceFailure>) -> Result<SeedServer, String>
 {
     if cancel.is_cancelled() { return Err("LocalSwarm operation cancelled".into()); }
     manifest.validate()?;
@@ -1186,7 +1188,7 @@ pub async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>,
     if json.len() > protocol::MAX_MANIFEST { return Err("Manifest JSON too large".into()); }
     let manifest_frame = Arc::new(Message::ManifestResponse(json).encode()?);
     #[cfg(all(any(target_os = "ios", target_os = "macos"), not(test)))]
-    return seed_apple(manifest, peer_id, pin, reader, upload_budget, cancel, manifest_frame).await;
+    return seed_apple(manifest, peer_id, pin, reader, upload_budget, cancel, manifest_frame, on_source_failure).await;
     #[cfg(any(not(any(target_os = "ios", target_os = "macos")), test))]
     {
     let config = server_config()?;
@@ -1213,7 +1215,7 @@ pub async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>,
     let task_stats = stats.clone();
     let pin = pin.filter(|pin| !pin.is_empty());
     let publication = Arc::new(SeedPublication {
-        manifest, peer_id, pin, reader, budget: upload_budget, frame: manifest_frame, stats: stats.clone(),
+        manifest, peer_id, pin, reader, on_source_failure, budget: upload_budget, frame: manifest_frame, stats: stats.clone(),
     });
     let task = tokio::spawn(async move {
         let mut tasks = JoinSet::new();
@@ -1281,7 +1283,8 @@ pub async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>,
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub(super) async fn seed_apple(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>, reader: ChunkReader,
-    upload_budget: Arc<RateBudget>, cancel: CancellationToken, frame: Arc<Vec<u8>>) -> Result<SeedServer, String>
+    upload_budget: Arc<RateBudget>, cancel: CancellationToken, frame: Arc<Vec<u8>>,
+    on_source_failure: Option<SeedSourceFailure>) -> Result<SeedServer, String>
 {
     let mut listener = super::apple_transport::Listener::new(&cancel).await?;
     let port = listener.port;
@@ -1293,7 +1296,7 @@ pub(super) async fn seed_apple(manifest: Arc<Manifest>, peer_id: String, pin: Op
     let task_cancel = cancel.child_token(); let server_cancel = task_cancel.clone();
     let pin = pin.filter(|pin| !pin.is_empty());
     let publication = Arc::new(SeedPublication {
-        manifest, peer_id, pin, reader, budget: upload_budget, frame, stats: stats.clone(),
+        manifest, peer_id, pin, reader, on_source_failure, budget: upload_budget, frame, stats: stats.clone(),
     });
     let task = tokio::spawn(async move {
         let mut tasks = JoinSet::new();
@@ -1441,17 +1444,22 @@ async fn wait_front(sending: &mut std::collections::VecDeque<PendingSend>,
     Ok(bytes)
 }
 
-fn start_read(reader: &ChunkReader, manifest: &Manifest, index: u32, len: usize) -> PendingRead {
-    let expected = manifest.chunk_hashes[index as usize].clone();
+fn start_read(reader: &ChunkReader, manifest: &Arc<Manifest>, index: u32, len: usize,
+    on_source_failure: Option<SeedSourceFailure>) -> PendingRead {
+    let manifest = manifest.clone();
     let callback = reader.clone();
     let measured = super::profile::start();
     // The read and its integrity check run off the async runtime, so several
     // chunks are in flight while the previous response is still being written.
     let task = tokio::task::spawn_blocking(move || {
-        let data = callback(index)?;
-        if data.len() != len || !chunk_matches(&data, &expected) {
-            return Err("LocalSwarm source changed or returned corrupt bytes".into());
-        }
+        let result = callback(index).and_then(|data| {
+            if data.len() != len || !chunk_matches(&data, &manifest.chunk_hashes[index as usize]) {
+                return Err("LocalSwarm source changed or returned corrupt bytes".into());
+            }
+            Ok(data)
+        });
+        if let (Err(error), Some(retire)) = (&result, on_source_failure) { retire(error); }
+        let data = result?;
         super::profile::record(1, data.len(), measured);
         Ok(data)
     });
@@ -1579,7 +1587,7 @@ async fn serve_window(send: &mut SendStream, messages: &mut tokio::sync::mpsc::R
                         break;
                     }
                     if active_transfer.is_none() { active_transfer = Some(stats.begin_transfer()?); }
-                    reads.push_back(start_read(reader, manifest, index, len));
+                    reads.push_back(start_read(reader, manifest, index, len, publication.on_source_failure.clone()));
                     read_bytes += len;
                 }
                 Message::Bitfield { bits, .. } if bits.len() == manifest.chunk_hashes.len() => {},
@@ -1945,12 +1953,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn seeder_retires_source_on_manifest_mismatch_before_sending() {
+        let manifest = transfer_fixture_with_size(16);
+        let reader: ChunkReader = Arc::new(|index| Ok(vec![if index == 0 { 0x5a } else { 0 }; 16]));
+        let cancel = CancellationToken::new();
+        let offer = cancel.clone();
+        let failure: SeedSourceFailure = Arc::new(move |_| offer.cancel());
+        let valid = start_read(&reader, &manifest, 0, 16, Some(failure.clone())).task.await.unwrap();
+        assert_eq!(valid.unwrap(), vec![0x5a; 16]);
+        assert!(!cancel.is_cancelled());
+        let corrupt = start_read(&reader, &manifest, 1, 16, Some(failure)).task.await.unwrap();
+        assert!(corrupt.unwrap_err().contains("corrupt bytes"));
+        assert!(cancel.is_cancelled());
+    }
+
+    #[tokio::test]
     #[ignore = "real QUIC throttling regression takes at least 128 seconds"]
     async fn native_low_rate_chunks_survive_application_idle_deadline() {
         let manifest = transfer_fixture();
         let server = seed(manifest.clone(), "fixture-seeder".into(), Some("1234".into()),
             Arc::new(|_| Ok(vec![0x5a; 1024 * 1024])), Arc::new(RateBudget::new(0)),
-            CancellationToken::new()).await.unwrap();
+            CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, Some("1234"), "fixture-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(16 * 1024))).await.unwrap();
@@ -1967,7 +1990,7 @@ mod tests {
         let manifest = transfer_fixture_with_size(4096);
         let server = seed(manifest.clone(), "admission-seeder".into(), None,
             Arc::new(|_| Ok(vec![0x5a; 4096])), Arc::new(RateBudget::new(0)),
-            CancellationToken::new()).await.unwrap();
+            CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let stats = server.stats.clone();
         let mut active = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "active-receiver",
@@ -1993,7 +2016,7 @@ mod tests {
         let manifest = transfer_fixture();
         let server = seed(manifest.clone(), "fixture-seeder".into(), Some("1234".into()),
             Arc::new(|_| Ok(vec![0x5a; 1024 * 1024])), Arc::new(RateBudget::new(0)),
-            CancellationToken::new()).await.unwrap();
+            CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let cancel = CancellationToken::new();
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, Some("1234"), "fixture-receiver",
@@ -2044,7 +2067,7 @@ mod tests {
         let manifest = transfer_fixture_with_size(4096);
         let server = seed(manifest.clone(), "pipeline-seeder".into(), Some("1234".into()),
             Arc::new(|_| Ok(vec![0x5a; 4096])), Arc::new(RateBudget::new(4096)),
-            CancellationToken::new()).await.unwrap();
+            CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, Some("1234"), "pipeline-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2068,7 +2091,7 @@ mod tests {
         let manifest = transfer_fixture_with_size(4096);
         let server = seed(manifest.clone(), "fragment-seeder".into(), None,
             Arc::new(|_| Ok(vec![0x5a; 4096])), Arc::new(RateBudget::new(4096)),
-            CancellationToken::new()).await.unwrap();
+            CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "fragment-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2118,7 +2141,7 @@ mod tests {
             Ok(source[start..(start + chunk_size).min(source.len())].to_vec())
         });
         let server = seed_apple(manifest.clone(), "apple-ownership-seeder".into(), Some("738291".into()),
-            reader, Arc::new(RateBudget::new(0)), CancellationToken::new(), frame).await.unwrap();
+            reader, Arc::new(RateBudget::new(0)), CancellationToken::new(), frame, None).await.unwrap();
         let port = server.port;
         let mut receivers = JoinSet::new();
         for receiver in 0..4 {
@@ -2172,7 +2195,7 @@ mod tests {
         let frame = Arc::new(Message::ManifestResponse(serde_json::to_vec(manifest.as_ref()).unwrap()).encode().unwrap());
         let server = seed_apple(manifest.clone(), "apple-measurement-seeder".into(), Some("738291".into()),
             Arc::new(|_| Ok(vec![0x5a; 1024 * 1024])), Arc::new(RateBudget::new(0)),
-            CancellationToken::new(), frame).await.unwrap();
+            CancellationToken::new(), frame, None).await.unwrap();
         let mut session = connect(&host, server.port, &manifest.swarm_id, Some("738291"),
             "quinn-measurement-receiver", CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
         assert!(session.connection.is_some(), "Receiver must exercise Quinn, not Apple");
@@ -2234,7 +2257,7 @@ mod tests {
         let source = data.clone();
         let reader: ChunkReader = Arc::new(move |index| Ok(source[index as usize].clone()));
         let server = seed_apple(manifest.clone(), "apple-serve-rate-seeder".into(), Some("738291".into()),
-            reader, Arc::new(RateBudget::new(0)), CancellationToken::new(), frame).await.unwrap();
+            reader, Arc::new(RateBudget::new(0)), CancellationToken::new(), frame, None).await.unwrap();
         let mut session = connect(&host, server.port, &manifest.swarm_id, Some("738291"),
             "quinn-serve-rate-receiver", CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
         assert!(session.connection.is_some(), "Receiver must exercise Quinn, not Apple");
@@ -2295,7 +2318,7 @@ mod tests {
             Ok(source[index as usize].clone())
         });
         let server = seed(manifest.clone(), "pipeline-window-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "pipeline-window-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2335,7 +2358,7 @@ mod tests {
             Ok(source[index as usize].clone())
         });
         let server = seed(manifest.clone(), "serve-cadence-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "serve-cadence-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2371,7 +2394,7 @@ mod tests {
             Ok(source[index as usize].clone())
         });
         let server = seed(manifest.clone(), "serve-window-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "serve-window-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2405,7 +2428,7 @@ mod tests {
             Ok(source[index as usize].clone())
         });
         let server = seed(manifest.clone(), "serve-order-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "serve-order-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2430,7 +2453,7 @@ mod tests {
         let source = data.clone();
         let reader: ChunkReader = Arc::new(move |index| Ok(source[index as usize].clone()));
         let server = seed(manifest.clone(), "hostile-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "hostile-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2459,7 +2482,7 @@ mod tests {
             Ok(source[index as usize].clone())
         });
         let server = seed(manifest.clone(), "pipeline-error-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "pipeline-error-receiver",
             CancellationToken::new(), Arc::new(RateBudget::new(0))).await.unwrap();
@@ -2512,7 +2535,7 @@ mod tests {
             Ok(vec![0x5a; protocol::MAX_CHUNK_SIZE as usize])
         });
         let server = seed(manifest.clone(), "full-prefetch-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let capacity = PREFETCH_BYTES / PREFETCH_UNIT;
         let units = (protocol::MAX_CHUNK_SIZE as usize).div_ceil(PREFETCH_UNIT);
@@ -2629,7 +2652,7 @@ mod tests {
         let reader: ChunkReader = Arc::new(move |index| Ok(source[index as usize].clone()));
         // Throttled so no response can be ready when cancellation lands.
         let server = seed(manifest.clone(), "pipeline-cancel-seeder".into(), None, reader,
-            Arc::new(RateBudget::new(1024)), CancellationToken::new()).await.unwrap();
+            Arc::new(RateBudget::new(1024)), CancellationToken::new(), None).await.unwrap();
         server.stats.set_accepting(true);
         let cancel = CancellationToken::new();
         let mut session = connect("127.0.0.1", server.port, &manifest.swarm_id, None, "pipeline-cancel-receiver",

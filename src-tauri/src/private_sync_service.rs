@@ -12,6 +12,8 @@ use serde::Serialize;
 
 const PAIR_LIFETIME: Duration = Duration::from_secs(300);
 const NETWORK_TIMEOUT: Duration = Duration::from_secs(60);
+const AUTOMATIC_SYNC_INTERVAL: Duration = Duration::from_secs(15);
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(250);
 /// Longest an idle automatic peer waits before one reconciliation exchange,
 /// which also refreshes both sides' endpoints after a network change.
 const IDLE_SYNC_REFRESH: Duration = Duration::from_secs(300);
@@ -68,9 +70,31 @@ struct Runtime {
     window: String,
     generation: u64,
     revision: u64,
-    endpoints: Vec<SocketAddr>,
+    port: u16,
     binding: crate::transfer_policy::LocalBinding,
     cancel: CancellationToken,
+}
+
+impl Runtime {
+    fn endpoints(&self) -> Result<Vec<SocketAddr>, String> {
+        // The wildcard listener's port remains bound, but a live address
+        // can change on the retained route. Never replace that route here.
+        let mut endpoints = Vec::new();
+        for interface in if_addrs::get_if_addrs().map_err(|error| error.to_string())? {
+            let IpAddr::V4(address) = interface.ip() else { continue; };
+            if (address.is_private() || address.is_link_local()) && self.binding.is_on_link_peer(IpAddr::V4(address))? {
+                let endpoint = SocketAddr::new(IpAddr::V4(address), self.port);
+                if !endpoints.contains(&endpoint) {
+                    endpoints.push(endpoint);
+                    if endpoints.len() == 16 { break; }
+                }
+            }
+        }
+        if endpoints.is_empty() {
+            return Err("Connect both devices to the same Wi-Fi or Ethernet network before using private Nearby sync".into());
+        }
+        Ok(endpoints)
+    }
 }
 
 struct PeerGreeting {
@@ -175,17 +199,8 @@ impl Service {
         socket.bind(SocketAddr::from(([0, 0, 0, 0], port))).map_err(|error| format!("Cannot open the private Nearby endpoint: {error}"))?;
         let listener = socket.listen(16).map_err(|error| error.to_string())?;
         let port = listener.local_addr().map_err(|error| error.to_string())?.port();
-        let mut endpoints = Vec::new();
-        for interface in if_addrs::get_if_addrs().map_err(|error| error.to_string())? {
-            let IpAddr::V4(address) = interface.ip() else { continue; };
-            if (address.is_private() || address.is_link_local()) && binding.is_on_link_peer(IpAddr::V4(address))? {
-                let endpoint = SocketAddr::new(IpAddr::V4(address), port);
-                if !endpoints.contains(&endpoint) { endpoints.push(endpoint); }
-            }
-        }
-        if endpoints.is_empty() { return Err("Connect both devices to the same Wi-Fi or Ethernet network before using private Nearby sync".into()); }
-        endpoints.truncate(16);
-        let runtime = Runtime { window: window.into(), generation, revision, endpoints, binding, cancel: CancellationToken::new() };
+        let runtime = Runtime { window: window.into(), generation, revision, port, binding, cancel: CancellationToken::new() };
+        runtime.endpoints()?;
         {
             let _policy = self.privacy_gate.read().await;
             self.private_sync_admit(&runtime)?;
@@ -200,11 +215,21 @@ impl Service {
         *manager.listener_done.lock().map_err(|_| "Private endpoint retirement unavailable")? = Some(done);
         tokio::spawn(async move {
             let worker = async {
+                let start = tokio::time::Instant::now() + AUTOMATIC_SYNC_INTERVAL;
+                let mut automatic = tokio::time::interval_at(start, AUTOMATIC_SYNC_INTERVAL);
+                automatic.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
                     tokio::select! {
                         accepted = listener.accept() => {
-                            let (stream, peer) = accepted.map_err(|error| error.to_string())?;
-                            if !runtime.binding.is_on_link_peer(peer.ip())? { continue; }
+                            let Ok((stream, peer)) = accepted else {
+                                // Resource pressure can make accept fail repeatedly. The
+                                // enclosing cancellation select also interrupts this backoff.
+                                tokio::time::sleep(ACCEPT_RETRY_DELAY).await;
+                                continue;
+                            };
+                            // A failed route check denies this connection, not the
+                            // listener. The accepted task checks runtime policy again.
+                            if !matches!(runtime.binding.is_on_link_peer(peer.ip()), Ok(true)) { continue; }
                             let Ok(permit) = owned.permits.clone().try_acquire_owned() else { continue; };
                             let Some(service) = weak.upgrade() else { return Ok::<(),String>(()); };
                             let manager = owned.clone(); let receipt = runtime.clone();
@@ -217,7 +242,7 @@ impl Service {
                                 }
                             });
                         },
-                        _ = tokio::time::sleep(Duration::from_secs(15)) => {
+                        _ = automatic.tick() => {
                             let Some(service) = weak.upgrade() else { return Ok(()); };
                             service.private_sync_admit(&runtime)?;
                             let counter = service.store.reading_sync_counter()?;
@@ -233,7 +258,9 @@ impl Service {
                                     .is_some_and(|last| (time::OffsetDateTime::now_utc() - last)
                                         < time::Duration::seconds(IDLE_SYNC_REFRESH.as_secs() as i64))
                                 { continue; }
-                                service.private_sync_spawn(owned.clone(), peer.id.clone(), false)?;
+                                // The peer could have been revoked since this snapshot.
+                                // Spawn rechecks admission; a rejected peer is skipped.
+                                let _ = service.private_sync_spawn(owned.clone(), peer.id.clone(), false);
                             }
                         }
                     }
@@ -371,7 +398,7 @@ impl Service {
                 let token = zeroize::Zeroizing::new(hex::encode(bytes));
                 use zeroize::Zeroize; bytes.zeroize();
                 let expires_at = crate::timestamps::format(time::OffsetDateTime::now_utc() + PAIR_LIFETIME);
-                let invitation = zeroize::Zeroizing::new(serde_json::to_string(&Invitation { version: 1, identity: manager.identity.public_hex(), token: token.clone(), endpoints: runtime.endpoints.clone(), expires_at: expires_at.clone() }).map_err(|error| error.to_string())?);
+                let invitation = zeroize::Zeroizing::new(serde_json::to_string(&Invitation { version: 1, identity: manager.identity.public_hex(), token: token.clone(), endpoints: runtime.endpoints()?, expires_at: expires_at.clone() }).map_err(|error| error.to_string())?);
                 let session = Arc::new(PairSession { view: Mutex::new(PairView { id: Uuid::new_v4().to_string(), invitation: Some(invitation), peer_identity: None, peer_name: None, verification_code: None, local_confirmed: false, remote_confirmed: false, expires_at, phase: "waiting".into(), error: None }), token: Mutex::new(Some(token)), expires: Instant::now() + PAIR_LIFETIME, claimed: AtomicBool::new(false), notify: tokio::sync::Notify::new(), cancel: runtime.cancel.child_token() });
                 if let Some(old) = manager.session.lock().map_err(|_| "Private pairing unavailable")?.replace(session.clone()) { old.retire(); }
                 Self::private_sync_expire(manager.clone(), session);
@@ -434,7 +461,7 @@ impl Service {
         {
             let mut activity = manager.activity.lock().map_err(|_| "Private sync status unavailable")?;
             let status = activity.entry(id.clone()).or_default();
-            if status.syncing || (!explicit && status.attempted.is_some_and(|time|time.elapsed() < Duration::from_secs(15))) { return Ok(()); }
+            if status.syncing || (!explicit && status.attempted.is_some_and(|time| time.elapsed() < AUTOMATIC_SYNC_INTERVAL)) { return Ok(()); }
             status.syncing = true; status.error = None; status.attempted = Some(Instant::now());
         }
         let service = self.clone();
@@ -458,8 +485,9 @@ impl Service {
         Err("The connected device is unavailable. Keep both apps open on the same Wi-Fi network; create a new invitation if its network address changed".into())
     }
     fn private_sync_hello(&self, runtime: &Runtime, purpose: &str, token: Option<zeroize::Zeroizing<String>>) -> Result<Message, String> {
+        self.private_sync_admit(runtime)?;
         let state = self.store.read()?;
-        Ok(Message::Hello { purpose: purpose.into(), token, name: state.reading_sync.device_name.clone(), endpoints: runtime.endpoints.clone(), categories: state.reading_sync.categories })
+        Ok(Message::Hello { purpose: purpose.into(), token, name: state.reading_sync.device_name.clone(), endpoints: runtime.endpoints()?, categories: state.reading_sync.categories })
     }
     fn private_sync_peer_info(message: Message, expected: &str) -> Result<PeerGreeting, String> {
         match message {
@@ -475,13 +503,13 @@ impl Service {
         let mut channel = tokio::time::timeout(Duration::from_secs(10), Channel::handshake(stream, &manager.identity, true, Some(&identity))).await.map_err(|_| "Private handshake timed out")??;
         let token = session.token.lock().map_err(|_| "Private pairing unavailable")?.take().ok_or("Private invitation was cancelled")?;
         channel.send(&self.private_sync_hello(&runtime, "pair", Some(token))?).await?;
-        let PeerGreeting { name, endpoints, .. } = Self::private_sync_peer_info(channel.receive().await?, "pair")?;
+        let PeerGreeting { name, endpoints, .. } = Self::private_sync_peer_info(channel.receive_control().await?, "pair")?;
         self.private_sync_pair_exchange(&manager, &runtime, &session, &mut channel, name, endpoints).await
     }
     async fn private_sync_accept(self: Arc<Self>, manager: Arc<PrivateSyncManager>, runtime: Runtime, stream: TcpStream) -> Result<(), String> {
         self.private_sync_admit(&runtime)?;
         let mut channel = tokio::time::timeout(Duration::from_secs(10), Channel::handshake(stream, &manager.identity, false, None)).await.map_err(|_| "Private handshake timed out")??;
-        let message = tokio::time::timeout(Duration::from_secs(10), channel.receive()).await.map_err(|_| "Private device greeting timed out")??;
+        let message = tokio::time::timeout(Duration::from_secs(10), channel.receive_control()).await.map_err(|_| "Private device greeting timed out")??;
         match &message {
             Message::Hello { purpose, .. } if purpose == "pair" => {
                 let PeerGreeting { token, name, endpoints, .. } = Self::private_sync_peer_info(message, "pair")?;
@@ -494,8 +522,11 @@ impl Service {
                     expected.take();
                 }
                 drop(token);
-                channel.send(&self.private_sync_hello(&runtime, "pair", None)?).await?;
-                let result = tokio::select! { _ = session.cancel.cancelled() => return Ok(()), result = self.private_sync_pair_exchange(&manager, &runtime, &session, &mut channel, name, endpoints) => result };
+                let work = async {
+                    channel.send(&self.private_sync_hello(&runtime, "pair", None)?).await?;
+                    self.private_sync_pair_exchange(&manager, &runtime, &session, &mut channel, name, endpoints).await
+                };
+                let result = tokio::select! { _ = session.cancel.cancelled() => return Ok(()), result = work => result };
                 if let Err(error) = result { manager.finish_pair_error(&session, error); }
                 Ok(())
             },
@@ -532,7 +563,7 @@ impl Service {
         }
         channel.send(&Message::Confirm { identity: channel.identity.clone() }).await?;
         let confirmation = tokio::select! {
-            message = channel.receive() => message?,
+            message = channel.receive_control() => message?,
             _ = session.cancel.cancelled() => return Err("Private pairing was cancelled".into()),
             _ = tokio::time::sleep(session.expires.saturating_duration_since(Instant::now())) => return Err("Private invitation expired".into()),
         };
@@ -547,7 +578,7 @@ impl Service {
         self.private_sync_admit(runtime)?;
         self.store.check_private_peer_capacity(&channel.identity)?;
         channel.send(&Message::Ready).await?;
-        if !matches!(channel.receive().await?, Message::Ready) { return Err("Private device did not finish confirmation".into()); }
+        if !matches!(channel.receive_control().await?, Message::Ready) { return Err("Private device did not finish confirmation".into()); }
         {
             let _policy = self.privacy_gate.read().await;
             self.private_sync_admit(runtime)?;
@@ -580,7 +611,7 @@ impl Service {
         let stream = self.private_sync_socket(&runtime, &peer.endpoints).await?;
         let mut channel = tokio::time::timeout(Duration::from_secs(10), Channel::handshake(stream, &manager.identity, true, Some(&peer.identity))).await.map_err(|_| "Private handshake timed out")??;
         channel.send(&self.private_sync_hello(&runtime, "sync", None)?).await?;
-        let PeerGreeting { endpoints, categories, .. } = Self::private_sync_peer_info(channel.receive().await?, "sync")?;
+        let PeerGreeting { endpoints, categories, .. } = Self::private_sync_peer_info(channel.receive_control().await?, "sync")?;
         self.private_sync_exchange(&runtime, &mut channel, true, endpoints, categories).await
     }
     async fn private_sync_send_snapshot(&self, runtime: &Runtime, channel: &mut Channel, snapshot: crate::reading_data::WireSnapshot) -> Result<(), String> {
@@ -607,14 +638,14 @@ impl Service {
             self.private_sync_apply(runtime, &channel.identity, snapshot, categories).await?;
             self.private_sync_trusted(runtime, &channel.identity)?;
             channel.send(&Message::Committed).await?;
-            if !matches!(channel.receive().await?, Message::Committed) { return Err("Private device did not acknowledge durable sync".into()); }
+            if !matches!(channel.receive_control().await?, Message::Committed) { return Err("Private device did not acknowledge durable sync".into()); }
         } else {
             let Message::Snapshot { snapshot } = channel.receive().await? else { return Err("Private device did not send reading data".into()); };
             self.private_sync_apply(runtime, &channel.identity, snapshot, categories).await?;
             let state = self.store.read()?; sent_counter = state.reading_sync.counter;
             let snapshot = crate::reading_data::export(&state, categories)?;
             self.private_sync_send_snapshot(runtime, channel, snapshot).await?;
-            if !matches!(channel.receive().await?, Message::Committed) { return Err("Private device did not acknowledge durable sync".into()); }
+            if !matches!(channel.receive_control().await?, Message::Committed) { return Err("Private device did not acknowledge durable sync".into()); }
             self.private_sync_trusted(runtime, &channel.identity)?;
             channel.send(&Message::Committed).await?;
         }

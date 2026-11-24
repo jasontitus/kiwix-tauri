@@ -109,8 +109,16 @@ internal class ApplicationResources(
                     }
                 }
                 "networkState" -> networkPolicy.snapshot()
-                "downloadNotifications" -> onMain {
+                // The Rust async endpoint already owns a blocking worker.
+                // Notification authority needs a durable commit, not the UI queue.
+                "downloadNotifications" -> {
                     DownloadNotifications.update(context, JSONObject(payload))
+                    JSONObject()
+                }
+                "takeTransferEvents" -> JSONObject().put("events", TransferEvents.peek(context))
+                "acknowledgeTransferEvent" -> {
+                    val args = JSONObject(payload)
+                    TransferEvents.acknowledge(context, args.getString("event"), args.getString("requestId"))
                     JSONObject()
                 }
                 "crashCapturePolicy" -> {
@@ -214,8 +222,7 @@ internal class ApplicationResources(
             "speechStop", "speechRetire", "speechPause", "speechResume", "speechPrevious",
             "speechNext", "speechRewind", "speechForward", "speechSeek",
             "speechEngineStart", "speechEngineUpdate", "speechEngineStop",
-            "discoveryState", "transferState", "takeTransferEvents",
-            "acknowledgeTransferEvent", "registerListener", "takeIncomingDocuments" -> {
+            "discoveryState", "transferState", "registerListener", "takeIncomingDocuments" -> {
                 check(main.post {
                     try {
                         when (command) {
@@ -233,8 +240,13 @@ internal class ApplicationResources(
                             "speechForward" -> speech.forward(invoke)
                             "speechSeek" -> speech.seek(invoke)
                             "speechEngineStart" -> {
-                                if (SpeechPlayback.start(context,
-                                        SpeechLabels.from(invoke.getArgs().optJSONObject("labels")), true, true)) {
+                                val args = invoke.getArgs()
+                                val id = args.getString("id")
+                                val token = args.getString("token")
+                                if (speech.admitExternal(id, token) && SpeechPlayback.start(context, id,
+                                        SpeechLabels.from(args.optJSONObject("labels")), true, true,
+                                        title = args.getString("title"), subtitle = args.optString("subtitle"),
+                                        external = true)) {
                                     invoke.resolve(JSObject())
                                 } else {
                                     invoke.reject("SPEECH_FOREGROUND_REQUIRED")
@@ -242,12 +254,15 @@ internal class ApplicationResources(
                             }
                             "speechEngineUpdate" -> {
                                 val args = invoke.getArgs()
-                                SpeechPlayback.update(args.optBoolean("speaking", true),
-                                    args.optBoolean("paused", false), args.optBoolean("canPrevious", true))
-                                invoke.resolve(JSObject())
+                                if (SpeechPlayback.update(args.getString("id"), args.optBoolean("speaking", true),
+                                        args.optBoolean("paused", false), args.optBoolean("canPrevious", true))) {
+                                    invoke.resolve(JSObject())
+                                } else {
+                                    invoke.reject("SPEECH_AUDIO_SESSION_FAILED")
+                                }
                             }
                             "speechEngineStop" -> {
-                                SpeechPlayback.stop(context)
+                                SpeechPlayback.stop(context, invoke.getArgs().getString("id"))
                                 invoke.resolve(JSObject())
                             }
                             "discoveryState" -> {
@@ -261,12 +276,6 @@ internal class ApplicationResources(
                                 invoke.resolve(JSObject())
                             }
                             "transferState" -> requirePlugin().transferState(invoke)
-                            "takeTransferEvents" -> invoke.resolve(JSObject().put("events", TransferEvents.peek(context)))
-                            "acknowledgeTransferEvent" -> {
-                                val args = invoke.getArgs()
-                                TransferEvents.acknowledge(context, args.getString("event"), args.getString("requestId"))
-                                invoke.resolve(JSObject())
-                            }
                         }
                     } catch (error: Exception) { invoke.reject(error.toString()) }
                 }) { "NATIVE_MAIN_LOOP_UNAVAILABLE" }

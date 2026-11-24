@@ -18,27 +18,28 @@ class KiwixSpeechService : Service() {
         // Every delivery, including a transport action, may arrive through
         // startForegroundService. Satisfy that contract before dispatching.
         if (!SpeechPlayback.foreground(this)) return START_NOT_STICKY
+        val id = intent?.getStringExtra(SpeechPlayback.EXTRA_SESSION)
         when (intent?.action) {
             SpeechPlayback.ACTION_START, null -> Unit
-            SpeechPlayback.ACTION_PLAY -> SpeechPlayback.dispatchAction("play")
-            SpeechPlayback.ACTION_PAUSE -> SpeechPlayback.dispatchAction("pause")
-            SpeechPlayback.ACTION_STOP -> SpeechPlayback.dispatchAction("stop")
-            SpeechPlayback.ACTION_PREVIOUS -> SpeechPlayback.dispatchAction("previous")
-            SpeechPlayback.ACTION_REWIND -> SpeechPlayback.dispatchAction("rewind")
-            SpeechPlayback.ACTION_FORWARD -> SpeechPlayback.dispatchAction("forward")
+            SpeechPlayback.ACTION_PLAY -> SpeechPlayback.dispatchAction(id, "play")
+            SpeechPlayback.ACTION_PAUSE -> SpeechPlayback.dispatchAction(id, "pause")
+            SpeechPlayback.ACTION_STOP -> SpeechPlayback.dispatchAction(id, "stop")
+            SpeechPlayback.ACTION_PREVIOUS -> SpeechPlayback.dispatchAction(id, "previous")
+            SpeechPlayback.ACTION_REWIND -> SpeechPlayback.dispatchAction(id, "rewind")
+            SpeechPlayback.ACTION_FORWARD -> SpeechPlayback.dispatchAction(id, "forward")
             else -> return START_NOT_STICKY
         }
         return START_NOT_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        SpeechPlayback.onTaskRemoved()
+        SpeechPlayback.onTaskRemoved(this)
         stopSelf()
     }
 
     override fun onDestroy() {
         try {
-            SpeechPlayback.onServiceDestroyed()
+            SpeechPlayback.onServiceDestroyed(this)
         } finally {
             super.onDestroy()
         }

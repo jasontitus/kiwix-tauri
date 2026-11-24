@@ -116,6 +116,7 @@ pub(super) fn publish_verified_download(
     file: std::fs::File,
     downloaded: u64,
     digest: &str,
+    hashed_identity: Option<PartIdentity>,
     mode: FinalizeMode,
 ) -> Result<Outcome, String> {
     let snapshot = inner.snapshot(id)?;
@@ -125,6 +126,9 @@ pub(super) fn publish_verified_download(
         .map_err(|e| format!("Retaining verified download: {e}"))?;
     let identity = file_identity(verified.file())
         .map_err(|e| format!("Inspecting verified download: {e}"))?;
+    if hashed_identity != identity {
+        return Err("Download changed identity after its checksum pass; verify it again".into());
+    }
     // Publication and stop commands share this lock, giving them a clear ordering.
     let mut state = inner.state()?;
     match mode {
@@ -337,7 +341,7 @@ pub(super) fn finalize_durable_download(
                 if let Some(action) = local_stop_action(inner, id)? {
                     return Ok(signal_outcome(action));
                 }
-                return publish_verified_download(inner, id, file, total, &digest, mode);
+                return publish_verified_download(inner, id, file, total, &digest, identity, mode);
             }
         }
     }
@@ -393,11 +397,11 @@ pub(super) fn finalize_durable_download(
         record_verification_failure(inner, id, after, &digest, &error);
         return Err(error);
     }
-    record_verification_success(inner, id, after, &digest)?;
+    record_verification_success(inner, id, after.clone(), &digest)?;
     if let Some(action) = local_stop_action(inner, id)? {
         return Ok(signal_outcome(action));
     }
-    publish_verified_download(inner, id, file, total, &digest, mode)
+    publish_verified_download(inner, id, file, total, &digest, after, mode)
 }
 
 /// Re-check a live manager for rows whose bytes are durable but whose worker

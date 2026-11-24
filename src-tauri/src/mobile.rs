@@ -88,6 +88,8 @@ pub(crate) struct MobileState {
     #[cfg(target_os = "ios")]
     pub transfer_retirements: tokio::sync::Mutex<Vec<TransferRetirement>>,
     #[cfg(target_os = "ios")]
+    pub local_transfer_snapshot: tokio::sync::Mutex<Option<bool>>,
+    #[cfg(target_os = "ios")]
     pub activation_retry: AtomicBool,
     #[cfg(target_os = "ios")]
     pub sharing_policy_retry: AtomicBool,
@@ -139,6 +141,8 @@ impl Default for MobileState {
             serial: tokio::sync::Mutex::new(()),
             #[cfg(target_os = "ios")]
             transfer_retirements: tokio::sync::Mutex::new(Vec::new()),
+            #[cfg(target_os = "ios")]
+            local_transfer_snapshot: tokio::sync::Mutex::new(Some(false)),
             #[cfg(target_os = "ios")]
             activation_retry: AtomicBool::new(false),
             #[cfg(target_os = "ios")]
@@ -215,6 +219,14 @@ fn lifecycle_generation(service: &Service, active: bool, checkpoint_transition: 
     }
     state.desired_active = active;
     state.checkpoint_transition = if active { None } else { checkpoint_transition };
+    #[cfg(target_os = "ios")]
+    if !active {
+        // Revoke live sensor access in the same critical section that closes
+        // foreground admission; a rapid resume cannot skip this or observe
+        // foreground again before restoring the exact dormant owner.
+        state.active = false;
+        service.mobile_suspend_sensor_owners();
+    }
     drop(state);
     if !active { emit(service, "kiwix-mobile-background", json!({"generation": generation})); }
     // iOS and Android retain an active native read-aloud session across the
@@ -439,7 +451,7 @@ pub(crate) async fn drain_entries(_service: Arc<Service>) -> Result<(), String> 
 
 async fn register_events(service: Arc<Service>) -> Result<(), String> {
     let app = service.app.lock().map_err(|_| "Application handle unavailable")?.clone().ok_or("Application handle unavailable")?;
-    for event in ["document-progress", "camera-revoked", "checkpoint-expired", "checkpoint-retiring", "incoming-documents", "app-entry", "completion-notification-tap", "mobile-inactive", "mobile-suspended", "mobile-resumed", "transfers-pause", "transfers-timeout", "transfers-error", "hardware-shortcut", "network-policy-changed", "speech-state", "speech-action", "reader-audio", "dynamic-type", "hotspot-stopped", "nearby-bluetooth", "nearby-join"] {
+    for event in ["document-progress", "checkpoint-expired", "checkpoint-retiring", "incoming-documents", "app-entry", "completion-notification-tap", "mobile-inactive", "mobile-suspended", "mobile-resumed", "transfers-pause", "transfers-timeout", "transfers-error", "hardware-shortcut", "network-policy-changed", "speech-state", "speech-action", "reader-audio", "dynamic-type", "hotspot-stopped", "nearby-bluetooth", "nearby-join"] {
         let service = service.clone();
         app.kiwix_mobile().listen(event, move |payload| {
             match event {
@@ -496,11 +508,6 @@ async fn register_events(service: Arc<Service>) -> Result<(), String> {
                     {
                         emit(&service,"kiwix-mobile-shortcut",json!({"action":action}));
                     }
-                }
-                "camera-revoked" => {
-                    service.mobile_deactivate_sensors();
-                    #[cfg(target_os="android")]
-                    reconcile_android_window(service.clone());
                 }
                 "checkpoint-expired" | "checkpoint-retiring" => {
                     service.mobile_expire_checkpoint(&payload, event == "checkpoint-expired");
@@ -982,7 +989,10 @@ pub fn run() {
                     let Some(action) = url.query_pairs()
                         .find(|(key, _)| key == "action").map(|(_, value)| value.into_owned())
                         else { continue; };
-                    service.mobile_speech_action(json!({"action": action}));
+                    let Some(session_id) = url.query_pairs()
+                        .find(|(key, _)| key == "sessionId").map(|(_, value)| value.into_owned())
+                        else { continue; };
+                    service.mobile_speech_action(json!({"action": action, "sessionId": session_id, "activity": true}));
                 }
                 if !links.is_empty() {
                     // Queue exactly like a file open; a cold launch consumes the

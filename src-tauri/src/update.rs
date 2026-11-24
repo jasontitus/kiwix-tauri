@@ -395,12 +395,23 @@ fn acceptance_override(name: &str) -> Option<String> {
     }
 }
 
-fn updater_for(app: &AppHandle, config: &ChannelConfig) -> Result<tauri_plugin_updater::Updater, String> {
+fn updater_for<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    config: &ChannelConfig,
+    request_timeout: Duration,
+) -> Result<tauri_plugin_updater::Updater, String> {
     app.updater_builder()
         .endpoints(vec![config.endpoint.clone()])
         .map_err(|error| plain_update_error(&error))?
         .pubkey(config.pubkey.clone())
-        .timeout(REQUEST_TIMEOUT)
+        .timeout(request_timeout)
+        // The plugin applies its builder timeout to metadata checks only.
+        // Artifacts also need a bound on stalled reads, not total elapsed time.
+        .configure_client(move |client| {
+            client
+                .connect_timeout(Duration::from_secs(20))
+                .read_timeout(request_timeout)
+        })
         .build()
         .map_err(|error| plain_update_error(&error))
 }
@@ -610,7 +621,7 @@ pub(crate) async fn check(
         }
     }
     let _operation = OPERATION.try_begin().ok_or_else(|| BUSY.to_string())?;
-    let updater = updater_for(&app, &config)?;
+    let updater = updater_for(&app, &config, REQUEST_TIMEOUT)?;
     let result = updater.check().await;
     let now = time::OffsetDateTime::now_utc();
     let path = service.store.data_dir().join(STATE_FILE);
@@ -1058,6 +1069,47 @@ mod tests {
             let _ = stream.write_all(response.as_bytes());
         });
         format!("http://{address}/update.json")
+    }
+
+    #[tokio::test]
+    async fn updater_allows_progressing_bodies_but_times_out_a_stall() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let idle = Duration::from_millis(750);
+        for stall in [false, true] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let artifact = format!("http://{}/artifact", listener.local_addr().unwrap());
+            let signature = base64::engine::general_purpose::STANDARD.encode(TEST_SIGNATURE);
+            let endpoint = serve_manifest(test_manifest("0.1.1", &signature, &artifact));
+            let app = mock_loopback_app(&[&endpoint]);
+            let config = ChannelConfig {
+                endpoint: Url::parse(&endpoint).unwrap(),
+                pubkey: base64::engine::general_purpose::STANDARD.encode(TEST_PUBLIC_KEY),
+            };
+            let updater = updater_for(app.handle(), &config, idle).unwrap();
+            let update = updater.check().await.unwrap().unwrap();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let _ = socket.read(&mut [0; 4096]).await.unwrap();
+                socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nt").await.unwrap();
+                if stall {
+                    std::future::pending::<()>().await;
+                }
+                for byte in b"est" {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    socket.write_all(&[*byte]).await.unwrap();
+                }
+            });
+            let result = tokio::time::timeout(Duration::from_secs(5), update.download(|_, _| {}, || {}))
+                .await.expect("updater must enforce its own idle bound");
+            if stall {
+                assert!(matches!(result, Err(UpdaterError::Reqwest(error)) if error.is_timeout()));
+                server.abort();
+            } else {
+                assert_eq!(result.unwrap().as_slice(), b"test");
+                server.await.unwrap();
+            }
+        }
     }
 
     #[test]

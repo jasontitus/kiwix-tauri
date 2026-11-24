@@ -644,7 +644,7 @@ final class ExternalDocuments {
       if scoped { url.stopAccessingSecurityScopedResource() }
     }
   }
-  // All methods are serialized by the plugin's document worker.
+  // All methods are serialized by the plugin's provider worker.
   private var transient: [String: Record] = [:]
   private var selectedURLs: [String: URL] = [:]
   private var leases: [String: Lease] = [:]

@@ -3,8 +3,7 @@
 //! Capability-scoped LAN article search. No app IPC, profile data or sensors.
 use super::*;
 use crate::search::{self, Mode};
-
-type SharedArchive = (String, Result<Archive, String>);
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub(super) enum Scope { Selected(Index), Library(LibraryIndex) }
@@ -17,34 +16,35 @@ impl Scope {
             Self::Library(s) => available_books(s)?.into_iter().map(|b| (b.metadata.id, b.metadata.title)).collect(),
         })
     }
-    fn archives(&self, selected: &str) -> Result<Vec<SharedArchive>, String> {
-        search::check_cancel(&self.cancellation().0.search_cancel)?;
+    fn search(&self, query: &Query, suggest: bool, cancel: &CancellationToken) -> Result<Value, String> {
+        search::check_cancel(cancel)?;
+        let execute = |ids: Vec<String>, open: &mut dyn FnMut(usize) -> Result<Archive, String>| {
+            let prefix = query.q.trim();
+            if suggest {
+                // Open only the archives visited by this continuation. Warming
+                // the whole library on each keystroke churns its bounded cache.
+                return search::suggest(&ids, prefix, query.token.as_deref(), 20, cancel, |index, _| open(index));
+            }
+            let mut archives = Vec::with_capacity(ids.len());
+            for (index, id) in ids.into_iter().enumerate() {
+                search::check_cancel(cancel)?;
+                archives.push((id, open(index)));
+            }
+            search::run(archives, prefix, query.mode, query.offset, 20, true, cancel)
+        };
         match self {
             Self::Selected(s) => {
-                if !selected.is_empty() && !s.entries.iter().any(|b| b.id == selected) { return Err("Archive is not shared".into()); }
-                Ok(s.entries.iter().filter(|b| selected.is_empty() || selected == b.id).map(|b| {
-                    (b.id.clone(), b.archive.upgrade().map(|a| (*a).clone()).ok_or_else(|| "Archive is no longer shared".into()))
-                }).collect())
+                let entries: Vec<_> = s.entries.iter().filter(|b| query.book.is_empty() || query.book == b.id).collect();
+                if !query.book.is_empty() && entries.is_empty() { return Err("Archive is not shared".into()); }
+                let ids = entries.iter().map(|b| b.id.clone()).collect();
+                execute(ids, &mut |index| {
+                    entries[index].archive.upgrade().map(|a| (*a).clone()).ok_or_else(|| "Archive is no longer shared".into())
+                })
             }
             Self::Library(s) => {
-                let mut archives = Vec::new();
-                if !selected.is_empty() {
-                    // A selected archive is resolved once from the same live
-                    // record the availability list would have produced.
-                    search::check_cancel(&s.cancellation.0.search_cancel)?;
-                    let book = available_book(s, selected)?;
-                    let id = book.metadata.id.clone();
-                    let archive = library_archive_record(s, &book).map(|a| (*a).clone()).map_err(|e| e.message);
-                    archives.push((id, archive));
-                    return Ok(archives);
-                }
-                for book in available_books(s)? {
-                    search::check_cancel(&s.cancellation.0.search_cancel)?;
-                    let id = book.metadata.id.clone();
-                    let archive = library_archive_record(s, &book).map(|a| (*a).clone()).map_err(|e| e.message);
-                    archives.push((id, archive));
-                }
-                Ok(archives)
+                let books = if query.book.is_empty() { available_books(s)? } else { vec![available_book(s, &query.book)?] };
+                let ids = books.iter().map(|b| b.metadata.id.clone()).collect();
+                execute(ids, &mut |index| library_archive_record(s, &books[index]).map(|a| (*a).clone()).map_err(|e| e.message))
             }
         }
     }
@@ -91,11 +91,7 @@ pub(super) async fn request(scope: Scope, rest: &str, host: IpAddr, uri: &Uri, h
     let stopped = cancellation.clone();
     let result = cancellation.0.workers.run(move || {
         let _permit = permit;
-        stopped.native(|| {
-            let archives = worker_scope.archives(&query.book)?;
-            if suggest { search::suggest(archives, query.q.trim(), query.token.as_deref(), 20, &stopped.0.search_cancel) }
-            else { search::run(archives, query.q.trim(), query.mode, query.offset, 20, true, &stopped.0.search_cancel) }
-        }).map_err(|e| e.to_string())?
+        stopped.native(|| worker_scope.search(&query, suggest, &stopped.0.search_cancel)).map_err(|e| e.to_string())?
     }).await;
     match result {
         Ok(mut value) => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![forbid(unsafe_code)]
 use super::*;
-use std::{fs, io::{Seek, Write}, time::Duration};
+use std::{fs, io::Write, time::Duration};
 
 struct Temp(PathBuf);
 impl Temp {
@@ -38,10 +38,10 @@ fn resume_rehash_repairs_corrupt_claims_without_discarding_valid_chunks() {
     let path = root.0.join(&owned.staging).join("book.zim");
     let mut changed = fs::OpenOptions::new().write(true).open(&path).unwrap(); changed.write_all(b"xxxx").unwrap(); changed.sync_all().unwrap(); drop(changed);
     let mut open = owned.open(&manifest, false).unwrap(); let mut bits = vec![true, true];
-    rehash_verified(&mut open, &manifest, &owned, &mut bits, false, &CancellationToken::new()).unwrap();
+    rehash_verified(&mut open, &manifest, &owned, &mut bits, &CancellationToken::new()).unwrap();
     assert_eq!(bits, vec![false, true]); assert_eq!(verified_bytes(&manifest, &bits).unwrap(), 4);
     open.write_chunk(&manifest, 0, b"abcd").unwrap(); bits[0] = true;
-    rehash_verified(&mut open, &manifest, &owned, &mut bits, true, &CancellationToken::new()).unwrap();
+    rehash_verified(&mut open, &manifest, &owned, &mut bits, &CancellationToken::new()).unwrap();
     assert_eq!(bits, vec![true, true]); assert_eq!(open.read_chunk(&manifest, 1).unwrap(), b"efgh");
 }
 #[test]
@@ -138,7 +138,8 @@ async fn split_header_offer_and_receiver_preserve_every_part() {
     assert_eq!(transferred, bytes);
     let files = manifest.files.iter().map(|entry|
         (entry.path.clone(), File::open(directory.join(&entry.path)).unwrap())).collect::<Vec<_>>();
-    validate_zim(&directory, &files, &manifest).unwrap();
+    let cancel = CancellationToken::new();
+    validate_zim(&directory, &files, &manifest, &cancel).unwrap();
     let last = directory.join("selected.zimac");
     if cfg!(windows) {
         // The pinned offer denies write sharing, so no in-place writer can
@@ -152,7 +153,7 @@ async fn split_header_offer_and_receiver_preserve_every_part() {
     }
     fs::OpenOptions::new().write(true).open(&last).unwrap()
         .set_len((bytes.len() - 81) as u64).unwrap();
-    assert!(validate_zim(&directory, &files, &manifest).is_err());
+    assert!(validate_zim(&directory, &files, &manifest, &cancel).is_err());
 }
 #[tokio::test]
 async fn retired_native_checksum_does_not_block_stop_or_publish_late_result() {
@@ -180,7 +181,7 @@ async fn protected_transfer_restart_retains_data_but_never_credentials_or_automa
     let sid = manifest.swarm_id.clone();
     let reader: network::ChunkReader = Arc::new(move |index| pinned.chunk(index));
     let secret = "638274-private-test-pin";
-    let server = network::seed(manifest, Uuid::new_v4().to_string(), Some(secret.into()), reader, Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+    let server = network::seed(manifest, Uuid::new_v4().to_string(), Some(secret.into()), reader, Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let profile = root.0.join("receiver-profile");
     let store = Arc::new(Store::new(profile.clone()).unwrap());
@@ -290,7 +291,7 @@ fn native_verification_cannot_validate_a_good_path_replacement_for_bad_retained_
     fs::write(original_name.join("book.zim"), &good).unwrap();
     // The replacement is a genuinely good ZIM of the exact same size. POSIX
     // verifies the bad retained descriptors; Windows rejects its foreign IDs.
-    assert!(validate_zim(&original_name, &files, &manifest).is_err());
+    assert!(validate_zim(&original_name, &files, &manifest, &CancellationToken::new()).is_err());
     assert_eq!(fs::read(original_name.join("book.zim")).unwrap(), good);
 }
 
@@ -310,7 +311,10 @@ fn stock_native_descriptor_verification_covers_the_complete_split_set() {
         let first = open.read_chunk(&manifest, 0).unwrap();
         assert!(open.write_chunk(&manifest, 0, &first).is_err());
         let files = open.verification_files(&manifest, &owned).unwrap();
-        validate_zim(&open.directory.path, &files, &manifest).unwrap();
+        let cancel = CancellationToken::new();
+        validate_zim(&open.directory.path, &files, &manifest, &cancel).unwrap();
+        cancel.cancel();
+        assert!(validate_zim(&open.directory.path, &files, &manifest, &cancel).unwrap_err().contains("stopped"));
     }
 }
 
@@ -562,7 +566,7 @@ async fn endpoint_fixture(root: &Temp) -> (SeedServer, Arc<Manifest>, Vec<u8>) {
     let (manifest, source) = SourceSet::prepare(store, book, CancellationToken::new()).await.unwrap();
     let reader: network::ChunkReader = Arc::new(move |index| source.chunk(index));
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     (server, manifest, bytes)
 }
@@ -657,7 +661,7 @@ async fn throttled_identity_preflight_inspects_and_admits_into_a_nonempty_librar
     });
     let upload = Arc::new(RateBudget::new(0));
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        upload.clone(), CancellationToken::new()).await.unwrap();
+        upload.clone(), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let target = ConnectionTarget::manual("127.0.0.1".into(), server.port);
     let started = Instant::now();
@@ -727,7 +731,7 @@ async fn duplicate_preflight_reads_identity_across_split_part_boundaries() {
         Ok(data[file][offset..data[file].len().min(offset + 1024)].to_vec())
     });
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let inspection = LocalSwarmManager::inspect(ConnectionTarget::manual("127.0.0.1".into(), server.port),
         &manifest.swarm_id, None, CancellationToken::new(), 0, true).await.unwrap();
@@ -781,7 +785,7 @@ async fn stopping_and_restarting_preserves_terminal_failures_and_cancellations()
         Ok(data[index as usize * 1024..data.len().min((index as usize + 1) * 1024)].to_vec())
     });
     let server = network::seed(manifest, Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let store = Arc::new(Store::new(root.0.join("profile")).unwrap());
     let manager = LocalSwarmManager::new(store.clone(), CancellationToken::new()).unwrap();
@@ -828,7 +832,7 @@ async fn checkpoint_window_batches_state_updates_and_pause_flushes_verified_chun
     });
     // Throttled so the checkpoint cadence is observable while the transfer runs.
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(64 * 1024)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(64 * 1024)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let store = Arc::new(Store::new(root.0.join("receiver-profile")).unwrap());
     let manager = LocalSwarmManager::new(store.clone(), CancellationToken::new()).unwrap();
@@ -836,8 +840,18 @@ async fn checkpoint_window_batches_state_updates_and_pause_flushes_verified_chun
     let job = manager.start(target, manifest.swarm_id.clone(), None, root.0.join("received"), None).await.unwrap();
     let deadline = Instant::now() + Duration::from_secs(60);
     let mut observed = std::collections::BTreeSet::new();
+    let mut saved_during_window = false;
     loop {
         let row = manager.list().unwrap().into_iter().find(|row| row.id == job.id).unwrap();
+        if !saved_during_window && (1..(CHECKPOINT_CHUNKS * 1024) as u64).contains(&row.downloaded) {
+            // An unrelated save while UI progress is ahead must not accidentally
+            // journal the worker's unsynced bytes.
+            manager.record_route(&job.id, "test route change");
+            let jobs = load(&manager.inner.directory, &store).unwrap();
+            assert_eq!(jobs[&job.id].job.downloaded, 0);
+            assert!(jobs[&job.id].verified.iter().all(|bit| !bit));
+            saved_during_window = true;
+        }
         assert_ne!(row.status, "failed", "{:?}", row.error);
         // The on-disk job row is the durable record; it must only ever move in
         // whole windows even though the in-memory row moves per chunk.
@@ -849,6 +863,7 @@ async fn checkpoint_window_batches_state_updates_and_pause_flushes_verified_chun
         assert!(Instant::now() < deadline, "Checkpoint window did not advance");
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
+    assert!(saved_during_window, "Did not exercise an unrelated save during the first window");
     assert!(observed.len() >= 2, "Only one checkpoint window was observed: {observed:?}");
     assert!(observed.iter().all(|count| count % CHECKPOINT_CHUNKS == 0), "Per-chunk durable checkpoints: {observed:?}");
     manager.pause(&job.id, false).await.unwrap();
@@ -869,12 +884,15 @@ async fn checkpoint_window_batches_state_updates_and_pause_flushes_verified_chun
     server.shutdown().await;
 }
 
-/// A crash between checkpoints loses unsynced writes only: resume keeps exactly
-/// the durable verified prefix and re-downloads the rest.
+/// Unknown bytes after a crash are not claims, even if they match the manifest.
+/// This covers both a surviving uncommitted write and a matching sparse zero.
 #[test]
 fn crash_between_checkpoints_keeps_only_the_committed_verified_prefix() {
     let root = Temp::new();
-    let chunk = |index: u32| (0..4).map(|offset| (index * 11 + offset) as u8).collect::<Vec<u8>>();
+    let chunk = |index: u32| {
+        if index == 19 { return vec![0; 4]; }
+        (0..4).map(|offset| (index * 11 + offset) as u8).collect::<Vec<u8>>()
+    };
     let mut manifest = Manifest { zim: None,
         protocol_version: 1, swarm_id: String::new(), name: "durability-fixture.zim".into(),
         total_bytes: 80, chunk_size_bytes: 4, chunk_hash_algo: "sha256".into(),
@@ -884,24 +902,21 @@ fn crash_between_checkpoints_keeps_only_the_committed_verified_prefix() {
     manifest.swarm_id = manifest.content_address();
     manifest.validate().unwrap();
     let (owned, mut open) = OwnedSet::create(Directory::open(&root.0).unwrap(), &manifest, &Uuid::new_v4().to_string()).unwrap();
-    for index in 0..20u32 { open.write_chunk(&manifest, index, &chunk(index)).unwrap(); }
-    open.sync_data().unwrap();
     // A committed prefix of eight chunks; the production window is much larger,
     // but the crash contract is identical for any window boundary.
     let checkpoint = 8usize;
+    for index in 0..checkpoint as u32 { open.write_chunk(&manifest, index, &chunk(index)).unwrap(); }
+    open.commit_data(&manifest, &owned).unwrap();
+    open.write_chunk(&manifest, checkpoint as u32, &chunk(checkpoint as u32)).unwrap();
     let mut verified = vec![false; 20];
     verified[..checkpoint].fill(true);
     drop(open);
-    // The crash dropped every write after the last fsynced checkpoint.
-    let path = root.0.join(&owned.staging).join("durability-fixture.zim");
-    let mut file = fs::OpenOptions::new().write(true).open(&path).unwrap();
-    file.seek(std::io::SeekFrom::Start((checkpoint * 4) as u64)).unwrap();
-    file.write_all(&vec![0u8; (20 - checkpoint) * 4]).unwrap();
-    file.sync_all().unwrap(); drop(file);
+    // An uncommitted matching write is still present; the rest of the staging
+    // file, including a legitimate zero chunk in the manifest, was never written.
     let mut open = owned.open(&manifest, false).unwrap();
-    rehash_verified(&mut open, &manifest, &owned, &mut verified, false, &CancellationToken::new()).unwrap();
+    rehash_verified(&mut open, &manifest, &owned, &mut verified, &CancellationToken::new()).unwrap();
     let mut expected = vec![false; 20]; expected[..checkpoint].fill(true);
-    assert_eq!(verified, expected, "Only the committed prefix may survive a crash");
+    assert_eq!(verified, expected, "Recovery must not claim matching bytes outside the checkpoint");
     assert_eq!(verified_bytes(&manifest, &verified).unwrap(), (checkpoint * 4) as u64);
     // Resume re-downloads the lost window and the file becomes whole again.
     for index in checkpoint as u32..20 {
@@ -909,7 +924,7 @@ fn crash_between_checkpoints_keeps_only_the_committed_verified_prefix() {
         verified[index as usize] = true;
     }
     open.sync_data().unwrap();
-    rehash_verified(&mut open, &manifest, &owned, &mut verified, true, &CancellationToken::new()).unwrap();
+    rehash_verified(&mut open, &manifest, &owned, &mut verified, &CancellationToken::new()).unwrap();
     assert!(verified.iter().all(|bit| *bit));
 }
 
@@ -963,16 +978,16 @@ async fn receive_path_throughput_measurement() {
         if apple {
             let frame = Arc::new(protocol::Message::ManifestResponse(serde_json::to_vec(manifest.as_ref()).unwrap()).encode().unwrap());
             network::seed_apple(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-                Arc::new(RateBudget::new(0)), CancellationToken::new(), frame).await.unwrap()
+                Arc::new(RateBudget::new(0)), CancellationToken::new(), frame, None).await.unwrap()
         } else {
             network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-                Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap()
+                Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap()
         }
         #[cfg(not(any(target_os = "ios", target_os = "macos")))]
         {
             assert!(!apple, "Only Apple platforms serve through the Network.framework bridge");
             network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-                Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap()
+                Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap()
         }
     };
     server.stats.set_accepting(true);
@@ -1094,7 +1109,7 @@ async fn mid_transfer_link_loss_redials_the_peer_and_resumes_from_the_verified_p
         })
     };
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let store = Arc::new(Store::new(root.0.join("receiver-profile")).unwrap());
     let manager = LocalSwarmManager::new(store, CancellationToken::new()).unwrap();
@@ -1150,7 +1165,7 @@ async fn repeated_link_loss_surfaces_a_bounded_error_instead_of_looping() {
     // the handshake: a peer whose link never comes back.
     let reader: network::ChunkReader = Arc::new(|_| Err("LocalSwarm source read failed".into()));
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let store = Arc::new(Store::new(root.0.join("receiver-profile")).unwrap());
     let manager = LocalSwarmManager::new(store, CancellationToken::new()).unwrap();
@@ -1278,7 +1293,7 @@ fn adopts_only_hash_verified_chunks_from_partial_downloads() {
 
     // A rehash of the adopted staging agrees with the recorded bits.
     let mut recheck = bits.clone();
-    rehash_verified(&mut open, &manifest, &owned, &mut recheck, true, &CancellationToken::new()).unwrap();
+    rehash_verified(&mut open, &manifest, &owned, &mut recheck, &CancellationToken::new()).unwrap();
     assert_eq!(recheck, bits);
 }
 
@@ -1350,7 +1365,7 @@ async fn receive_reuses_an_unfinished_torrent_partial_and_fetches_only_missing_c
         Ok(source[start..(start + 1024).min(source.len())].to_vec())
     });
     let server = network::seed(manifest.clone(), Uuid::new_v4().to_string(), None, reader,
-        Arc::new(RateBudget::new(0)), CancellationToken::new()).await.unwrap();
+        Arc::new(RateBudget::new(0)), CancellationToken::new(), None).await.unwrap();
     server.stats.set_accepting(true);
     let manager = LocalSwarmManager::new(store, CancellationToken::new()).unwrap();
     let target = ConnectionTarget::manual("127.0.0.1".into(), server.port);

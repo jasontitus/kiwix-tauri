@@ -1134,7 +1134,7 @@
 :root[data-platform="ios"][data-large-text="true"] .rw-mobile-bar {
   flex-basis: auto;
 }
-:root[data-platform="ios"][data-large-text="true"] :is(button, summary, label, .page-description, .rw-document-title, .rw-document-book, .rw-mobile-identity strong) {
+:root[data-platform="ios"][data-large-text="true"] :is(button, summary, label, .page-description, .rw-document-identity strong, .rw-document-book, .rw-mobile-identity strong) {
   white-space: normal;
   overflow-wrap: anywhere;
 }

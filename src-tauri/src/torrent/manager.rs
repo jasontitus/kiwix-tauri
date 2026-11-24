@@ -1966,13 +1966,28 @@ impl TorrentManager {
                 // The engine must open any files this adapter created. A
                 // missing file is still created by ConfinedFactory.
                 factory.existing = true;
-                match super::web_seed::download(token, &factory, &seed, &|downloaded, total| {
-                    let _ = self.update_record(id, |record| {
-                        if record.paused || record.job.status == "cancelled" { return; }
-                        record.job.downloaded = downloaded.min(total);
-                        record.job.status = "downloading".into();
-                    });
-                }).await {
+                // A row is display progress, not recovery evidence. Resume
+                // reopens the owned files and verifies against torrent pieces.
+                let result = super::web_seed::download(token, &factory, &seed, &|downloaded, total, speed| {
+                    if let Ok(mut state) = self.inner.state.lock() {
+                        if let Some(record) = state.jobs.iter_mut().find(|record| record.job.id == id
+                            && !token.is_cancelled() && !record.paused && record.job.status != "cancelled")
+                        {
+                            record.job.downloaded = downloaded.min(total);
+                            record.job.total = Some(total);
+                            record.job.speed = speed;
+                            record.job.eta_seconds = (speed > 0.0 && downloaded < total)
+                                .then(|| ((total - downloaded) as f64 / speed).ceil() as u64);
+                        }
+                    }
+                }).await;
+                if let Ok(mut state) = self.inner.state.lock() {
+                    if let Some(record) = state.jobs.iter_mut().find(|record| record.job.id == id) {
+                        record.job.speed = 0.0;
+                        record.job.eta_seconds = None;
+                    }
+                }
+                match result {
                     Ok(()) => {}
                     Err(_) if token.is_cancelled() => return Ok(()),
                     Err(error) => {

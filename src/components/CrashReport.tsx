@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Eye, EyeOff, Mail, Trash2 } from "lucide-react";
 import { api, isNative } from "../api";
+import { diagnostics, reportError } from "../diagnostics";
 import { formatDate, t } from "../i18n";
 import type { Book } from "../types";
-import { confirmAction, Modal } from "./UI";
+import { confirmAction, ErrorNotice, errorText, Modal } from "./UI";
 
 /** Matches `src-tauri/src/crash.rs` schema 1. */
 export interface CrashRecord {
@@ -263,16 +264,25 @@ export function CrashReportSection({
   onError: (error: unknown) => void;
 }) {
   const [state, setState] = useState<CrashReportState | null>(null);
+  const [readError, setReadError] = useState("");
+  const readRequest = useRef(0);
   const load = useCallback(async () => {
+    const id = ++readRequest.current;
+    setReadError("");
     try {
-      setState(await api<CrashReportState>("crash_report"));
+      const result = await api<CrashReportState>("crash_report");
+      if (id === readRequest.current) setState(result);
     } catch (error) {
-      onError(error);
+      if (id !== readRequest.current) return;
+      if (reportError(diagnostics, error, "blocking", true))
+        setReadError(t("Could not read the local crash report.") + "\n" + errorText(error));
     }
-  }, [onError]);
+  }, []);
   useEffect(() => {
     void load();
+    return () => { readRequest.current++; };
   }, [load]);
+  if (readError) return <ErrorNotice message={readError} onRetry={() => void load()} />;
   if (!state)
     return (
       <p className="muted" role="status">
@@ -298,25 +308,34 @@ export function CrashReportSection({
 export default function CrashReportPrompt({
   books,
   readOnly,
+  available = true,
   onError,
 }: {
   books: Book[];
   readOnly: boolean;
+  available?: boolean;
   onError: (error: unknown) => void;
 }) {
   const [state, setState] = useState<CrashReportState | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const canRead = useRef(false);
+  canRead.current = available && !dismissed;
+  const readRequest = useRef(0);
   const load = useCallback(async () => {
+    if (!canRead.current) return;
+    const id = ++readRequest.current;
     try {
-      setState(await api<CrashReportState>("crash_report"));
+      const result = await api<CrashReportState>("crash_report");
+      if (canRead.current && id === readRequest.current) setState(result);
     } catch (error) {
-      onError(error);
+      if (canRead.current && id === readRequest.current) onError(error);
     }
   }, [onError]);
   useEffect(() => {
-    void load();
-  }, [load]);
-  if (dismissed || !state?.record || state.record.reportedAt) return null;
+    if (available && !dismissed) void load();
+    return () => { readRequest.current++; };
+  }, [available, dismissed, load]);
+  if (!available || dismissed || !state?.record || state.record.reportedAt) return null;
   return (
     <Modal
       title={t("Crash report available")}

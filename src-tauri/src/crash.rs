@@ -8,10 +8,10 @@
 //! show, copy, mail or delete the record.
 //!
 //! Privacy rules applied before anything reaches disk:
-//! * URLs lose their query string and fragment; reader `/.kiwix/<token>/` path
-//!   authority and `zim://` locations are dropped entirely.
-//! * Filesystem paths are reduced to their final component. Panic locations and
-//!   backtrace frames keep only `file.rs:line`.
+//! * External HTTP(S) URLs lose credentials, queries, and fragments. Local
+//!   reader URLs and other URI schemes do not keep hosts or paths.
+//! * Path-like text may be a reader route; do not keep its final component.
+//!   Compiler-supplied panic locations and backtrace locations keep filenames.
 //! * Values following token/secret/password/cookie/bearer keywords are replaced.
 //! * Long opaque token-like runs are replaced.
 //! * Every field is length-bounded; the whole record is capped at 32 KiB.
@@ -233,17 +233,23 @@ fn build_record(
 
 fn sanitize_backtrace(backtrace: &str) -> Vec<String> {
     let mut frames = Vec::new();
-    for line in backtrace.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.eq_ignore_ascii_case("stack backtrace:") {
+    let mut lines = backtrace.lines().map(str::trim).peekable();
+    while let Some(line) = lines.next() {
+        // std's stable Display output puts the frame number on the symbol
+        // line and its optional source location on a separate, unnumbered line.
+        if !line.split_once(':').is_some_and(|(number, _)| {
+            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        }) {
             continue;
         }
-        // Keep the human frame line but not raw paths or long tokens.
-        let frame = truncate_chars(&redact_line(line), MAX_FRAME_CHARS);
-        if !frame.is_empty() {
-            frames.push(frame);
+        let mut frame = redact_line(line);
+        if let Some(location) = lines.next_if(|line| line.starts_with("at ")) {
+            frame.push_str(" at ");
+            let location = replace_urls(&location[3..]);
+            frame.push_str(&redact_secret_values(file_name(&location)));
         }
-        if frames.len() >= MAX_STACK_FRAMES {
+        frames.push(truncate_chars(&frame, MAX_FRAME_CHARS));
+        if frames.len() == MAX_STACK_FRAMES {
             break;
         }
     }
@@ -414,75 +420,74 @@ fn redact_line(value: &str) -> String {
 }
 
 fn replace_urls(value: &str) -> String {
-    const SCHEMES: [&str; 5] = ["https://", "http://", "file://", "zim://", "mailto:"];
+    const OPAQUE_SCHEMES: &[&str] = &["blob", "content", "data", "file", "mailto", "tauri", "tel", "zim"];
     let mut output = String::with_capacity(value.len());
-    let mut rest = value;
-    loop {
-        let mut found: Option<(usize, &str)> = None;
-        for scheme in SCHEMES {
-            if let Some(index) = find_ignore_ascii_case(rest, scheme) {
-                if found.is_none_or(|(current, _)| index < current) {
-                    found = Some((index, scheme));
-                }
-            }
+    let mut cursor = 0;
+    for (colon, _) in value.match_indices(':') {
+        if colon < cursor {
+            continue;
         }
-        let Some((index, scheme)) = found else {
-            output.push_str(rest);
-            return output;
-        };
-        output.push_str(&rest[..index]);
-        let candidate = &rest[index..];
-        let end = candidate
-            .char_indices()
-            .find(|(_, character)| {
-                character.is_whitespace()
-                    || matches!(character, '"' | '\'' | '<' | '>' | ')' | ']' | '}' | ',')
+        let scheme_len = value.as_bytes()[cursor..colon]
+            .iter()
+            .rev()
+            .take_while(|&&byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
+            .count();
+        let start = colon - scheme_len;
+        let scheme = &value[start..colon];
+        if !scheme.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) {
+            continue;
+        }
+        let tail = &value[colon + 1..];
+        if !tail.starts_with("//")
+            && (tail.starts_with(':')
+                || !OPAQUE_SCHEMES.iter().any(|name| scheme.eq_ignore_ascii_case(name)))
+        {
+            continue;
+        }
+        let end = tail
+            .find(|character: char| {
+                character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
             })
-            .map(|(offset, _)| offset)
-            .unwrap_or(candidate.len());
-        let raw = &candidate[..end];
-        output.push_str(&safe_url(raw, scheme));
-        rest = &candidate[end..];
+            .map_or(value.len(), |end| colon + 1 + end);
+        output.push_str(&value[cursor..start]);
+        output.push_str(&safe_url(&value[start..end], scheme));
+        cursor = end;
     }
+    output.push_str(&value[cursor..]);
+    output
 }
 
 fn safe_url(raw: &str, scheme: &str) -> String {
-    if scheme == "mailto:" {
-        return "mailto:[redacted]".into();
-    }
-    if scheme == "zim://" {
-        return "zim://[redacted]".into();
-    }
-    if scheme == "file://" {
-        let path = raw.trim_start_matches("file://");
-        return file_name(path).to_owned();
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return "[url]".into();
     }
     let Ok(url) = url::Url::parse(raw) else {
         return "[url]".into();
     };
-    let host = url.host_str().unwrap_or("");
-    if host.is_empty() {
+    let Some(host) = url.host() else {
         return "[url]".into();
-    }
-    let mut path = url.path().to_owned();
-    if let Some(index) = path.find("/.kiwix/") {
-        path.truncate(index + "/.kiwix".len());
-        path.push_str("/[redacted]");
+    };
+    let local = match host {
+        url::Host::Domain(domain) => {
+            let domain = domain.trim_end_matches('.');
+            domain == "localhost" || domain.ends_with(".localhost")
+        }
+        url::Host::Ipv4(ip) => ip.is_loopback(),
+        url::Host::Ipv6(ip) => {
+            ip.is_loopback() || ip.to_ipv4_mapped().is_some_and(|ip| ip.is_loopback())
+        }
+    };
+    let path = url.path();
+    let decoded = percent_encoding::percent_decode_str(path).decode_utf8_lossy();
+    let nested = decoded.contains("://")
+        || ["mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:"]
+            .iter()
+            .any(|prefix| decoded.contains(prefix));
+    if local || decoded.contains("/.kiwix/") || nested {
+        return "[reader-url]".into();
     }
     let port = url.port().map(|port| format!(":{port}")).unwrap_or_default();
-    // Query and fragment are always dropped: they carry reader tokens and
-    // arbitrary article parameters.
-    format!("{scheme}{host}{port}{path}")
-}
-
-fn find_ignore_ascii_case(haystack: &str, needle: &str) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+    format!("{}://{host}{port}{path}", url.scheme())
 }
 
 fn redact_paths(value: &str) -> String {
@@ -490,8 +495,8 @@ fn redact_paths(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut index = 0;
     while index < chars.len() {
-        if let Some((end, replacement)) = path_at(&chars, index) {
-            output.push_str(&replacement);
+        if let Some(end) = path_at(&chars, index) {
+            output.push_str("[path]");
             index = end;
             continue;
         }
@@ -501,7 +506,7 @@ fn redact_paths(value: &str) -> String {
     output
 }
 
-fn path_at(chars: &[char], index: usize) -> Option<(usize, String)> {
+fn path_at(chars: &[char], index: usize) -> Option<usize> {
     let boundary = index == 0
         || chars[index - 1].is_whitespace()
         || matches!(
@@ -525,47 +530,11 @@ fn path_at(chars: &[char], index: usize) -> Option<(usize, String)> {
     let mut end = index;
     while end < chars.len()
         && !chars[end].is_whitespace()
-        && !matches!(
-            chars[end],
-            '"' | '\'' | '<' | '>' | ')' | ']' | '}' | ',' | ';' | '?' | '#'
-        )
+        && !matches!(chars[end], '"' | '<' | '>' | '`')
     {
         end += 1;
     }
-    // A path-looking token may be followed by a query/fragment; drop it with
-    // the path so `?token=...` cannot survive as plain text.
-    if matches!(chars.get(end), Some('?' | '#')) {
-        while end < chars.len()
-            && !chars[end].is_whitespace()
-            && !matches!(
-                chars[end],
-                '"' | '\'' | '<' | '>' | ')' | ']' | '}' | ',' | ';'
-            )
-        {
-            end += 1;
-        }
-    }
-    let candidate: String = chars[index..end].iter().collect();
-    let candidate = candidate
-        .split(['?', '#'])
-        .next()
-        .unwrap_or(&candidate);
-    // Require a real separator so a lone "/" or "C:" is not rewritten.
-    let has_separator = candidate.matches('/').count() + candidate.matches('\\').count() > 0;
-    if !has_separator {
-        return None;
-    }
-    let basename = candidate
-        .trim_end_matches(['/', '\\'])
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or("");
-    let replacement = if basename.is_empty() {
-        "[path]".to_owned()
-    } else {
-        basename.to_owned()
-    };
-    Some((end, replacement))
+    Some(end)
 }
 
 fn redact_secret_values(value: &str) -> String {
@@ -728,7 +697,8 @@ mod tests {
              Authorization: Bearer abc.def.ghi token=deadbeef \
              blob=QWxhZGRpbjpvcGVuIHNlc2FtZTEyMzQ1Njc4OTBhYmNkZWY=",
         );
-        assert!(text.contains("notes.txt"), "{text}");
+        assert!(text.contains("[path]"), "{text}");
+        assert!(!text.contains("notes.txt"), "{text}");
         assert!(!text.contains("alice"), "{text}");
         assert!(!text.contains("secret&q"), "{text}");
         assert!(!text.contains("?token"), "{text}");
@@ -740,16 +710,43 @@ mod tests {
     }
 
     #[test]
-    fn urls_keep_host_and_drop_query_and_reader_token() {
-        assert_eq!(
-            safe_url("https://example.org/a/b?token=secret#x", "https://"),
-            "https://example.org/a/b"
+    fn local_reader_and_non_http_urls_keep_no_path_or_host_identity() {
+        let text = redact(
+            "reader HTTP://12b34567-1234-5678-90ab-123456789abc-deadbeef.localhost.:9/A/Pri)vate_page?secret=1 \
+             loopback http://127.0.0.2:9/book-uuid/A/Private \
+             ipv6 http://[::1]:9/book-uuid/A/Private \
+             bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private \
+             path=/book-uuid/A/Private relative=/.kiwix/token/A/Private \
+             ZIM://book-uuid/A/Private MAILTO:private@example.org \
+             content://provider/Private file:///Documents/Private%20Notes.txt \
+             custom://host/Private public https://user:pass@example.org/a/b?token=secret#x \
+             adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
         );
         assert_eq!(
-            safe_url("http://127.0.0.1:9/.kiwix/token/A/Page", "http://"),
-            "http://127.0.0.1:9/.kiwix/[redacted]"
+            text,
+            "reader [reader-url] loopback [reader-url] ipv6 [reader-url] bridge [reader-url] \
+             path=[path] relative=[path] [url] [url] [url] [url] [url] public https://example.org/a/b \
+             adjacent [reader-url]"
         );
-        assert_eq!(safe_url("zim://uuid/A/Page", "zim://"), "zim://[redacted]");
+    }
+
+    #[test]
+    fn backtrace_budget_counts_frames_not_source_lines() {
+        let mut backtrace = "stack backtrace:\n".to_owned();
+        for number in 0..MAX_STACK_FRAMES + 2 {
+            let name = if number == 20 { "tauri::reader::read_article" } else { "std::runtime" };
+            backtrace.push_str(&format!(
+                " {number:2}: {name}\n         at /Users/private/source file.rs:12:23\n"
+            ));
+        }
+        let stack = sanitize_backtrace(&backtrace);
+        assert_eq!(stack.len(), MAX_STACK_FRAMES);
+        assert_eq!(stack[20], "20: tauri::reader::read_article at source file.rs:12:23");
+        assert!(stack.last().unwrap().starts_with("23: "), "{stack:?}");
+        assert!(stack.iter().all(|frame| !frame.contains("private")));
+
+        let long_frame = format!("0: {}", "💥".repeat(MAX_FRAME_CHARS * 2));
+        assert_eq!(sanitize_backtrace(&long_frame)[0].chars().count(), MAX_FRAME_CHARS);
     }
 
     #[test]
@@ -779,10 +776,15 @@ mod tests {
                 "installation-uuid",
                 "read_article /Users/alice/secret.txt?token=abc",
             );
-            panic!(
-                "synthetic crash at /Users/alice/Private/notes.txt \
-                 url=https://example.org/a?token=leak secret=leak"
-            );
+            #[inline(never)]
+            fn panic_from_reader() {
+                panic!(
+                    "synthetic crash at /Users/alice/Private/notes.txt \
+                     reader=http://book-uuid-reader.localhost:9/A/Private_Article \
+                     url=https://example.org/a?token=leak secret=leak"
+                );
+            }
+            panic_from_reader();
         });
         assert!(result.is_err());
         let record = pending(&profile.0).unwrap().expect("panic record");
@@ -794,8 +796,16 @@ mod tests {
         assert!(!text.contains("alice"), "{text}");
         assert!(!text.contains("leak"), "{text}");
         assert!(!text.contains("token="), "{text}");
-        assert!(record["stack"].as_array().is_some());
-        assert!(serde_json::to_vec(&record).unwrap().len() <= MAX_RECORD_BYTES);
+        assert!(!text.contains("book-uuid-reader"), "{text}");
+        assert!(!text.contains("Private_Article"), "{text}");
+        let stack = record["stack"].as_array().expect("stack frames");
+        assert!(!stack.is_empty() && stack.len() <= MAX_STACK_FRAMES, "{stack:?}");
+        #[cfg(debug_assertions)]
+        assert!(stack.iter().any(|frame| {
+            frame.as_str().unwrap().contains("panic_from_reader")
+        }), "{stack:?}");
+        let saved_bytes = fs::metadata(record_path(&profile.0)).unwrap().len();
+        assert!(saved_bytes <= MAX_RECORD_BYTES as u64);
         assert!(mark_reported(&profile.0).unwrap());
         let reported = pending(&profile.0).unwrap().unwrap();
         assert!(reported.get("reportedAt").is_some());

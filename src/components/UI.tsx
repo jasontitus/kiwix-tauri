@@ -2,15 +2,17 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
 import { createRoot } from "react-dom/client";
 import { AlertCircle, BookOpen, LoaderCircle, X } from "lucide-react";
-import { t, formatBytes, formatNumber } from "../i18n";
+import { t, formatBytes, formatNumber, getLocale } from "../i18n";
 import type { Book, CatalogEntry, Settings, TabLocation } from "../types";
 import {
   ERROR_SITES,
@@ -188,18 +190,34 @@ export function Loading({ label = t("Loading…") }: { label?: string }) {
     </div>
   );
 }
+
+function subscribeVisibility(notify: () => void) {
+  document.addEventListener("visibilitychange", notify);
+  return () => document.removeEventListener("visibilitychange", notify);
+}
+const documentVisible = () => document.visibilityState !== "hidden";
+export function useDocumentVisible() {
+  return useSyncExternalStore(subscribeVisibility, documentVisible);
+}
 export function ErrorNotice({
   message,
   onRetry,
+  onDismiss,
 }: {
   message: string;
   onRetry?: () => void;
+  onDismiss?: () => void;
 }) {
   return (
     <div className="error-notice" role="alert">
       <AlertCircle size={18} />
       <span>{errorText(message)}{onRetry ? " " : null}</span>
-      {onRetry && <button onClick={onRetry}>{t("Try again")}</button>}
+      {onRetry && <button type="button" onClick={onRetry}>{t("Try again")}</button>}
+      {onDismiss && (
+        <button type="button" className="icon-button" onClick={onDismiss} aria-label={t("Dismiss error")}>
+          <X size={18} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
@@ -265,11 +283,22 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    ref.current?.showModal();
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    const previous = document.activeElement;
+    if (!dialog.open) dialog.showModal();
     initialFocus?.current?.focus({ preventScroll: true });
-    return () => previous?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+      // Prefer native restoration. Some webviews leave focus on the closed
+      // dialog or the body; don't steal focus from another active control.
+      const active = document.activeElement;
+      if (previous instanceof HTMLElement && previous.isConnected &&
+        (active === document.body || dialog.contains(active))) {
+        previous.focus({ preventScroll: true });
+      }
+    };
   }, [initialFocus]);
   return (
     <dialog
@@ -436,6 +465,27 @@ function coverRequest(book: { id: string; thumbnailUrl?: string | null }): Promi
   return request;
 }
 
+const coverLoads = new Map<Element, () => void>();
+let coverObserver: IntersectionObserver | undefined;
+function observeCover(target: Element, load: () => void) {
+  coverObserver ??= new IntersectionObserver((entries, observer) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const start = coverLoads.get(entry.target);
+      if (!start) continue;
+      observer.unobserve(entry.target);
+      coverLoads.delete(entry.target);
+      start();
+    }
+  }, { rootMargin: "160px" });
+  coverLoads.set(target, load);
+  coverObserver.observe(target);
+  return () => {
+    coverLoads.delete(target);
+    coverObserver?.unobserve(target);
+  };
+}
+
 export function BookCover({
   book,
 }: {
@@ -454,27 +504,15 @@ export function BookCover({
     setImage(null);
     if ((!book.available && !book.thumbnailUrl) || !cover.current) return;
     let alive = true;
-    let started = false;
     const load = () => {
-      if (started) return;
-      started = true;
       void coverRequest(book).then((value) => {
         if (alive) setImage(value);
       });
     };
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          observer.disconnect();
-          load();
-        }
-      },
-      { rootMargin: "160px" },
-    );
-    observer.observe(cover.current);
+    const unobserve = observeCover(cover.current, load);
     return () => {
       alive = false;
-      observer.disconnect();
+      unobserve();
     };
   }, [book.id, book.available, book.thumbnailUrl]);
   return (
@@ -694,6 +732,15 @@ export function EditionBadges({
   );
 }
 
+/** Standard ZIM metadata is presented by EditionBadges and the detail facts. */
+export function ArchiveTags({ tags }: { tags: string[] }) {
+  const visible = [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag && !tag.startsWith("_")))];
+  if (!visible.length) return null;
+  return <div className="tag-list">
+    {visible.map((tag) => <span key={tag} className="badge">{tag}</span>)}
+  </div>;
+}
+
 /** Patch only this surface's preferences; read-only changes remain local. */
 export function useArchiveFilters(
   settings: Settings,
@@ -785,6 +832,7 @@ function FacetPicker({
       panel!.style.top = `${Math.max(topEdge, Math.min(anchor.bottom + 6, topEdge + height - bounds.height)) - originTop}px`;
     }
     function schedulePosition(event?: Event) {
+      if (!details!.open) return;
       if (event?.target instanceof Node && panel!.contains(event.target)) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(positionPopover);
@@ -1068,6 +1116,8 @@ function archiveSortKey(
   keys.set(field, key);
   return key;
 }
+let archiveCollator: Intl.Collator | undefined;
+let archiveCollatorLocale: string | undefined;
 export function compareArchives(
   a: Book | CatalogEntry,
   b: Book | CatalogEntry,
@@ -1078,8 +1128,10 @@ export function compareArchives(
   if (typeof av === "number" && typeof bv === "number") return av - bv;
   if (typeof av === "boolean" && typeof bv === "boolean")
     return Number(av) - Number(bv);
-  return String(av ?? "").localeCompare(String(bv ?? ""), undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
+  const locale = getLocale();
+  if (archiveCollatorLocale !== locale || !archiveCollator) {
+    archiveCollator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+    archiveCollatorLocale = locale;
+  }
+  return archiveCollator.compare(String(av ?? ""), String(bv ?? ""));
 }

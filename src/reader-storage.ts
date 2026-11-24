@@ -59,7 +59,8 @@ let retiringDocuments: Promise<() => void> | undefined;
 let retirementActive = false;
 const reservations = new Set<RegisteredBinding>();
 // A forced security detach has no final producer proof. Retain its bounded
-// authority until this trusted shell is destroyed; never recycle it on a timer.
+// authority until the shell replaces the frames and explicitly discards it;
+// never recycle that authority for a later document.
 const quarantinedBindings = new Set<RegisteredBinding>();
 const streams = new Set<Stream>();
 const queue: QueuedBatch[] = [];
@@ -917,6 +918,43 @@ export function quarantineReaderStorage(source: WindowProxy): void {
   settleNavigationWaiters();
 }
 
+/**
+ * Discard quarantined authority after the shell has replaced the affected
+ * frames. Late packets become unknown rather than reusing an unproved origin;
+ * this recovers the window without claiming that the lost writes were saved.
+ */
+export function discardQuarantinedReaderStorage(): void {
+  if (!quarantinedBindings.size) return;
+  for (const binding of quarantinedBindings) {
+    for (const stream of [...streams])
+      if (stream.binding === binding) closeStream(stream);
+    const source = binding.source.deref();
+    if (source) {
+      if (active.get(source) === binding) {
+        active.delete(source);
+        activeFrames.delete(source);
+        currentDocuments.delete(source);
+      }
+      bindings.get(source)?.delete(binding);
+    }
+    binding.retired = true;
+    binding.ready = false;
+    binding.quarantined = false;
+    if (binding.reserve) {
+      reservedBytes -= binding.reserve;
+      binding.reserve = 0;
+    }
+    reservations.delete(binding);
+    removeOriginBinding(binding);
+    abandonedReservations.unregister(binding);
+  }
+  quarantinedBindings.clear();
+  retirementActive = false;
+  suppressFreezeRestore = false;
+  deferredRestores.clear();
+  settleNavigationWaiters();
+}
+
 function retireDocuments(restoreOnFailure = true): Promise<() => void> {
   if (quarantinedBindings.size)
     return Promise.reject(
@@ -1104,7 +1142,9 @@ function retireDocuments(restoreOnFailure = true): Promise<() => void> {
  */
 export async function retireReaderDocuments({
   restoreOnFailure = true,
-}: { restoreOnFailure?: boolean } = {}): Promise<void> {
+  discardQuarantine = false,
+}: { restoreOnFailure?: boolean; discardQuarantine?: boolean } = {}): Promise<void> {
+  if (discardQuarantine) discardQuarantinedReaderStorage();
   await retireDocuments(restoreOnFailure);
 }
 

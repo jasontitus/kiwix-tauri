@@ -181,7 +181,7 @@ impl Service {
     /// Share a library archive through the platform share sheet. The path is
     /// resolved from the trusted store, never from renderer-supplied input.
     pub(super) async fn share_book(self: Arc<Self>, label: &str, args: Value) -> Result<Value, String> {
-        self.writable()?;
+        self.normal_writable()?;
         self.ensure_window_active(label)?;
         let generation = self.ensure_generation(&args)?;
         #[cfg(not(target_os = "macos"))]

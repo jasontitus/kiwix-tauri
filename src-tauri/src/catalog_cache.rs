@@ -8,10 +8,11 @@ use cap_std::fs::{Dir, OpenOptions};
 use reqwest::header::{ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, ETAG, IF_NONE_MATCH};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use std::sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc, Mutex};
+use std::sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc, Mutex, OnceLock};
 use tokio::sync::RwLock;
 
-const MAX_RECORDS: usize = 24;
+// Leave room for a complete index traversal and both navigation feeds.
+const MAX_RECORDS: usize = super::index::MAX_PAGES + 2;
 const MAX_CACHE: usize = 32 * 1024 * 1024;
 const CACHE_FILE: &str = "catalog-opds-v1.json";
 const PENDING_FILE: &str = "catalog-opds-v1.pending";
@@ -112,7 +113,7 @@ impl Stamp {
 /// checked, which a fetch needs only for the one representation it returns.
 struct Retained {
     stamp: Stamp,
-    records: Records,
+    records: Records<Arc<Record>>,
     verified: AtomicBool,
 }
 
@@ -126,9 +127,9 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Record {
+pub(super) struct Record {
     url: String,
     language: String,
     kind: Kind,
@@ -136,11 +137,29 @@ struct Record {
     etag: Option<String>,
     xml: String,
     digest: String,
+    #[serde(skip)]
+    encoded_bytes: OnceLock<usize>,
 }
 
 impl Record {
     fn matches(&self, url: &str, language: &str, kind: Kind) -> bool {
         self.url == url && self.language == language && self.kind == kind
+    }
+
+    fn encoded_bytes(&self) -> usize {
+        *self.encoded_bytes.get_or_init(|| {
+            struct Count(usize);
+            impl Write for Count {
+                fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                    self.0 += bytes.len();
+                    Ok(bytes.len())
+                }
+                fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+            }
+            let mut count = Count(0);
+            serde_json::to_writer(&mut count, self).expect("Serializing a catalog record into a byte counter");
+            count.0
+        })
     }
 
     fn validate(&self, loopback: bool) -> Result<Parsed, String> {
@@ -165,12 +184,17 @@ fn record_digest(record: &Record) -> String {
     hex::encode(hash.finalize())
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Records {
+struct Records<T = Record> {
     version: u32,
     // Insertion/revalidation order, oldest first. Offline reads never write.
-    records: Vec<Record>,
+    records: Vec<T>,
+}
+
+pub(super) enum CacheUpdate {
+    Fresh { record: Arc<Record>, previous: Option<String> },
+    Revalidated(String),
 }
 
 enum Parsed { Page(CatalogPage), Facets(Vec<CatalogFacet>) }
@@ -204,7 +228,13 @@ impl CacheDirectory {
         options.read(true).follow(FollowSymlinks::No);
         #[cfg(unix)] { use cap_std::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
         match self.directory.open_with(name, &options) {
-            Ok(file) => Ok(Stamp::of(&file.metadata().map_err(|e| e.to_string())?)),
+            Ok(file) => {
+                let metadata = file.metadata().map_err(|e| e.to_string())?;
+                if !metadata.is_file() || metadata.nlink() != 1 || metadata.len() > MAX_CACHE as u64 {
+                    return Err(format!("{label} is not a bounded, unlinked regular file"));
+                }
+                Ok(Stamp::of(&metadata))
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Stamp::Absent),
             Err(error) => Err(format!("Reading {label}: {error}")),
         }
@@ -272,7 +302,7 @@ impl CatalogCache {
     pub(super) fn write_index(&self, bytes: &[u8]) -> Result<(), String> {
         if bytes.len() > MAX_CACHE { return Err("Catalog index exceeds disk limit".into()); }
         let directory = self.directory(true)?.ok_or("Catalog cache directory unavailable")?;
-        atomic_write_named(&directory, bytes, INDEX_PENDING_FILE, INDEX_FILE, || {})
+        atomic_write_named(&directory, bytes, INDEX_PENDING_FILE, INDEX_FILE, || {}).map(|_| ())
     }
 
     /// Cheap identity of the durable index, so a retained parse is reused only
@@ -289,9 +319,24 @@ impl CatalogCache {
             let _guard = gate.read().await;
             check_generation(generation, expected_generation)?;
         }
-        let (parsed, cache, representation) = self.fetch(url, locale, Kind::Page, gate, generation, expected_generation).await?;
+        let (page, _) = self.fetch_page_impl(url, locale, gate, generation, expected_generation, false).await?;
+        Ok(page)
+    }
+
+    /// An index traversal publishes accepted fresh bodies together, after it
+    /// reacquires the same privacy lease and Store policy for its index commit.
+    pub(super) async fn fetch_refresh_page(
+        &self, url: &str, locale: &str, gate: &Arc<RwLock<()>>, generation: &AtomicU64, expected: u64,
+    ) -> Result<(CachedCatalogPage, Option<CacheUpdate>), String> {
+        self.fetch_page_impl(url, locale, gate, generation, expected, true).await
+    }
+
+    async fn fetch_page_impl(
+        &self, url: &str, locale: &str, gate: &Arc<RwLock<()>>, generation: &AtomicU64, expected: u64, defer: bool,
+    ) -> Result<(CachedCatalogPage, Option<CacheUpdate>), String> {
+        let (parsed, cache, representation, update) = self.fetch(url, locale, Kind::Page, gate, generation, expected, defer).await?;
         let Parsed::Page(page) = parsed else { unreachable!("Page parser variant") };
-        Ok(CachedCatalogPage { page, cache, representation })
+        Ok((CachedCatalogPage { page, cache, representation }, update))
     }
 
     pub async fn fetch_facets(
@@ -304,11 +349,11 @@ impl CatalogCache {
             check_generation(generation, expected_generation)?;
         }
         let (languages, categories) = tokio::try_join!(
-            self.fetch(languages.as_str(), locale, Kind::Languages, gate, generation, expected_generation),
-            self.fetch(categories.as_str(), locale, Kind::Categories, gate, generation, expected_generation),
+            self.fetch(languages.as_str(), locale, Kind::Languages, gate, generation, expected_generation, false),
+            self.fetch(categories.as_str(), locale, Kind::Categories, gate, generation, expected_generation, false),
         )?;
-        let (Parsed::Facets(languages_values), mut cache, _) = languages else { unreachable!("Facet parser variant") };
-        let (Parsed::Facets(categories_values), other, _) = categories else { unreachable!("Facet parser variant") };
+        let (Parsed::Facets(languages_values), mut cache, _, _) = languages else { unreachable!("Facet parser variant") };
+        let (Parsed::Facets(categories_values), other, _, _) = categories else { unreachable!("Facet parser variant") };
         let _guard = gate.read().await;
         check_generation(generation, expected_generation)?;
         cache.stale |= other.stale;
@@ -323,11 +368,11 @@ impl CatalogCache {
     }
 
     async fn fetch(
-        &self, url: &str, locale: &str, kind: Kind, gate: &Arc<RwLock<()>>, generation: &AtomicU64, expected: u64,
-    ) -> Result<(Parsed, CatalogCacheMetadata, Representation), String> {
+        &self, url: &str, locale: &str, kind: Kind, gate: &Arc<RwLock<()>>, generation: &AtomicU64, expected: u64, defer: bool,
+    ) -> Result<(Parsed, CatalogCacheMetadata, Representation, Option<CacheUpdate>), String> {
         let url = checked_url(url, self.loopback())?;
         let language = accept_language(locale);
-        let (cached, cache_warning) = {
+        let (cached, cache_warning, previous) = {
             let lease = gate.clone().read_owned().await;
             check_generation(generation, expected)?;
             let cache = self.clone();
@@ -343,17 +388,23 @@ impl CatalogCache {
                     Ok(cache.retained()?.records.records.iter()
                         .find(|r| r.matches(&request_url, &request_language, kind)).cloned())
                 });
-                let loaded = loaded.and_then(|record| record.map(|record| {
-                    let parsed = record.validate(cache.loopback())?;
-                    Ok((record, parsed))
-                }).transpose());
-                match loaded { Ok(record) => (record, None), Err(error) => (None, Some(error)) }
+                match loaded {
+                    Ok(Some(record)) => {
+                        let previous = defer.then(|| record.digest.clone());
+                        match record.validate(cache.loopback()) {
+                            Ok(parsed) => (Some((record, parsed)), None, previous),
+                            Err(error) => (None, Some(error), previous),
+                        }
+                    }
+                    Ok(None) => (None, None, None),
+                    Err(error) => (None, Some(error), None),
+                }
             }).await.map_err(|e| format!("Loading catalog cache: {e}"))?;
             let _guard = gate.read().await;
             check_generation(generation, expected)?;
             result
         };
-        let fetched = self.request(&url, &language, kind, cached.as_ref().map(|(record, _)| record)).await;
+        let fetched = self.request(&url, &language, kind, cached.as_ref().map(|(record, _)| record.as_ref())).await;
         // No result or disk write may escape a retired privacy generation, including
         // normal -> private -> normal transitions during an in-flight request.
         let lease = gate.clone().read_owned().await;
@@ -371,27 +422,36 @@ impl CatalogCache {
                                 (record, parsed, true)
                             }
                         };
-                        let representation = Representation::from(&record);
+                        let representation = Representation::from(record.as_ref());
                         let mut metadata = CatalogCacheMetadata {
                             status: if revalidated { "revalidated" } else { "network" }.into(),
                             stale: false, stored: false, error: cache_warning,
                         };
+                        if defer {
+                            let update = if private || read_only {
+                                None
+                            } else if revalidated {
+                                Some(CacheUpdate::Revalidated(record.digest.clone()))
+                            } else {
+                                Some(CacheUpdate::Fresh { record, previous })
+                            };
+                            // Storage will be determined by the traversal's eventual publication.
+                            return Ok((parsed, metadata, representation, update));
+                        }
                         // A 304 describes the representation sent with this request. A
                         // later 200 may already have committed a different representation.
                         if !private && !read_only && (!revalidated || cache.contains(&record)) {
-                            // Retain only bounded identity fields, not another XML body.
-                            let identity = (record.url.clone(), record.language.clone(), record.kind, record.base.clone(), record.digest.clone());
-                            match cache.save(record) {
+                            match cache.save_updates(vec![CacheUpdate::Fresh { record: Arc::clone(&record), previous: None }], false) {
                                 Ok(()) => metadata.stored = true,
                                 Err(error) => {
-                                    metadata.stored = cache.contains_representation(&identity.0, &identity.1, identity.2, &identity.3, &identity.4);
+                                    metadata.stored = cache.contains(&record);
                                     metadata.error = Some(error);
                                 }
                             }
                         } else if !private {
                             metadata.stored = cache.contains(&record);
                         }
-                        Ok((parsed, metadata, representation))
+                        Ok((parsed, metadata, representation, None))
                     }
                     Err(error) => {
                         // Only a representation parsed before the request is eligible.
@@ -399,8 +459,8 @@ impl CatalogCache {
                         let Some((record, parsed)) = cached.filter(|_| !private) else {
                             return Err(match cache_warning { Some(warning) => format!("{error}; {warning}"), None => error });
                         };
-                        let stored = cache.contains(&record);
-                        Ok((parsed, CatalogCacheMetadata { status: "offline".into(), stale: true, stored, error: Some(error) }, Representation::from(&record)))
+                        let stored = !defer && cache.contains(&record);
+                        Ok((parsed, CatalogCacheMetadata { status: "offline".into(), stale: true, stored, error: Some(error) }, Representation::from(record.as_ref()), None))
                     }
                 }
             })
@@ -413,7 +473,7 @@ impl CatalogCache {
     /// `None` is a validated 304 response that reuses the cached representation.
     async fn request(
         &self, url: &Url, language: &str, kind: Kind, cached: Option<&Record>,
-    ) -> Result<Option<(Record, Parsed)>, String> {
+    ) -> Result<Option<(Arc<Record>, Parsed)>, String> {
         // Retained per transport policy, so pages of one traversal and later
         // catalog work reuse its warm connector pool.
         let client = http_client_with_redirects(self.loopback(), false)?;
@@ -466,9 +526,9 @@ impl CatalogCache {
         tokio::task::spawn_blocking(move || {
             let xml = String::from_utf8(bytes).map_err(|e| format!("OPDS feed is not UTF-8: {e}"))?;
             let parsed = parse(kind, &xml, &base, &language)?;
-            let mut record = Record { url: request_url, language, kind, base: base.to_string(), etag, xml, digest: String::new() };
+            let mut record = Record { url: request_url, language, kind, base: base.to_string(), etag, xml, digest: String::new(), encoded_bytes: OnceLock::new() };
             record.digest = record_digest(&record);
-            Ok(Some((record, parsed)))
+            Ok(Some((Arc::new(record), parsed)))
         }).await.map_err(|e| format!("Parsing OPDS catalog: {e}"))?
     }
 
@@ -529,6 +589,10 @@ impl CatalogCache {
                 verified: AtomicBool::new(true),
             }));
         };
+        self.retained_in(&directory)
+    }
+
+    fn retained_in(&self, directory: &CacheDirectory) -> Result<Arc<Retained>, String> {
         let stamp = directory.stamp(CACHE_FILE, "catalog cache")?;
         {
             let memory = self.memory();
@@ -536,19 +600,19 @@ impl CatalogCache {
                 return Ok(retained.clone());
             }
         }
-        let records = read_records(&directory.directory, self.loopback())?;
+        let (stamp, records) = read_records(&directory.directory, self.loopback())?;
         directory.unchanged().map_err(|e| e.to_string())?;
+        if directory.stamp(CACHE_FILE, "catalog cache")? != stamp {
+            return Err("Catalog cache changed while reading".into());
+        }
         let retained = Arc::new(Retained { stamp, records, verified: AtomicBool::new(false) });
         let mut memory = self.memory();
         *memory = Some(retained.clone());
         Ok(retained)
     }
 
-    /// Snapshot whose every record passed its XML digest check. Verification runs
-    /// once per cache-file identity, so a traversal that keeps publishing pages
-    /// does not re-hash the whole cache per page.
-    fn load(&self) -> Result<Arc<Retained>, String> {
-        let retained = self.retained()?;
+    /// Verify the retained file once before merging its XML bodies into a write.
+    fn verified(retained: Arc<Retained>) -> Result<Arc<Retained>, String> {
         if retained.verified.load(Ordering::Acquire) { return Ok(retained); }
         if retained.records.records.iter().any(|record| record.digest != record_digest(record)) {
             return Err("A saved catalog page is damaged. Refresh the catalog".into());
@@ -567,34 +631,67 @@ impl CatalogCache {
     }
 
     fn contains_representation(&self, url: &str, language: &str, kind: Kind, base: &str, digest: &str) -> bool {
-        self.load().is_ok_and(|retained| retained.records.records.iter().any(|r|
+        self.retained().and_then(Self::verified).is_ok_and(|retained| retained.records.records.iter().any(|r|
             r.matches(url, language, kind) && r.base == base && r.digest == digest))
     }
 
-    fn save(&self, record: Record) -> Result<(), String> {
+    pub(super) fn save_refresh(&self, updates: Vec<CacheUpdate>) -> Result<(), String> {
+        self.save_updates(updates, true)
+    }
+
+    // Callers hold Store's policy transaction. Reload any intervening single
+    // page writes, then merge in traversal order and encode once for publication.
+    fn save_updates(&self, updates: Vec<CacheUpdate>, batch: bool) -> Result<(), String> {
+        if updates.is_empty() { return Ok(()); }
         let directory = self.directory(true)?.ok_or("Catalog cache directory unavailable")?;
-        // Corruption cannot poison future successful refreshes. A new valid feed
-        // replaces an unusable cache; installed records and filters live elsewhere.
-        let mut records = self.load().map(|retained| retained.records.clone())
-            .unwrap_or(Records { version: 1, records: Vec::new() });
-        records.records.retain(|r| !r.matches(&record.url, &record.language, record.kind));
-        records.records.push(record);
-        while records.records.len() > MAX_RECORDS { records.records.remove(0); }
-        let bytes = loop {
-            let bytes = serde_json::to_vec(&records).map_err(|e| format!("Encoding catalog cache: {e}"))?;
-            if bytes.len() <= MAX_CACHE { break bytes; }
-            if records.records.len() <= 1 { return Err("Catalog representation exceeds durable cache capacity".into()); }
-            records.records.remove(0);
-        };
-        atomic_write(&directory, &bytes)?;
-        // What was just published is exactly what the next page of this traversal
-        // would read back, and every record in it is digest-verified.
-        if let Ok(stamp) = directory.stamp(CACHE_FILE, "catalog cache") {
-            let mut memory = self.memory();
-            *memory = Some(Arc::new(Retained {
-                stamp, records, verified: AtomicBool::new(true),
-            }));
+        let retained = self.retained_in(&directory).and_then(Self::verified).ok();
+        let mut records = retained.as_ref().map(|cache| cache.records.records.clone()).unwrap_or_default();
+        const ENVELOPE_BYTES: usize = br#"{"version":1,"records":[]}"#.len();
+        for update in updates {
+            match update {
+                CacheUpdate::Fresh { record, previous } => {
+                    if ENVELOPE_BYTES + record.encoded_bytes() > MAX_CACHE {
+                        return Err("Catalog representation exceeds durable cache capacity".into());
+                    }
+                    if let Some(index) = records.iter().position(|r| r.matches(&record.url, &record.language, record.kind)) {
+                        if batch && records[index].digest != record.digest
+                            && previous.as_ref() != Some(&records[index].digest)
+                        {
+                            continue; // A concurrent interactive request superseded this body.
+                        }
+                        records.remove(index);
+                    }
+                    records.push(record);
+                }
+                CacheUpdate::Revalidated(digest) => {
+                    if let Some(index) = records.iter().position(|r| r.digest == digest) {
+                        let record = records.remove(index);
+                        records.push(record);
+                    }
+                }
+            }
         }
+        if records.is_empty() { return Ok(()); }
+        if batch && retained.as_ref().is_some_and(|old| old.records.records.iter().map(|r| &r.digest)
+            .eq(records.iter().map(|r| &r.digest))) {
+            return Ok(());
+        }
+        let mut bytes = ENVELOPE_BYTES + records.iter().map(|r| r.encoded_bytes()).sum::<usize>()
+            + records.len().saturating_sub(1);
+        let mut evicted = 0;
+        while records.len() - evicted > MAX_RECORDS || bytes > MAX_CACHE {
+            bytes -= records[evicted].encoded_bytes() + 1;
+            evicted += 1;
+        }
+        records.drain(..evicted);
+        let mut encoded = Vec::with_capacity(bytes);
+        serde_json::to_writer(&mut encoded, &Records { version: 1, records: records.iter().map(Arc::as_ref).collect() })
+            .map_err(|e| format!("Encoding catalog cache: {e}"))?;
+        debug_assert_eq!(encoded.len(), bytes);
+        let stamp = atomic_write_named(&directory, &encoded, PENDING_FILE, CACHE_FILE, || {})?;
+        *self.memory() = Some(Arc::new(Retained {
+            stamp, records: Records { version: 1, records }, verified: AtomicBool::new(true),
+        }));
         Ok(())
     }
 }
@@ -609,7 +706,7 @@ fn check_generation(generation: &AtomicU64, expected: u64) -> Result<(), String>
 /// uniqueness, but not its XML digest: the digest of the one representation a
 /// caller returns is checked by `Record::validate`, and whole-cache digests are
 /// checked once per file identity by `CatalogCache::load`.
-fn read_records(directory: &Dir, loopback: bool) -> Result<Records, String> {
+fn read_records(directory: &Dir, loopback: bool) -> Result<(Stamp, Records<Arc<Record>>), String> {
     let mut options = OpenOptions::new();
     options.read(true).follow(FollowSymlinks::No);
     #[cfg(unix)] {
@@ -618,16 +715,20 @@ fn read_records(directory: &Dir, loopback: bool) -> Result<Records, String> {
     }
     let file = match directory.open_with(CACHE_FILE, &options) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Records { version: 1, records: Vec::new() }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((Stamp::Absent, Records { version: 1, records: Vec::new() })),
         Err(error) => return Err(format!("Reading catalog cache: {error}")),
     };
     let metadata = file.metadata().map_err(|e| e.to_string())?;
     if !metadata.is_file() || metadata.nlink() != 1 || metadata.len() > MAX_CACHE as u64 {
         return Err("Catalog cache is not a bounded, unlinked regular file".into());
     }
+    let stamp = Stamp::of(&metadata);
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    file.take(MAX_CACHE as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("Reading catalog cache: {e}"))?;
+    (&file).take(MAX_CACHE as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("Reading catalog cache: {e}"))?;
     if bytes.len() > MAX_CACHE { return Err("Catalog cache exceeds disk limit".into()); }
+    if Stamp::of(&file.metadata().map_err(|e| e.to_string())?) != stamp {
+        return Err("Catalog cache changed while reading".into());
+    }
     let records: Records = serde_json::from_slice(&bytes).map_err(|e| format!("Catalog cache unavailable: {e}"))?;
     if records.version != 1 || records.records.len() > MAX_RECORDS { return Err("Unsupported or oversized catalog cache".into()); }
     let mut keys = HashSet::new();
@@ -642,30 +743,36 @@ fn read_records(directory: &Dir, loopback: bool) -> Result<Records, String> {
             return Err("A saved catalog page is damaged. Refresh the catalog".into());
         }
     }
-    Ok(records)
+    Ok((stamp, Records { version: records.version, records: records.records.into_iter().map(Arc::new).collect() }))
 }
 
+#[cfg(test)]
 fn atomic_write(cache: &CacheDirectory, bytes: &[u8]) -> Result<(), String> {
     atomic_write_with_hook(cache, bytes, || {})
 }
 
+#[cfg(test)]
 fn atomic_write_with_hook(cache: &CacheDirectory, bytes: &[u8], before_publish: impl FnOnce()) -> Result<(), String> {
-    atomic_write_named(cache, bytes, PENDING_FILE, CACHE_FILE, before_publish)
+    atomic_write_named(cache, bytes, PENDING_FILE, CACHE_FILE, before_publish).map(|_| ())
 }
 
-fn atomic_write_named(cache: &CacheDirectory, bytes: &[u8], pending: &str, destination: &str, before_publish: impl FnOnce()) -> Result<(), String> {
+fn atomic_write_named(cache: &CacheDirectory, bytes: &[u8], pending: &str, destination: &str, before_publish: impl FnOnce()) -> Result<Stamp, String> {
     let directory = &cache.directory;
-    let io = || -> std::io::Result<()> {
+    let io = || -> std::io::Result<Stamp> {
         cache.unchanged()?;
         let mut options = OpenOptions::new();
         // A fixed scratch name bounds even interrupted writes to one extra file.
         // Open without truncation until its retained descriptor is verified.
         options.read(true).write(true).create(true).follow(FollowSymlinks::No);
-        #[cfg(unix)] { use cap_std::fs::OpenOptionsExt; options.mode(0o600); }
+        #[cfg(unix)] { use cap_std::fs::OpenOptionsExt; options.mode(0o600).custom_flags(libc::O_NONBLOCK); }
         let file = directory.open_with(pending, &options)?;
         let before = file.metadata()?;
         if !before.is_file() || before.nlink() != 1 || before.len() > MAX_CACHE as u64 {
             return Err(std::io::Error::other("Catalog cache scratch file is unsafe"));
+        }
+        let named = directory.symlink_metadata(pending)?;
+        if !named.is_file() || named.nlink() != 1 || named.dev() != before.dev() || named.ino() != before.ino() {
+            return Err(std::io::Error::other("Catalog cache scratch file changed"));
         }
         let mut file = file.into_std();
         #[cfg(unix)] {
@@ -677,18 +784,22 @@ fn atomic_write_named(cache: &CacheDirectory, bytes: &[u8], pending: &str, desti
         file.write_all(bytes)?;
         file.sync_all()?;
         let verified = crate::publication::VerifiedFile::new(file, bytes.len() as u64)?;
+        before_publish();
+        cache.unchanged()?;
         if !verified.matches_in(directory, std::path::Path::new(pending))? {
             return Err(std::io::Error::other("Catalog cache scratch file changed"));
         }
-        before_publish();
-        cache.unchanged()?;
+        let metadata = cap_std::fs::Metadata::from_file(verified.file())?;
+        if metadata.nlink() != 1 {
+            return Err(std::io::Error::other("Catalog cache scratch file changed"));
+        }
         directory.rename(pending, directory, destination)?;
         if !verified.matches_in(directory, std::path::Path::new(destination))? {
             return Err(std::io::Error::other("Catalog cache publication changed"));
         }
         #[cfg(unix)] crate::storage::sync_cap_directory(directory)?;
         cache.unchanged()?;
-        Ok(())
+        Ok(Stamp::of(&metadata))
     };
     io().map_err(|e| format!("Persisting catalog cache: {e}"))
 }

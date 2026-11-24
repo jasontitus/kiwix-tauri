@@ -5,12 +5,12 @@
 //! continuation token binds the prefix, scope, archive cursor, and local offset,
 //! so a page produced for another query or scope can never be appended.
 #![forbid(unsafe_code)]
-use crate::archive::{Archive, SearchHit};
+use crate::archive::{Archive, RankedHit, SearchHit, SearchResults};
 
 use serde_json::{json, Value};
 use std::{
     cmp::Ordering,
-    collections::{BinaryHeap, HashSet, VecDeque},
+    collections::{BTreeMap, BinaryHeap, HashSet, VecDeque},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -40,14 +40,14 @@ impl Mode {
 struct Cursor {
     id: String,
     archive: Archive,
-    buffered: VecDeque<SearchHit>,
+    buffered: VecDeque<RankedHit>,
     next: u32,
     exhausted: bool,
 }
 struct Head {
     slot: usize,
     rank: u32,
-    hit: SearchHit,
+    hit: RankedHit,
 }
 impl PartialEq for Head {
     fn eq(&self, other: &Self) -> bool {
@@ -66,7 +66,7 @@ impl Ord for Head {
         other
             .rank
             .cmp(&self.rank)
-            .then_with(|| other.hit.title.cmp(&self.hit.title))
+            .then_with(|| other.hit.hit.title.cmp(&self.hit.hit.title))
             .then_with(|| other.slot.cmp(&self.slot))
     }
 }
@@ -151,6 +151,38 @@ fn append_rows(
     }
     check_cancel(cancel)
 }
+
+/// Enrich only the visible page, grouped by its retained archive so each
+/// winner group takes the reader lock and checks file identity once.
+fn render_ranked<'a>(
+    mut selected: Vec<(usize, u32, RankedHit)>,
+    archive: impl Fn(usize) -> (&'a str, &'a Archive),
+    query: &str,
+    show_snippets: bool,
+    errors: &mut Vec<Value>,
+    cancel: &CancellationToken,
+) -> Result<Vec<Value>, String> {
+    if show_snippets && selected.iter().any(|(_, _, hit)| hit.excerpt_entry.is_some()) {
+        let mut groups: BTreeMap<_, Vec<_>> = BTreeMap::new();
+        for (book, _, hit) in &mut selected {
+            groups.entry(*book).or_default().push(hit);
+        }
+        for (book, mut hits) in groups {
+            if !hits.iter().any(|hit| hit.excerpt_entry.is_some()) { continue; }
+            check_cancel(cancel)?;
+            let (id, archive) = archive(book);
+            let result = archive.fill_search_excerpts(query, &mut hits, cancel);
+            check_cancel(cancel)?;
+            if let Err(error) = result {
+                errors.push(json!({"bookId":id,"error":error}));
+            }
+        }
+    }
+    selected.into_iter()
+        .map(|(book, rank, hit)| row(archive(book).0, rank, hit.hit, show_snippets, cancel))
+        .collect()
+}
+
 pub fn run(
     archives: Vec<(String, Result<Archive, String>)>,
     query: &str,
@@ -169,10 +201,10 @@ pub fn run(
     }
     let fulltext = mode == Mode::Fulltext;
     let mut errors = Vec::new();
-    let mut hits = Vec::with_capacity(limit as usize);
     let mut total = 0u64;
     let first_page = offset.saturating_add(limit).clamp(1, PAGE);
     if archives.len() == 1 {
+        let mut hits = Vec::with_capacity(limit as usize);
         let (id, result) = archives.into_iter().next().unwrap();
         let page = result.and_then(|archive| archive.search_cancellable(query, fulltext, offset, limit, show_snippets, cancel));
         check_cancel(cancel)?;
@@ -188,10 +220,11 @@ pub fn run(
     }
     let mut cursors = Vec::new();
     let mut heap = BinaryHeap::new();
+    let mut selected = Vec::with_capacity(limit as usize);
     for (id, result) in archives {
         check_cancel(cancel)?;
         let page = result.and_then(|archive| {
-            let page = archive.search_cancellable(query, fulltext, 0, first_page, show_snippets, cancel)?;
+            let page = archive.rank_cancellable(query, fulltext, 0, first_page, show_snippets, cancel)?;
             Ok((archive, page))
         });
         check_cancel(cancel)?;
@@ -225,7 +258,7 @@ pub fn run(
         let Some(head) = heap.pop() else { break };
         let cursor = &mut cursors[head.slot];
         if position >= u64::from(offset) {
-            hits.push(row(&cursor.id, head.rank, head.hit, show_snippets, cancel)?);
+            selected.push((head.slot, head.rank, head.hit));
         }
         position += 1;
         if position == end {
@@ -233,7 +266,7 @@ pub fn run(
         }
         if cursor.buffered.is_empty() && !cursor.exhausted {
             check_cancel(cancel)?;
-            let page = cursor.archive.search_cancellable(query, fulltext, cursor.next, PAGE, show_snippets, cancel);
+            let page = cursor.archive.rank_cancellable(query, fulltext, cursor.next, PAGE, show_snippets, cancel);
             check_cancel(cancel)?;
             match page {
                 Ok(page) => {
@@ -258,6 +291,8 @@ pub fn run(
             }
         }
     }
+    let hits = render_ranked(selected, |slot| (cursors[slot].id.as_str(), &cursors[slot].archive),
+        query, show_snippets, &mut errors, cancel)?;
     check_cancel(cancel)?;
     Ok(json!({"hasMore":hits.len()==limit as usize,"hits":hits,"total":total,"errors":errors}))
 }
@@ -278,13 +313,13 @@ fn sources(book: usize, has_fulltext: bool) -> impl Iterator<Item = Source> {
 
 #[derive(Default)]
 struct CombinedCursor {
-    buffered: VecDeque<SearchHit>,
+    buffered: VecDeque<RankedHit>,
     next: u32,
     exhausted: bool,
 }
 
 struct CombinedPage {
-    hits: Vec<(usize, u32, SearchHit)>,
+    hits: Vec<(usize, u32, RankedHit)>,
     total: u64,
     has_more: bool,
     errors: Vec<(usize, String)>,
@@ -299,7 +334,7 @@ fn collect_combined(
     offset: u32,
     limit: u32,
     cancel: &CancellationToken,
-    mut fetch: impl FnMut(Source, u32, u32, &CancellationToken) -> Result<crate::archive::SearchResults, String>,
+    mut fetch: impl FnMut(Source, u32, u32, &CancellationToken) -> Result<SearchResults<RankedHit>, String>,
 ) -> Result<CombinedPage, String> {
     let mut cursors = Vec::with_capacity(sources.len());
     let mut heap = BinaryHeap::new();
@@ -337,8 +372,8 @@ fn collect_combined(
     while let Some(head) = heap.pop() {
         check_cancel(cancel)?;
         let source = sources[head.slot];
-        if !seen[source.book].contains(&head.hit.path) {
-            seen[source.book].insert(head.hit.path.clone());
+        if !seen[source.book].contains(&head.hit.hit.path) {
+            seen[source.book].insert(head.hit.hit.path.clone());
             if position == end {
                 has_more = true;
                 break;
@@ -393,20 +428,20 @@ fn run_combined(
     for (book, (id, archive)) in archives.iter().enumerate() {
         check_cancel(cancel)?;
         match archive.as_ref().map_err(Clone::clone)
-            .and_then(|archive| archive.metadata_cancellable(cancel)) {
-            Ok(metadata) => streams.extend(sources(book, metadata.has_fulltext_index)),
+            .and_then(|archive| archive.search_capabilities_cancellable(cancel)) {
+            Ok((fulltext, _)) => streams.extend(sources(book, fulltext)),
             Err(error) => errors.push(json!({"bookId":id,"error":error})),
         }
         check_cancel(cancel)?;
     }
     let page = collect_combined(&streams, offset, limit, cancel, |source, offset, limit, cancel| {
         archives[source.book].1.as_ref().map_err(Clone::clone)?
-            .search_cancellable(query, source.fulltext, offset, limit, show_snippets, cancel)
+            .rank_cancellable(query, source.fulltext, offset, limit, show_snippets, cancel)
     })?;
-    let mut hits = Vec::with_capacity(page.hits.len());
-    for (book, rank, hit) in page.hits {
-        hits.push(row(&archives[book].0, rank, hit, show_snippets, cancel)?);
-    }
+    let hits = render_ranked(page.hits, |book| {
+        let (id, archive) = &archives[book];
+        (id.as_str(), archive.as_ref().expect("A ranked hit has a retained archive"))
+    }, query, show_snippets, &mut errors, cancel)?;
     for (book, error) in page.errors {
         errors.push(json!({"bookId":archives[book].0,"error":error}));
     }
@@ -503,32 +538,30 @@ pub(crate) fn collect_page(
 /// Title suggestions are title-only: no snippet, score, or full-text fallback is
 /// computed, so the snippet preference can never leak article text here.
 pub fn suggest(
-    archives: Vec<(String, Result<Archive, String>)>,
+    scope: &[String],
     prefix: &str,
     token: Option<&str>,
     limit: u32,
     cancel: &CancellationToken,
+    mut open: impl FnMut(usize, &CancellationToken) -> Result<Archive, String>,
 ) -> Result<Value, String> {
     check_cancel(cancel)?;
     if prefix.is_empty() {
         return Ok(json!({"suggestions":[],"hasMore":false,"nextToken":null,"errors":[]}));
     }
     let limit = limit.clamp(1, SUGGEST_PAGE_MAX);
-    let scope: Vec<String> = archives.iter().map(|(id, _)| id.clone()).collect();
     let cursor = match token {
-        Some(token) => suggestion_cursor(token, prefix, &scope)?,
+        Some(token) => suggestion_cursor(token, prefix, scope)?,
         None => (0, 0),
     };
-    let page = collect_page(&scope, cursor, limit, cancel, |book, offset, limit, cancel| {
-        archives[book]
-            .1
-            .as_ref()
-            .map_err(|error| error.clone())?
-            .search_cancellable(prefix, false, offset, limit, false, cancel)
+    let page = collect_page(scope, cursor, limit, cancel, |book, offset, limit, cancel| {
+        let archive = open(book, cancel)?;
+        check_cancel(cancel)?;
+        archive.search_cancellable(prefix, false, offset, limit, false, cancel)
             .map(|page| page.hits)
     })?;
     let next = page.next
-        .map(|(book, offset)| suggestion_token(prefix, &scope, book, offset));
+        .map(|(book, offset)| suggestion_token(prefix, scope, book, offset));
     let suggestions: Vec<Value> = page
         .hits
         .into_iter()
@@ -627,9 +660,10 @@ mod tests {
         }
     }
 
-    fn native_page(hits: &[SearchHit], offset: u32, limit: u32) -> crate::archive::SearchResults {
+    fn native_page(hits: &[SearchHit], offset: u32, limit: u32) -> SearchResults<RankedHit> {
         crate::archive::SearchResults {
-            hits: hits.iter().skip(offset as usize).take(limit as usize).cloned().collect(),
+            hits: hits.iter().skip(offset as usize).take(limit as usize).cloned()
+                .map(|hit| RankedHit { hit, excerpt_entry: None }).collect(),
             total: hits.len() as u64,
         }
     }
@@ -662,7 +696,7 @@ mod tests {
             Ok(native_page(rows, offset, limit))
         };
         let all = collect_combined(&streams, 0, 20, &cancel, fetch).unwrap();
-        let expected: Vec<_> = all.hits.iter().map(|(book, _, hit)| (*book, hit.path.clone())).collect();
+        let expected: Vec<_> = all.hits.iter().map(|(book, _, hit)| (*book, hit.hit.path.clone())).collect();
         assert_eq!(expected, [
             (0, "Shared".into()),
             (1, "Shared".into()),
@@ -676,7 +710,7 @@ mod tests {
         for offset in 0..4 {
             let page = collect_combined(&streams, offset, 1, &cancel, fetch).unwrap();
             assert_eq!(page.has_more, offset < 3);
-            paged.extend(page.hits.into_iter().map(|(book, _, hit)| (book, hit.path)));
+            paged.extend(page.hits.into_iter().map(|(book, _, hit)| (book, hit.hit.path)));
         }
         assert_eq!(paged, expected);
     }
@@ -694,15 +728,15 @@ mod tests {
             Ok(native_page(if source.fulltext { &fulltext } else { &titles }, offset, limit))
         }).unwrap();
         assert_eq!(page.hits.len(), 5);
-        assert_eq!(page.hits.first().unwrap().2.path, "Article 0200");
-        assert_eq!(page.hits.last().unwrap().2.path, "Article 0204");
+        assert_eq!(page.hits.first().unwrap().2.hit.path, "Article 0200");
+        assert_eq!(page.hits.last().unwrap().2.hit.path, "Article 0204");
         assert!(page.has_more);
         assert_eq!(refills, [(true, PAGE), (false, PAGE)]);
         let last = collect_combined(&streams, PAGE + 5, 5, &cancel, |source, offset, limit, _| {
             Ok(native_page(if source.fulltext { &fulltext } else { &titles }, offset, limit))
         }).unwrap();
         assert_eq!(last.hits.len(), 1);
-        assert_eq!(last.hits[0].2.path, "Title beyond the full-text index");
+        assert_eq!(last.hits[0].2.hit.path, "Title beyond the full-text index");
         assert_eq!(last.total, u64::from(PAGE) + 6);
         assert!(!last.has_more);
     }
@@ -716,7 +750,7 @@ mod tests {
             Ok(native_page(&[hit("Title without a body index")], offset, limit))
         }).unwrap();
         assert_eq!(page.hits.len(), 1);
-        assert_eq!(page.hits[0].2.title, "Title without a body index");
+        assert_eq!(page.hits[0].2.hit.title, "Title without a body index");
         assert!(page.errors.is_empty());
         assert!(!page.has_more);
     }
@@ -920,14 +954,12 @@ mod tests {
         let prefix: String = title.chars().take(1).collect();
         let cancel = CancellationToken::new();
         let page = suggest(
-            vec![
-                ("broken".to_string(), Err("Archive unavailable".into())),
-                ("book".to_string(), Ok(archive)),
-            ],
+            &["broken".to_string(), "book".to_string()],
             &prefix,
             None,
             5,
             &cancel,
+            |book, _| if book == 0 { Err("Archive unavailable".into()) } else { Ok(archive.clone()) },
         )
         .unwrap();
         assert_eq!(page["errors"][0]["bookId"], "broken");
@@ -971,8 +1003,8 @@ mod tests {
         let title = archive.title_batch(0, 1).unwrap().titles.into_iter().next().unwrap();
         let prefix: String = title.chars().take(2).collect();
         let cancel = CancellationToken::new();
-        let scope = || vec![("book".to_string(), Ok(archive.clone()))];
-        let complete = suggest(scope(), &prefix, None, SUGGEST_PAGE_MAX, &cancel).unwrap();
+        let scope = ["book".to_string()];
+        let complete = suggest(&scope, &prefix, None, SUGGEST_PAGE_MAX, &cancel, |_, _| Ok(archive.clone())).unwrap();
         let expected: Vec<String> = complete["suggestions"]
             .as_array()
             .unwrap()
@@ -983,7 +1015,7 @@ mod tests {
         let mut paged = Vec::new();
         let mut token: Option<String> = None;
         for _ in 0..SUGGEST_PAGE_MAX {
-            let page = suggest(scope(), &prefix, token.as_deref(), 1, &cancel).unwrap();
+            let page = suggest(&scope, &prefix, token.as_deref(), 1, &cancel, |_, _| Ok(archive.clone())).unwrap();
             assert_eq!(page["errors"], json!([]));
             for row in page["suggestions"].as_array().unwrap() {
                 assert_eq!(row["bookId"], "book");
@@ -1004,13 +1036,28 @@ mod tests {
         cancel.cancel();
         assert_eq!(
             suggest(
-                vec![("book".to_string(), Err("Archive unavailable".into()))],
+                &["book".to_string()],
                 "Eiff",
                 None,
                 5,
                 &cancel,
+                |_, _| panic!("a cancelled suggestion opened an archive"),
             ),
             Err("Search cancelled".into()),
         );
+    }
+
+    #[test]
+    fn a_full_suggestion_page_never_launches_unvisited_archive_loads() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/indexed_search.zim");
+        let archive = Archive::open(&fixture).unwrap();
+        let scope: Vec<_> = (0..30).map(|index| index.to_string()).collect();
+        let cancel = CancellationToken::new();
+        let page = suggest(&scope, "V", None, 1, &cancel, |book, _| {
+            assert_eq!(book, 0);
+            Ok(archive.clone())
+        }).unwrap();
+        assert_eq!(page["suggestions"][0]["bookId"], "0");
+        assert!(page["nextToken"].is_string());
     }
 }

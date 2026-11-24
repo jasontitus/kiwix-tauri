@@ -1114,7 +1114,7 @@
   .rw-reveal-controls {
     position: absolute;
     inset-block-start: calc(env(safe-area-inset-top, 0px) + 4px);
-    inset-inline-start: 50%;
+    left: 50%;
     z-index: 7;
     display: inline-flex;
     align-items: center;

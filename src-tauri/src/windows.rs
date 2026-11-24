@@ -242,11 +242,9 @@ pub fn create(
         .on_navigation(move |url| {
             let service = nav_app
                 .try_state::<std::sync::Arc<crate::service::Service>>();
-            let origins = service
-                .as_ref()
-                .map(|state| state.reader_origins())
-                .unwrap_or_default();
-            crate::navigation_allowed(url, &origins)
+            crate::navigation_allowed(url, |origin| {
+                service.as_ref().is_some_and(|state| state.has_reader_origin(origin))
+            })
         })
         .inner_size(1280.0, 850.0)
         .min_inner_size(760.0, 520.0);

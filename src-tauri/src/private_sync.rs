@@ -9,6 +9,9 @@ use tokio::net::TcpStream;
 pub(crate) const PROTOCOL: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
 const PROLOGUE: &[u8] = b"org.kiwix.private-reading-sync/1";
 pub(crate) const MAX_MESSAGE: usize = 16 * 1024 * 1024;
+// A Noise identity is not an enrolled peer. Its control messages must
+// never use the bound reserved for a trusted peer's reading snapshot.
+const MAX_CONTROL_MESSAGE: usize = 4 * 1024;
 const CHUNK: usize = 60_000;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -149,11 +152,17 @@ impl Channel {
         for chunk in data.chunks(CHUNK) { self.send_chunk(chunk).await?; }
         Ok(())
     }
+    pub(super) async fn receive_control(&mut self) -> Result<Message, String> {
+        self.receive_bounded(MAX_CONTROL_MESSAGE).await
+    }
     pub(crate) async fn receive(&mut self) -> Result<Message, String> {
+        self.receive_bounded(MAX_MESSAGE).await
+    }
+    async fn receive_bounded(&mut self, limit: usize) -> Result<Message, String> {
         let header = self.receive_chunk().await?;
         let bytes: [u8; 4] = header.try_into().map_err(|_| "Invalid private message header")?;
         let length = u32::from_be_bytes(bytes) as usize;
-        if length == 0 || length > MAX_MESSAGE { return Err("Private message exceeds the supported transfer bound".into()); }
+        if length == 0 || length > limit { return Err("Private message exceeds the supported transfer bound".into()); }
         let mut data = zeroize::Zeroizing::new(Vec::with_capacity(length));
         while data.len() < length {
             let chunk = self.receive_chunk().await?;

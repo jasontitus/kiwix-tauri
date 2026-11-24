@@ -9,7 +9,7 @@ use axum::response::IntoResponse;
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, State},
-    http::{HeaderMap, Method, StatusCode, Uri},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, Uri},
     response::Response,
     routing::any,
     Router,
@@ -1684,9 +1684,14 @@ fn archive_response(
         Some(nonce) => format!("default-src 'self' data: blob:; script-src 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; frame-ancestors 'self' {parent}; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; manifest-src 'none'"),
         None => format!("default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; frame-src {}; frame-ancestors 'self' {parent}; worker-src 'self' blob:; object-src 'none'; form-action 'self'; base-uri 'self'", state.origin),
     };
+    // Archives supply MIME metadata. Refuse malformed header bytes rather than
+    // terminating the request, and keep sniffing disabled on the fallback.
+    let content_type = HeaderValue::from_str(mime).ok()
+        .filter(|value| value.to_str().is_ok())
+        .unwrap_or_else(|| HeaderValue::from_static("application/octet-stream"));
     let mut builder = Response::builder()
         .status(status)
-        .header("Content-Type", mime)
+        .header("Content-Type", content_type)
         .header("Content-Length", size)
         .header("Accept-Ranges", "bytes")
         .header("Content-Security-Policy", policy)
@@ -1708,7 +1713,9 @@ fn archive_response(
     if let Some(etag) = etag {
         builder = builder.header("ETag", etag);
     }
-    builder.body(body).unwrap()
+    builder.body(body).unwrap_or_else(|_| {
+        error(StatusCode::INTERNAL_SERVER_ERROR, "Could not prepare the archive response")
+    })
 }
 
 /// A strong validator for one archive entry in this reader session.

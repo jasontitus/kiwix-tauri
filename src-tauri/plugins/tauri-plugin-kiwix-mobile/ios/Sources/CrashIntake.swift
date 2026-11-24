@@ -18,12 +18,13 @@ enum CrashIntake {
   private static let previousFile = "previous.json"
   private static let tempFile = ".pending.json.tmp"
   // Compiled once: the redaction helper runs per field and per stack frame.
-  private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s"'<>)]+"#)
+  private static let urlPattern = try! NSRegularExpression(
+    pattern: #"(?i)(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://|(?:blob|content|data|file|mailto|tauri|tel|zim):(?!:))[^\s"<>`]*"#)
   private static let bearerPattern = try! NSRegularExpression(pattern: #"(?i)\bbearer\s+\S+"#)
   private static let secretPattern = try! NSRegularExpression(
     pattern: #"(?i)\b(authorization|access_token|refresh_token|api_key|apikey|password|passwd|cookie|token|secret|pin)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;&)\]}]+)"#)
   private static let pathPattern = try! NSRegularExpression(
-    pattern: #"(?<!\S)(?:/[^\s"'<>),;]+|[A-Za-z]:[\\/][^\s"'<>),;]+|~/[^\s"'<>),;]+)"#)
+    pattern: #"(?<![^\s=(\[{"',;:`])(?:/(?!/)|[a-zA-Z]:[\\/]|~/|\\\\)[^\s"<>`]+"#)
   private static let tokenPattern = try! NSRegularExpression(pattern: #"\b[A-Za-z0-9_+/=-]{40,}\b"#)
 
   static func install() {
@@ -144,7 +145,7 @@ enum CrashIntake {
     #endif
   }
 
-  private static func redact(_ value: String) -> String {
+  static func redact(_ value: String) -> String {
     var text = replacing(value, urlPattern) { match in
       safeURL(match)
     }
@@ -154,10 +155,7 @@ enum CrashIntake {
         .trimmingCharacters(in: .whitespaces)
       return "\(key)=[redacted]"
     }
-    text = replacing(text, pathPattern) { match in
-      let name = (match as NSString).lastPathComponent
-      return name.isEmpty ? "[path]" : name
-    }
+    text = replacing(text, pathPattern) { _ in "[path]" }
     text = replacing(text, tokenPattern) { _ in "[redacted]" }
     return text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
   }
@@ -181,14 +179,21 @@ enum CrashIntake {
   }
 
   private static func safeURL(_ raw: String) -> String {
-    guard let components = URLComponents(string: raw), let host = components.host else {
+    guard let components = URLComponents(string: raw), let scheme = components.scheme?.lowercased(),
+          scheme == "http" || scheme == "https", let host = components.host, !host.isEmpty else {
       return "[url]"
     }
-    var path = components.percentEncodedPath
-    if let marker = path.range(of: "/.kiwix/") {
-      path = String(path[..<marker.lowerBound]) + "/.kiwix/[redacted]"
+    let hostname = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]."))
+    let loopback = hostname == "localhost" || hostname.hasSuffix(".localhost")
+      || (hostname.hasPrefix("127.") && hostname.utf8.allSatisfy { $0 == 46 || (48...57).contains($0) })
+      || (hostname.contains(":") && hostname.hasSuffix("1") && hostname.dropLast().allSatisfy { $0 == ":" || $0 == "0" })
+    let path = components.path
+    let nested = path.contains("://")
+      || ["mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:"].contains { path.contains($0) }
+    if loopback || path.contains("/.kiwix/") || nested {
+      return "[reader-url]"
     }
     let port = components.port.map { ":\($0)" } ?? ""
-    return "\(components.scheme ?? "http")://\(host)\(port)\(path)"
+    return "\(scheme)://\(host)\(port)\(components.percentEncodedPath)"
   }
 }

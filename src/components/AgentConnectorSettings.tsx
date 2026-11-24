@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { t } from "../i18n";
-import { errorText } from "./UI";
+import { errorText, useDocumentVisible } from "./UI";
 
 /** Live state of the offline-library agent connector (kiwix-mcp). */
 type AgentConnectorStatus = {
@@ -39,20 +39,29 @@ export function AgentConnectorSettings({
 }) {
   const [status, setStatus] = useState<AgentConnectorStatus | null>(null);
   const [copied, setCopied] = useState(false);
+  const visible = useDocumentVisible();
   useEffect(() => {
-    let alive = true;
-    const load = () =>
-      api<AgentConnectorStatus>("agent_connector_status", {})
-        .then((value) => alive && setStatus(value))
-        .catch(() => alive && setStatus(null));
+    if (!visible) return;
+    let active = true;
+    let timer: number | undefined;
+    const monitor = enabled && !privateMode && !readOnly;
+    async function load() {
+      try {
+        const value = await api<AgentConnectorStatus>("agent_connector_status", {});
+        if (active) setStatus(value);
+      } catch {
+        if (active) setStatus(null);
+      } finally {
+        if (active && monitor && document.visibilityState !== "hidden")
+          timer = window.setTimeout(load, 5000);
+      }
+    }
     void load();
-    // Activity and errors change while the page is open.
-    const timer = window.setInterval(load, 5000);
     return () => {
-      alive = false;
-      window.clearInterval(timer);
+      active = false;
+      window.clearTimeout(timer);
     };
-  }, [enabled, privateMode, readOnly]);
+  }, [enabled, privateMode, readOnly, visible]);
   if (!status?.supported) return null;
   const args = status.dataDir ? ["--data-dir", status.dataDir] : [];
   const relayArgs = status.flatpak

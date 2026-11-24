@@ -208,7 +208,7 @@ impl SensorManager {
             cancel_requests(&mut state);
         }
     }
-    #[cfg(any(target_os = "android", test))]
+    #[cfg(any(mobile, test))]
     pub(crate) fn retained_session(&self) -> Option<RetainedSensorSession> {
         self.0.lock().ok().and_then(|state| state.retained.clone())
     }

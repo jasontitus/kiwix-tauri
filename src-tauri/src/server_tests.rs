@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 use super::parse_range;
 use super::{ArchiveWorkers, ReaderConnection, ReaderListener, ReaderStorage, Store};
+use futures_util::FutureExt;
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
@@ -700,7 +701,7 @@ fn malformed_locations_are_rejected_instead_of_resolved() {
 /// A live reader origin over the real archive fixture, so the streaming
 /// path is exercised end to end instead of through a hand-built handler.
 struct ReaderFixture {
-    _server: super::ReaderServer,
+    server: Option<super::ReaderServer>,
     host: String,
     port: u16,
     directory: PathBuf,
@@ -744,7 +745,11 @@ impl ReaderFixture {
             .rsplit_once(':')
             .and_then(|(_, port)| port.parse().ok())
             .expect("reader origin names its port");
-        Self { _server: server, host, port, directory, archive }
+        Self { server: Some(server), host, port, directory, archive }
+    }
+
+    async fn shutdown(mut self) {
+        self.server.take().unwrap().shutdown().await.unwrap();
     }
 
     fn url(&self, path: &str) -> String {
@@ -906,6 +911,34 @@ async fn ranged_media_request_returns_exact_bytes_and_headers() {
         response.body,
         fixture.archive.read(MEDIA_PATH, 1000, 1000).unwrap()
     );
+}
+
+#[tokio::test]
+async fn malformed_archive_media_type_still_serves_ranged_bytes() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/media.zim");
+    let mut archive = std::fs::read(source).unwrap();
+    let offset = archive.windows(b"video/mp4\0".len())
+        .position(|bytes| bytes == b"video/mp4\0").unwrap();
+    archive[offset + 6] = b'\n';
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("media.zim");
+    std::fs::write(&path, archive).unwrap();
+    let fixture = ReaderFixture::start_path(path).await;
+    let expected = fixture.archive.read(MEDIA_PATH, 1000, 1000).unwrap();
+    let response = std::panic::AssertUnwindSafe(async {
+        fetch(
+            fixture.port, &fixture.host, "GET", &fixture.url(MEDIA_PATH), &[("Range", "bytes=1000-1999")],
+        ).await
+    })
+    .catch_unwind()
+    .await;
+    fixture.shutdown().await;
+    directory.close().unwrap();
+    let response = response.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+    assert_eq!(response.status, 206);
+    assert_eq!(response.header("content-type"), Some("application/octet-stream"));
+    assert_eq!(response.header("x-content-type-options"), Some("nosniff"));
+    assert_eq!(response.body, expected);
 }
 
 #[tokio::test]

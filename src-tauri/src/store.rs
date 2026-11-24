@@ -2127,7 +2127,7 @@ impl Store {
         // and root marker remain to be committed at this explicit policy boundary.
         let initialized = crate::mobile_rebase::initialize(&self.data_dir, false)?;
         if !initialized.durable {
-            return Err("The profile relocation is incomplete; keep the profile writable and retry after the remaining records are repaired".into());
+            return Err("The profile relocation is incomplete. Keep the profile writable and try again after the remaining files are repaired.".into());
         }
         inner.mobile_relocation = None;
         Ok(())

@@ -70,6 +70,16 @@ async fn serve(State(state): State<Arc<Network>>, uri: Uri, headers: HeaderMap) 
                 .find(|(key, _)| key == "page").and_then(|(_, value)| value.parse::<usize>().ok()).unwrap_or(0);
             (feed(&entry("urn:uuid:a", "A"), Some(&format!("/feed?page={}", offset + 1))), 8)
         },
+        10 | 11 => {
+            let offset = url::form_urlencoded::parse(uri.query().unwrap_or("").as_bytes())
+                .find(|(key, _)| key == "page").and_then(|(_, value)| value.parse::<usize>().ok()).unwrap_or(0);
+            let next = (offset + 1 < MAX_PAGES).then(|| format!("/feed?page={}", offset + 1));
+            if mode == 10 && next.is_none() {
+                state.entered.notify_one();
+                state.release.notified().await;
+            }
+            (feed(&entry(&format!("page-{offset}"), "Book"), next.as_deref()), 10)
+        }
         _ if second => (feed(&entry("b", "B"), None), 1),
         _ => (feed(&entry("urn:uuid:a", "A"), Some("/second")), 1),
     };
@@ -117,6 +127,37 @@ async fn current_chain_revalidates_all_pages_and_offline_is_never_traversed() {
     assert!(offline.pages.iter().all(|page| page.stale && page.status == "offline"));
     assert!(index.lookup(&offline.source_id, &offline.entries[0].entry_id, offline.generation).is_err());
     assert!(index.lookup_current(&offline.source_id, &offline.entries[0].entry_id).is_err());
+    fixture.stop().await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn maximum_traversal_publishes_raw_history_once_and_revalidates_every_page() {
+    let profile = Profile::new();
+    let fixture = Fixture::new().await;
+    fixture.network.mode.store(10, Ordering::SeqCst);
+    let store = Arc::new(Store::new(profile.0.clone()).unwrap());
+    let cache = cache(store.clone());
+    let index = Arc::new(CatalogIndex::new(store));
+    let (gate, generation) = policy();
+    let root = fixture.root();
+    let pending = {
+        let (index, cache, gate, generation, root) = (index.clone(), cache.clone(), gate.clone(), generation.clone(), root.clone());
+        tokio::spawn(async move { index.refresh(&cache, &root, "en", &gate, &generation, 1).await.unwrap() })
+    };
+    fixture.network.entered.notified().await;
+    let raw = profile.0.join("cache/catalog-opds-v1.json");
+    assert!(!raw.exists(), "the traversal must not publish an incomplete set of raw pages");
+    fixture.network.release.notify_one();
+    let first = pending.await.unwrap();
+    assert!(first.stored && !first.stale);
+    assert_eq!(first.pages.len(), MAX_PAGES);
+    assert_eq!(first.completeness, "traversed");
+    assert!(raw.is_file());
+
+    fixture.network.mode.store(11, Ordering::SeqCst);
+    let second = index.refresh(&cache, &root, "en", &gate, &generation, 1).await.unwrap();
+    assert_eq!(second.pages.len(), MAX_PAGES);
+    assert!(second.pages.iter().all(|page| page.status == "revalidated"));
     fixture.stop().await;
 }
 
