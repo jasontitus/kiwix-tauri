@@ -29,14 +29,14 @@ const collectionCode = await handlers("../src/components/Collections.tsx", ["sav
 const pagedCode = await handlers("../src/components/UI.tsx", ["PagedResults"]);
 const binaryCode = await handlers("../src/api.ts", ["saveBytes", "saveResource", "saveMhtml"]);
 const pickerCode = await handlers("../src/api.ts", ["readTextFile"]);
-const bookmark = () => ({ id: "one", bookId: "book", path: "A/Article", title: "Title", note: "Original", tags: ["saved"] });
+const bookmark = () => ({ id: "one", bookId: "book", path: "A/Article", title: "Title", note: "Original", tags: ["saved"], tagsText: "saved" });
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
 function collection(overrides = {}) {
-  const state = { edit: bookmark(), busy: false, refreshed: 0, errors: [], notice: "" };
+  const state = { edit: bookmark(), busy: false, refreshed: 0, errors: [], notice: "", importError: "" };
   const context = vm.createContext({
     edit: state.edit, busy: false, readOnlyRef: { current: false },
     bookmarks: [bookmark(), { ...bookmark(), id: "two" }],
@@ -49,6 +49,10 @@ function collection(overrides = {}) {
     setBusy: (value) => { state.busy = value; },
     setEdit: (value) => { state.edit = typeof value === "function" ? value(state.edit) : value; },
     setNotice: (value) => { state.notice = value; },
+    setImportError: (value) => { state.importError = value; },
+    reportError: () => true,
+    diagnostics: {},
+    errorText: (error) => error instanceof Error ? error.message : String(error),
     onRefresh: () => { state.refreshed++; },
     onError: (error) => { state.errors.push(error); },
     ...overrides,
@@ -189,7 +193,8 @@ test("unreadable browser file rejects through import and releases its busy state
   input.onchange();
   await pending;
   assert.equal(imported, 0);
-  assert.deepEqual(state.errors, [failure]);
+  assert.deepEqual(state.errors, []);
+  assert.match(state.importError, /Selected file is no longer readable/);
   assert.equal(state.busy, false);
   assert.equal(state.refreshed, 0);
 });

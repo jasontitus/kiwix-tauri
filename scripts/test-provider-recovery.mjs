@@ -165,11 +165,11 @@ test("revoked grants and other failures stay visible and are not cleared by a su
     try { await ui.context.dispatchOnce("open_article", {}); } catch (error) { failure = error; }
     ui.context.report(failure);
     assert.equal(ui.localProvider(), null);
-    assert.equal(ui.bands.length, 1);
+    assert.equal(ui.bands.length, 0, "the active reader owns the visible notice");
     assert.equal(ui.log.snapshot().length, 1);
     assert.equal(ui.localError(), failure.message);
     ui.context.recovered();
-    assert.equal(ui.bands.length, 1);
+    assert.equal(ui.bands.length, 0);
     assert.equal(ui.localError(), failure.message, "source recovery cannot erase a genuine error");
   }
 });
@@ -182,7 +182,8 @@ test("unscoped or mismatched envelopes never acquire local-retry authority", () 
     assert.equal(isProviderUnavailableFor(failure, ui.currentBook), false);
     ui.context.report(failure);
     assert.equal(ui.localProvider(), null);
-    assert.equal(ui.bands.length, 1);
+    assert.equal(ui.bands.length, 0);
+    assert.equal(ui.localError(), failure.message);
   }
   assert.equal(parseProviderDocumentError(envelope({ sourceReference: "not-a-reference" })), null);
   assert.equal(parseProviderDocumentError("NativeDocumentError: PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT"), null);

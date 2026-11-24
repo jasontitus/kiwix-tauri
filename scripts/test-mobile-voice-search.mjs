@@ -385,7 +385,8 @@ test("valid audible/PiP retention keeps the same reader document, session and pl
     assert.equal(app.nativeOwner(), "session-1", "foreground reactivates the retained owner without navigation");
     assert.equal(app.readerReady(), true);
     assert.equal((await app.prepareSpeech()).token, "prepared-token");
-    assert.ok(app.commands.includes("sensor_activate"));
+    assert.ok(app.commands.includes("mobile_speech_restore_reader"));
+    assert.equal(app.commands.includes("sensor_activate"), false);
     assert.ok(app.commands.includes("mobile_speech_prepare"));
     app.close();
   }

@@ -442,6 +442,7 @@ impl SearchReader {
         self.page_with(q, fulltext, offset, limit, mode, Some(cancel), |hit, excerpt_entry| RankedHit { hit, excerpt_entry })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn page_with<T>(
         &self, q: &str, fulltext: bool, offset: u32, limit: u32, snippets: SnippetMode,
         cancel: Option<&CancellationToken>, make_row: fn(SearchHit, Option<u32>) -> T,

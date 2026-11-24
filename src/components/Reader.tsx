@@ -2005,13 +2005,25 @@ export default function Reader(props: ReaderProps) {
         }, current);
         // Native restoration is fenced by the exact retained session. A late
         // reply cannot deactivate a newer foreground owner.
-        if (!current()) return;
+        if (!current()) {
+          void lifecycle(() => api("sensor_deactivate", { sessionId: retained.sessionId }))
+            .catch((value) => latest.current.onError(value, ERROR_SITES["reader.sensor-deactivate"]));
+          return;
+        }
         retained.status = status;
         retainedActivation.current = null;
         setFrame((previous) => previous?.frameId === retained.frameId ? { ...previous, status } : previous);
         setFrameReady(true);
       }).catch((value) => {
-        if (!current()) return;
+        if (!current()) {
+          // A failed restore after retirement/privacy still needs to release
+          // any native owner the old session retained. A background media
+          // handoff keeps that owner for the next foreground.
+          if (!latest.current.mediaRetained)
+            void lifecycle(() => api("sensor_deactivate", { sessionId: retained.sessionId }))
+              .catch((error) => latest.current.onError(error, ERROR_SITES["reader.sensor-deactivate"]));
+          return;
+        }
         // The retained owner is gone (or Rust never retained it). Drop the
         // stale activation and run a normal fresh open instead of leaving the
         // frame permanently unready.

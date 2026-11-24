@@ -56,8 +56,8 @@ impl PieceReceipt {
         if piece_length == 0 || info.len == 0 || end > lengths.total_length() {
             bail!("Torrent archive has no verifiable pieces");
         }
-        if info.offset_in_torrent % piece_length != 0
-            || (end % piece_length != 0 && end != lengths.total_length())
+        if !info.offset_in_torrent.is_multiple_of(piece_length)
+            || (!end.is_multiple_of(piece_length) && end != lengths.total_length())
             || u64::from(info.piece_range.start) != info.offset_in_torrent / piece_length
             || info.piece_range.len() as u64 != info.len.div_ceil(piece_length)
         {

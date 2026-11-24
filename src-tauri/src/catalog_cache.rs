@@ -371,6 +371,7 @@ impl CatalogCache {
         Ok(CachedCatalogFacets { facets: CatalogFacets { languages: languages_values, categories: categories_values }, cache })
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn fetch(
         &self, url: &str, locale: &str, kind: Kind, gate: &Arc<RwLock<()>>, generation: &AtomicU64, expected: u64, defer: bool,
     ) -> Result<(Parsed, CatalogCacheMetadata, Representation, Option<CacheUpdate>), String> {

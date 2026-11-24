@@ -1282,6 +1282,7 @@ pub(super) async fn seed(manifest: Arc<Manifest>, peer_id: String, pin: Option<S
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn seed_apple(manifest: Arc<Manifest>, peer_id: String, pin: Option<String>, reader: ChunkReader,
     upload_budget: Arc<RateBudget>, cancel: CancellationToken, frame: Arc<Vec<u8>>,
     on_source_failure: Option<SeedSourceFailure>) -> Result<SeedServer, String>

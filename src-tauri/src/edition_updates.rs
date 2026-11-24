@@ -551,7 +551,7 @@ fn change_times_provable(source: &RetainedSource) -> Result<bool, String> {
     for (_, file) in source.files() {
         let metadata = file.metadata().map_err(|error| error.to_string())?;
         let nanos = metadata.ctime_nsec();
-        if nanos < 0 || nanos >= 1_000_000_000 || (metadata.ctime() == 0 && nanos == 0) {
+        if !(0..1_000_000_000).contains(&nanos) || (metadata.ctime() == 0 && nanos == 0) {
             return Ok(false);
         }
     }
