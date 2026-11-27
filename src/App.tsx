@@ -467,6 +467,30 @@ export default function App() {
   } | null>(null);
   const errorDismiss = useRef<HTMLButtonElement>(null);
   const errorMessageId = useId();
+  // Where keyboard focus was when a failure interrupted a dialog. A button
+  // that disables itself while its action runs has already lost focus by the
+  // time the action fails, so the last focused control is tracked as well.
+  const lastFocus = useRef<HTMLElement | null>(null);
+  const errorOrigin = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const remember = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement && !event.target.closest('dialog[role="alertdialog"]'))
+        lastFocus.current = event.target;
+    };
+    document.addEventListener("focusin", remember, true);
+    return () => document.removeEventListener("focusin", remember, true);
+  }, []);
+  useEffect(() => {
+    if (error?.surface === "dialog") return;
+    const origin = errorOrigin.current;
+    errorOrigin.current = null;
+    // The dialog restores focus itself when its opener can take it. Step in
+    // only when focus was left on nothing, and never across another modal.
+    if (!origin?.isConnected || origin.matches(":disabled") || document.activeElement !== document.body) return;
+    const dialogs = openDialogs(document);
+    if (dialogs.length && document.elementFromPoint(0, 0)?.closest("dialog[open]") !== origin.closest("dialog[open]")) return;
+    origin.focus({ preventScroll: true });
+  }, [error]);
   const [initialError, setInitialError] = useState("");
   const [startupNoticeDismissed, setStartupNoticeDismissed] = useState(false);
   const [pageVisible, setPageVisible] = useState(document.visibilityState === "visible");
@@ -862,11 +886,15 @@ export default function App() {
       // the second already shows this message.
       const covered = openDialogs(document).some((dialog) =>
         dialog !== quitDialog.current && dialog !== mobileRecoveryDialog.current);
-      setError({
-        message: errorText(value),
-        severity: normalizeSeverity(severity),
-        surface: errorSurface(severity, covered),
-      });
+      const surface = errorSurface(severity, covered);
+      if (surface === "dialog") {
+        const active = document.activeElement;
+        // Keep the first origin while a newer failure replaces the message.
+        if (!(active instanceof HTMLElement && active.closest('dialog[role="alertdialog"]')))
+          errorOrigin.current = active instanceof HTMLElement && active !== document.body
+            ? active : lastFocus.current;
+      }
+      setError({ message: errorText(value), severity: normalizeSeverity(severity), surface });
     },
     [],
   );

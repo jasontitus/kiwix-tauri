@@ -185,3 +185,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 - desktop lane launched (af117…): CORE-4, BUILD-12, BUILD-2, BUILD-9, BUILD-7, APPLE-2, APPLE-3 (owns update.rs, windows.rs, sandbox.rs, menus.rs; store.rs load path; App.tsx nativeMenuLabels). Model switched to Opus 5.5 by user; checkpoint attribution updated.
 - DURABILITY: planning state synced to docs/reviews/2026-11-27/working/ on every checkpoint (sync-working.sh); RESUME.md written; auto-checkpoint loop every 10 min (bg b2pot9yel, 2h limit; re-arm when it ends). Save adversarial reports to scratchpad/adv/<lane>.md.
 - 23:48 UTC: rate limit (Fable) stopped lanes: cidocs (ae9fa…), files (a5327…), startup (a38ef…), reader (a5578…). Resume each via SendMessage after 00:00 UTC reset. Others may follow.
+- also stopped: adv-apple (a3939…), android (afedc…).
