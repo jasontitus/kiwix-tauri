@@ -13,6 +13,20 @@ use futures_util::FutureExt;
 /// not make the history permanently unwritable.
 static JOURNAL: Mutex<()> = Mutex::new(());
 
+/// Whether this host can bind the `[::]` dual-stack TCP and UDP sockets the
+/// torrent engine uses by default. A kernel without IPv6 refuses to create
+/// them at all; the same probe-then-IPv4 rule as the LocalSwarm listeners.
+pub(super) fn dual_stack_available() -> bool {
+    let bind = |kind, protocol| {
+        socket2::Socket::new(socket2::Domain::IPV6, kind, Some(protocol)).and_then(|socket| {
+            socket.set_only_v6(false)?;
+            socket.bind(&SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), 0).into())
+        })
+    };
+    bind(socket2::Type::STREAM, socket2::Protocol::TCP).is_ok()
+        && bind(socket2::Type::DGRAM, socket2::Protocol::UDP).is_ok()
+}
+
 impl TorrentManager {
     /// Snapshot one durably published member, including a completed member of
     /// a still-running multi-file torrent. Metadata and filenames are not proof.
@@ -1301,12 +1315,17 @@ impl TorrentManager {
             };
             let startup = self.inner.stop.child_token();
             let startup_guard = startup.clone().drop_guard();
+            // The engine's default peer listener and DHT socket are `[::]`
+            // dual-stack. A host without IPv6 cannot create them, so use the
+            // engine's IPv4 addresses there instead of failing every torrent.
+            let ipv4_only = !dual_stack_available();
             let opts = SessionOptions {
                 // Persistent torrent metadata belongs to this adapter; avoid
                 // engine auto-restoration opening paths before our validation.
                 persistence: None, fastresume: false,
                 dht: Some(DhtSessionConfig { persistence: None, ..Default::default() }),
-                listen: Some(ListenerOptions::default()),
+                listen: Some(ListenerOptions { ipv4_only, ..Default::default() }),
+                ipv4_only,
                 cancellation_token: Some(startup),
                 ratelimits: config, concurrent_init_limit: Some(2),
                 client_name_and_version: Some("Kiwix Workbench".into()),
