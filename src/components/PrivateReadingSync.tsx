@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { BookOpen, Copy, Link, RefreshCw, ShieldCheck, Unlink } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { capturePrivacyContext, isPrivacyContextCurrent, subscribeReaderPreferences, type PrivacyContext } from "../api";
+import { capturePrivacyContext, isMobile, isPrivacyContextCurrent, subscribeReaderPreferences, type PrivacyContext } from "../api";
 import { privateSyncRequest } from "../private-sync-api";
 import { t, formatDate } from "../i18n";
 import type { PrivateSyncConflict, PrivateSyncStatus } from "../private-sync-types";
@@ -20,7 +20,21 @@ interface Props {
   onRefresh: () => void;
 }
 
-type OwnedSession = { id: string; privacy: PrivacyContext };
+/**
+ * The invitation or connection this view started. `phase` is the last one
+ * seen, and `hidden` records that the app left the foreground meanwhile: a
+ * phone cancels the session then, by design.
+ */
+type OwnedSession = { id: string; privacy: PrivacyContext; expiresAt: number; phase: string; hidden: boolean };
+
+/** Why a session this view started is gone although nobody here ended it. */
+function endedSessionText(owned: OwnedSession): string {
+  if (Number.isFinite(owned.expiresAt) && Date.now() >= owned.expiresAt)
+    return t("The invitation expired before your other device connected. Create a new invitation.");
+  if (isMobile && owned.hidden)
+    return t("Connecting your devices was cancelled because this app was hidden or interrupted. Create a new invitation and keep this screen open on both devices until they connect.");
+  return t("The invitation is no longer active. Create a new invitation to connect your other device.");
+}
 
 function ConflictChoice({ conflict, disabled, onChoose, onCopy }: {
   conflict: PrivateSyncConflict;
@@ -102,7 +116,10 @@ export default function PrivateReadingSync({
     function activity() {
       const active = document.visibilityState === "visible" && document.hasFocus();
       setForeground(active);
-      if (!active) retire(false);
+      if (!active) {
+        if (ownedSession.current) ownedSession.current.hidden = true;
+        retire(false);
+      }
     }
     const unsubscribe = subscribeReaderPreferences(() => {
       if (statusPrivacy.current && !isPrivacyContextCurrent(statusPrivacy.current)) retire();
@@ -150,6 +167,15 @@ export default function PrivateReadingSync({
           statusPrivacy.current = privacy;
           setStatus(next);
           setStatusError("");
+          const owned = ownedSession.current;
+          if (owned && next.session?.id === owned.id) owned.phase = next.session.phase;
+          else if (owned && !next.session) {
+            // Nobody here ended it, and the form is back to "Create private
+            // invitation". Without a reason the invitation the person just
+            // sent looks valid while the other device is refused.
+            ownedSession.current = null;
+            if (owned.phase === "waiting" || owned.phase === "verifying") setError(endedSessionText(owned));
+          }
         }
       } catch (cause) {
         if (active && current(privacy, operation) &&
@@ -177,7 +203,15 @@ export default function PrivateReadingSync({
           if (isPrivacyContextCurrent(privacy)) void privateSyncRequest("private_sync_pair_cancel", { sessionId: next.session.id }, privacy).catch(() => {});
           return;
         }
-        ownedSession.current = { id: next.session.id, privacy };
+        ownedSession.current = {
+          id: next.session.id, privacy, expiresAt: Date.parse(next.session.expiresAt),
+          phase: next.session.phase, hidden: false,
+        };
+      } else if (ownedSession.current) {
+        // The person's own action (Cancel connection, Close invitation,
+        // disconnecting a device) ended or advanced it; no notice is owed.
+        if (!next.session) ownedSession.current = null;
+        else if (next.session.id === ownedSession.current.id) ownedSession.current.phase = next.session.phase;
       }
       if (!current(privacy, operation)) return;
       statusPrivacy.current = privacy;
@@ -215,7 +249,9 @@ export default function PrivateReadingSync({
     if (!privacy || !value) return;
     try {
       await navigator.clipboard.writeText(value);
-      if (current(privacy, operation)) setNotice(t("Invitation copied. Send it only to your other device."));
+      if (current(privacy, operation)) setNotice(isMobile
+        ? t("Invitation copied. Keep this app open: the invitation is cancelled if this app is closed or hidden. If you cannot paste it on your other device from here, scan the QR code instead.")
+        : t("Invitation copied. Send it only to your other device."));
     } catch (cause) {
       if (current(privacy, operation)) setError(errorText(cause));
     }
@@ -288,6 +324,7 @@ export default function PrivateReadingSync({
                 <p className="muted">{t("Use your other device’s QR reader to copy this invitation, or copy and paste it. An invitation expires automatically.")}</p>
                 <label className="field"><span>{t("Private invitation")}</span><textarea readOnly value={session.invitation} rows={3} autoComplete="off" spellCheck={false} /></label>
                 <button disabled={disabled} onClick={() => void copyInvitation()}><Copy size={16} aria-hidden="true" />{t("Copy invitation")}</button>
+                {isMobile && <p className="muted">{t("Keep this screen open until your other device connects. The invitation is cancelled if this app is closed or hidden.")}</p>}
               </>}
               <p className="muted">{t("Invitation expires: {date}", { date: formatDate(session.expiresAt) })}</p>
               {session.phase === "waiting" && <p role="status">{t("Waiting for your other device…")}</p>}

@@ -16,13 +16,19 @@ States: **Running** → **Stopping** (`Service.stopping = true`, which is never 
 
 The Quit attempt (`QuitManager.attempt`) moves **Idle** → **Preparing** (flush requested from every shell) → **Prepared** (all flushed; the attempt is *held* through `Service::shutdown`) → exit, or back to **Idle**.
 
+A Quit that cannot save or retire stops in **Asking**: one native dialog (`ask_after_failed_quit`) with Retry, Quit Without Saving and Cancel. `exiting` stays `true` while it is open, so a second Quit request cannot stack another dialog or start another attempt.
+
 | From | Event | To | Where |
 |---|---|---|---|
-| Running, Idle | `RunEvent::ExitRequested` (not yet authorized) | Preparing; `exiting=true` | `lib.rs` run callback, `quit::prepare` → `begin_attempt` |
-| Preparing | flush error, timeout or cancellation | Idle (`cancel` emits `kiwix-quit-cancelled`), `exiting=false` | `quit::prepare` |
-| Preparing | every shell acknowledged | Prepared | `quit::prepare` |
-| Prepared | `Service::shutdown` → Ok | Retired, `authorized=true`, then `app.exit`, or `app.request_restart()` when an installed update armed a relaunch | `lib.rs`, `update::take_restart_after_quit` (fix F-2) |
-| Prepared | `Service::shutdown` → Err | Stay Prepared and show the retirement error with a native Retry button. The next Quit reuses the flushed session and retries shutdown. An installed update retains its relaunch request. | `lib.rs`, `quit::prepare`, `quit::needs_flush` |
+| Running, Idle | `RunEvent::ExitRequested` (not yet authorized) | Preparing; `exiting=true` | `lib.rs` run callback, `quit::prepare` → `needs_flush` |
+| Preparing | flush error, timeout or cancellation | Attempt back to Idle (`cancel` emits `kiwix-quit-cancelled`; the shells resume), then Asking (`QuitFailure::Flush`); `exiting` stays `true` | `quit::prepare`, `lib.rs` `ask_after_failed_quit` |
+| Preparing | every shell acknowledged | Prepared. Window geometry and the session snapshot are then written best-effort: a failure is logged and does not cancel Quit | `quit::prepare` |
+| Prepared | `Service::shutdown` → Ok | Retired, `authorized=true`, then `app.exit`, or `app.request_restart()` when an installed update armed a relaunch | `lib.rs` `finish_authorized_quit`, `update::take_restart_after_quit` (fix F-2) |
+| Prepared | `Service::shutdown` → Err | Stay Prepared (shells frozen) and Asking (`QuitFailure::Retirement`) | `lib.rs` `ask_after_failed_quit` |
+| Asking (either) | Retry | `exiting=false`, then a new `ExitRequested`. After a failed flush every shell is flushed again; after a failed retirement the flushed session is reused and only shutdown is retried. An installed update retains its relaunch request. | `quit::failed_quit_action`, `quit::needs_flush` |
+| Asking (either) | Quit Without Saving | `Service::shutdown` runs once more, every stage; its result no longer vetoes the exit. Then `authorized=true` and exit or the armed relaunch, as after a clean retirement. `exiting` stays `true` throughout. | `lib.rs` `retire_without_saving`, `finish_authorized_quit` |
+| Asking (`Flush`) | Cancel, or the dialog is closed | Running, Idle; `exiting=false`; the relaunch request of an installed update is cleared, so a later plain Quit does not restart | `quit::failed_quit_action`, `update::clear_restart_after_quit` |
+| Asking (`Retirement`) | Cancel, or the dialog is closed | Stay Prepared (shells frozen, service Stopping); `exiting=false`. The next Quit reuses the flushed session and retries shutdown. An installed update retains its relaunch request. | `quit::failed_quit_action`, `quit::needs_flush` |
 
 Invariants:
 - Every command passes `ensure_running` at dispatch entry and again after the privacy lease is taken.
@@ -30,6 +36,8 @@ Invariants:
 - `Service::shutdown` is repeatable: after the cause is repaired it re-joins whatever is left (`shutdown_surfaces_failed_download_checkpoint_and_retains_retry_ownership`).
 - Final shutdown takes the privacy **write** lease. Therefore nothing may block while holding a privacy read lease and waiting for the exit to finish.
 - Tauri ignores `prevent_exit` for `RESTART_EXIT_CODE`. So `restart()`/`request_restart()` must only be called once Quit has authorized the exit; anything earlier skips the flush and retirement (see F-2).
+- State is given up only by the dialog button labelled Quit Without Saving. `quit::failed_quit_action` maps every other result to Retry or Cancel: a closed dialog (which the dialog plugin reports as the Cancel button), an unexpected result, and button labels that a translation made identical. No other path sets `authorized` after a failed flush or retirement, including the relaunch of an installed update.
+- Quit Without Saving skips no retirement stage. Transfers are still asked to stop at a checkpoint and listeners, locks and native resources are still released; only a stage's failure to write is tolerated. After a failed flush the shells are not flushed again and window geometry is not captured.
 
 ### 1.2 Privacy / read-only mode and its epochs (`service.rs::operation`, `service/dispatch.rs` `save_settings`)
 

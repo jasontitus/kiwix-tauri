@@ -149,7 +149,13 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
   if (prepare) await page.evaluateOnNewDocument(prepare);
   await page.evaluateOnNewDocument(fixture, native);
   await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready);
+  try {
+    await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 20000 });
+  } catch {
+    // Say where startup stopped instead of only "waiting failed".
+    const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }));
+    assert.fail(`The shell did not start: ${JSON.stringify(boot)} ${JSON.stringify(pageErrors)}`);
+  }
   const until = (check, ...args) => page.waitForFunction(check, { timeout: 10000 }, ...args);
   const button = async (scope, text) => {
     const handle = await until((sel, value) => [...document.querySelectorAll(`${sel} button`)]
