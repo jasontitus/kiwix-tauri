@@ -9,7 +9,7 @@ certification.
 | Check | Result | Scope |
 |---|---|---|
 | LocalSwarm Objective-C++ ASan + UBSan | Pass, 12 checks, no sanitizer report | `native/localswarm_tests.mm` + `native/localswarm.mm` |
-| ZIM archive parser fuzz | 100,000 seeded runs, no crash; 1,549 coverage edges | `zimru::Archive::from_positioned` and entry/check paths |
+| ZIM archive parser fuzz | 100,000 seeded runs, no crash; 1,549 coverage edges | `zimru::Archive::from_positioned` and entry/check paths, as the target stood on 2026-11-20 (see "Fuzz targets changed since this pass") |
 | MCP protocol fuzz | 100,000 seeded runs, no crash | `kiwix-mcp/src/protocol.rs` JSON-RPC handling |
 | Rust `-Zub-checks` | 1,286 passed; 1 environment-only failure | Full lib suite; see below |
 | App-test ASan | Not completed | x86_64 Apple link fails in `tauri-utils` initializer; fuzz targets provide the ASan coverage |
@@ -30,10 +30,74 @@ disabled because Apple's ASan runtime does not support it.
 the tracked ZIM fixtures and the MCP seed line into the local corpus, then runs a
 bounded libFuzzer session. Corpora and crash artifacts are ignored.
 
+### Fuzz targets changed since this pass
+
+The results above were recorded on 2026-11-20. On 2026-11-27 the targets were
+changed and **have not been run since**; both changes were type-checked only
+(`cargo check --manifest-path src-tauri/fuzz/Cargo.toml` on stable Rust, Linux).
+
+- `zim_archive` then stopped at directory entries and the MD5 pass, so it never
+  decoded a cluster. It now resolves the first 64 entries to their blobs (zstd/xz
+  cluster decoding and blob offset tables), looks up a title prefix range and
+  validates the first four clusters. It uses the limits and cluster-cache budget of
+  `open_source` in `src-tauri/src/archive.rs` instead of its own smaller ones. It
+  does not apply the app's `validate_layout` table-extent check, so it also reaches
+  inputs the app refuses.
+- `search_index` is new. Its whole input is one embedded Glass index, opened with
+  the app's `zimfile_xapian::ReaderLimits`, followed by one full-text page and one
+  title-suggestion page with fixed queries. `scripts/fuzz.sh` seeds it with the two
+  indexes of `tests/fixtures/indexed_search.zim`, copied out by
+  `src-tauri/fuzz/extract-index-seeds.py` (needs `python3`).
+
+```sh
+RUNS=100000 MAX_TOTAL_TIME=60 ./scripts/fuzz.sh search_index
+```
+
+The 1,549-edge figure describes the earlier, shallower `zim_archive` target. Replace
+it and add a `search_index` row only from an actual run.
+
 The `-Zub-checks` suite's only failure is
 `update::tests::signature_verification_rejects_a_tampered_payload`, because the
 test binary ran from a `/tmp` symlink and the updater rejects that path. The
 targeted storage test and the other 1,286 tests pass with UB checks enabled.
+
+## iOS plugin XCTest suite: local only
+
+`src-tauri/plugins/tauri-plugin-kiwix-mobile/ios/Tests` holds eight XCTest files
+(the `KiwixMobileTests` target of `ios/Package.swift`). **No workflow builds or
+runs them.** `checks.yml` and `build.yml` contain no iOS `xcodebuild` or
+`swift test` step; the only native test CI runs is
+`scripts/test-native-sanitizers.sh`, which builds `native/localswarm_tests.mm`
+alone. A change to the Swift plugin is therefore not covered by a green
+"Checks" run.
+
+They also do not resolve from a clean checkout. `Package.swift` depends on the
+local package `../.tauri/tauri-api`. That directory is git-ignored: the plugin's
+build script (`tauri-plugin`'s mobile setup) copies Tauri's Swift API there only
+when the crate is built for an iOS target on a Mac.
+
+To run them locally, on a Mac with Xcode and an iOS simulator runtime:
+
+1. Build the app for iOS once so that
+   `src-tauri/plugins/tauri-plugin-kiwix-mobile/.tauri/tauri-api` exists
+   (`npm run iphone -- --prepare-only` builds without contacting a device).
+2. Open `src-tauri/plugins/tauri-plugin-kiwix-mobile/ios/Package.swift` in Xcode,
+   choose an iOS simulator destination and run the tests; or, in that `ios`
+   directory, list the generated schemes with `xcodebuild -list` and run
+   `xcodebuild test -scheme <scheme> -destination 'platform=iOS Simulator,name=<installed simulator>'`.
+
+These steps were written on a Linux host from `Package.swift` and the
+`tauri-plugin` build script and were **not executed** when this section was
+added; the repository records no earlier command line for this suite. `swift test`
+on the Mac host is not an alternative: the package declares only the iOS platform
+and its sources import UIKit.
+
+CI does not run them because no such job exists yet. It would need a macOS
+runner, an iOS-target Rust build to materialize `tauri-api`, and a simulator
+destination, and it could not be written and observed to pass from the Linux
+host used when this section was added. Add the job only after it has run green on
+a real runner; until then record local runs, with the Xcode and simulator
+versions, in the review notes for the change.
 
 ## Dependency audit
 
@@ -64,7 +128,8 @@ vendored with `ringbuf 0.5.3`, and the host suite and Windows type checks pass. 
   boundaries and are not instrumented.
 - No Windows, Linux or physical-device run was performed in this pass.
 - `cargo-fuzz`'s corpus is local; only the seed fixtures and seed JSON line are
-  tracked.
+  tracked. The search-index seeds are derived from a tracked fixture at run time.
+- No workflow runs a fuzz target; every fuzz result in this file is a local run.
 
 ## Platform test handoff
 

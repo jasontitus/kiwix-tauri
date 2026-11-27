@@ -284,4 +284,17 @@ class SpeechAndProviderAuthorityTest {
         assertNull(cache.lookup(original.copy(document = "43",
             uri = "content://provider/document/43").uri, stat))
     }
+
+    @Test fun everyReadAloudEnginePausesWhenHeadphonesAreUnplugged() {
+        // System voices and the bundled voice both stop playing through the
+        // speaker once the audio route becomes noisy.
+        assertTrue(speechAudioPolicy(external = false).noisyReceiver)
+        assertTrue(speechAudioPolicy(external = true).noisyReceiver)
+    }
+
+    @Test fun onlyKiwixOwnedAudioOutputRequestsAudioFocus() {
+        // The system text-to-speech service requests focus per utterance itself.
+        assertFalse(speechAudioPolicy(external = false).audioFocus)
+        assertTrue(speechAudioPolicy(external = true).audioFocus)
+    }
 }

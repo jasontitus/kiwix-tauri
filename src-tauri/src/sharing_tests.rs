@@ -1021,6 +1021,96 @@ fn archive_csp_forbids_framing_without_changing_existing_directives() {
     assert!(ARCHIVE_CSP.contains("object-src 'none'"));
 }
 
+/// A session that never started a listener: status reads only these fields.
+fn status_fixture(binding: SharingBinding, hosts: SessionHosts, scope: SharingScope) -> SharingServer {
+    let library = scope == SharingScope::Library;
+    SharingServer {
+        url: "http://198.51.100.9:8080/nearby/session".into(),
+        urls: vec!["http://198.51.100.9:8080/nearby/session".into()],
+        port: 8080,
+        binding,
+        bindings: Vec::new(),
+        books: if library { Vec::new() } else {
+            vec![json!({"id": "book", "port": 9090, "urls": ["http://198.51.100.9:9090/.kiwix-access/secret"]})]
+        },
+        token: "secret".into(),
+        book_ids: Vec::new(),
+        scope,
+        session_id: "session".into(),
+        locked: false,
+        catalog_url: library.then(|| "http://198.51.100.9:8080/secret/catalog/v2/root.xml".into()),
+        catalog_urls: if library { vec!["http://198.51.100.9:8080/secret/catalog/v2/root.xml".into()] } else { Vec::new() },
+        library_count: 1,
+        cancellation: SharingCancellation::new(),
+        servers: Vec::new(),
+        archives: Vec::new(),
+        library: None,
+        hosts,
+        address_lost: Mutex::new((None, false)),
+    }
+}
+
+/// A laptop that changed Wi-Fi keeps a listener on an address it no longer
+/// has. Status must say so instead of presenting the old link as working.
+#[tokio::test]
+async fn status_reports_an_interface_binding_whose_address_left_this_device() {
+    // TEST-NET-2 is never assigned to a local interface.
+    let gone: IpAddr = "198.51.100.9".parse().unwrap();
+    let binding = SharingBinding::Interface { address: gone.to_string() };
+    let server = status_fixture(binding.clone(), SessionHosts::new(&[gone], &binding), SharingScope::Library);
+    let status = server.status();
+    assert_eq!(status["addressLost"], true);
+    // The address is reported, never silently replaced: an interface binding
+    // answers only on the address it was started with.
+    assert_eq!(status["urls"], json!(["http://198.51.100.9:8080/nearby/session"]));
+    let authority = server.hosts.for_port(8080);
+    assert_eq!(authority.check(&headers("198.51.100.9:8080", None), &"/".parse().unwrap()), Some(gone));
+    assert_eq!(authority.check(&headers("127.0.0.1:8080", None), &"/".parse().unwrap()), None);
+
+    let current = interfaces().unwrap();
+    assert!(address_absent("198.51.100.9", &current));
+    let present = [SharingInterface { name: "wlan0".into(), address: "192.168.1.50".into(), family: "ipv4" }];
+    assert!(!address_absent("192.168.1.50", &present));
+    assert!(address_absent("192.168.1.51", &present));
+
+    // Bindings that cannot lose an address do not carry the field.
+    let loopback = status_fixture(SharingBinding::Loopback {},
+        SessionHosts::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &SharingBinding::Loopback {}), SharingScope::Library);
+    assert!(loopback.status().get("addressLost").is_none());
+}
+
+/// A wildcard listener already answers on the device's current addresses, so
+/// the links it shows must be those addresses and not the ones at start.
+#[tokio::test]
+async fn status_links_of_a_wildcard_binding_follow_the_addresses_the_server_accepts() {
+    let stale: IpAddr = "198.51.100.9".parse().unwrap();
+    let binding = SharingBinding::Ipv4All {};
+    for scope in [SharingScope::Library, SharingScope::Selected] {
+        let server = status_fixture(binding.clone(), SessionHosts::new_expired(&[stale], &binding), scope);
+        let status = server.status();
+        let urls: Vec<String> = serde_json::from_value(status["urls"].clone()).unwrap();
+        assert!(!urls.is_empty() && urls.iter().all(|url| !url.contains("198.51.100.9")), "{urls:?}");
+        assert!(urls.contains(&"http://127.0.0.1:8080/nearby/session".to_string()), "{urls:?}");
+        assert_eq!(status["url"], json!(urls[0]));
+        assert!(status.get("addressLost").is_none());
+        // Every link shown is one the server accepts, and nothing else is.
+        let accepted = server.hosts.current();
+        let expected: Vec<String> = accepted.iter().map(|host| access_url(*host, 8080, "/nearby/session")).collect();
+        assert_eq!(urls, expected);
+        if scope == SharingScope::Library {
+            let catalogs: Vec<String> = serde_json::from_value(status["catalogUrls"].clone()).unwrap();
+            assert_eq!(catalogs.len(), urls.len());
+            assert!(catalogs.contains(&"http://127.0.0.1:8080/secret/catalog/v2/root.xml".to_string()), "{catalogs:?}");
+            assert_eq!(status["catalogUrl"], json!(catalogs[0]));
+        } else {
+            assert_eq!(status["catalogUrl"], Value::Null);
+            let book: Vec<String> = serde_json::from_value(status["books"][0]["urls"].clone()).unwrap();
+            assert!(book.contains(&"http://127.0.0.1:9090/.kiwix-access/secret".to_string()), "{book:?}");
+            assert!(book.iter().all(|url| !url.contains("198.51.100.9")), "{book:?}");
+        }
+    }
+}
+
 #[test]
 fn wildcard_binding_refreshes_local_hosts_and_drops_stale_ips_while_explicit_stays_pinned() {
     let uri: Uri = "/token/reader".parse().unwrap();

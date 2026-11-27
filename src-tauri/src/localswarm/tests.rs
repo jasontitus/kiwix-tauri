@@ -1500,3 +1500,101 @@ fn windows_empty_directory_removal_is_bound_to_identity() {
     parent.remove_empty_directory("retained", &identity).unwrap();
     assert!(!root.0.join("retained").exists());
 }
+
+/// Install a running library offer exactly as `share_library` does, minus the
+/// DNS-SD record: the ordinary suite never announces a test library.
+async fn unadvertised_library(manager: &LocalSwarmManager, store: &Arc<Store>) -> library::LibraryPeerDescriptor {
+    let server = library::LibraryServer::start(store.clone(), manager.inner.peer_id.clone(), "Sender".into(),
+        manager.inner.upload_budget.clone(), manager.cancel_token()).await.unwrap();
+    let descriptor = server.descriptor.clone();
+    let generation = server.generation.clone();
+    *manager.inner.library.lock().await = Some(LibraryOffer { server, advertisement: "unpublished".into() });
+    manager.supervise_library(descriptor.clone(), generation);
+    descriptor
+}
+async fn library_retired(manager: &LocalSwarmManager) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while manager.inner.library.lock().await.is_some() {
+        assert!(Instant::now() < deadline, "The ended library share was never retired");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    manager.status().await.unwrap()["librarySharing"].clone()
+}
+
+/// "Share all" that ends without the person stopping it must say so where
+/// the Share all button is; their own Stop must not leave that message.
+#[tokio::test]
+async fn a_library_share_that_ends_by_itself_says_so_and_an_explicit_stop_does_not() {
+    let root = Temp::new();
+    let path = root.0.join("shared.zim");
+    fs::copy(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim"), &path).unwrap();
+    let book = crate::imports::load_book(path.to_str().unwrap(), false, false).unwrap();
+    let store = Arc::new(Store::new(root.0.join("profile")).unwrap());
+    store.update(|state| { state.books.push(book.clone()); Ok(()) }).unwrap();
+    let manager = LocalSwarmManager::new(store.clone(), CancellationToken::new()).unwrap();
+
+    // A shared archive becomes unavailable (an unplugged drive, a removal).
+    let descriptor = unadvertised_library(&manager, &store).await;
+    let running = manager.status().await.unwrap()["librarySharing"].clone();
+    assert_eq!(running["running"], true);
+    assert!(running["error"].is_null());
+    store.update(|state| { state.books[0].available = false; Ok(()) }).unwrap();
+    let stopped = library_retired(&manager).await;
+    assert!(descriptor.cancel.is_cancelled());
+    assert_eq!(stopped["running"], false);
+    assert_eq!(stopped["error"], LIBRARY_STOPPED);
+    // It stays until the person acts, not for one poll.
+    assert_eq!(manager.status().await.unwrap()["librarySharing"]["error"], LIBRARY_STOPPED);
+    assert_eq!(manager.stop_library().await.unwrap().error, None);
+    store.update(|state| { state.books[0].available = true; Ok(()) }).unwrap();
+
+    // The listener or its route ends. On a phone the same cancellation also
+    // precedes an explicit Stop sharing, which must then leave no message.
+    let descriptor = unadvertised_library(&manager, &store).await;
+    descriptor.cancel.cancel();
+    assert_eq!(library_retired(&manager).await["error"], LIBRARY_STOPPED);
+    assert_eq!(manager.stop_library().await.unwrap().error, None);
+    assert!(manager.status().await.unwrap()["librarySharing"]["error"].is_null());
+
+    // An archive of the share is changed through the library itself.
+    unadvertised_library(&manager, &store).await;
+    drop(manager.quiesce_sources(Some(&book.metadata.id)).await.unwrap());
+    assert_eq!(manager.status().await.unwrap()["librarySharing"]["error"], LIBRARY_STOPPED);
+    assert_eq!(manager.stop_library().await.unwrap().error, None);
+
+    // Stop sharing on a running share, and Stop all, are the person's choice.
+    unadvertised_library(&manager, &store).await;
+    let status = manager.stop_library().await.unwrap();
+    assert!(!status.running);
+    assert_eq!(status.error, None);
+    let descriptor = unadvertised_library(&manager, &store).await;
+    let status = manager.stop().await.unwrap();
+    assert!(descriptor.cancel.is_cancelled());
+    assert_eq!(status["librarySharing"]["running"], false);
+    assert!(status["librarySharing"]["error"].is_null());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(manager.status().await.unwrap()["librarySharing"]["error"].is_null());
+}
+
+/// After a browse ends by itself the button reads "Find nearby" again. That
+/// press must start a new browse; it used to be refused until "Stop all".
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+#[tokio::test]
+async fn find_nearby_restarts_a_browse_that_ended_by_itself() {
+    let root = Temp::new();
+    let store = Arc::new(Store::new(root.0.join("profile")).unwrap());
+    let manager = LocalSwarmManager::new(store, CancellationToken::new()).unwrap();
+    manager.inner.discovery.lock().await.end_browse_for_test("Local network discovery stopped unexpectedly").await;
+    let status = manager.status().await.unwrap();
+    assert_eq!(status["discovery"], false);
+    assert_eq!(status["error"], "Local network discovery stopped unexpectedly");
+    match manager.discovery(true).await {
+        Ok(status) => {
+            assert_eq!(status["discovery"], true);
+            assert!(status["error"].is_null());
+        }
+        // A machine that cannot browse at all reports that, not the latch.
+        Err(error) => assert!(!error.contains("Stop the failed discovery session"), "{error}"),
+    }
+    let _ = manager.stop().await;
+}

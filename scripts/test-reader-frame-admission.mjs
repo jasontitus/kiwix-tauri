@@ -296,13 +296,6 @@ test("only the bridge that holds the session can prove an unannounced load", asy
     assert.notEqual(r.context.activeFrame.current.sessionId, session, name);
     assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate"], name);
   }
-  // A session whose bridge never bound a token has nothing to be proved with.
-  const r = reader();
-  r.hello(); r.load(); r.ready();
-  const session = r.context.activeFrame.current.sessionId;
-  r.load(); r.proof(crypto.randomUUID());
-  r.advance(1000); await r.drain();
-  assert.notEqual(r.context.activeFrame.current.sessionId, session);
 });
 
 test("the proof of an earlier load cannot settle a later one", async () => {
@@ -391,14 +384,21 @@ test("a navigation whose load precedes its announcement is still re-sessioned wi
   assert.equal(r.context.activeFrame.current.sessionId, incoming);
 });
 
-test("an announcement for a session no bridge has bound waits for the proof window", async () => {
+test("a session no bridge has bound is never named in a probe: its next load re-sessions at once", async () => {
+  // Whichever document read such a probe could claim the session as the first to bind a token.
   const r = reader();
   r.hello(); r.load(); r.ready();
   const session = r.context.activeFrame.current.sessionId;
-  r.load(); r.hello();
-  assert.equal(r.context.activeFrame.current.sessionId, session, "nothing identifies the announcer yet");
-  r.advance(1000); await r.drain();
-  assert.notEqual(r.context.activeFrame.current.sessionId, session, "and nothing proved the load, so it re-sessions");
+  r.load();
+  assert.equal(r.probes().length, 0);
+  assert.equal(r.context.activeFrame.current, null);
+  assertPending(r);
+  // A claim made for the retired session is not accepted afterwards either.
+  const forged = crypto.randomUUID();
+  r.post({ type: "reading-pan-bind", token: forged, sessionId: session });
+  await r.drain();
+  assert.notEqual(r.context.activeFrame.current.sessionId, session);
+  assert.equal(r.context.panAuthority.current, null);
 });
 
 test("an announcement made while a re-session is in flight is answered by that re-session's initialisation", async () => {

@@ -1833,6 +1833,173 @@ mod launch_tests {
     }
 
     #[tokio::test]
+    async fn unreadable_launch_archives_are_reported_and_readable_ones_still_open() {
+        let profile = Profile::new();
+        let scratch = Profile::new();
+        std::fs::create_dir_all(&scratch.0).unwrap();
+        let broken = scratch.0.join("Broken Book.zim");
+        std::fs::write(&broken, b"not a ZIM archive").unwrap();
+        let broken = broken.to_string_lossy().into_owned();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+
+        // Nothing could be opened. This used to be `Ok(())` with the reason on
+        // stderr only, so a double-clicked archive did nothing visible.
+        let failures = open_paths(service.clone(), vec![broken.clone()], None, false, None)
+            .await
+            .unwrap();
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(failures[0].starts_with("Broken Book.zim: "), "{failures:?}");
+        assert!(failures[0].len() > "Broken Book.zim: ".len(), "{failures:?}");
+        assert!(service.store.read().unwrap().books.is_empty());
+
+        // A second launch (and macOS "Open with") reports the same list in a dialog.
+        let cwd = std::env::current_dir().unwrap();
+        let secondary = open_secondary_paths(service.clone(), options(&[broken.as_str()]), &cwd).await;
+        assert_eq!(secondary.as_ref().unwrap(), &failures);
+        assert_eq!(launch_failure_detail(secondary), Some(failures[0].clone()));
+        assert_eq!(launch_failure_detail(Ok(Vec::new())), None);
+        assert_eq!(
+            launch_failure_detail(Err("Cannot open archives while application Quit is pending".into())).as_deref(),
+            Some("Cannot open archives while application Quit is pending")
+        );
+
+        // Mixed launch: the readable archive opens, the other one is reported.
+        let mixed = open_paths(service.clone(), vec![broken.clone(), fixture()], None, false, None)
+            .await
+            .unwrap();
+        assert_eq!(mixed, failures);
+        let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+        assert_eq!(snapshot["launchLocations"].as_array().unwrap().len(), 1);
+        assert_eq!(snapshot["books"].as_array().unwrap().len(), 1);
+        assert!(snapshot["startupWarnings"].as_array().unwrap().is_empty());
+
+        // At startup the list goes to the shell's startup notice.
+        assert!(note_startup_launch_outcome(&service, Ok(mixed)));
+        assert!(!note_startup_launch_outcome(&service, Ok(Vec::new())));
+        let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+        assert_eq!(
+            snapshot["startupWarnings"],
+            json!([format!("Could not open startup archive: {}", failures[0])])
+        );
+        service.shutdown().await.unwrap();
+        drop(service);
+
+        // Read-only mode opens registered archives and names the one it refused.
+        let service = Service::new(profile.0.clone(), false, true).unwrap();
+        let refused = open_paths(service.clone(), vec![fixture(), broken], None, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            refused,
+            vec!["Broken Book.zim: Read-only mode can open registered archives only".to_string()]
+        );
+        let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+        assert_eq!(snapshot["launchLocations"].as_array().unwrap().len(), 1);
+        service.shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn fatal_startup_errors_reach_a_dialog_and_exit_1_unless_headless() {
+        let profile = Profile::new();
+        std::fs::create_dir_all(&profile.0).unwrap();
+        std::fs::write(profile.0.join("state.json"), b"{").unwrap();
+        // The pre-builder failure for a damaged profile: `run_application`
+        // returns this text from `hint.read_only.clone()?`.
+        let error = store::startup_hint(&profile.0).read_only.unwrap_err();
+        assert!(error.contains("state.json") && error.contains("The original is untouched."), "{error}");
+
+        let windowed = startup_failure(&error, false);
+        assert_eq!(windowed.exit_code, 1);
+        let message = windowed.dialog.expect("a windowed launch explains itself in a dialog");
+        // The store's text is shown whole, after a fixed sentence: the dialog
+        // text can never begin like a command-line option.
+        assert_eq!(message, format!("Kiwix could not start.\n\n{error}"));
+        // A headless launch reports on stderr only and exits with the same status.
+        assert_eq!(startup_failure(&error, true), StartupFailure { dialog: None, exit_code: 1 });
+        // An argument error that itself starts with an option name.
+        let usage = parse(&["--data-dir"]).err().unwrap();
+        assert_eq!(usage, "--data-dir requires a path");
+        assert!(startup_failure(&usage, false).dialog.unwrap().starts_with("Kiwix could not start."));
+        assert_eq!(std::fs::read(profile.0.join("state.json")).unwrap(), b"{");
+    }
+
+    #[test]
+    fn a_profile_saved_by_another_version_shows_the_stores_recovery_text() {
+        let profile = Profile::new();
+        std::fs::create_dir_all(&profile.0).unwrap();
+        let saved = br#"{"version":3,"settings":{}}"#;
+        std::fs::write(profile.0.join("state.json"), saved).unwrap();
+        // The setup-hook failure: the store refuses the profile, and that
+        // error must become the dialog, not a Tauri setup panic.
+        let error = match Service::new_checked(profile.0.clone(), false, false, None) {
+            Err(error @ store::StoreOpenError::Fatal(_)) => error.to_string(),
+            Err(store::StoreOpenError::Busy(error)) => panic!("unexpectedly busy: {error}"),
+            Ok(_) => panic!("a version 3 profile must not open"),
+        };
+        let failure = startup_failure(&error, false);
+        assert_eq!(failure.exit_code, 1);
+        let message = failure.dialog.unwrap();
+        assert!(message.ends_with(&error), "{message}");
+        for sentence in [
+            "This profile was saved by a different version of Kiwix (version 3;",
+            "Open it with that version, or choose another profile.",
+            "Your saved file was not changed.",
+        ] {
+            assert!(message.contains(sentence), "{message}");
+        }
+        assert_eq!(std::fs::read(profile.0.join("state.json")).unwrap(), saved);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn quitting_without_saving_still_retires_the_service_when_the_profile_is_gone() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        service
+            .store
+            .update(|state| {
+                state.settings.zoom = 1.25;
+                Ok(())
+            })
+            .unwrap();
+        // A reading-position style change waits in memory for the next write.
+        service
+            .store
+            .update_browsing(|state| {
+                state.recent_searches = vec!["pending".into()];
+                Ok(())
+            })
+            .unwrap();
+        // The volume that holds the profile goes away.
+        std::fs::remove_dir_all(&profile.0).unwrap();
+        assert!(service.store.update(|_| Ok(())).is_err());
+
+        // Ordinary Quit: retirement reports the unsaved state, every time.
+        let error = service.shutdown().await.unwrap_err();
+        assert!(error.contains("Writing the last reading position"), "{error}");
+        let error = service.shutdown().await.unwrap_err();
+        assert!(error.contains("Writing the last reading position"), "{error}");
+        let labels = quit::FailedQuitLabels {
+            retry: "Retry".into(),
+            quit_without_saving: "Quit Without Saving".into(),
+            cancel: "Cancel".into(),
+        };
+        // Only the explicit button moves on, and then retirement no longer
+        // vetoes the exit: the person is not left with a force-kill.
+        assert_eq!(
+            quit::failed_quit_action(
+                quit::QuitFailure::Retirement,
+                &tauri_plugin_dialog::MessageDialogResult::Custom("Quit Without Saving".into()),
+                &labels,
+            ),
+            quit::FailedQuitAction::QuitWithoutSaving
+        );
+        retire_without_saving(&service).await;
+        assert!(service.ensure_running().is_err());
+        assert!(service.clone().dispatch("snapshot", json!({})).await.is_err());
+    }
+
+    #[tokio::test]
     async fn secondary_launches_accept_matching_modes_profiles_and_omitted_flags() {
         let profile = Profile::new();
         let cwd = std::env::current_dir().unwrap();

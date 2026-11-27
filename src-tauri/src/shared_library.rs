@@ -372,6 +372,65 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(not(mobile))]
+    fn receipt(grant: &ScopedDownloadGrant, created: Instant) -> Receipt {
+        let mut held = grant.clone();
+        let books: Arc<[SharedBook]> = vec![held.book.take().unwrap()].into();
+        Receipt { created, grant: held, books }
+    }
+
+    /// A list left open for longer than the retention age is still the list
+    /// the sender is offering. Download must work; only the grant decides.
+    #[tokio::test]
+    #[cfg(not(mobile))]
+    async fn an_open_list_outlives_its_age_but_never_its_grant() {
+        let root = std::env::temp_dir().join(format!("kiwix-public-receipt-{}", uuid::Uuid::new_v4()));
+        let store = Arc::new(Store::new(root.clone()).unwrap());
+        let discovery = LocalSwarmManager::new(store.clone(), CancellationToken::new()).unwrap();
+        let client = SharedLibraryClient::new(store.clone(), discovery.clone());
+        let (grant, _) = test_download_grant(store.clone(), 128);
+        let now = Instant::now();
+        // As old as this machine's clock allows; a just-booted machine cannot
+        // represent an instant before its own start.
+        let old = now.checked_sub(RECEIPT_TTL * 2).unwrap_or(now);
+        client.state.lock().unwrap().1.insert("open-list".into(), receipt(&grant, old));
+
+        let admitted = client.receipt_grant("open-list", "book").unwrap();
+        admitted.check().await.unwrap();
+        assert_eq!(admitted.book().unwrap().id, "book");
+        assert_eq!(client.receipt_grant("open-list", "other").unwrap_err(), "Book is not in this shared library");
+        assert_eq!(client.receipt_grant("unknown", "book").err().unwrap(), REVOKED);
+
+        // Another browse making room does not drop it either, however old.
+        let later = now + RECEIPT_TTL * 4;
+        make_room(&mut client.state.lock().unwrap().1, later);
+        assert!(client.receipt_grant("open-list", "book").is_ok());
+        // Under pressure the oldest lists past the retention age make way,
+        // and a full table of recent lists is refused as before.
+        {
+            let mut state = client.state.lock().unwrap();
+            for index in 1..MAX_RECEIPTS { state.1.insert(format!("recent-{index}"), receipt(&grant, later)); }
+            assert_eq!(state.1.len(), MAX_RECEIPTS);
+            make_room(&mut state.1, later);
+            assert_eq!(state.1.len(), MAX_RECEIPTS - 1);
+            assert!(!state.1.contains_key("open-list"));
+            state.1.insert("recent-0".into(), receipt(&grant, later));
+            make_room(&mut state.1, later);
+            assert_eq!(state.1.len(), MAX_RECEIPTS);
+        }
+
+        // Authority is the grant: once its owner is gone the receipt admits
+        // nothing, whatever its age, and stops occupying the table.
+        grant.inner.descriptor.cancel.cancel();
+        let revoked = client.receipt_grant("recent-1", "book").unwrap();
+        assert_eq!(revoked.check().await.unwrap_err(), REVOKED);
+        make_room(&mut client.state.lock().unwrap().1, later);
+        assert!(client.state.lock().unwrap().1.is_empty());
+        assert_eq!(client.receipt_grant("recent-1", "book").err().unwrap(), REVOKED);
+        drop(revoked); drop(admitted); drop(grant); drop(client); drop(discovery); drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[tokio::test]
     #[cfg(not(mobile))]
     async fn selected_owner_cancellation_permanently_retires_a_paused_grant() {

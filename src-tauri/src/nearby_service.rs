@@ -1047,3 +1047,125 @@ fn decode_packet(encoded: Option<&str>) -> Result<Vec<u8>,String> {
     if !(9..=512).contains(&bytes.len()) || STANDARD.encode(&bytes)!=encoded { return Err("Invalid Bluetooth packet length or encoding".into()); }
     Ok(bytes)
 }
+
+#[cfg(all(test, not(mobile)))]
+mod tests {
+    use super::*;
+    struct Profile(PathBuf);
+    impl Profile { fn new() -> Self { Self(std::env::temp_dir().join(format!("kiwix-nearby-service-{}", Uuid::new_v4()))) } }
+    impl Drop for Profile { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+
+    /// Bluetooth off or not allowed fails after "Share all" and "Find nearby"
+    /// have returned. Status is the only place either can be seen.
+    #[tokio::test]
+    async fn bluetooth_failures_are_visible_in_status_and_a_failed_connection_stays_with_its_sender() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        assert!(service.nearby_status().unwrap()["error"].is_null());
+
+        // Sharing: the publisher task records why it is not advertising.
+        let (publisher, _events, _actions) = service.nearby_insert("main".into(), true).unwrap();
+        service.nearby_status_update(&publisher, "failed", Some("BLE_POWERED_OFF".into()));
+        let status = service.nearby_status().unwrap();
+        assert_eq!(status["publisher"]["phase"], "failed");
+        assert_eq!(status["publisher"]["error"], "BLE_POWERED_OFF");
+        // The receive view has its own line; a sharing failure is not repeated there.
+        assert!(status["error"].is_null());
+
+        // Finding: a failed connection to one sender leaves the finder running
+        // and is reported with that sender, not as "finding stopped".
+        let (finder, _events, _actions) = service.nearby_insert("main".into(), false).unwrap();
+        service.nearby_status_update(&finder, "failed", Some("The sender is not reachable on the current Wi-Fi".into()));
+        let status = service.nearby_status().unwrap();
+        assert!(status["error"].is_null());
+        assert_eq!(status["consumer"]["error"], "The sender is not reachable on the current Wi-Fi");
+        // The finder's own failure ends it, exactly as its task does.
+        service.nearby_status_update(&finder, "failed", Some("[NEARBY_PERMISSION_DENIED] - NEARBY_PERMISSION_DENIED".into()));
+        finder.cancel.cancel();
+        let status = service.nearby_status().unwrap();
+        assert_eq!(status["error"], "[NEARBY_PERMISSION_DENIED] - NEARBY_PERMISSION_DENIED");
+        assert_eq!(status["discovery"], false);
+        // Leaving the foreground is not a failure and is never shown.
+        service.nearby_status_update(&finder, "failed", Some(crate::user_error::suspended()));
+        assert!(service.nearby_status().unwrap()["error"].is_null());
+        // No native radio exists here, so retirement reports that; the
+        // owners are still gone.
+        let _ = service.nearby_retire().await;
+        let status = service.nearby_status().unwrap();
+        assert!(status["error"].is_null() && status["consumer"].is_null() && status["publisher"].is_null());
+    }
+
+    /// The whole path: a finder that cannot start its radio reports why. On
+    /// this platform the radio is always unavailable, which is such a failure.
+    #[tokio::test]
+    async fn a_finder_that_cannot_start_reports_why_instead_of_looking_forever() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        service.nearby_discover_start("main".into()).await.unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let error = loop {
+            let status = service.nearby_status().unwrap();
+            if let Some(error) = status["error"].as_str() { break error.to_string(); }
+            assert!(Instant::now() < deadline, "The failed finder never reported its error: {status}");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
+        assert!(error.starts_with("Bluetooth discovery requires"), "{error}");
+        let _ = service.nearby_retire().await;
+    }
+
+    /// `localswarm_discovery` holds the privacy read lease while it starts the
+    /// finder. Tokio's lock prefers writers, so a second read behind a queued
+    /// writer never returns: the start must not take the lease again.
+    #[tokio::test]
+    async fn starting_the_finder_under_a_held_lease_does_not_wait_behind_a_queued_writer() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        let gate = service.privacy_gate.clone();
+        let held = gate.read().await;
+        let queued = gate.clone();
+        let writer = tokio::spawn(async move { drop(queued.write().await); });
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while gate.try_read().is_ok() { tokio::task::yield_now().await; }
+        }).await.expect("the writer never queued");
+        tokio::time::timeout(Duration::from_secs(5), service.nearby_discover_start("main".into())).await
+            .expect("starting the finder waited for the privacy lease it already holds").unwrap();
+        assert!(!writer.is_finished(), "the lease was released early");
+        drop(held);
+        tokio::time::timeout(Duration::from_secs(3), writer).await.unwrap().unwrap();
+        let _ = service.nearby_retire().await;
+    }
+
+    /// Closing a connect dialog abandons a connection still being made, and
+    /// only that: an established one carries accepted downloads.
+    #[tokio::test]
+    async fn abandoning_a_pending_connection_never_ends_an_established_one() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        let (finder, _events, _actions) = service.nearby_insert("main".into(), false).unwrap();
+        let established = LibraryPeerDescriptor {
+            session_id: "b".repeat(32), peer_id: "a".repeat(32), name: "Sender".into(), port: 4433,
+            addresses: vec!["192.168.1.2".into()], native_services: Vec::new(), direct: false, route: None,
+            cancel: CancellationToken::new(), authority: Default::default(),
+        };
+        service.nearby.inner.lock().unwrap().owner_mut(&finder.id).unwrap().descriptor = Some(established.clone());
+        let abandon = json!({"owner": finder.id, "pendingOnly": true});
+        service.clone().nearby_command("nearby_stop", abandon.clone()).await.unwrap();
+        assert!(!finder.cancel.is_cancelled());
+        assert!(!established.cancel.is_cancelled());
+        assert!(service.nearby_status().unwrap()["consumer"].is_object());
+        // Still connecting: nothing accepted depends on it, so it ends.
+        // (Stopping reports the missing native radio here; the owner is gone.)
+        service.nearby.inner.lock().unwrap().owner_mut(&finder.id).unwrap().descriptor = None;
+        let _ = service.clone().nearby_command("nearby_stop", abandon).await;
+        assert!(finder.cancel.is_cancelled());
+        assert!(service.nearby_status().unwrap()["consumer"].is_null());
+        // An unknown owner, or none, with `pendingOnly` stops nothing.
+        let (publisher, _events, _actions) = service.nearby_insert("main".into(), true).unwrap();
+        service.clone().nearby_command("nearby_stop", json!({"pendingOnly": true})).await.unwrap();
+        service.clone().nearby_command("nearby_stop", json!({"owner": "unknown", "pendingOnly": true})).await.unwrap();
+        assert!(!publisher.cancel.is_cancelled());
+        // The plain owner-scoped stop is unchanged.
+        let _ = service.clone().nearby_command("nearby_stop", json!({"owner": publisher.id})).await;
+        assert!(publisher.cancel.is_cancelled());
+    }
+}

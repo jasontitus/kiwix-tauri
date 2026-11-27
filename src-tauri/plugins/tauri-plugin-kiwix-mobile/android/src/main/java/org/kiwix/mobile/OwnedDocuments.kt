@@ -134,6 +134,35 @@ internal fun syncDirectory(directory: File) {
     } finally { Os.close(fd) }
 }
 
+/**
+ * The files and directories one staging operation created itself. Cleanup
+ * after a cancelled or failed copy goes through this record only, so a file
+ * the operation did not create is never removed, and a directory is removed
+ * only once it is empty.
+ */
+internal class StagedEntries {
+    private val files = mutableListOf<File>()
+    private val created = mutableListOf<File>()
+
+    /** Directories in creation order. */
+    val directories: List<File> get() = created
+
+    /** Record a file this operation has just created exclusively. */
+    fun file(file: File) { files.add(file) }
+
+    /** Record a directory this operation has just created. */
+    fun directory(directory: File) { created.add(directory) }
+
+    fun retainedPaths(): List<String> = files.filter { it.exists() }.map { it.path }
+
+    /** Remove everything recorded, newest first. Returns the files that remain. */
+    fun remove(): List<String> {
+        files.asReversed().forEach { it.delete() }
+        created.asReversed().forEach { it.delete() }
+        return retainedPaths()
+    }
+}
+
 internal class OwnedDocuments(
     private val context: Context,
     destination: String,
@@ -142,8 +171,7 @@ internal class OwnedDocuments(
 ) {
     val root = ownedPath(context, destination)
     val paths = mutableListOf<String>()
-    private val files = mutableListOf<File>()
-    private val directories = mutableListOf<File>()
+    private val staged = StagedEntries()
     /** Absolute paths proven by [ownedPath] or created by this operation. */
     private val validatedDirectories = HashSet<String>()
     private var bytes = 0L
@@ -162,7 +190,7 @@ internal class OwnedDocuments(
             // Parent creates the staging parent; native code never invents directories outside its operation.
             if (!root.parentFile.isDirectory || !root.mkdir())
                 throw NativeDocumentError("STAGING_DIRECTORY_UNAVAILABLE")
-            directories.add(root)
+            staged.directory(root)
         }
         validatedDirectories.add(root.absolutePath)
     }
@@ -216,7 +244,7 @@ internal class OwnedDocuments(
             if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                 budget.entry()
                 if (!target.mkdir()) throw NativeDocumentError("STAGING_DIRECTORY_UNAVAILABLE")
-                directories.add(target)
+                staged.directory(target)
                 validatedDirectories.add(target.absolutePath)
                 visit(tree, childId, target, seen, depth + 1)
             } else copy(DocumentsContract.buildDocumentUriUsingTree(tree, childId), target)
@@ -255,7 +283,7 @@ internal class OwnedDocuments(
                 val fd = Os.open(target.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or
                     OsConstants.O_EXCL or OsConstants.O_NOFOLLOW, 384 /* 0600 */)
                 try {
-                    files.add(target)
+                    staged.file(target)
                     FileOutputStream(fd).use { output ->
                         while (true) {
                             cancellation.throwIfCanceled()
@@ -293,20 +321,19 @@ internal class OwnedDocuments(
     private fun finish() {
         cancellation.throwIfCanceled()
         try {
-            directories.asReversed().forEach { if (it != root) syncDirectory(it) }
+            staged.directories.asReversed().forEach { if (it != root) syncDirectory(it) }
             syncDirectory(root)
             syncDirectory(root.parentFile)
         } catch (error: Exception) { throw NativeDocumentError("STAGING_DURABILITY_ERROR", error) }
     }
 
-    fun retainedPaths(): List<String> = files.filter { it.exists() }.map { it.path }
+    fun retainedPaths(): List<String> = staged.retainedPaths()
 
-    /** Only files created O_EXCL by this operation and directories it created can be removed. */
-    fun cancelCleanup(): List<String> {
-        files.asReversed().forEach { it.delete() }
-        directories.asReversed().forEach { it.delete() }
-        return retainedPaths()
-    }
+    /**
+     * Used when a copy is cancelled or fails before its result was delivered.
+     * Only files created O_EXCL by this operation and directories it created can be removed.
+     */
+    fun cancelCleanup(): List<String> = staged.remove()
 
     private companion object {
         const val PROGRESS_BYTES = 1024L * 1024

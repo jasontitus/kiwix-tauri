@@ -22,6 +22,8 @@ use discovery::Discovery;
 use discovery::Peer;
 use network::{RateBudget, SeedServer, Session};
 pub(crate) use network::{reachable_addresses, routed_local_address};
+#[cfg(test)]
+pub(crate) use network::{lan_addresses, InterfaceCandidate};
 use protocol::{Manifest, SwarmFile};
 use storage::{err, Directory, OpenSet, OwnedSet, Stamp};
 pub use sources::ConnectionTarget;

@@ -385,6 +385,67 @@ test("a cancellation the user chose is typed and never painted as a failure", as
     "a refusal the user did not choose stays an ordinary visible error");
 });
 
+test("only the user's own answer to the low-storage prompt is a cancellation", async () => {
+  const path = "../src/api.ts";
+  const tree = ts.createSourceFile(path, await readFile(new URL(path, import.meta.url), "utf8"),
+    ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const wanted = ["diskSpaceConfirmation", "registerDiskSpaceConfirmation", "decideDiskSpaceWarning", "confirmDiskSpaceWarning", "request"];
+  const parts = tree.statements.filter((statement) =>
+    (ts.isFunctionDeclaration(statement) && wanted.includes(statement.name?.text)) ||
+    (ts.isVariableStatement(statement) && statement.declarationList.declarations.some((item) => wanted.includes(item.name.getText(tree)))))
+    .map((statement) => statement.getText(tree).replace(/^export /, ""));
+  assert.equal(parts.length, wanted.length);
+  const warning = { acknowledgement: "ack-1", directory: "/downloads", availableBytes: 10, remainingBytes: 5 };
+  const start = async ({ decision, register = true, privacy = { generation: 4, privateMode: false, readOnly: false }, current = true }) => {
+    const sent = [];
+    const context = vm.createContext({
+      Error, UserCancelledError, structuredClone, t: interpolate, localSwarmStopGeneration: 0,
+      checkLocalSwarmAdmission() {},
+      capturePrivacyContext: () => privacy,
+      isPrivacyContextCurrent: () => current,
+      parseDiskSpaceWarning: (error) => error?.diskSpace ? warning : null,
+      requestOnce: async (command, args) => {
+        sent.push({ command, args: { ...args } });
+        if (!args.diskSpaceAcknowledgement) throw Object.assign(new Error("low storage"), { diskSpace: true });
+        return { id: "job-1" };
+      },
+    });
+    vm.runInContext(ts.transpileModule(`${parts.join("\n")}
+      globalThis.register = registerDiskSpaceConfirmation; globalThis.request = request;`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText, context);
+    let prompts = 0;
+    if (register) context.register(async () => { prompts++; return decision; });
+    let result, failure;
+    try { result = await context.request("start_download", { url: "https://example.org/a.zim" }); }
+    catch (error) { failure = error; }
+    return { result, failure, sent, prompts };
+  };
+  const accepted = await start({ decision: "accepted" });
+  assert.deepEqual({ ...accepted.result }, { id: "job-1" });
+  assert.equal(accepted.sent.length, 2);
+  assert.equal(accepted.sent[1].args.diskSpaceAcknowledgement, "ack-1");
+
+  const declined = await start({ decision: "declined" });
+  assert.ok(isUserCancelledError(declined.failure), "Cancel on the prompt is the user's choice");
+  assert.equal(declined.sent.length, 1, "nothing is retried without consent");
+  assert.equal(declined.prompts, 1);
+
+  // Not shown, or withdrawn by the lifecycle: the download did not start and
+  // the user did not choose that, so it stays an ordinary visible error.
+  for (const [name, options] of [
+    ["withdrawn by the lifecycle", { decision: "unavailable" }],
+    ["no prompt surface is mounted", { decision: "accepted", register: false }],
+    ["read-only", { decision: "accepted", privacy: { generation: 4, privateMode: false, readOnly: true } }],
+    ["consent under an expired privacy generation", { decision: "accepted", current: false }],
+  ]) {
+    const refused = await start(options);
+    assert.ok(refused.failure instanceof Error, name);
+    assert.equal(isUserCancelledError(refused.failure), false, name);
+    assert.equal(refused.sent.length, 1, name);
+  }
+});
+
 test("an error notice with nothing to say is not rendered, but a retry stays reachable", async () => {
   const path = "../src/components/UI.tsx";
   const tree = ts.createSourceFile(path, await readFile(new URL(path, import.meta.url), "utf8"),

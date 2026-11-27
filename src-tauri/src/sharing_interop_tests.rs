@@ -530,14 +530,65 @@ async fn selected_browser_activation_is_revoked_with_its_installation() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// One-click sharing hands the other device a single link. It must name the
+/// network that device is on, not a container bridge, VPN or carrier link
+/// that merely has a private address which sorts first.
+#[test]
+fn one_click_binding_chooses_the_lan_another_device_can_reach() {
+    use crate::localswarm::{lan_addresses, InterfaceCandidate};
+    fn chosen(interfaces: &[(&str, &str, bool)], routed: Option<&str>) -> Result<SharingBinding, String> {
+        let available = lan_addresses(interfaces.iter().map(|(name, address, point_to_point)| InterfaceCandidate {
+            name: *name, address: address.parse().unwrap(), point_to_point: *point_to_point, loopback: *name == "lo",
+        }));
+        auto_lan_binding(&available, routed.map(|address| address.parse().unwrap()))
+    }
+    let wifi = |address: &str| Ok(SharingBinding::Interface { address: address.into() });
+    for (interfaces, expected) in [
+        (vec![("lo", "127.0.0.1", false), ("docker0", "172.17.0.1", false), ("wlan0", "192.168.1.50", false)], "192.168.1.50"),
+        (vec![("vEthernet (WSL)", "172.29.0.1", false), ("Wi-Fi", "192.168.1.50", false)], "192.168.1.50"),
+        (vec![("rmnet_data0", "10.12.3.4", false), ("wlan0", "192.168.1.7", false)], "192.168.1.7"),
+        (vec![("tun0", "10.8.0.2", true), ("wg0", "10.66.0.2", true), ("eth0", "192.168.1.9", false)], "192.168.1.9"),
+        // A tunnel is recognised by its flag even under a name no list knows.
+        (vec![("corp-vpn", "10.1.2.3", true), ("enp3s0", "192.168.1.9", false)], "192.168.1.9"),
+        (vec![("br-9f8e", "172.18.0.1", false), ("virbr0", "192.168.122.1", false), ("vmnet8", "172.16.5.1", false),
+            ("wwan0", "10.20.30.40", false), ("wlp2s0", "192.168.178.20", false)], "192.168.178.20"),
+    ] {
+        // Whichever address the system routes from, the answer is the LAN.
+        for routed in [None, Some(interfaces[0].1), Some(expected), Some("203.0.113.9")] {
+            assert_eq!(chosen(&interfaces, routed), wifi(expected), "{interfaces:?} routed {routed:?}");
+        }
+    }
+    // Two real networks: the one actually carrying traffic wins over the one
+    // that sorts first, and sorting only decides when nothing is routed.
+    let two = [("eth0", "10.0.0.5", false), ("wlan0", "192.168.1.50", false)];
+    assert_eq!(chosen(&two, Some("192.168.1.50")), wifi("192.168.1.50"));
+    assert_eq!(chosen(&two, Some("10.0.0.5")), wifi("10.0.0.5"));
+    assert_eq!(chosen(&two, None), wifi("10.0.0.5"));
+    // A VPN that owns the default route is not a LAN: fall back to the LAN.
+    assert_eq!(chosen(&[("tun0", "10.8.0.2", true), ("wlan0", "192.168.1.50", false)], Some("10.8.0.2")), wifi("192.168.1.50"));
+    // Only virtual adapters: refuse, so the person is told to connect.
+    assert!(chosen(&[("docker0", "172.17.0.1", false), ("rmnet0", "10.1.1.1", false)], Some("172.17.0.1")).is_err());
+    // The hotspot this phone hosts stays a network peers are on.
+    for name in ["ap0", "swlan0", "wlan1", "softap0"] {
+        assert_eq!(chosen(&[(name, "192.168.43.1", false)], None), wifi("192.168.43.1"), "{name}");
+    }
+}
+
 #[test]
 fn session_defaults_and_pin_validation_do_not_widen_network_authority() {
     assert_eq!(SharingScope::default(), SharingScope::Library);
     assert_eq!(query_value("id with +/percent%"), "id%20with%20%2B%2Fpercent%25");
     let addresses = ["127.0.0.1", "169.254.1.2", "0.0.0.0", "8.8.8.8", "::1", "fe80::1", "192.168.7.9"];
     let addresses: Vec<IpAddr> = addresses.iter().map(|address| address.parse().unwrap()).collect();
-    assert_eq!(auto_lan_binding(&addresses).unwrap(), SharingBinding::Interface { address: "192.168.7.9".into() });
-    assert!(auto_lan_binding(&addresses[..6]).is_err());
+    assert_eq!(auto_lan_binding(&addresses, None).unwrap(), SharingBinding::Interface { address: "192.168.7.9".into() });
+    assert!(auto_lan_binding(&addresses[..6], None).is_err());
+    // The routed address grants nothing by itself: public, loopback and
+    // unlisted addresses cannot become the binding.
+    for routed in ["8.8.8.8", "127.0.0.1", "10.9.9.9"] {
+        assert!(auto_lan_binding(&addresses[..6], Some(routed.parse().unwrap())).is_err(), "{routed}");
+        assert_eq!(auto_lan_binding(&addresses, Some(routed.parse().unwrap())).unwrap(),
+            SharingBinding::Interface { address: "192.168.7.9".into() }, "{routed}");
+    }
     for pin in ["123", "12345", "1234567890123", "12ab", "１２３４", "1234\n"] {
         assert!(SharingSession::new(Some(pin), None).is_err());
     }

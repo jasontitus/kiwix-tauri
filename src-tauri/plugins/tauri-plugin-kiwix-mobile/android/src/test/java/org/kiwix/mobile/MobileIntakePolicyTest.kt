@@ -88,4 +88,48 @@ class MobileIntakePolicyTest {
         assertFalse(intakeColdStartNotice(transientMarker = true, inMemoryBatches = 1))
         assertFalse(intakeColdStartNotice(transientMarker = false, inMemoryBatches = 0))
     }
+
+    @Test
+    fun firstLaunchIntentIsOfferedOnce() {
+        // "Open with", a link or a shortcut starting the app: no saved state.
+        assertTrue(launchIntentConsumable(restored = false, flags = 0))
+        assertTrue(launchIntentConsumable(restored = false, flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    @Test
+    fun restoredOrHistoryLaunchNeverReplaysItsIntent() {
+        // After process death Android restores the Activity with the original
+        // intent, without the in-process handled extras.
+        assertFalse(launchIntentConsumable(restored = true, flags = 0))
+        // Reopened from Recents after the task was finished.
+        val history = android.content.Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
+        assertFalse(launchIntentConsumable(restored = false, flags = history))
+        assertFalse(launchIntentConsumable(restored = false,
+            flags = history or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        assertFalse(launchIntentConsumable(restored = true, flags = history, unofferedByPredecessor = true))
+    }
+
+    @Test
+    fun recreationBeforeThePluginSawTheIntentKeepsItConsumable() {
+        // A configuration change during a cold "Open with" start, before any
+        // plugin was offered the intent, must not lose the file.
+        assertTrue(launchIntentConsumable(restored = true, flags = 0, unofferedByPredecessor = true))
+        assertFalse(launchIntentConsumable(restored = true, flags = 0, unofferedByPredecessor = false))
+    }
+
+    @Test
+    fun replacedActivityFailsAPendingOperationInsteadOfCancellingIt() {
+        assertEquals(RetirementOutcome.FAIL_RECREATED,
+            retirementOutcome(copying = false, viewerScratch = false, replaced = true))
+        // Only the person closing the app still reads as their own cancellation.
+        assertEquals(RetirementOutcome.CANCELLED,
+            retirementOutcome(copying = false, viewerScratch = false, replaced = false))
+        // A viewer may already hold its grant: retained and reported either way.
+        for (replaced in listOf(false, true)) assertEquals(RetirementOutcome.FAIL_DESTROYED,
+            retirementOutcome(copying = false, viewerScratch = true, replaced = replaced))
+        // A running worker removes what it staged before the operation settles.
+        for (replaced in listOf(false, true)) for (viewer in listOf(false, true))
+            assertEquals(RetirementOutcome.AWAIT_WORKER,
+                retirementOutcome(copying = true, viewerScratch = viewer, replaced = replaced))
+    }
 }

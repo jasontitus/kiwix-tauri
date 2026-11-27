@@ -2075,6 +2075,13 @@ export default function Reader(props: ReaderProps) {
   const probeDocument = useCallback(
     (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
       clearDocumentProbe();
+      // Only a session a bridge has already bound its token to can be proved.
+      // An unbound one is never named to the frame: whichever document reads
+      // the probe must not be able to claim that session as the first to bind.
+      if (panAuthority.current?.sessionId !== active.sessionId) {
+        resessionFrame(node, active, painted);
+        return;
+      }
       const nonce = crypto.randomUUID();
       const timer = window.setTimeout(() => {
         const probe = documentProbe.current;
@@ -2101,7 +2108,7 @@ export default function Reader(props: ReaderProps) {
         active.location.origin,
       );
     },
-    [clearDocumentProbe, resessionUnproven],
+    [clearDocumentProbe, resessionFrame, resessionUnproven],
   );
   const restoreFrame = useCallback(
     (url: string) => {
@@ -3408,8 +3415,7 @@ export default function Reader(props: ReaderProps) {
         documentAnnounced.current = event.data.token;
         // The load being proved belonged to this other document (its
         // announcement can follow its load). The session's own late
-        // announcement, or one for a session not yet bound, leaves the proof
-        // window to decide.
+        // announcement leaves the proof window to decide.
         const probe = documentProbe.current;
         if (probe && session && probe.sessionId === session.sessionId && documentReplaced(session)) {
           clearDocumentProbe();
