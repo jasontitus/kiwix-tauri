@@ -2077,7 +2077,7 @@ impl Service {
         for job in downloads {if matches!(job.status.as_str(),"queued"|"connecting"|"downloading"|"verifying"|"publishing") {active=true;progress=progress.saturating_add(job.downloaded);total=total.zip(job.total).map(|(a,b)|a.saturating_add(b));}}
         let torrents=self.torrents.lock().map_err(|_| "Torrent manager unavailable")?.clone();
         if let Some(manager)=torrents {
-            for job in manager.list().await {if matches!(job.status.as_str(),"queued"|"resolving"|"initializing"|"metadata"|"checking"|"downloading"|"publishing"|"seeding"|"live") {active=true;progress=progress.saturating_add(job.downloaded);total=total.zip(job.total).map(|(a,b)|a.saturating_add(b));}}
+            for job in manager.list().await {if matches!(job.status.as_str(),"queued"|"resolving"|"initializing"|"metadata"|"checking"|"creating"|"downloading"|"publishing"|"seeding"|"live") {active=true;progress=progress.saturating_add(job.downloaded);total=total.zip(job.total).map(|(a,b)|a.saturating_add(b));}}
         }
         if let Some(manager)=self.localswarm.get() {
             for job in manager.list()? {if matches!(job.status.as_str(),"queued"|"connecting"|"downloading"|"verifying"|"publishing") {active=true;progress=progress.saturating_add(job.downloaded);total=total.zip(job.total).map(|(a,b)|a.saturating_add(b));}}

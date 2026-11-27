@@ -28,7 +28,10 @@
 //! and recorded directory identity. Failed publication checks preserve recovery
 //! identities without deleting potentially unowned output. Uncommitted publication
 //! checkpoints are reclaimable; unresolved records follow later jobs as visible
-//! recovery warnings rather than blocking unrelated compositions. Fresh publication
+//! recovery warnings rather than blocking unrelated compositions. Delete and
+//! cancel demote a partial they cannot prove and reclaim to such a record, so a
+//! retained checkpoint never outlives the last way to resume or remove it; the
+//! warning is dismissed explicitly and dismissal never touches the file. Fresh publication
 //! also holds the library reservation guard, so even a missing installed book's
 //! path cannot be filled with another acquisition's bytes.
 //! Low-space admission runs after recipe metadata and cache accounting, before
@@ -260,10 +263,13 @@ pub struct MapJob {
     pub total: u64,
     pub incoming: u64,
     pub incoming_total: u64,
+    /// Mean bytes per second of the block being fetched from the network, or
+    /// of the last one while the next is prepared. Zero whenever the most
+    /// recent block came from the cache or a local map, and when idle. There
+    /// is deliberately no ETA: how much of the remainder must be downloaded is
+    /// unknown until each block has been tried against the cache and local maps.
     #[serde(default)]
     pub speed: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub eta_seconds: Option<u64>,
     pub error: Option<String>,
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -278,6 +284,11 @@ pub struct MapJob {
     pub resumable: bool,
     #[serde(default)]
     pub can_remove_from_list: bool,
+    /// Where each preserved recovery entry was kept. Filled only by `status()`
+    /// and never read back from a journal; every string is exactly the `path`
+    /// that `forget_recovery` accepts.
+    #[serde(default, skip_deserializing, skip_serializing_if = "Vec::is_empty")]
+    pub recovery_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     resume: Option<MapResume>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -377,6 +388,16 @@ impl MapJob {
         Ok(false)
     }
 
+    /// The one reported location of a preserved recovery entry: the warning
+    /// text, `recovery_paths` and `forget_recovery` must all name the same path.
+    fn recovery_path(record: &OwnedPartial) -> PathBuf {
+        let name = record
+            .publication
+            .as_ref()
+            .map_or(record.name.as_str(), |saved| saved.name.as_str());
+        record.destination.join(name)
+    }
+
     /// Remove only the recovery sentence from the visible error, keeping any
     /// other failure (for example a low-disk warning) intact.
     fn clear_recovery_warning(&mut self) {
@@ -415,11 +436,7 @@ impl MapJob {
             if index != 0 {
                 warning.push_str(", ");
             }
-            let name = record
-                .publication
-                .as_ref()
-                .map_or(record.name.as_str(), |saved| saved.name.as_str());
-            let _ = write!(warning, "{}", record.destination.join(name).display());
+            let _ = write!(warning, "{}", Self::recovery_path(record).display());
         }
         self.error = Some(
             if let Some(mut value) = error
@@ -994,11 +1011,12 @@ pub(crate) mod evaluation {
             id: "android-evaluation".into(), status: "validating".into(), created_at: None,
             region_id: "synthetic".into(), language: "evaluation".into(),
             written: 0, total: recipe.size, incoming: 0, incoming_total: 0,
-            speed: 0, eta_seconds: None,
+            speed: 0,
             error: None, path: None, owned_partial: None, recovery_records: Vec::new(),
             blocks_total: None, blocks_ready: None, blocks_downloaded: None, decision: None,
             resumable: false, resume: None, published: None,
             can_remove_from_list: false,
+            recovery_paths: Vec::new(),
             monitored_paths: Vec::new(),
             retained_publications: Vec::new(),
             history_dismissed: false,

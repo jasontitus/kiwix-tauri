@@ -78,6 +78,18 @@ pub(super) fn persist(path: &Path, job: &MapJob) -> Result<(), String> {
     Ok(())
 }
 
+/// Append `bytes` and wait for the file to accept them.
+///
+/// `tokio::fs::File` acknowledges a write as soon as its blocking task is
+/// queued and reports that task's failure only on the next write or flush.
+/// Composition hashes and counts every slice right after writing it, so the
+/// flush must come first: a full disk otherwise leaves the checkpoint ahead of
+/// the bytes on disk and the prefix can never be resumed.
+pub(super) async fn write_observed(output: &mut tokio::fs::File, bytes: &[u8]) -> Result<(), String> {
+    output.write_all(bytes).await.map_err(|error| format!("Map write failed: {error}"))?;
+    output.flush().await.map_err(|error| format!("Map write failed: {error}"))
+}
+
 pub(super) struct PartialFile(pub(super) PathBuf);
 impl Drop for PartialFile {
     fn drop(&mut self) {
@@ -551,6 +563,7 @@ impl ChunkReader<'_> {
             if let Ok(bytes) = read_exact_file(file, len, self.control).await {
                 if self.control.chunk_sha256(&bytes) == *expected {
                     self.blocks.mark(expected, len, false, self.manager, self.id, self.control)?;
+                    self.served_without_network();
                     return Ok(self.remember(name, bytes));
                 }
             }
@@ -610,6 +623,7 @@ impl ChunkReader<'_> {
             }
             if let Some(bytes) = verified {
                 self.blocks.mark(expected, len, false, self.manager, self.id, self.control)?;
+                self.served_without_network();
                 return Ok(self.remember(name, bytes));
             }
         }
@@ -675,7 +689,6 @@ impl ChunkReader<'_> {
                         j.incoming = 0;
                         j.incoming_total = 0;
                         j.speed = 0;
-                        j.eta_seconds = None;
                     });
                     self.control.check()?;
                     if attempt == 2 {
@@ -690,6 +703,12 @@ impl ChunkReader<'_> {
             }
         }
         Err("Map chunk transfer failed".into())
+    }
+
+    /// A block from the cache or a local map involved no transfer: the rate
+    /// measured for an earlier network block no longer describes this job.
+    fn served_without_network(&self) {
+        self.manager.update(self.id, |job| job.speed = 0);
     }
 
     pub(super) fn remember(&mut self, key: String, bytes: Vec<u8>) -> Arc<Vec<u8>> {
@@ -783,8 +802,6 @@ impl ChunkReader<'_> {
                     j.incoming_total = total;
                     if speed > 0 {
                         j.speed = speed;
-                        let remaining = j.total.saturating_sub(j.written).saturating_sub(incoming);
-                        j.eta_seconds = Some(remaining.div_ceil(speed));
                     }
                 });
             },

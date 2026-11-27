@@ -149,11 +149,10 @@ impl MapManager {
                 job.retain_current_path();
                 changed = true;
             }
-            if job.incoming != 0 || job.incoming_total != 0 || job.speed != 0 || job.eta_seconds.is_some() {
+            if job.incoming != 0 || job.incoming_total != 0 || job.speed != 0 {
                 job.incoming = 0;
                 job.incoming_total = 0;
                 job.speed = 0;
-                job.eta_seconds = None;
                 changed = true;
             }
             if let Some(warning) = recovery_warning {
@@ -435,27 +434,23 @@ impl MapManager {
         // durable.
         let mut moved_partial = None;
         if let Some(job) = state.job.as_mut() {
+            // Never a resumable prefix: the guard above refused every job that
+            // still holds a checkpoint, and only explicit Delete or cancel
+            // (`reclaim_job_partial`) gives one up.
             if let Some(mut record) = job.owned_partial.take() {
-                if job.resume.is_some() {
-                    // A retained prefix is not disposable cache. List-only
-                    // dismissal can preserve it, never silently reclaim it.
+                let recovery = reclaim_partial(&mut record, |record| {
+                    job.owned_partial = Some(record.clone());
+                    persist(&self.inner.state_path, job)
+                });
+                if !matches!(recovery, Ok(PartialRecovery::Reclaimed)) {
+                    // Move, never discard, unresolved ownership into the next
+                    // durable status. It must not veto another region's job.
                     moved_partial = Some(record.clone());
                     recovery_records.push(record);
-                } else {
-                    let recovery = reclaim_partial(&mut record, |record| {
-                        job.owned_partial = Some(record.clone());
-                        persist(&self.inner.state_path, job)
-                    });
-                    if !matches!(recovery, Ok(PartialRecovery::Reclaimed)) {
-                        // Move, never discard, unresolved ownership into the next
-                        // durable status. It must not veto another region's job.
-                        moved_partial = Some(record.clone());
-                        recovery_records.push(record);
-                    }
-                    // Whatever was preserved now lives in `recovery_records`;
-                    // the new job must not inherit an owned-partial reservation.
-                    job.owned_partial = None;
                 }
+                // Whatever was preserved now lives in `recovery_records`;
+                // the new job must not inherit an owned-partial reservation.
+                job.owned_partial = None;
             }
         }
         let mut job = MapJob {
@@ -469,13 +464,13 @@ impl MapManager {
             incoming: 0,
             incoming_total: 0,
             speed: 0,
-            eta_seconds: None,
             error: None,
             path: None,
             blocks_total: None, blocks_ready: None, blocks_downloaded: None,
             decision,
             resumable: false, resume: None, published: None,
             can_remove_from_list: false,
+            recovery_paths: Vec::new(),
             history_dismissed: false,
             owned_partial: None,
             recovery_records,
@@ -634,7 +629,6 @@ impl MapManager {
         job.incoming = 0;
         job.incoming_total = 0;
         job.speed = 0;
-        job.eta_seconds = None;
         persist(&self.inner.state_path, &job)?;
         state.job = Some(job.clone());
         state.admission = state.admission.wrapping_add(1);
@@ -655,6 +649,8 @@ impl MapManager {
                 && matches!(job.status.as_str(), "complete" | "failed" | "cancelled" | "paused")
                 && job.owned_partial.is_none() && job.resume.is_none() && job.recovery_records.is_empty()
                 && (job.path.is_none() || self.inner.store.acquisition_consumed(&format!("map:{}", job.id))?);
+            job.recovery_paths = job.recovery_records.iter()
+                .map(|record| MapJob::recovery_path(record).to_string_lossy().into_owned()).collect();
         }
         Ok(job)
     }
@@ -709,19 +705,31 @@ impl MapManager {
         Ok(())
     }
 
+    /// Explicit Delete and cancel only: give up the job's owned partial.
+    ///
+    /// Bytes are unlinked only by `reclaim_partial`, after it has proven the
+    /// journaled directory and inode. When it cannot (the folder was removed,
+    /// moved or recreated, the entry is no longer our inode, or cleanup failed
+    /// part-way) the record moves into `recovery_records` untouched: the file
+    /// stays where it is and stays reported, while the checkpoint nobody can
+    /// resume or delete any more stops vetoing every later map.
     pub(super) fn reclaim_job_partial(&self, job: &mut MapJob) -> Result<(), String> {
         let Some(mut record) = job.owned_partial.clone() else { return Ok(()) };
         let mut paths = vec![record.destination.join(&record.name)];
         if let Some(publication) = &record.publication { paths.push(record.destination.join(&publication.name)); }
+        // The library guard's own refusal (read-only mode, a name reserved by an
+        // installed book) says nothing about the entry and is retryable, so it
+        // still fails with the checkpoint intact. Only the outcome of the
+        // ownership-checked reclaim itself can demote the record.
         let recovery = self.inner.store.with_acquisition_destinations(&paths, || {
-            reclaim_partial(&mut record, |updated| {
+            Ok(reclaim_partial(&mut record, |updated| {
                 job.owned_partial = Some(updated.clone());
                 persist(&self.inner.state_path, job)
-            })
+            }))
         })?;
         match recovery {
-            PartialRecovery::Reclaimed => { job.owned_partial = None; }
-            PartialRecovery::Published(path) => {
+            Ok(PartialRecovery::Reclaimed) => { job.owned_partial = None; }
+            Ok(PartialRecovery::Published(path)) => {
                 let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
                 record.name = publication.name;
                 job.published = Some(PublishedMap { record, size: publication.size, sha256: publication.sha256 });
@@ -729,7 +737,20 @@ impl MapManager {
                 job.path = Some(path.to_string_lossy().into_owned());
                 if job.status != "cancelled" { job.status = "complete".into(); }
             }
-            PartialRecovery::Preserved => return Err("Map file ownership changed; no bytes were deleted".into()),
+            Ok(PartialRecovery::Preserved) | Err(_) => {
+                // One durable step; if it cannot be saved the checkpoint and its
+                // ownership record stay exactly as they were for a later retry.
+                let mut checkpoint = job.clone();
+                checkpoint.owned_partial = None;
+                checkpoint.recovery_records.push(record);
+                checkpoint.resume = None;
+                checkpoint.resumable = false;
+                checkpoint.clear_recovery_warning();
+                checkpoint.append_recovery_warning();
+                persist(&self.inner.state_path, &checkpoint)?;
+                *job = checkpoint;
+                return Ok(());
+            }
         }
         job.resume = None;
         job.resumable = false;
@@ -871,12 +892,20 @@ impl MapManager {
                 }
             })?;
         }
-        // Record proven absence before reporting unrelated historical recovery
-        // warnings; restart must not resurrect an already-reclaimed publication.
+        // Record proven absence before reporting recovery warnings; restart
+        // must not resurrect an already-reclaimed publication.
         job.path = None;
         persist(&self.inner.state_path, job)?;
         if !job.recovery_records.is_empty() {
-            return Err("Map recovery warnings remain unresolved; this download stays visible and no unproven files were deleted".into());
+            // Everything this download owned is gone, so Delete succeeded. What
+            // could not be proven ours was kept: the job stays listed, carrying
+            // only that warning and its `recovery_paths`, until each entry is
+            // dismissed with `forget_recovery`. No unproven file was deleted.
+            job.error = None;
+            job.append_recovery_warning();
+            persist(&self.inner.state_path, job)?;
+            state.retirement_error = None;
+            return Ok(());
         }
         // Keep exclusion/recovery evidence; never clear the shared source cache.
         job.history_dismissed = true;
@@ -918,13 +947,7 @@ impl MapManager {
         let index = job
             .recovery_records
             .iter()
-            .position(|record| {
-                let name = record
-                    .publication
-                    .as_ref()
-                    .map_or(record.name.as_str(), |saved| saved.name.as_str());
-                record.destination.join(name) == path
-            })
+            .position(|record| MapJob::recovery_path(record) == path)
             .ok_or("This map recovery entry is no longer in the current download. Refresh and try again")?;
         job.recovery_records.remove(index);
         job.clear_recovery_warning();
@@ -1066,9 +1089,12 @@ impl MapManager {
     }
 
     pub(super) async fn checkpoint_output(
-        &self, id: &str, output: &tokio::fs::File, recipe: &str, written: u64,
+        &self, id: &str, output: &mut tokio::fs::File, recipe: &str, written: u64,
         prefix: &Sha256, blocks: &BlockProgress<'_>,
     ) -> Result<(), String> {
+        // `sync_all` joins an in-flight write but discards its error. Observe it
+        // here so a checkpoint can never claim bytes the file did not accept.
+        output.flush().await.map_err(|error| format!("Map write failed: {error}"))?;
         output.sync_all().await.map_err(|error| format!("Cannot sync map prefix: {error}"))?;
         self.checkpoint_resume(id, MapResume {
             recipe: recipe.into(), written,
@@ -1089,7 +1115,6 @@ impl MapManager {
         checkpoint.incoming = 0;
         checkpoint.incoming_total = 0;
         checkpoint.speed = 0;
-        checkpoint.eta_seconds = None;
         checkpoint.error = None;
         if let Some(mut record) = checkpoint.owned_partial.clone() {
             if let Some(publication) = record.publication.take() {
@@ -1123,7 +1148,6 @@ impl MapManager {
                 job.incoming = 0;
                 job.incoming_total = 0;
                 job.speed = 0;
-                job.eta_seconds = None;
                 if let Some(resume) = &job.resume {
                     job.written = resume.written;
                     job.blocks_ready = Some(resume.blocks.iter().filter(|state| **state & 1 != 0).count() as u64);
@@ -1164,6 +1188,11 @@ impl MapManager {
     ) -> Result<PathBuf, String> {
         control.check()?;
         let _activity = MapWorkActivity::new(&self.inner.active_work);
+        // A map takes long enough for an unattended Mac to idle-sleep, and the
+        // range requests in flight do not survive that. Held for the whole
+        // admitted run; released on completion, pause, cancellation and panic.
+        #[cfg(target_os = "macos")]
+        let _power = crate::power_activity::Guard::acquire("Downloading an offline map");
         self.update(id, |j| j.status = "downloading".into());
         let catalog = self.catalog_controlled(catalog_url, control).await?;
         let job = self.status()?.ok_or("Missing map job")?;
@@ -1364,7 +1393,7 @@ impl MapManager {
         };
         let mut output = tokio::fs::File::from_std(file);
         if resume.is_none() {
-            self.checkpoint_output(id, &output, &fingerprint, 0, &prefix_sha256, &blocks).await?;
+            self.checkpoint_output(id, &mut output, &fingerprint, 0, &prefix_sha256, &blocks).await?;
         }
         cleanup.armed = false;
         let mut last_checkpoint = resume_written;
@@ -1397,7 +1426,7 @@ impl MapManager {
                         let bytes = STANDARD.decode(segment.data.as_deref().ok_or("Missing inline data")?)
                             .map_err(|error| error.to_string())?;
                         let bytes = &bytes[skip as usize..];
-                        output.write_all(bytes).await.map_err(|error| format!("Map write failed: {error}"))?;
+                        write_observed(&mut output, bytes).await?;
                         md5.consume(bytes);
                         prefix_sha256.update(bytes);
                         chunks.written += bytes.len() as u64;
@@ -1410,7 +1439,7 @@ impl MapManager {
                             hex::encode(md5.clone().finalize().0) != *expected) {
                             return Err(CompositionFailure::invalid("Composed whole-file MD5 mismatch"));
                         }
-                        output.write_all(&digest).await.map_err(|error| format!("Map write failed: {error}"))?;
+                        write_observed(&mut output, &digest).await?;
                         prefix_sha256.update(digest);
                         chunks.written += 16;
                     }
@@ -1425,7 +1454,7 @@ impl MapManager {
                             let from = (offset % source.chunk) as usize;
                             let count = ((bytes.len() - from) as u64).min(end - offset) as usize;
                             let slice = &bytes[from..from + count];
-                            output.write_all(slice).await.map_err(|error| format!("Map write failed: {error}"))?;
+                            write_observed(&mut output, slice).await?;
                             md5.consume(slice);
                             prefix_sha256.update(slice);
                             offset += count as u64;
@@ -1436,7 +1465,7 @@ impl MapManager {
                                 control.request_pause();
                             }
                             if chunks.written - last_checkpoint >= MAX_CHUNK {
-                                self.checkpoint_output(id, &output, &fingerprint, chunks.written,
+                                self.checkpoint_output(id, &mut output, &fingerprint, chunks.written,
                                     &prefix_sha256, &chunks.blocks).await?;
                                 last_checkpoint = chunks.written;
                             }
@@ -1449,7 +1478,7 @@ impl MapManager {
                 if control.pause_after.is_some_and(|limit| chunks.written >= limit) { control.request_pause(); }
                 if chunks.written <= recipe.size - 16
                     && (chunks.written - last_checkpoint >= MAX_CHUNK || position == recipe.size - 16) {
-                    self.checkpoint_output(id, &output, &fingerprint, chunks.written,
+                    self.checkpoint_output(id, &mut output, &fingerprint, chunks.written,
                         &prefix_sha256, &chunks.blocks).await?;
                     last_checkpoint = chunks.written;
                 }
@@ -1459,6 +1488,7 @@ impl MapManager {
                 }
             }
             if chunks.written != recipe.size { return Err("Composed file size mismatch".into()); }
+            output.flush().await.map_err(|error| format!("Map write failed: {error}"))?;
             output.sync_all().await.map_err(|error| format!("Cannot sync composed map: {error}"))?;
             Ok(())
         }).catch_unwind().await.unwrap_or_else(|_| {

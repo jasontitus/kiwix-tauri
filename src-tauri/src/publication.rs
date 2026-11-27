@@ -559,7 +559,7 @@ pub(crate) fn rename_entry_noreplace(directory: &Dir, source: &Path, destination
 
 /// The kernel enforces exclusivity in one operation relative to the supplied
 /// directories. Return the original OS error if the filesystem lacks support.
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn rename_noreplace_at(
     source_dir: impl std::os::fd::AsFd,
     source: &std::ffi::CStr,
@@ -574,6 +574,216 @@ pub(crate) fn rename_noreplace_at(
         rustix::fs::RenameFlags::NOREPLACE,
     )
     .map_err(io::Error::from)
+}
+
+/// The kernel enforces exclusivity in one operation relative to the supplied
+/// directories. Filesystems without `RENAME_NOREPLACE` (NFS, FUSE servers
+/// without rename2) take [`exclusive_rename_fallback`], which is exclusive too.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub(crate) fn rename_noreplace_at(
+    source_dir: impl std::os::fd::AsFd,
+    source: &std::ffi::CStr,
+    destination_dir: impl std::os::fd::AsFd,
+    destination: &std::ffi::CStr,
+) -> io::Result<()> {
+    rename_noreplace_with(
+        source_dir.as_fd(),
+        source,
+        destination_dir.as_fd(),
+        destination,
+        native_rename_noreplace,
+        native_link,
+        || {},
+    )
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn native_rename_noreplace(
+    source_dir: std::os::fd::BorrowedFd<'_>,
+    source: &std::ffi::CStr,
+    destination_dir: std::os::fd::BorrowedFd<'_>,
+    destination: &std::ffi::CStr,
+) -> io::Result<()> {
+    rustix::fs::renameat_with(
+        source_dir,
+        source,
+        destination_dir,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
+}
+
+/// `linkat` without `AT_SYMLINK_FOLLOW`: a symlink source is linked itself.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn native_link(
+    source_dir: std::os::fd::BorrowedFd<'_>,
+    source: &std::ffi::CStr,
+    destination_dir: std::os::fd::BorrowedFd<'_>,
+    destination: &std::ffi::CStr,
+) -> io::Result<()> {
+    rustix::fs::linkat(source_dir, source, destination_dir, destination, rustix::fs::AtFlags::empty())
+        .map_err(io::Error::from)
+}
+
+/// Only these mean "this filesystem cannot do an exclusive rename". Every
+/// other failure, `EEXIST` above all, is the answer and is returned as it is.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn exclusive_rename_unsupported(error: &io::Error) -> bool {
+    matches!(
+        error.raw_os_error(),
+        Some(libc::ENOSYS | libc::EINVAL | libc::EOPNOTSUPP)
+    )
+}
+
+/// The rename and link primitives are parameters so tests can model a
+/// filesystem without `RENAME_NOREPLACE` or without hard links; `after_link`
+/// exercises the gap between publishing the new name and retiring the old one.
+/// Production monomorphizes the native calls and the empty closure in.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn rename_noreplace_with(
+    source_dir: std::os::fd::BorrowedFd<'_>,
+    source: &std::ffi::CStr,
+    destination_dir: std::os::fd::BorrowedFd<'_>,
+    destination: &std::ffi::CStr,
+    rename: impl FnOnce(std::os::fd::BorrowedFd<'_>, &std::ffi::CStr, std::os::fd::BorrowedFd<'_>, &std::ffi::CStr) -> io::Result<()>,
+    link: impl FnOnce(std::os::fd::BorrowedFd<'_>, &std::ffi::CStr, std::os::fd::BorrowedFd<'_>, &std::ffi::CStr) -> io::Result<()>,
+    after_link: impl FnOnce(),
+) -> io::Result<()> {
+    let Err(error) = rename(source_dir, source, destination_dir, destination) else {
+        return Ok(());
+    };
+    if !exclusive_rename_unsupported(&error) {
+        return Err(error);
+    }
+    exclusive_rename_fallback(source_dir, source, destination_dir, destination, link, after_link)
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn entry_identity(
+    directory: std::os::fd::BorrowedFd<'_>,
+    name: &std::ffi::CStr,
+) -> io::Result<(rustix::fs::FileType, u64, u64)> {
+    let stat = rustix::fs::statat(directory, name, rustix::fs::AtFlags::SYMLINK_NOFOLLOW)?;
+    // The field widths differ between Linux architectures.
+    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
+    Ok((rustix::fs::FileType::from_raw_mode(stat.st_mode), stat.st_dev as u64, stat.st_ino as u64))
+}
+
+/// An exclusive move for filesystems whose rename cannot refuse to replace.
+/// Every step goes through the two retained directory descriptors and never
+/// follows a symlink in the final component.
+///
+/// A directory is moved onto an exclusively created (`mkdir`) placeholder:
+/// `rename(2)` replaces a directory only while it is empty, so nothing but an
+/// empty directory can ever be displaced.
+///
+/// Anything else is published with `link(2)`, which is atomic and fails with
+/// `EEXIST` rather than replace. The old name is then retired without ever
+/// unlinking a checked public pathname: it is first captured by a rename to a
+/// private random name in the same directory, and only the captured entry is
+/// inspected. It is unlinked only while it is the same inode the destination
+/// name holds, so the file stays reachable there; a different entry (the
+/// source name was reused after the link) is put back under its old name.
+///
+/// A filesystem with neither exclusive rename nor hard links is refused: an
+/// `O_EXCL` placeholder followed by a plain rename could replace a file that
+/// took the placeholder's name in between.
+///
+/// A crash between the link and the unlink leaves two names for one file
+/// (the source name or the private `.kiwix-renamed-*` name); no step can leave
+/// fewer names than it found.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn exclusive_rename_fallback(
+    source_dir: std::os::fd::BorrowedFd<'_>,
+    source: &std::ffi::CStr,
+    destination_dir: std::os::fd::BorrowedFd<'_>,
+    destination: &std::ffi::CStr,
+    link: impl FnOnce(std::os::fd::BorrowedFd<'_>, &std::ffi::CStr, std::os::fd::BorrowedFd<'_>, &std::ffi::CStr) -> io::Result<()>,
+    after_link: impl FnOnce(),
+) -> io::Result<()> {
+    use rustix::fs::{AtFlags, FileType};
+    let (kind, device, inode) = entry_identity(source_dir, source)?;
+    if kind == FileType::Directory {
+        rustix::fs::mkdirat(destination_dir, destination, rustix::fs::Mode::from_raw_mode(0o700))?;
+        return rustix::fs::renameat(source_dir, source, destination_dir, destination).map_err(|error| {
+            // Only an empty directory can be removed here; one that gained
+            // entries in the meantime is no longer the placeholder and stays.
+            let _ = rustix::fs::unlinkat(destination_dir, destination, AtFlags::REMOVEDIR);
+            if error == rustix::io::Errno::NOTEMPTY {
+                return io::Error::from_raw_os_error(libc::EEXIST);
+            }
+            io::Error::from(error)
+        });
+    }
+    if let Err(error) = link(source_dir, source, destination_dir, destination) {
+        return Err(match error.raw_os_error() {
+            Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP) => io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!(
+                    "This storage location cannot move a file into place without the risk of overwriting another file: it supports neither an exclusive rename nor hard links ({error}). Choose a folder on a different drive"
+                ),
+            ),
+            _ => error,
+        });
+    }
+    after_link();
+    // What the link published. A destination that already changed again is
+    // not evidence about the source name, so nothing is removed then.
+    let (_, linked_device, linked_inode) = entry_identity(destination_dir, destination).map_err(|error| {
+        io::Error::other(format!(
+            "The moved file's new name changed before its old name could be removed; the old name was kept: {error}"
+        ))
+    })?;
+    let private = format!(".kiwix-renamed-{}", uuid::Uuid::new_v4());
+    let captured = std::ffi::CString::new(private.clone())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Publication path contains NUL"))?;
+    match rustix::fs::statat(source_dir, captured.as_c_str(), AtFlags::SYMLINK_NOFOLLOW) {
+        Err(rustix::io::Errno::NOENT) => {}
+        Ok(_) => return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Private rename name is already in use; the old name was kept")),
+        Err(error) => return Err(error.into()),
+    }
+    // Capture whatever the source name holds now, atomically.
+    match rustix::fs::renameat(source_dir, source, source_dir, captured.as_c_str()) {
+        Ok(()) => {}
+        // The old name is already gone; the destination holds the file.
+        Err(rustix::io::Errno::NOENT) => return Ok(()),
+        Err(error) => {
+            return Err(io::Error::other(format!(
+                "The file was published under its new name but its old name could not be removed: {error}"
+            )))
+        }
+    }
+    let (captured_kind, captured_device, captured_inode) = entry_identity(source_dir, captured.as_c_str())?;
+    if (captured_device, captured_inode) == (linked_device, linked_inode) {
+        // The same file is reachable through the destination name.
+        return rustix::fs::unlinkat(source_dir, captured.as_c_str(), AtFlags::empty()).map_err(|error| {
+            io::Error::other(format!(
+                "The file was published under its new name; removing its old name, kept as {private}, failed: {error}"
+            ))
+        });
+    }
+    // The source name was reused after the link (or the destination changed).
+    // The captured entry is not the published file: put it back, exclusively.
+    let restored = if captured_kind == FileType::Directory {
+        // A directory can only displace an empty directory.
+        rustix::fs::renameat(source_dir, captured.as_c_str(), source_dir, source)
+    } else {
+        rustix::fs::linkat(source_dir, captured.as_c_str(), source_dir, source, AtFlags::empty())
+            .and_then(|()| rustix::fs::unlinkat(source_dir, captured.as_c_str(), AtFlags::empty()))
+    };
+    if let Err(error) = restored {
+        return Err(io::Error::other(format!(
+            "An entry that replaced the moved file's old name was preserved as {private}: {error}"
+        )));
+    }
+    if (linked_device, linked_inode) == (device, inode) {
+        // The original file moved; its old name now belongs to a newer entry.
+        return Ok(());
+    }
+    Err(io::Error::other(
+        "The file changed while it was being moved; both names were kept",
+    ))
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
@@ -668,30 +878,29 @@ fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn platform_publish(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::fd::AsFd;
     let from = c_path(source)?;
     let to = c_path(destination)?;
-    let Err(error) = rename_noreplace_at(rustix::fs::CWD, &from, rustix::fs::CWD, &to) else {
+    let Err(error) = native_rename_noreplace(rustix::fs::CWD, &from, rustix::fs::CWD, &to) else {
         return Ok(());
     };
-    if !matches!(
-        error.raw_os_error(),
-        Some(libc::ENOSYS | libc::EINVAL | libc::EOPNOTSUPP)
-    ) {
+    if !exclusive_rename_unsupported(&error) {
         return Err(error);
     }
-    // Old kernels/filesystems may lack exclusive rename. link(2) is itself
-    // atomic and exclusive; it is safe for regular files only. Unsupported
-    // filesystems return their real error rather than falling back to clobbering.
-    if !std::fs::symlink_metadata(source)?.file_type().is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Publication source must be a regular file",
-        ));
-    }
-    std::fs::hard_link(source, destination)?;
-    // Publication has committed even if unlink fails; report that error and
-    // leave the destination intact so durable callers can recover by digest.
-    std::fs::remove_file(source)
+    // Old kernels/filesystems may lack exclusive rename. The one fallback works
+    // through directory descriptors, so anchor both names to their parents.
+    let (source_parent, source_name) = parent_and_name(source)?;
+    let (destination_parent, destination_name) = parent_and_name(destination)?;
+    let source_dir = Dir::open_ambient_dir(source_parent, cap_std::ambient_authority())?;
+    let destination_dir = Dir::open_ambient_dir(destination_parent, cap_std::ambient_authority())?;
+    exclusive_rename_fallback(
+        source_dir.as_fd(),
+        &c_path(source_name)?,
+        destination_dir.as_fd(),
+        &c_path(destination_name)?,
+        native_link,
+        || {},
+    )
 }
 
 #[cfg(windows)]
