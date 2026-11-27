@@ -1365,13 +1365,13 @@ impl Service {
         match maps { Some(manager) => manager.has_active_work(), None => Ok(false) }
     }
     #[cfg(target_os = "ios")]
-    pub(crate) async fn mobile_local_transfer_update(&self) -> Result<(), String> {
+    pub(crate) async fn mobile_local_transfer_update(&self) -> Result<bool, String> {
         let _update = self.update_admission.admit().await;
         let _transfer = self.mobile.transfer_gate.lock().await;
         self.mobile_local_transfer_update_locked().await
     }
     #[cfg(target_os = "ios")]
-    pub(super) async fn mobile_local_transfer_update_locked(&self) -> Result<(), String> {
+    pub(super) async fn mobile_local_transfer_update_locked(&self) -> Result<bool, String> {
         let foreground = self.mobile.state.lock().map_err(|_| "Mobile lifecycle unavailable")?
             .desired_active;
         let policy = if foreground && self.mobile_active()
@@ -1388,8 +1388,9 @@ impl Service {
             }
         } else { Ok(()) };
         let activity = if foreground { self.mobile_local_transfer_active().await } else { Ok(false) };
-        self.mobile_publish_local_transfer(activity.as_ref().copied().unwrap_or(false)).await?;
-        policy.and(activity.map(|_| ()))
+        let active = activity.as_ref().copied().unwrap_or(false);
+        self.mobile_publish_local_transfer(active).await?;
+        policy.and(activity)
     }
     #[cfg(target_os = "ios")]
     async fn mobile_publish_local_transfer(&self, active: bool) -> Result<(), String> {
@@ -1827,6 +1828,7 @@ impl Service {
             if !keep_sharing {
                 if let Err(error)=self.mobile_hotspot_stop().await { errors.push(error); }
             }
+            crate::maps::clear_recipe_cache();
             #[cfg(target_os="android")]
             let maps=self.maps.lock().map_err(|_| "Map manager unavailable")?.clone();
             #[cfg(target_os = "android")]

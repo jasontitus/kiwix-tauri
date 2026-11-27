@@ -1018,3 +1018,41 @@ fn archive_csp_forbids_framing_without_changing_existing_directives() {
     assert!(ARCHIVE_CSP.contains("frame-src 'none'"));
     assert!(ARCHIVE_CSP.contains("object-src 'none'"));
 }
+
+#[test]
+fn wildcard_binding_refreshes_local_hosts_and_drops_stale_ips_while_explicit_stays_pinned() {
+    let uri: Uri = "/token/reader".parse().unwrap();
+    let stale_ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 5));
+    let mut loopback_headers = HeaderMap::new();
+    loopback_headers.insert("host", "127.0.0.1:8080".parse().unwrap());
+    let mut stale_headers = HeaderMap::new();
+    stale_headers.insert("host", "192.0.2.5:8080".parse().unwrap());
+
+    let explicit = SessionHosts::new_expired(
+        &[stale_ip],
+        &SharingBinding::Interface {
+            address: "192.0.2.5".into(),
+        },
+    )
+    .for_port(8080);
+    assert_eq!(explicit.check(&loopback_headers, &uri), None);
+    assert_eq!(explicit.check(&stale_headers, &uri), Some(stale_ip));
+
+    let shared_wildcard = SessionHosts::new_expired(&[stale_ip], &SharingBinding::Ipv4All {});
+    let index_auth = shared_wildcard.for_port(8080);
+    assert_eq!(
+        index_auth.check(&loopback_headers, &uri),
+        Some(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
+    // After the TTL refresh, the pre-DHCP stale IP is no longer accepted.
+    assert_eq!(index_auth.check(&stale_headers, &uri), None);
+    // A newly bound per-book listener created from the shared SessionHosts
+    // immediately accepts the refreshed IP on its own port with no 403 window.
+    let mut book_headers = HeaderMap::new();
+    book_headers.insert("host", "127.0.0.1:9090".parse().unwrap());
+    let book_auth = shared_wildcard.for_port(9090);
+    assert_eq!(
+        book_auth.check(&book_headers, &uri),
+        Some(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
+}

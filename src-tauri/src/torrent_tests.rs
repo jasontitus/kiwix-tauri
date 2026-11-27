@@ -1520,7 +1520,7 @@ fn publication_factory(record: &Record) -> ConfinedFactory {
         sources: Arc::new(Mutex::new(HashMap::new())),
         existing: true,
         stop: CancellationToken::new(),
-        gate: Arc::new(Mutex::new(())),
+        gate: Arc::new(std::sync::RwLock::new(())),
         dirs: Arc::new(Mutex::new(HashSet::new())),
         owner: None,
     }

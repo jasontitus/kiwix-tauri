@@ -18,6 +18,12 @@ function storage(options = {}) {
       callbacks.push(callback);
       listeners.set(name, callbacks);
     },
+    removeEventListener(name, callback) {
+      const callbacks = listeners.get(name);
+      if (!callbacks) return;
+      const index = callbacks.indexOf(callback);
+      if (index >= 0) callbacks.splice(index, 1);
+    },
     dispatchEvent(event) {
       for (const callback of listeners.get(event.type) ?? []) callback(event);
     },
@@ -358,4 +364,49 @@ test("generation retirement fails blocked retries instead of committing them", a
   assert.equal(writers.some((producer) =>
     producer.messages.some((message) => message.type === "kiwix-storage-ack")), false,
   "a retired blocked batch must not commit later");
+});
+
+test("freeze completes immediately without waiting 5s on a registered pre-ready iframe", async () => {
+  const root = storage({ api: async () => ({ status: "committed" }) });
+  const first = frame();
+  const firstFrame = {
+    isConnected: true,
+    contentWindow: first.source,
+    addEventListener() {},
+    removeEventListener() {},
+    _src: `${archiveOrigin}/index.html`,
+    get src() { return this._src; },
+    set src(value) {
+      this._src = value;
+      const parsed = new URL(value);
+      const id = parsed.searchParams.get("retire");
+      if (id) {
+        queueMicrotask(() => {
+          root.window.dispatchEvent({
+            type: "message",
+            origin: archiveOrigin,
+            source: first.source,
+            data: { type: "kiwix-storage-retired", id, proof: "b".repeat(32) },
+          });
+        });
+      }
+    },
+  };
+  assert.equal(
+    typeof root.registerReaderStorage(
+      first.source,
+      { ...binding(), currentUrl: firstFrame.src },
+      firstFrame,
+    ),
+    "function",
+  );
+  const started = Date.now();
+  const resume = await root.freezeReaderStorage();
+  assert.ok(Date.now() - started < 1000, "pre-ready iframe must not block freeze with a 5s drain timeout");
+  assert.equal(
+    first.messages.filter((message) => message.type === "kiwix-storage-drain").length,
+    0,
+  );
+  resume();
+  assert.equal(root.canNavigateReaderStorage(), true);
 });

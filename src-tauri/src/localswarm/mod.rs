@@ -230,7 +230,11 @@ struct Inner {
     offers: tokio::sync::Mutex<HashMap<String, Offer>>, operation: tokio::sync::Mutex<()>,
     library: tokio::sync::Mutex<Option<LibraryOffer>>,
     library_retirement: Mutex<Option<String>>,
-    lifetime: Mutex<CancellationToken>, download_budget: Arc<RateBudget>, upload_budget: Arc<RateBudget>,
+    lifetime: Mutex<CancellationToken>,
+    sharing_lifetime: Mutex<CancellationToken>,
+    seed_setup_gate: tokio::sync::RwLock<()>,
+    receive_setup_gate: tokio::sync::RwLock<()>,
+    download_budget: Arc<RateBudget>, upload_budget: Arc<RateBudget>,
     slots: tokio::sync::Semaphore,
     receive_activity: Arc<network::ReceiveActivity>,
     #[cfg(target_os = "ios")]
@@ -284,7 +288,7 @@ struct SourceMonitor {
 impl SourceMonitor {
     fn start(source: &SourceSet, cancel: CancellationToken, reason: Arc<Mutex<Option<String>>>) -> Result<Self, String> {
         let snapshot = {
-            let retained = source.retained.lock().map_err(|_| "LocalSwarm source unavailable")?;
+            let retained = source.retained.read().map_err(|_| "LocalSwarm source unavailable")?;
             match &*retained {
                 crate::archive_source::RetainedSource::Filesystem(pinned) => SourceWatch {
                     path: pinned.path.clone(),
@@ -312,11 +316,11 @@ impl SourceMonitor {
             let _permit = permit;
             while !token.is_cancelled() {
                 if let Err(error) = snapshot.unchanged() {
-                    *reason.lock().unwrap() = Some(error);
+                    *reason.lock().unwrap_or_else(|e| e.into_inner()) = Some(error);
                     token.cancel();
                     break;
                 }
-                let guard = worker_wake.0.lock().unwrap();
+                let guard = worker_wake.0.lock().unwrap_or_else(|e| e.into_inner());
                 if token.is_cancelled() { break; }
                 let _wait = worker_wake.1.wait_timeout(guard, std::time::Duration::from_millis(500));
             }
@@ -328,7 +332,7 @@ impl Drop for SourceMonitor {
     fn drop(&mut self) {
         self.cancel.cancel();
         if let Some(wake) = &self.wake {
-            let _guard = wake.0.lock().unwrap();
+            let _guard = wake.0.lock().unwrap_or_else(|e| e.into_inner());
             wake.1.notify_all();
         }
         if self.thread.as_ref().is_some_and(|thread| thread.is_finished()) {
@@ -615,7 +619,9 @@ impl LocalSwarmManager {
         let peer_id = if let Some(bytes) = directory.optional_bytes("peer-id", 64)? { let id = String::from_utf8(bytes).map_err(err)?; if Uuid::parse_str(&id).map_err(err)?.to_string() != id { return Err("Invalid LocalSwarm peer identity".into()); } id } else { let id = Uuid::new_v4().to_string(); directory.atomic("peer-id", id.as_bytes())?; id };
         let jobs = load(&directory, &store)?; let settings = store.settings()?;
         let discovery = Discovery::new(peer_id.clone())?;
-        Ok(Self { inner: Arc::new(Inner { #[cfg(target_os = "ios")] sharing_admission: std::sync::atomic::AtomicBool::new(true), #[cfg(target_os = "ios")] receive_work: std::sync::atomic::AtomicUsize::new(0), store, directory, peer_id, _process_lock: process_lock, state: Mutex::new(State { jobs, running: HashMap::new() }), discovery: tokio::sync::Mutex::new(discovery), offers: tokio::sync::Mutex::new(HashMap::new()), library: tokio::sync::Mutex::new(None), library_retirement: Mutex::new(None), operation: tokio::sync::Mutex::new(()), lifetime: Mutex::new(admission.child_token()), download_budget: Arc::new(RateBudget::new(settings.download_limit)), upload_budget: Arc::new(RateBudget::new(settings.upload_limit)), slots: tokio::sync::Semaphore::new(3), receive_activity: Arc::new(network::ReceiveActivity::default()), error: Mutex::new(None), last_start_manifest: Mutex::new(None), persist_order: Mutex::new(PersistOrder { next: 0, written: 0 }), cleanup_digests: Mutex::new(HashMap::new()) }) })
+        let lifetime = admission.child_token();
+        let sharing_lifetime = lifetime.child_token();
+        Ok(Self { inner: Arc::new(Inner { #[cfg(target_os = "ios")] sharing_admission: std::sync::atomic::AtomicBool::new(true), #[cfg(target_os = "ios")] receive_work: std::sync::atomic::AtomicUsize::new(0), store, directory, peer_id, _process_lock: process_lock, state: Mutex::new(State { jobs, running: HashMap::new() }), discovery: tokio::sync::Mutex::new(discovery), offers: tokio::sync::Mutex::new(HashMap::new()), library: tokio::sync::Mutex::new(None), library_retirement: Mutex::new(None), operation: tokio::sync::Mutex::new(()), lifetime: Mutex::new(lifetime), sharing_lifetime: Mutex::new(sharing_lifetime), seed_setup_gate: tokio::sync::RwLock::new(()), receive_setup_gate: tokio::sync::RwLock::new(()), download_budget: Arc::new(RateBudget::new(settings.download_limit)), upload_budget: Arc::new(RateBudget::new(settings.upload_limit)), slots: tokio::sync::Semaphore::new(3), receive_activity: Arc::new(network::ReceiveActivity::default()), error: Mutex::new(None), last_start_manifest: Mutex::new(None), persist_order: Mutex::new(PersistOrder { next: 0, written: 0 }), cleanup_digests: Mutex::new(HashMap::new()) }) })
     }
     fn allowed(&self) -> Result<(), String> { if self.inner.store.private_mode()? || self.inner.store.read_only()? { Err("LocalSwarm is disabled in private/read-only mode".into()) } else { Ok(()) } }
     /// Clone the job map for a durable write. Callers hold the state lock for
@@ -651,13 +657,20 @@ impl LocalSwarmManager {
         let (sequence, jobs) = self.stage(state);
         self.write_staged(sequence, &jobs)
     }
-    fn cancel_token(&self) -> CancellationToken { self.inner.lifetime.lock().unwrap().child_token() }
+    fn cancel_token(&self) -> CancellationToken { self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner()).child_token() }
+    fn sharing_cancel_token(&self) -> CancellationToken { self.inner.sharing_lifetime.lock().unwrap_or_else(|e| e.into_inner()).child_token() }
     /// Cancels long accepted setup before Service waits for its mode writer.
-    pub fn interrupt(&self) { self.inner.lifetime.lock().unwrap().cancel(); }
+    pub fn interrupt(&self) { self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner()).cancel(); }
     pub fn activate(&self, admission: &CancellationToken) -> Result<(), String> {
         check_cancel(admission)?;
-        let mut lifetime = self.inner.lifetime.lock().unwrap();
-        if lifetime.is_cancelled() { *lifetime = admission.child_token(); }
+        let mut lifetime = self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner());
+        if lifetime.is_cancelled() {
+            *lifetime = admission.child_token();
+            *self.inner.sharing_lifetime.lock().unwrap_or_else(|e| e.into_inner()) = lifetime.child_token();
+        } else {
+            let mut sharing = self.inner.sharing_lifetime.lock().unwrap_or_else(|e| e.into_inner());
+            if sharing.is_cancelled() { *sharing = lifetime.child_token(); }
+        }
         Ok(())
     }
     pub fn limits(&self, download: u64, upload: u64) { self.inner.download_budget.set_limit(download); self.inner.upload_budget.set_limit(upload); }
@@ -689,7 +702,7 @@ impl LocalSwarmManager {
         self.inner.receive_activity.set_accepting(accepting);
         if !accepting {
             let _operation = self.inner.operation.lock().await;
-            if let Err(error) = self.stop_library_locked().await { *self.inner.error.lock().unwrap() = Some(error); }
+            if let Err(error) = self.stop_library_locked().await { *self.inner.error.lock().unwrap_or_else(|e| e.into_inner()) = Some(error); }
         }
         for offer in self.inner.offers.lock().await.values() { offer.stats.set_accepting(accepting); }
     }
@@ -703,7 +716,7 @@ impl LocalSwarmManager {
     pub async fn status(&self) -> Result<Value, String> {
         let discovery = self.inner.discovery.lock().await;
         let peers = discovery.peers(); let browsing = discovery.is_browsing();
-        let error = discovery.error().or_else(|| self.inner.error.lock().unwrap().clone());
+        let error = discovery.error().or_else(|| self.inner.error.lock().unwrap_or_else(|e| e.into_inner()).clone());
         drop(discovery);
         let mut offers = self.inner.offers.lock().await;
         let seeds: Vec<_> = offers.values_mut().map(|offer| {
@@ -804,7 +817,7 @@ impl LocalSwarmManager {
             return Err("The shared library session changed".into());
         }
         if let Err(error) = self.inner.discovery.lock().await.unadvertise(&offer.advertisement).await {
-            *self.inner.library_retirement.lock().unwrap() = Some(offer.advertisement);
+            *self.inner.library_retirement.lock().unwrap_or_else(|e| e.into_inner()) = Some(offer.advertisement);
             offer.server.shutdown().await;
             return Err(error);
         }
@@ -832,12 +845,12 @@ impl LocalSwarmManager {
         if let Some(offer) = offer {
             offer.server.cancel();
             offer.server.shutdown().await;
-            *self.inner.library_retirement.lock().unwrap() = Some(offer.advertisement);
+            *self.inner.library_retirement.lock().unwrap_or_else(|e| e.into_inner()) = Some(offer.advertisement);
         }
-        let pending = self.inner.library_retirement.lock().unwrap().clone();
+        let pending = self.inner.library_retirement.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(id) = pending {
             self.inner.discovery.lock().await.unadvertise(&id).await?;
-            *self.inner.library_retirement.lock().unwrap() = None;
+            *self.inner.library_retirement.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
         Ok(())
     }
@@ -896,42 +909,58 @@ impl LocalSwarmManager {
     pub async fn start(
         &self, target: ConnectionTarget, sid: String, pin: Option<String>, directory: PathBuf, acknowledgement: Option<String>,
     ) -> Result<DownloadJob, String> {
-        self.allowed()?; let _operation = self.inner.operation.lock().await;
+        self.allowed()?;
         let pin = pin.filter(|pin| !pin.is_empty());
-        if self.inner.state.lock().unwrap().jobs.len() >= MAX_JOBS { return Err("Delete retained LocalSwarm downloads and their files before starting another transfer (64 retained jobs maximum)".into()); }
-        let cancel = self.cancel_token();
+        if self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).jobs.len() >= MAX_JOBS { return Err("Delete retained LocalSwarm downloads and their files before starting another transfer (64 retained jobs maximum)".into()); }
         let port = target.port();
         let direct = target.direct();
+        let (cancel, host, initial_route, manifest) = {
+            let _setup = self.inner.receive_setup_gate.read().await;
+            let cancel = self.cancel_token();
+            check_cancel(&cancel)?;
+            // Perform the network dial and optional identity preflight outside
+            // `operation` so a slow/unreachable peer cannot freeze unrelated
+            // LocalSwarm controls (pause, resume, stop, discovery, cleanup),
+            // while `receive_setup_gate` still lets `stop()` fence in-flight dials.
+            let (host, mut session) = self.session(&target, &sid, pin.as_deref(), &cancel).await?;
+            supported(session.manifest())?;
+            // No incoming UUID can collide with an empty library. Avoid reading a
+            // payload chunk (and waiting on its bandwidth budget) just to prove that.
+            if self.inner.store.has_books()? {
+                if let Some(id) = incoming_archive_id(&mut session).await? {
+                    if let Some(existing) = self.inner.store.book(&id)? {
+                        session.shutdown().await;
+                        return Err(if existing.available {
+                            "This archive is already in your library. Open the existing copy instead."
+                        } else {
+                            "This archive is already in your library, but its file is unavailable. Locate or remove that entry in Library before downloading it again."
+                        }.into());
+                    }
+                }
+            }
+            let initial_route = session.route().map(str::to_owned);
+            let manifest = session.into_manifest().await;
+            check_cancel(&cancel)?;
+            (cancel, host, initial_route, manifest)
+        };
+        let _operation = self.inner.operation.lock().await;
+        self.allowed()?;
+        check_cancel(&cancel)?;
+        if self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).jobs.len() >= MAX_JOBS {
+            return Err("Delete retained LocalSwarm downloads and their files before starting another transfer (64 retained jobs maximum)".into());
+        }
         let request = serde_json::to_string(&(sid.as_str(), format!("{target:?}"), &directory)).map_err(err)?;
-        let nonce = self.inner.last_start_manifest.lock().unwrap().as_mut()
+        let nonce = self.inner.last_start_manifest.lock().unwrap_or_else(|e| e.into_inner()).as_mut()
             .filter(|(key, _, _)| key == &request).map(|(_, nonce, _)| {
                 nonce.get_or_insert_with(|| Uuid::new_v4().to_string()).clone()
             }).unwrap_or_else(|| Uuid::new_v4().to_string());
         let identity = serde_json::to_string(&(request.as_str(), nonce.as_str())).map_err(err)?;
-        let (host, mut session) = self.session(&target, &sid, pin.as_deref(), &cancel).await?;
-        supported(session.manifest())?;
-        // No incoming UUID can collide with an empty library. Avoid reading a
-        // payload chunk (and waiting on its bandwidth budget) just to prove that.
-        if self.inner.store.has_books()? {
-            if let Some(id) = incoming_archive_id(&mut session).await? {
-                if let Some(existing) = self.inner.store.book(&id)? {
-                    session.shutdown().await;
-                    return Err(if existing.available {
-                        "This archive is already in your library. Open the existing copy instead."
-                    } else {
-                        "This archive is already in your library, but its file is unavailable. Locate or remove that entry in Library before downloading it again."
-                    }.into());
-                }
-            }
-        }
-        let initial_route = session.route().map(str::to_owned);
-        let manifest = session.into_manifest().await; check_cancel(&cancel)?;
         let directory = blocking(move || {
             crate::fs_ext::create_private_dir_all(&directory).map_err(err)?;
             let directory = std::fs::canonicalize(&directory).map_err(err)?;
             Directory::open(&directory)
         }).await?;
-        *self.inner.last_start_manifest.lock().unwrap() = Some((request, Some(nonce), manifest.clone()));
+        *self.inner.last_start_manifest.lock().unwrap_or_else(|e| e.into_inner()) = Some((request, Some(nonce), manifest.clone()));
         let space_identity = identity.clone(); let space_acknowledgement = acknowledgement.clone();
         let suffix = Uuid::new_v4().to_string(); let id = format!("localswarm:{suffix}");
         let create_manifest = manifest.clone(); let create_suffix = suffix;
@@ -941,11 +970,11 @@ impl LocalSwarmManager {
             let (owned, open) = OwnedSet::create(parent, &create_manifest, &create_suffix)?;
             drop(open); Ok(owned)
         }).await?;
-        if let Some((_, nonce, _)) = self.inner.last_start_manifest.lock().unwrap().as_mut() { nonce.take(); }
+        if let Some((_, nonce, _)) = self.inner.last_start_manifest.lock().unwrap_or_else(|e| e.into_inner()).as_mut() { nonce.take(); }
         let timestamp = now();
         let job = DownloadJob { id: id.clone(), url: format!("localswarm:{}", manifest.swarm_id), file_name: manifest.files[0].path.clone(), destination: owned.final_path(&manifest.files[0].path).to_string_lossy().into_owned(), status: "queued".into(), downloaded: 0, total: Some(manifest.total_bytes), error: None, speed: 0, eta_seconds: None, created_at: timestamp.clone(), updated_at: timestamp, completed_paths: Vec::new(), requires_pin: pin.is_some(), transport: "localswarm".into(), route: initial_route };
         {
-            let mut state = self.inner.state.lock().unwrap();
+            let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
             let staging = owned.parent.join(&owned.staging);
             state.jobs.insert(id.clone(), StoredJob { job: job.clone(), verified: vec![false; manifest.chunk_hashes.len()], manifest, host, port, owned, publishing: false, direct, history_dismissed: false, cleanup: None });
             if let Err(error) = self.persist(&state) {
@@ -972,7 +1001,7 @@ impl LocalSwarmManager {
             let _ = started.await;
             let result = manager.receive(&task_id, pin, token.clone(), space_identity, acknowledgement).await;
             if let Err(error) = result {
-                let mut state = manager.inner.state.lock().unwrap();
+                let mut state = manager.inner.state.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(saved) = state.jobs.get_mut(&task_id) {
                     if saved.job.status != "complete" {
                         let cancelled = token.is_cancelled();
@@ -986,7 +1015,7 @@ impl LocalSwarmManager {
                 if let Err(e) = manager.persist(&state) { eprintln!("Saving LocalSwarm transfer: {e}"); }
             }
         });
-        self.inner.state.lock().unwrap().running.insert(id.to_string(), Running { cancel, task, progress: None });
+        self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).running.insert(id.to_string(), Running { cancel, task, progress: None });
         let _ = start.send(());
         Ok(())
     }
@@ -994,9 +1023,9 @@ impl LocalSwarmManager {
         self.allowed()?; let _operation = self.inner.operation.lock().await; self.pause_locked(id, cancelled).await
     }
     async fn pause_locked(&self, id: &str, cancelled: bool) -> Result<(), String> {
-        let running = self.inner.state.lock().unwrap().running.remove(id);
+        let running = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).running.remove(id);
         if let Some(running) = running { running.cancel.cancel(); running.task.await.map_err(|e| format!("Joining LocalSwarm transfer: {e}"))?; }
-        let mut state = self.inner.state.lock().unwrap(); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
+        let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
         if saved.job.status != "complete" && (cancelled || !matches!(saved.job.status.as_str(), "failed" | "cancelled")) { saved.job.status = if cancelled { "cancelled" } else { "paused" }.into(); saved.job.speed = 0; saved.job.eta_seconds = None; saved.job.error = None; saved.job.updated_at = now(); }
         self.persist(&state).map_err(Into::into)
     }
@@ -1008,14 +1037,14 @@ impl LocalSwarmManager {
         }
         let pin = pin.filter(|pin| !pin.is_empty());
         self.pause_locked(id, false).await?;
-        let saved = self.inner.state.lock().unwrap().jobs.get(id).cloned().ok_or("LocalSwarm job not found")?;
+        let saved = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).jobs.get(id).cloned().ok_or("LocalSwarm job not found")?;
         if saved.job.status == "complete" { return Ok(()); }
         if saved.job.requires_pin && pin.as_deref().is_none_or(str::is_empty) { return Err("Enter this protected swarm's PIN again to resume".into()); }
         // receive() owns the one retained-prefix rehash under its admitted-work
         // assertion. Do not rehash here while the command's transfer gate hides
         // that work from the native idle-timer reconciler.
         let cancel = self.cancel_token();
-        { let mut state = self.inner.state.lock().unwrap(); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
+        { let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
           if pin.is_some() { saved.job.requires_pin = true; } saved.job.status = "queued".into(); saved.job.error = None; self.persist(&state)?; }
         self.spawn(id, pin, cancel, id.to_string(), acknowledgement)
     }
@@ -1043,7 +1072,7 @@ impl LocalSwarmManager {
         // Nap cannot coalesce the receive's timers and transport completions.
         // Dropped on completion, error, cancellation and shutdown.
         let _power = crate::power_activity::Guard::acquire("Receiving a LocalSwarm transfer");
-        let saved = self.inner.state.lock().unwrap().jobs.get(id).cloned().ok_or("LocalSwarm job not found")?;
+        let saved = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).jobs.get(id).cloned().ok_or("LocalSwarm job not found")?;
         let StoredJob { manifest, owned, host, port, publishing, direct, mut verified, .. } = saved;
         let owned = Arc::new(owned); let open_manifest = manifest.clone(); let open_owned = owned.clone(); let recheck_cancel = cancel.clone();
         let donor_store = self.inner.store.clone();
@@ -1289,7 +1318,7 @@ impl LocalSwarmManager {
         let token = cancel.clone();
         readonly_verification(&cancel, move || validate_zim(&validate_path, &validate_files, &validate_manifest, &token)).await?;
         check_cancel(&cancel)?;
-        { let mut state = self.inner.state.lock().unwrap(); state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?.publishing = true; self.persist(&state)?; }
+        { let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()); state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?.publishing = true; self.persist(&state)?; }
         let publish_open = open.clone(); let publish_manifest = manifest.clone(); let publish_owned = owned.clone(); let store = self.inner.store.clone(); let token = cancel.clone();
         blocking(move || {
             check_cancel(&token)?; let mut open = publish_open.lock().map_err(|_| "LocalSwarm staging unavailable")?; open.unchanged(&publish_manifest, &publish_owned)?;
@@ -1307,7 +1336,7 @@ impl LocalSwarmManager {
                 open.unchanged(&publish_manifest, &publish_owned)
             })
         }).await?;
-        let mut state = self.inner.state.lock().unwrap(); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
+        let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()); let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
         saved.job.status = "complete".into(); saved.job.downloaded = manifest.total_bytes; saved.job.speed = 0; saved.job.eta_seconds = None; saved.job.error = None; saved.job.completed_paths = vec![saved.job.destination.clone()]; saved.job.updated_at = now(); self.persist(&state).map_err(Into::into)
     }
     /// In-flight progress belongs to this worker, never to the persisted job
@@ -1338,7 +1367,7 @@ impl LocalSwarmManager {
         // checkpoint after every durable window must not stall chunk progress,
         // status or listing behind a multi-megabyte rewrite.
         let (sequence, jobs) = {
-            let mut state = self.inner.state.lock().unwrap();
+            let mut state = self.inner.state.lock().unwrap_or_else(|e| e.into_inner());
             let saved = state.jobs.get_mut(id).ok_or("LocalSwarm job not found")?;
             saved.verified.copy_from_slice(verified); saved.job.downloaded = verified_bytes(&saved.manifest, verified)?; saved.job.status = status.into(); saved.job.speed = speed; saved.job.eta_seconds = if speed > 0 { Some((saved.manifest.total_bytes - saved.job.downloaded).div_ceil(speed)) } else { None }; saved.job.updated_at = now();
             self.stage(&state)
@@ -1346,21 +1375,36 @@ impl LocalSwarmManager {
         self.write_staged(sequence, &jobs).map_err(Into::into)
     }
     pub async fn seed(&self, book_id: &str, pin: Option<String>) -> Result<Seed, String> {
-        self.allowed()?; let _operation = self.inner.operation.lock().await;
+        self.allowed()?;
         let pin = pin.filter(|pin| !pin.is_empty());
         if self.inner.offers.lock().await.len() >= MAX_SEEDS { return Err("Stop an active LocalSwarm offer before adding another".into()); }
         let book = self.inner.store.book(book_id)?.filter(|b| b.available).ok_or("Select an available library archive")?;
-        let cancel = self.cancel_token();
         let settings = self.inner.store.settings()?;
-        let (manifest, source) = SourceSet::prepare(self.inner.store.clone(), book, cancel.clone()).await?;
+        // Verify and hash the manifest before taking `operation` so preparing a
+        // multi-GB offer never blocks pause, resume, discovery, or cleanup,
+        // while `seed_setup_gate` + `sharing_lifetime` still let `stop()` and
+        // Android `stop_sharing()` cancel and drain in-flight preparation.
+        let (cancel, manifest, source) = {
+            let _setup = self.inner.seed_setup_gate.read().await;
+            let cancel = self.sharing_cancel_token();
+            check_cancel(&cancel)?;
+            let (manifest, source) = SourceSet::prepare(self.inner.store.clone(), book, cancel.clone()).await?;
+            check_cancel(&cancel)?;
+            (cancel, manifest, source)
+        };
+        let _operation = self.inner.operation.lock().await;
+        self.allowed()?;
         check_cancel(&cancel)?; source.unchanged()?;
+        if self.inner.offers.lock().await.len() >= MAX_SEEDS {
+            return Err("Stop an active LocalSwarm offer before adding another".into());
+        }
         let source_reader = source.clone();
         let reason = Arc::new(Mutex::new(None));
         let monitor = SourceMonitor::start(&source, cancel.clone(), reason.clone())?;
         let reader_cancel = cancel.clone(); let reader_reason = reason.clone();
         let reader: network::ChunkReader = Arc::new(move |index| source_reader.chunk(index));
         let retire: network::SeedSourceFailure = Arc::new(move |error| {
-            *reader_reason.lock().unwrap() = Some(error.to_owned());
+            *reader_reason.lock().unwrap_or_else(|e| e.into_inner()) = Some(error.to_owned());
             reader_cancel.cancel();
         });
         let server = network::seed(manifest.clone(), self.inner.peer_id.clone(), pin.clone(), reader,
@@ -1377,7 +1421,7 @@ impl LocalSwarmManager {
             let _ = started.await;
             Self::supervise_offer(weak, offer_id, supervisor_source, reason, monitor, server, advertisement).await
         });
-        *self.inner.error.lock().unwrap() = None;
+        *self.inner.error.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let mut offers = self.inner.offers.lock().await;
         #[cfg(target_os = "ios")]
         stats.set_accepting(self.inner.sharing_admission.load(std::sync::atomic::Ordering::SeqCst));
@@ -1404,12 +1448,12 @@ impl LocalSwarmManager {
                 _ = cancel.cancelled() => break,
                 _ = tick.tick() => {
                     if server.is_finished() {
-                        *reason.lock().unwrap() = Some("The nearby-sharing listener stopped. Start sharing again to make this archive available.".into());
+                        *reason.lock().unwrap_or_else(|e| e.into_inner()) = Some("The nearby-sharing listener stopped. Start sharing again to make this archive available.".into());
                         cancel.cancel();
                         break;
                     }
                     if let Err(error) = source.principal() {
-                        *reason.lock().unwrap() = Some(error);
+                        *reason.lock().unwrap_or_else(|e| e.into_inner()) = Some(error);
                         cancel.cancel();
                         break;
                     }
@@ -1421,8 +1465,8 @@ impl LocalSwarmManager {
         server.shutdown().await;
         let Some(inner) = weak.upgrade() else { return Ok(()); };
         let result = inner.discovery.lock().await.unadvertise(&advertisement).await;
-        let failure = reason.lock().unwrap().clone().or_else(|| result.as_ref().err().cloned());
-        if let Some(error) = failure { *inner.error.lock().unwrap() = Some(error); }
+        let failure = reason.lock().unwrap_or_else(|e| e.into_inner()).clone().or_else(|| result.as_ref().err().cloned());
+        if let Some(error) = failure { *inner.error.lock().unwrap_or_else(|e| e.into_inner()) = Some(error); }
         inner.offers.lock().await.remove(&id);
         result
     }
@@ -1471,6 +1515,8 @@ impl LocalSwarmManager {
     /// but offers and discovery must not retain a hidden network presence.
     #[cfg(target_os = "android")]
     pub async fn stop_sharing(&self) -> Result<(), String> {
+        self.inner.sharing_lifetime.lock().unwrap_or_else(|e| e.into_inner()).cancel();
+        let _seed_fence = self.inner.seed_setup_gate.write().await;
         let _operation = self.inner.operation.lock().await;
         let library_error = self.stop_library_locked().await.err();
         let offers = std::mem::take(&mut *self.inner.offers.lock().await);
@@ -1482,13 +1528,17 @@ impl LocalSwarmManager {
         if let Err(error) = self.inner.discovery.lock().await.shutdown().await {
             errors.push(error);
         }
+        let lifetime = self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        *self.inner.sharing_lifetime.lock().unwrap_or_else(|e| e.into_inner()) = lifetime.child_token();
         if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
     }
     pub async fn stop(&self) -> Result<Value, String> {
-        self.inner.lifetime.lock().unwrap().cancel();
+        self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner()).cancel();
+        let _seed_fence = self.inner.seed_setup_gate.write().await;
+        let _receive_fence = self.inner.receive_setup_gate.write().await;
         let _operation = self.inner.operation.lock().await;
         let mut errors: Vec<_> = self.stop_library_locked().await.err().into_iter().collect();
-        let ids: Vec<_> = self.inner.state.lock().unwrap().running.keys().cloned().collect();
+        let ids: Vec<_> = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).running.keys().cloned().collect();
         for id in ids { if let Err(e) = self.pause_locked(&id, false).await { errors.push(e); } }
         let offers = std::mem::take(&mut *self.inner.offers.lock().await);
         for (_, offer) in offers { if let Err(error) = Self::finish_offer(offer).await { errors.push(error); } }
@@ -1620,7 +1670,7 @@ fn validate_zim(directory: &Path, files: &[(String, File)], manifest: &Manifest,
 struct SourceSet {
     store: Arc<Store>,
     book: Book,
-    retained: Mutex<crate::archive_source::RetainedSource>,
+    retained: std::sync::RwLock<crate::archive_source::RetainedSource>,
     #[cfg(mobile)]
     stamps: Vec<Stamp>,
     manifest: Arc<Manifest>,
@@ -1630,11 +1680,14 @@ impl SourceSet {
         check_cancel(&cancel)?;
         let source_book = book.clone();
         if book.source_reference.is_some() {
+            let verify_cancel = cancel.clone();
             let (retained, identity) = readonly_verification(&cancel, move || {
                 let retained = crate::archive_source::retain(&source_book)?;
                 let identity = retained.identity()?;
                 let archive = retained.open()?;
-                if archive.metadata()?.id != source_book.metadata.id || !archive.check_integrity()? {
+                if archive.metadata_cancellable(&verify_cancel)?.id != source_book.metadata.id
+                    || !archive.check_integrity_cancellable(&verify_cancel, |_, _| {})?
+                {
                     return Err("Kiwix could not verify this archive. Choose the file again".into());
                 }
                 if retained.identity()? != identity { return Err("This file changed while Kiwix was checking it. Choose it again".into()); }
@@ -1702,7 +1755,7 @@ impl SourceSet {
         manifest.swarm_id = manifest.content_address();
         supported(&manifest)?;
         let manifest = Arc::new(manifest);
-        let source = Arc::new(Self { store, book, retained: Mutex::new(retained),
+        let source = Arc::new(Self { store, book, retained: std::sync::RwLock::new(retained),
             #[cfg(mobile)]
             stamps,
             manifest: manifest.clone() });
@@ -1720,7 +1773,7 @@ impl SourceSet {
     }
     fn unchanged(&self) -> Result<(), String> {
         self.principal()?;
-        let retained = self.retained.lock().map_err(|_| "LocalSwarm source unavailable")?;
+        let retained = self.retained.read().map_err(|_| "LocalSwarm source unavailable")?;
         retained.unchanged()?;
         #[cfg(mobile)]
         if let crate::archive_source::RetainedSource::Provider(_) = &*retained {
@@ -1732,23 +1785,47 @@ impl SourceSet {
         }
         Ok(())
     }
-    // Read the exact offered source. The shared transport hashes these copied
-    // bytes once before responding, including for Apple QUIC.
+    // Read the exact offered source concurrently using positional reads so all
+    // pipelined chunk readers run in parallel. The shared transport hashes
+    // these copied bytes once before responding, including for Apple QUIC.
     fn chunk(&self, index: u32) -> Result<Vec<u8>, String> {
         let measured = profile::start();
         self.unchanged()?;
         let (file, offset) = storage::chunk_position(&self.manifest, index)?;
         let mut bytes = vec![0u8; self.manifest.chunk_len(index)?];
         {
-            let mut retained = self.retained.lock().map_err(|_| "LocalSwarm source unavailable")?;
-            let file = &mut retained.files_mut()[file].1;
-            file.seek(SeekFrom::Start(offset)).map_err(err)?;
-            file.read_exact(&mut bytes).map_err(err)?;
+            let retained = self.retained.read().map_err(|_| "LocalSwarm source unavailable")?;
+            let file = &retained.files()[file].1;
+            read_exact_at(file, offset, &mut bytes)?;
         }
         self.unchanged()?;
         profile::record(0, bytes.len(), measured);
         Ok(bytes)
     }
+}
+
+fn read_exact_at(file: &File, mut offset: u64, mut buf: &mut [u8]) -> Result<(), String> {
+    while !buf.is_empty() {
+        #[cfg(unix)]
+        let result = {
+            use std::os::unix::fs::FileExt;
+            file.read_at(buf, offset)
+        };
+        #[cfg(windows)]
+        let result = {
+            use std::os::windows::fs::FileExt;
+            file.seek_read(buf, offset)
+        };
+        let count = match result {
+            Ok(0) => return Err("Unexpected end of offered LocalSwarm archive".into()),
+            Ok(count) => count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(err(error)),
+        };
+        offset = offset.checked_add(count as u64).ok_or("LocalSwarm read offset overflow")?;
+        buf = &mut buf[count..];
+    }
+    Ok(())
 }
 
 #[cfg(test)]

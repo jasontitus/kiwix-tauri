@@ -110,9 +110,9 @@ pub(crate) struct MobileState {
     pub reader_picture_in_picture: AtomicBool,
     #[cfg(target_os="android")]
     pub policy_attempt_generation: std::sync::atomic::AtomicU64,
-    #[cfg(target_os="android")]
+    #[cfg(mobile)]
     pub transfer_signal_generation: std::sync::atomic::AtomicU64,
-    #[cfg(target_os="android")]
+    #[cfg(mobile)]
     pub transfer_reconciled_generation: std::sync::atomic::AtomicU64,
     #[cfg(target_os = "android")]
     pub transfer_events_gate: tokio::sync::Mutex<()>,
@@ -159,9 +159,9 @@ impl Default for MobileState {
             reader_picture_in_picture: AtomicBool::new(false),
             #[cfg(target_os="android")]
             policy_attempt_generation: std::sync::atomic::AtomicU64::new(0),
-            #[cfg(target_os="android")]
+            #[cfg(mobile)]
             transfer_signal_generation: std::sync::atomic::AtomicU64::new(1),
-            #[cfg(target_os="android")]
+            #[cfg(mobile)]
             transfer_reconciled_generation: std::sync::atomic::AtomicU64::new(0),
             #[cfg(target_os="android")]
             transfer_events_gate: tokio::sync::Mutex::new(()),
@@ -635,23 +635,43 @@ fn map_work_pending(status: &Value) -> bool {
 
 async fn maintain(service: Arc<Service>) {
     let mut reconciliation = Reconciliation::new();
+    #[cfg(target_os = "ios")]
+    let mut local_transfer_busy = false;
     loop {
-        // iOS stays at 1 Hz only while the app owns foreground work. An idle
-        // background loop does not need a bridge/lock pass every second; a
-        // lifecycle or transfer signal wakes it immediately.
+        // iOS stays at 1 Hz only while the app owns active foreground transfer,
+        // map, import, local-sharing, or Live Activity work. An idle foreground
+        // or background loop backs off to 5 s; lifecycle or transfer signals
+        // wake it immediately via `service.mobile.wake` and a monotonic counter
+        // prevents losing a signal emitted mid-tick.
+        #[cfg(target_os = "ios")]
+        let ios_signal_pending = service.mobile_active()
+            && service.mobile.transfer_signal_generation.load(Ordering::SeqCst)
+                != service.mobile.transfer_reconciled_generation.load(Ordering::SeqCst);
+        #[cfg(not(target_os = "ios"))]
+        let ios_signal_pending = false;
         let idle_seconds = if cfg!(target_os = "ios") {
-            if service.mobile_active() { 1 } else { 5 }
+            #[cfg(target_os = "ios")]
+            let ios_busy = service.mobile_active()
+                && (reconciliation.busy || local_transfer_busy || !service.mobile_live_activity_idle());
+            #[cfg(not(target_os = "ios"))]
+            let ios_busy = false;
+            if ios_busy { 1 } else { 5 }
         } else {
             3
         };
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(idle_seconds)) => {},
-            _ = service.mobile.wake.notified() => {},
+        if !ios_signal_pending {
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(idle_seconds)) => {},
+                _ = service.mobile.wake.notified() => {},
+            }
         }
         if service.mobile_terminal() { break; }
         let generation = service.mobile.state.lock().map(|state| state.generation).unwrap_or(0);
         #[cfg(target_os = "ios")]
+        let ios_signal_generation = service.mobile.transfer_signal_generation.load(Ordering::SeqCst);
+        #[cfg(target_os = "ios")]
         let signaled = generation != reconciliation.generation
+            || ios_signal_generation != service.mobile.transfer_reconciled_generation.load(Ordering::SeqCst)
             || service.mobile.activation_retry.load(Ordering::SeqCst)
             || service.mobile.sharing_policy_retry.load(Ordering::SeqCst);
         #[cfg(target_os = "android")]
@@ -669,9 +689,12 @@ async fn maintain(service: Arc<Service>) {
         let foreground = service.mobile.state.lock().is_ok_and(|state| state.desired_active);
         #[cfg(target_os = "ios")]
         if foreground {
-            if let Err(message) = service.mobile_local_transfer_update().await {
-                error(&service, "local-transfers", message);
+            match service.mobile_local_transfer_update().await {
+                Ok(busy) => local_transfer_busy = busy,
+                Err(message) => error(&service, "local-transfers", message),
             }
+        } else {
+            local_transfer_busy = false;
         }
         // Runs while backgrounded too: the retirement grace period is exactly
         // when the shown transfer turns into "paused" on the lock screen. While
@@ -703,6 +726,8 @@ async fn maintain(service: Arc<Service>) {
                     }
                 }
                 reconciliation.observed(generation, busy);
+                #[cfg(target_os = "ios")]
+                service.mobile.transfer_reconciled_generation.store(ios_signal_generation, Ordering::SeqCst);
             }
         }
         // The update is a no-op without a foreground transfer; the idle tick

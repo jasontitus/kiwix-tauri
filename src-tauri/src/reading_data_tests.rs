@@ -803,3 +803,24 @@ fn projection_claim_keeps_one_owner_per_local_id() {
     assert_eq!(a.bookmarks.iter().filter(|b| b.id == "bookmark-two").count(), 1);
     assert_eq!(a.bookmarks.iter().find(|b| b.id == "bookmark-one").unwrap().note, "Edited");
 }
+
+#[test]
+fn unrelated_store_mutations_succeed_even_when_sync_positions_are_at_capacity() {
+    let mut state = device("Laptop");
+    edit(&mut state, |s| {
+        s.history = (0..MAX_RECORDS)
+            .map(|index| {
+                let mut entry = history(1.0);
+                entry.id = format!("history-{index}");
+                entry.path = format!("A/Article-{index}");
+                entry
+            })
+            .collect();
+    });
+    assert_eq!(positions(&state).len(), MAX_RECORDS);
+    let before = state.clone();
+    state.settings.theme = "dark".into();
+    capture(&before, &mut state).unwrap();
+    assert_eq!(state.settings.theme, "dark");
+    assert_eq!(positions(&state).len(), MAX_RECORDS);
+}

@@ -254,8 +254,29 @@ pub(super) async fn execute_transfer(
                 let action = *signal.borrow();
                 return stop_file(inner, id, &mut file, downloaded, action).await;
             }
-            result = download_request(inner, id, transfer.clone(), headers) => result?,
+            result = download_request(inner, id, transfer.clone(), headers) => match result {
+                Ok(response) => response,
+                Err(error)
+                    if error.starts_with("Requesting download:")
+                        && !error.contains("Unsafe HTTP redirect")
+                        && !error.contains("Too many HTTP redirects")
+                        && body_retries < BODY_RETRIES =>
+                {
+                    body_retries += 1;
+                    retry_delay = Some(segment_delay(body_retries, 0, None));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            },
         };
+        let status = response.status();
+        if (status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
+            && body_retries < BODY_RETRIES
+        {
+            body_retries += 1;
+            retry_delay = Some(segment_delay(body_retries, 0, Some(response.headers())));
+            continue;
+        }
         if response
             .headers()
             .get(CONTENT_ENCODING)
@@ -263,7 +284,6 @@ pub(super) async fn execute_transfer(
         {
             return Err("Encoded HTTP download cannot be resumed safely".into());
         }
-        let status = response.status();
         if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
             let total = response
                 .headers()
@@ -518,6 +538,9 @@ pub(super) async fn execute_transfer(
             if count == 0 {
                 break None;
             }
+            // Payload bytes are flowing; reset request-phase retry count so
+            // transient connect/5xx retries do not starve mid-stream recovery.
+            body_retries = 0;
             let chunk = &buffer[..count];
             let next_received = received
                 .checked_add(chunk.len() as u64)
@@ -768,7 +791,16 @@ pub(super) async fn execute_transfer(
             return Err(CHECKSUM_LENGTH_CHANGED.into());
         }
         hashed += count as u64;
-        hasher.update(&buffer[..count]);
+        // Run CPU-bound SHA-256 compression off the Tokio async worker thread.
+        let chunk = std::mem::take(&mut buffer);
+        let (next_hasher, next_buffer) = tokio::task::spawn_blocking(move || {
+            hasher.update(&chunk[..count]);
+            (hasher, chunk)
+        })
+        .await
+        .map_err(|error| format!("Checksum worker failed: {error}"))?;
+        hasher = next_hasher;
+        buffer = next_buffer;
         #[cfg(test)]
         {
             let delay = inner.hash_delay.load(Ordering::Acquire);

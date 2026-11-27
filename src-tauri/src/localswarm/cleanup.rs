@@ -105,27 +105,61 @@ type PreparedCleanup = (CleanupIntent, Vec<(usize, File)>, Vec<[u8; 32]>);
 /// the full content proof, and a digest is reused only when the kernel proves
 /// the bytes cannot have changed; any write, truncate or replacement changes
 /// the key and is re-hashed. Never populated where ctime is not authoritative.
-pub(super) type CleanupDigestCache = Mutex<HashMap<(u64, u64, u64, i128, i128), [u8; 32]>>;
+type CleanupDigestKey = (String, usize, u64, u64, u64, i128, i128);
+pub(super) type CleanupDigestCache = Mutex<HashMap<CleanupDigestKey, [u8; 32]>>;
 #[cfg(unix)]
 const CLEANUP_DIGEST_CACHE: usize = 256;
 #[cfg(unix)]
-fn digest_key(file: &File) -> Result<(u64, u64, u64, i128, i128), String> {
+const RACY_TIMESTAMP_MARGIN_NS: i128 = 1_000_000_000;
+#[cfg(unix)]
+fn unix_now_ns() -> Option<i128> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_nanos() as i128)
+}
+#[cfg(unix)]
+fn digest_key(saved: &StoredJob, index: usize, file: &File) -> Result<Option<CleanupDigestKey>, String> {
     use std::os::unix::fs::MetadataExt;
     let metadata = file.metadata().map_err(err)?;
-    Ok((metadata.dev(), metadata.ino(), metadata.len(),
-        i128::from(metadata.mtime()) * 1_000_000_000 + i128::from(metadata.mtime_nsec()),
-        i128::from(metadata.ctime()) * 1_000_000_000 + i128::from(metadata.ctime_nsec())))
+    // Refuse caching where timestamps are missing or coarse (zero sub-second
+    // part on FAT/exFAT/SMB/HFS+ mounts), or within the racy-timestamp margin
+    // where a same-tick rewrite could preserve the tuple.
+    if metadata.ctime() <= 0
+        || metadata.mtime() <= 0
+        || metadata.ctime_nsec() == 0
+        || metadata.mtime_nsec() == 0
+    {
+        return Ok(None);
+    }
+    let mtime_ns = i128::from(metadata.mtime()) * 1_000_000_000 + i128::from(metadata.mtime_nsec());
+    let ctime_ns = i128::from(metadata.ctime()) * 1_000_000_000 + i128::from(metadata.ctime_nsec());
+    let Some(now_ns) = unix_now_ns() else {
+        return Ok(None);
+    };
+    if mtime_ns.max(ctime_ns).saturating_add(RACY_TIMESTAMP_MARGIN_NS) > now_ns {
+        return Ok(None);
+    }
+    Ok(Some((
+        saved.manifest.swarm_id.clone(),
+        index,
+        metadata.dev(),
+        metadata.ino(),
+        metadata.len(),
+        mtime_ns,
+        ctime_ns,
+    )))
 }
 
 /// Prove a published member against the manifest and return its publication
-/// digest, reusing one already proven for the same inode state.
+/// digest, reusing one already proven for the same manifest member and inode state.
 fn published_digest(file: &mut File, saved: &StoredJob, index: usize, bytes: &mut Vec<u8>,
     cache: Option<&CleanupDigestCache>, cancel: &CancellationToken) -> Result<[u8; 32], String> {
     #[cfg(unix)]
-    let key = digest_key(file)?;
+    let key = if cache.is_some() { digest_key(saved, index, file)? } else { None };
     #[cfg(unix)]
-    if let Some(cache) = cache {
-        if let Some(digest) = cache.lock().unwrap_or_else(|error| error.into_inner()).get(&key).copied() {
+    if let (Some(cache), Some(key)) = (cache, key.as_ref()) {
+        if let Some(digest) = cache.lock().unwrap_or_else(|error| error.into_inner()).get(key).copied() {
             return Ok(digest);
         }
     }
@@ -134,10 +168,11 @@ fn published_digest(file: &mut File, saved: &StoredJob, index: usize, bytes: &mu
     let mut hash = Sha256::new();
     verify_published(file, saved, index, bytes, Some(&mut hash), cancel)?;
     let digest: [u8; 32] = hash.finalize().into();
-    // Only a state that survived the read may authorize a later reuse.
+    // Only a state that survived the read and satisfies the racy-timestamp
+    // separation guard may authorize a later reuse.
     #[cfg(unix)]
-    if let Some(cache) = cache {
-        if digest_key(file)? == key {
+    if let (Some(cache), Some(key)) = (cache, key) {
+        if digest_key(saved, index, file)?.as_ref() == Some(&key) {
             let mut cache = cache.lock().unwrap_or_else(|error| error.into_inner());
             if cache.len() >= CLEANUP_DIGEST_CACHE { cache.clear(); }
             cache.insert(key, digest);
@@ -146,8 +181,8 @@ fn published_digest(file: &mut File, saved: &StoredJob, index: usize, bytes: &mu
     Ok(digest)
 }
 
-fn prepare(saved: &StoredJob, cancel: &CancellationToken) -> Result<CleanupIntent, String> {
-    prepare_with_access(saved, true, cancel, None).map(|(intent, _, _)| intent)
+fn prepare(saved: &StoredJob, cancel: &CancellationToken, cache: Option<&CleanupDigestCache>) -> Result<CleanupIntent, String> {
+    prepare_with_access(saved, true, cancel, cache).map(|(intent, _, _)| intent)
 }
 
 fn prepare_with_access(saved: &StoredJob, writable: bool, cancel: &CancellationToken, cache: Option<&CleanupDigestCache>) -> Result<PreparedCleanup, String> {
@@ -179,7 +214,7 @@ fn prepare_with_access(saved: &StoredJob, writable: bool, cancel: &CancellationT
         }
         let (mut file, stamp) = owned_file(&directory, saved, index, writable)?;
         if published && writable {
-            verify_published(&mut file, saved, index, &mut bytes, None, cancel)?;
+            published_digest(&mut file, saved, index, &mut bytes, cache, cancel)?;
         } else if published {
             digests.push(published_digest(&mut file, saved, index, &mut bytes, cache, cancel)?);
         }
@@ -496,7 +531,7 @@ impl LocalSwarmManager {
         let intent = match &saved.cleanup {
             Some(intent) => intent.clone(),
             None => {
-                let intent = prepare(&saved, admission)?;
+                let intent = prepare(&saved, admission, Some(&self.inner.cleanup_digests))?;
                 check_cancel(admission)?;
                 self.save_cleanup(id, intent.clone())?;
                 intent
@@ -1059,7 +1094,7 @@ mod tests {
         let root = Temp::new();
         let (manager, id) = fixture(&root.0, 2, false, "failed");
         let receipt = saved(&manager, &id);
-        let intent = prepare(&receipt, &manager.cancel_token()).unwrap();
+        let intent = prepare(&receipt, &manager.cancel_token(), None).unwrap();
         manager.save_cleanup(&id, intent.clone()).unwrap();
         let staging = receipt.owned.parent.join(&receipt.owned.staging);
         let retained = root.0.join("retained-stage");
@@ -1083,7 +1118,7 @@ mod tests {
         let root = Temp::new();
         let (manager, id) = fixture(&root.0, 239, false, "failed");
         let receipt = saved(&manager, &id);
-        let intent = prepare(&receipt, &manager.cancel_token()).unwrap();
+        let intent = prepare(&receipt, &manager.cancel_token(), None).unwrap();
         manager.save_cleanup(&id, intent).unwrap();
         let parent = parent(&receipt).unwrap();
         let name = cleanup_name(&receipt).unwrap();
@@ -1180,13 +1215,37 @@ mod tests {
         let root = Temp::new();
         let (manager, id) = fixture(&root.0, 2, true, "complete");
         let receipt = saved(&manager, &id);
-        let intent = prepare(&receipt, &manager.cancel_token()).unwrap();
+        let intent = prepare(&receipt, &manager.cancel_token(), None).unwrap();
         manager.save_cleanup(&id, intent).unwrap();
         let file = receipt.owned.final_path("book.zim");
         fs::write(&file, b"useredit").unwrap();
         assert!(manager.terminal_owned_publications(&id).is_err());
         assert_eq!(fs::read(file).unwrap(), b"useredit");
         assert_eq!(manager.list().unwrap().len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cleanup_digest_cache_reuses_unchanged_file_and_invalidates_on_write() {
+        let root = Temp::new();
+        let (manager, id) = fixture(&root.0, 2, true, "complete");
+        let receipt = saved(&manager, &id);
+        let cache = CleanupDigestCache::default();
+        // Immediately after creation (<1s), the racy-timestamp guard refuses
+        // caching so a same-tick rewrite can never reuse a cached proof.
+        let _ = prepare(&receipt, &manager.cancel_token(), Some(&cache)).unwrap();
+        assert_eq!(cache.lock().unwrap().len(), 0);
+        // Once past the 1s racy-timestamp separation margin, sub-second Unix
+        // mounts populate and reuse the digest for the unchanged inode.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let _ = prepare(&receipt, &manager.cancel_token(), Some(&cache)).unwrap();
+        let cached = cache.lock().unwrap().len();
+        let _ = prepare(&receipt, &manager.cancel_token(), Some(&cache)).unwrap();
+        assert_eq!(cache.lock().unwrap().len(), cached);
+        // Mutating the file changes its inode mtime/ctime so cached proof is NOT reused.
+        let file = receipt.owned.final_path("book.zim");
+        fs::write(&file, b"tampered").unwrap();
+        assert!(prepare(&receipt, &manager.cancel_token(), Some(&cache)).is_err());
     }
 
     #[test]

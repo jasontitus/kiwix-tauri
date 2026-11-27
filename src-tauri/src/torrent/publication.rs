@@ -169,17 +169,33 @@ pub(super) fn publish_archives(
                 "Torrent publication source is no longer the exact singly linked regular file: {e}"
             )
         })?;
+        #[cfg_attr(windows, allow(unused_mut))]
         let mut source = verified_source.file().try_clone().map_err(display)?;
-        use std::io::{Seek, SeekFrom};
-        source.seek(SeekFrom::Start(0)).map_err(display)?;
         crate::storage::check_file_size(&record.directory, retained.size)
             .map_err(|e| format!("Cannot publish {}: {e}", path.display()))?;
         let mut magic = [0u8; 4];
-        source.read_exact(&mut magic).map_err(display)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::FileExt;
+            let mut offset = 0usize;
+            while offset < magic.len() {
+                let count = source.seek_read(&mut magic[offset..], offset as u64).map_err(display)?;
+                if count == 0 {
+                    return Err(format!("{} is not a ZIM archive", path.display()));
+                }
+                offset += count;
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            use std::io::{Seek, SeekFrom};
+            source.seek(SeekFrom::Start(0)).map_err(display)?;
+            source.read_exact(&mut magic).map_err(display)?;
+            source.seek(SeekFrom::Start(0)).map_err(display)?;
+        }
         if magic != [b'Z', b'I', b'M', 4] {
             return Err(format!("{} is not a ZIM archive", path.display()));
         }
-        source.seek(SeekFrom::Start(0)).map_err(display)?;
         if !verified_source.matches_file(&source).map_err(display)? {
             return Err(format!(
                 "Torrent publication source changed before copying: {}",
@@ -203,6 +219,28 @@ pub(super) fn publish_archives(
         }
         let result = (|| -> Result<(), String> {
             publication_directory_unchanged(&record.directory, &destination, &temporary.directory)?;
+            // On Windows, `try_clone()` shares the kernel FILE_OBJECT cursor
+            // with concurrent peer `seek_read` calls; read via explicit offsets
+            // so concurrent seeding cannot shift `ReceiptReader`'s position.
+            #[cfg(windows)]
+            let mut positional = {
+                struct PositionalReader<'a> {
+                    file: &'a fs::File,
+                    offset: u64,
+                }
+                impl std::io::Read for PositionalReader<'_> {
+                    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                        use std::os::windows::fs::FileExt;
+                        let count = self.file.seek_read(buf, self.offset)?;
+                        self.offset = self.offset.saturating_add(count as u64);
+                        Ok(count)
+                    }
+                }
+                PositionalReader { file: &source, offset: 0 }
+            };
+            #[cfg(windows)]
+            let mut checked = ReceiptReader::new(&mut positional, receipt);
+            #[cfg(not(windows))]
             let mut checked = ReceiptReader::new(&mut source, receipt);
             let sha256 = publication_digest(&mut checked, &mut output, retained.size, stop)?;
             checked.finish()?;

@@ -16,7 +16,7 @@ pub(super) struct ConfinedFactory {
     pub(super) sources: Arc<Mutex<HashMap<PathBuf, EngineSource>>>,
     pub(super) existing: bool,
     pub(super) stop: CancellationToken,
-    pub(super) gate: Arc<Mutex<()>>,
+    pub(super) gate: Arc<std::sync::RwLock<()>>,
     /// Parent prefixes this factory already created/validated and journaled.
     /// Without it every file re-opened and re-checked each ancestor directory.
     pub(super) dirs: Arc<Mutex<HashSet<PathBuf>>>,
@@ -364,7 +364,7 @@ impl TorrentStorage for ConfinedStorage {
         let _write = self
             .factory
             .gate
-            .lock()
+            .write()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Torrent manager has shut down");
@@ -403,14 +403,17 @@ impl TorrentStorage for ConfinedStorage {
         Ok(())
     }
     fn pread_exact(&self, id: usize, offset: u64, buf: &mut [u8]) -> anyhow::Result<()> {
-        let _read = self.factory.gate.lock()
+        let _read = self.factory.gate.read()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() { bail!("Sharing stopped because the app is closing"); }
-        let files = self
-            .files
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
-        match files.get(id).context("Unknown torrent file")? {
+        let file = {
+            let files = self
+                .files
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
+            files.get(id).context("Unknown torrent file")?.clone()
+        };
+        match file {
             Some(f) => f.pread_exact(offset, buf),
             None => {
                 buf.fill(0);
@@ -419,19 +422,22 @@ impl TorrentStorage for ConfinedStorage {
         }
     }
     fn pwrite_all(&self, id: usize, offset: u64, buf: &[u8]) -> anyhow::Result<()> {
-        let _write = self
+        let _read = self
             .factory
             .gate
-            .lock()
+            .read()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Torrent manager has shut down");
         }
-        let files = self
-            .files
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
-        match files.get(id).context("Unknown torrent file")? {
+        let file = {
+            let files = self
+                .files
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
+            files.get(id).context("Unknown torrent file")?.clone()
+        };
+        match file {
             Some(f) => f.pwrite_all(offset, buf),
             None if buf.iter().all(|b| *b == 0) => Ok(()),
             None => bail!("Nonzero torrent padding"),
@@ -441,16 +447,19 @@ impl TorrentStorage for ConfinedStorage {
         let _write = self
             .factory
             .gate
-            .lock()
+            .write()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Torrent manager has shut down");
         }
-        let files = self
-            .files
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
-        if let Some(f) = files.get(id).context("Unknown torrent file")? {
+        let file = {
+            let files = self
+                .files
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
+            files.get(id).context("Unknown torrent file")?.clone()
+        };
+        if let Some(f) = file {
             f.set_len(length)?;
         }
         Ok(())
@@ -484,7 +493,7 @@ pub(super) struct LibraryFactory {
     pub(super) path: PathBuf,
     pub(super) expected: ShareIdentity,
     pub(super) stop: CancellationToken,
-    pub(super) gate: Arc<Mutex<()>>,
+    pub(super) gate: Arc<std::sync::RwLock<()>>,
 }
 
 pub(super) struct LibraryStorage {
@@ -512,7 +521,7 @@ impl TorrentStorage for LibraryStorage {
         let _gate = self
             .factory
             .gate
-            .lock()
+            .write()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Torrent manager has shut down");
@@ -579,19 +588,21 @@ impl TorrentStorage for LibraryStorage {
         let _read = self
             .factory
             .gate
-            .lock()
+            .read()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Sharing stopped because the app is closing");
         }
-        let file = self
-            .file
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
-        let file = file.as_ref().context("Unknown torrent file")?;
         if id != 0 {
             bail!("Unknown torrent file");
         }
+        let file = {
+            let file = self
+                .file
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
+            file.as_ref().context("Unknown torrent file")?.clone()
+        };
         file.pread_exact(offset, buf)
     }
 
@@ -603,20 +614,22 @@ impl TorrentStorage for LibraryStorage {
         let _write = self
             .factory
             .gate
-            .lock()
+            .write()
             .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
         if self.factory.stop.is_cancelled() {
             bail!("Torrent manager has shut down");
         }
-        let file = self
-            .file
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
-        let file = file.as_ref().context("Unknown torrent file")?;
+        let file = {
+            let file = self
+                .file
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Sharing was interrupted. Turn sharing off and on again"))?;
+            file.as_ref().context("Unknown torrent file")?.clone()
+        };
         if id != 0 {
             bail!("Unknown torrent file");
         }
-        let metadata = cap_std::fs::Metadata::from_file(file)?;
+        let metadata = cap_std::fs::Metadata::from_file(&file)?;
         if metadata.len() != length
             || ShareIdentity::of(&metadata).map_err(anyhow::Error::msg)? != self.factory.expected
         {

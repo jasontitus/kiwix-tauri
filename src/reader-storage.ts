@@ -1276,7 +1276,7 @@ function adoptFreeze(
   source: WindowProxy,
   binding: RegisteredBinding,
 ): void {
-  if (lease.retiring || binding.retired) return;
+  if (lease.retiring || binding.retired || !binding.ready) return;
   const previous = lease.targets.get(binding);
   if (previous && previous.documentId === binding.documentId) return;
   lease.targets.set(binding, { source, documentId: binding.documentId });

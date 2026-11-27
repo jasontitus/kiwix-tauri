@@ -221,12 +221,11 @@ pub fn run(
     let mut cursors = Vec::new();
     let mut heap = BinaryHeap::new();
     let mut selected = Vec::with_capacity(limit as usize);
-    for (id, result) in archives {
-        check_cancel(cancel)?;
-        let page = result.and_then(|archive| {
-            let page = archive.rank_cancellable(query, fulltext, 0, first_page, show_snippets, cancel)?;
-            Ok((archive, page))
-        });
+    let initial = rank_initial_parallel(&archives, cancel, |archive, cancel| {
+        let page = archive.rank_cancellable(query, fulltext, 0, first_page, show_snippets, cancel)?;
+        Ok((archive.clone(), page))
+    })?;
+    for (id, page) in archives.into_iter().map(|(id, _)| id).zip(initial) {
         check_cancel(cancel)?;
         match page {
             Ok((archive, page)) => {
@@ -415,6 +414,76 @@ fn collect_combined(
     Ok(CombinedPage { hits, total, has_more, errors })
 }
 
+/// Evaluate one read-only operation per archive in bounded parallel threads
+/// while preserving the exact input archive order (deterministic ranking & error
+/// ordering) and stopping promptly on cancellation.
+fn rank_initial_parallel<T, F>(
+    archives: &[(String, Result<Archive, String>)],
+    cancel: &CancellationToken,
+    work: F,
+) -> Result<Vec<Result<T, String>>, String>
+where
+    T: Send,
+    F: Fn(&Archive, &CancellationToken) -> Result<T, String> + Sync,
+{
+    const MAX_WORKERS: usize = 4;
+    if archives.len() <= 1 {
+        let mut results = Vec::with_capacity(archives.len());
+        for (_, archive) in archives {
+            check_cancel(cancel)?;
+            results.push(
+                archive
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|archive| work(archive, cancel)),
+            );
+            check_cancel(cancel)?;
+        }
+        return Ok(results);
+    }
+    check_cancel(cancel)?;
+    let workers = archives.len().min(MAX_WORKERS);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let slots: Vec<std::sync::Mutex<Option<Result<T, String>>>> =
+        (0..archives.len()).map(|_| std::sync::Mutex::new(None)).collect();
+    let run_worker = || loop {
+        if cancel.is_cancelled() {
+            break;
+        }
+        let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if index >= archives.len() {
+            break;
+        }
+        let result = archives[index]
+            .1
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|archive| work(archive, cancel));
+        *slots[index]
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(result);
+    };
+    std::thread::scope(|scope| {
+        for _ in 1..workers {
+            // Fall back cleanly if the OS rejects creating a helper thread;
+            // the calling thread always drains the shared index queue.
+            let _ = std::thread::Builder::new()
+                .name("search-rank".into())
+                .spawn_scoped(scope, run_worker);
+        }
+        run_worker();
+    });
+    check_cancel(cancel)?;
+    Ok(slots
+        .into_iter()
+        .map(|slot| {
+            slot.into_inner()
+                .unwrap_or_else(|error| error.into_inner())
+                .unwrap_or_else(|| Err("Search was cancelled".into()))
+        })
+        .collect())
+}
+
 fn run_combined(
     archives: Vec<(String, Result<Archive, String>)>,
     query: &str,
@@ -425,14 +494,15 @@ fn run_combined(
 ) -> Result<Value, String> {
     let mut streams = Vec::new();
     let mut errors = Vec::new();
-    for (book, (id, archive)) in archives.iter().enumerate() {
+    let capabilities = rank_initial_parallel(&archives, cancel, |archive, cancel| {
+        archive.search_capabilities_cancellable(cancel)
+    })?;
+    for (book, ((id, _), cap)) in archives.iter().zip(capabilities).enumerate() {
         check_cancel(cancel)?;
-        match archive.as_ref().map_err(Clone::clone)
-            .and_then(|archive| archive.search_capabilities_cancellable(cancel)) {
+        match cap {
             Ok((fulltext, _)) => streams.extend(sources(book, fulltext)),
             Err(error) => errors.push(json!({"bookId":id,"error":error})),
         }
-        check_cancel(cancel)?;
     }
     let page = collect_combined(&streams, offset, limit, cancel, |source, offset, limit, cancel| {
         archives[source.book].1.as_ref().map_err(Clone::clone)?
@@ -1059,5 +1129,34 @@ mod tests {
         }).unwrap();
         assert_eq!(page["suggestions"][0]["bookId"], "0");
         assert!(page["nextToken"].is_string());
+    }
+
+    #[test]
+    fn parallel_multi_archive_search_is_deterministic_and_cancellable() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/indexed_search.zim");
+        let archive = Archive::open(&fixture).unwrap();
+        let scope = || -> Vec<(String, Result<Archive, String>)> {
+            (0..6)
+                .map(|index| (format!("book-{index}"), Ok(archive.clone())))
+                .collect()
+        };
+        let query = archive.title_batch(0, 1).unwrap().titles.into_iter().next().unwrap();
+        let cancel = CancellationToken::new();
+        let first = run(scope(), &query, Mode::Title, 0, 10, true, &cancel).unwrap();
+        let second = run(scope(), &query, Mode::Title, 0, 10, true, &cancel).unwrap();
+        assert_eq!(first, second);
+        let hits = first["hits"].as_array().unwrap();
+        assert!(hits.len() >= 6);
+        let combined_first = run(scope(), &query, Mode::Combined, 0, 10, true, &cancel).unwrap();
+        let combined_second = run(scope(), &query, Mode::Combined, 0, 10, true, &cancel).unwrap();
+        assert_eq!(combined_first, combined_second);
+        assert!(combined_first["hits"].as_array().unwrap().len() >= 6);
+
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        assert_eq!(
+            run(scope(), &query, Mode::Title, 0, 10, true, &cancelled),
+            Err("Search cancelled".into())
+        );
     }
 }

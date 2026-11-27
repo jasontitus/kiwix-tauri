@@ -5,12 +5,13 @@ fn fixture() -> std::path::PathBuf { std::path::PathBuf::from(env!("CARGO_MANIFE
 fn state(store: Arc<Store>) -> LibraryIndex {
     let cancellation = SharingCancellation::new();
     let archives = Arc::new(LibraryArchives::default());
+    let session_hosts = SessionHosts::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &SharingBinding::Loopback {});
     LibraryIndex {
-        token: "secret".into(), authorities: authorities(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], 8080), port: 8080,
+        token: "secret".into(), authorities: session_hosts.for_port(8080), port: 8080,
         store: store.clone(), cancellation: cancellation.clone(), archives: archives.clone(),
         availability: Arc::new(AvailabilityCache::default()),
         session: Arc::new(SharingSession::new(None, None).unwrap()),
-        hosts: LibraryHosts { token: "secret".into(), bind: IpAddr::V4(Ipv4Addr::LOCALHOST), binding: SharingBinding::Loopback {}, hosts: Arc::new(vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]), store, cancellation, archives, entries: Arc::new(Mutex::new(HashMap::new())), retired: Arc::new(Mutex::new(Vec::new())) },
+        hosts: LibraryHosts { token: "secret".into(), bind: IpAddr::V4(Ipv4Addr::LOCALHOST), binding: SharingBinding::Loopback {}, hosts: session_hosts, store, cancellation, archives, entries: Arc::new(Mutex::new(HashMap::new())), seq: Arc::new(std::sync::atomic::AtomicU64::new(0)), retired: Arc::new(Mutex::new(Vec::new())) },
     }
 }
 fn headers() -> HeaderMap {
@@ -169,7 +170,7 @@ async fn reader_endpoints_keep_host_origin_token_and_live_scope_authority() {
     let archive = Arc::new(Archive::open(&fixture()).unwrap());
     let selected = Index {
         token: "selected".into(),
-        authorities: authorities(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], 8080),
+        authorities: AcceptedAuthorities::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &SharingBinding::Loopback {}, 8080),
         entries: Arc::new(vec![IndexBook { id: book.metadata.id.clone(), title: book.metadata.title.clone(), port: 8081, archive: Arc::downgrade(&archive), fulltext: book.metadata.has_fulltext_index }]),
         store: store.clone(), cancellation: SharingCancellation::new(),
         library: state.clone(),
@@ -203,12 +204,31 @@ async fn repeated_no_match_suggestions_do_not_flush_the_archive_cache() {
         extra.push(other);
     }
     let count = 1 + extra.len();
-    assert!(count > LIBRARY_ARCHIVE_CACHE);
     store.update(|state| {
         state.books.extend(extra);
         Ok(())
     }).unwrap();
-    let state = state(store);
+    // Under the default desktop cache (32), all 9 fixtures stay warm with zero
+    // re-opens on the second suggestion pass.
+    if count <= LIBRARY_ARCHIVE_CACHE {
+        let warmed = state(store.clone());
+        for prefix in ["qzqxnoarticleone", "qzqxnoarticletwo"] {
+            let uri = format!("/secret/suggest?q={prefix}").parse().unwrap();
+            let response = library_request(State(warmed.clone()), Method::GET, uri, headers(), Body::empty()).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let value: Value = serde_json::from_slice(&bytes(response).await).unwrap();
+            assert_eq!(value["suggestions"], json!([]));
+            assert_eq!(value["errors"], json!([]));
+            assert_eq!(warmed.archives.opens(), count);
+        }
+        drop(warmed);
+    }
+    // When a library exceeds cache capacity, search misses still do not flush
+    // the warmed slots.
+    let small_cap = 8usize;
+    assert!(count > small_cap);
+    let mut state = state(store);
+    state.archives = Arc::new(LibraryArchives::with_capacity(small_cap));
     for (pass, prefix) in ["qzqxnoarticleone", "qzqxnoarticletwo"].into_iter().enumerate() {
         let uri = format!("/secret/suggest?q={prefix}").parse().unwrap();
         let response = library_request(State(state.clone()), Method::GET, uri, headers(), Body::empty()).await;
@@ -216,7 +236,7 @@ async fn repeated_no_match_suggestions_do_not_flush_the_archive_cache() {
         let value: Value = serde_json::from_slice(&bytes(response).await).unwrap();
         assert_eq!(value["suggestions"], json!([]));
         assert_eq!(value["errors"], json!([]));
-        assert_eq!(state.archives.opens(), count + pass * (count - LIBRARY_ARCHIVE_CACHE));
+        assert_eq!(state.archives.opens(), count + pass * (count - small_cap));
     }
     drop(state);
     std::fs::remove_dir_all(root).unwrap();
@@ -494,8 +514,8 @@ async fn selected_browser_activation_is_revoked_with_its_installation() {
     let archive = Arc::new(Archive::open(&fixture()).unwrap());
     let state = SharedBook {
         archive: BookArchive::Selected { archive: Arc::downgrade(&archive), owner: Arc::new(book.clone()), store: store.clone(), stamp: archive_stamp(&book).unwrap() },
-        token: "secret".into(), authorities: authorities(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], 8080),
-        port: 8080, store: store.clone(), cancellation: SharingCancellation::new(),
+        token: "secret".into(), authorities: AcceptedAuthorities::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &SharingBinding::Loopback {}, 8080),
+        port: 8080, store: store.clone(), cancellation: SharingCancellation::new(), activity: None,
     };
     let uri: Uri = "/.kiwix-access/secret".parse().unwrap();
     assert_eq!(shared_request(State(state.clone()), Method::GET, uri.clone(), headers()).await.status(), StatusCode::OK);

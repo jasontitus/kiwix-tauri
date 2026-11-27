@@ -37,6 +37,8 @@ impl Fixture {
             total: self.bytes.len() as u64,
             incoming: 0,
             incoming_total: 0,
+            speed: 0,
+            eta_seconds: None,
             error: None,
             path: None,
             history_dismissed: false,
@@ -2311,6 +2313,97 @@ async fn full_composer_rejects_a_symlink_substituted_after_checksum_validation()
         .unwrap()
         .file_type()
         .is_symlink());
+}
+
+#[tokio::test]
+async fn fetch_json_decodes_gzip_and_caches_matching_recipes() {
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::Write;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let fixture = Fixture::new();
+    let recipe = fixture.recipe();
+    let expected_md5 = recipe.md5.clone();
+    let plain = serde_json::to_vec(&recipe).unwrap();
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&plain).unwrap();
+    let gzipped = encoder.finish().unwrap();
+
+    // Oversized uncompressed payload that fits comfortably in gzip form.
+    let mut bomb_encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let oversized = vec![b' '; MAX_JSON + 1024];
+    bomb_encoder.write_all(&oversized).unwrap();
+    let bomb = bomb_encoder.finish().unwrap();
+    assert!(bomb.len() < MAX_JSON);
+
+    let hits = Arc::new(AtomicUsize::new(0));
+    let server_hits = hits.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                break;
+            };
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = socket.read(&mut buffer).await.unwrap();
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let head = String::from_utf8_lossy(&request);
+            let body = if head.starts_with("GET /bomb.json ") {
+                &bomb
+            } else {
+                server_hits.fetch_add(1, Ordering::SeqCst);
+                &gzipped
+            };
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            socket.write_all(header.as_bytes()).await.unwrap();
+            socket.write_all(body).await.unwrap();
+        }
+    });
+
+    let client = checked_client().unwrap();
+    let control = Control::new();
+    let url = Url::parse(&format!("http://{addr}/recipe-{}.json", Uuid::new_v4())).unwrap();
+    let first = fetch_recipe_cached(&client, url.clone(), &expected_md5, &control).await.unwrap();
+    let second = fetch_recipe_cached(&client, url.clone(), &expected_md5, &control).await.unwrap();
+    assert_eq!(first.md5, expected_md5);
+    assert_eq!(second.md5, expected_md5);
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "second fetch should hit the TTL cache");
+
+    // Mismatched expected MD5 must not reuse or populate the cache.
+    let mismatch = fetch_recipe_cached(&client, url.clone(), "different-md5", &control).await.unwrap();
+    assert_eq!(mismatch.md5, expected_md5);
+    assert_eq!(hits.load(Ordering::SeqCst), 2);
+
+    // Explicit cache clear must evict cached recipes so subsequent fetches hit the server.
+    clear_recipe_cache();
+    let refreshed = fetch_recipe_cached(&client, url.clone(), &expected_md5, &control).await.unwrap();
+    assert_eq!(refreshed.md5, expected_md5);
+    assert_eq!(hits.load(Ordering::SeqCst), 3);
+
+    // Pre-cancelled control must fail immediately even on a cached key.
+    let cancelled = Control::new();
+    cancelled.cancel.send_replace(true);
+    assert_eq!(
+        fetch_recipe_cached(&client, url, &expected_md5, &cancelled).await.err().as_deref(),
+        Some(CANCELLED)
+    );
+
+    // Gzip bomb exceeding MAX_JSON after decompression must be rejected.
+    let bomb_url = Url::parse(&format!("http://{addr}/bomb.json")).unwrap();
+    let error = fetch_json::<serde_json::Value>(&client, bomb_url, &control).await.unwrap_err();
+    assert!(error.contains("size limit"), "{error}");
+
+    server.abort();
 }
 
 // Windows: the private cleanup capability is removed through a handle that

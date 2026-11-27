@@ -4,7 +4,7 @@ This file lists the application's explicit and implicit state machines. For each
 
 "Explicit" means a status enum or string field. "Implicit" means state carried by flags, `Option` slots, refs, generations or locks.
 
-Initial audit snapshot: 2026-11-07, branch `claude/app-state-machines-doc-3zj50h`. The scope is the native service and job managers (`src-tauri/src`) and the React shell (`src`). Platform-native Swift/Kotlin code was read only where a Rust transition depends on it. The transition descriptions below incorporate the [November 17 review](reviews/2026-11-17/PROJECT-REVIEW.md).
+Initial audit snapshot: 2026-11-07, branch `claude/app-state-machines-doc-3zj50h`. The scope is the native service and job managers (`src-tauri/src`) and the React shell (`src`). Platform-native Swift/Kotlin code was read only where a Rust transition depends on it. The transition descriptions below incorporate the [November 17 review](reviews/2026-11-17/PROJECT-REVIEW.md), the [November 23 remediation](reviews/2026-11-23/PROJECT-REVIEW-REMEDIATION.md), and the [November 25 remediation](reviews/2026-11-25/PROJECT-REVIEW-REMEDIATION.md).
 
 ---
 
@@ -72,13 +72,13 @@ Invariant: a request carrying an older epoch is refused, so a retired origin can
 
 Every change is made on a clone and persisted atomically, then published in memory. **Durability-latched**: if the commit succeeded but the durability step failed, the in-memory state is replaced and `durability_error` refuses later writes until restart. `runtime_read_only` refuses all updates. While `settings.read_only` is set, the only allowed change is leaving read-only. Schema versions 1 and 2 are accepted; anything else is refused.
 
-### 1.5 Self-update install (`update.rs`, `update_admission.rs`)
+### 1.5 Self-update install (`update.rs`, `update_admission.rs`, `service.rs`)
 
-The `AdmissionGate` (an RwLock) ensures transfer and migration work holds read leases while install holds the write lease. Busy state is the `OPERATION` flag; `PENDING` holds a found update.
+The `AdmissionGate` (an RwLock) ensures transfer and migration work holds read leases while install holds the write lease. Busy state is the `OPERATION` flag; `PENDING` holds a found update. `ActiveDownloadCancel` registers a monotonic download token before `"downloading"` progress is emitted.
 
-Flow: blocker check → download → verify → install → **arm `RESTART_AFTER_QUIT`, call `app.exit(0)`, return** (Windows: the installer exits the process).
+Flow: blocker check → download (under privacy read lease only; cancellable via desktop `"update_cancel"`, which `Service::operation` handles before `privacy_gate` so a pending privacy writer cannot deadlock cancellation) → drop privacy read lease → acquire `update_admission.install()` → recheck privacy generation/mode/blocker → verify → install → **arm `RESTART_AFTER_QUIT`, call `app.exit(0)`, return** (Windows: the installer exits the process).
 
-The command returning releases the dispatch privacy read lease and the admission write lease. The preventable `ExitRequested` then runs the ordinary Quit path (§1.1). Only after `Service::shutdown` succeeds does it call `request_restart()`. Cancelling the shell flush clears the relaunch. A retryable failure after the shells have flushed preserves it.
+The command returning releases the dispatch privacy read lease and the admission write lease. The preventable `ExitRequested` then runs the ordinary Quit path (§1.1). Only after `Service::shutdown` succeeds does it call `request_restart()`. Cancelling the shell flush clears the relaunch. A retryable failure after the shells have flushed preserves it. User cancellation aborts an active download (`USER_DOWNLOAD_CANCELLED`) while `ActiveDownloadCancel` is registered—including a cancel racing with download completion before `"verifying"`—and once `ActiveDownloadCancel` is dropped on entering `"verifying"`, `"update_cancel"` returns `false` and cannot cancel verification or install.
 
 ### 1.6 Instance lock (`lib.rs`, `instance.rs`, `store.rs`)
 
@@ -86,11 +86,13 @@ The command returning releases the dispatch privacy read lease and the admission
 
 A secondary launch moves **Busy** → forward its argv to the owner, or show a dialog and exit 0. No reachable invalid state was found.
 
-### 1.7 Mobile foreground gate (`mobile_service.rs`, `src/api.ts`, `src/suspended-retry.ts`)
+### 1.7 Mobile foreground gate and maintenance cadence (`mobile.rs`, `mobile_service.rs`, `src/api.ts`, `src/suspended-retry.ts`)
 
 Native lifecycle flags: `active`, `desired_active`, `inactive` (Android: an obscuring Activity), `background`.
 
 A command is admitted only when `active && desired_active && !inactive`. Otherwise it fails with `KIWIX_SUSPENDED`.
+
+On iOS, the foreground `maintain()` loop polls at 1 s while reconciliation, local transfers, or Live Activity are active, and backs off to 5 s when completely idle. `transfer_signal_generation` and `transfer_reconciled_generation` record new transfer work and native signals so reconciliation wakes promptly when work starts without a background spin loop.
 
 Frontend `ForegroundQueue` waiter: **waiting** → woken by
 - **native**: `kiwix-mobile-active`, which is authoritative; or
@@ -141,9 +143,9 @@ Invariants:
 
 Start, resume, pause and cancel require `normal_writable` at dispatch entry (`dispatch.rs`), so they are refused in private mode.
 
-### 2.2 Segments and frontend state
+### 2.2 Segments, retries and frontend state
 
-Each segment range is unstarted, partial or full. `durable` is copied into the journal on each `SYNC_INTERVAL` and on stop.
+Each segment range is unstarted, partial or full. `durable` is copied into the journal on each `SYNC_INTERVAL` and on stop. Single-stream transfers retry transient connect errors (excluding deterministic redirect rejections) and HTTP `429`/`5xx` responses before checking `CONTENT_ENCODING` (so gzipped error responses still retry), and reset the body retry counter once payload bytes stream. SHA-256 verification runs on `spawn_blocking`.
 
 A published HTTP archive can carry a separate `historyWarning` when saving the completion record or synchronizing its publication directory fails. Downloads displays the warning separately. Opening an available archive still requires its matching imported receipt. Recovery can use the previously saved publication intent.
 
@@ -182,10 +184,11 @@ Invariants:
 
 **Running** ⇄ **Suspended** (mobile). Either → `shutdown` (terminal; the dispatch slot is `take()`n and lazily recreated).
 
-### 3.4 Journals
+### 3.4 Journals and storage concurrency
 
 - **Metadata:** none → `metadata_temporary` → +cleanup → final.
-- **Archive publication:** temporaries → intents → no-clobber rename → `completed_paths`.
+- **Archive publication:** temporaries → intents → no-clobber rename → `completed_paths`. Windows publication uses positional `seek_read` so concurrent seeding does not race on a shared file cursor.
+- **Storage locking:** `ConfinedStorage` uses an `RwLock` gate (`read()` running positional `pread_exact`/`pwrite_all` on a cloned `Arc<File>` outside the `files` mutex; `write()` for initialization, length changes, and fencing).
 - **Staging:** every file or directory the engine creates is journaled right after it is created. **If the journal write fails, the new empty entry is removed**, so later cleanup cannot meet an unjournaled entry of its own (fix F-14). Cleanup: capture journaled → payload unlinked.
 
 ---
@@ -196,7 +199,7 @@ Invariants:
 
 None → Running(Selected | Library) → Stopping (the server stays in the slot until shutdown returns) → None.
 
-Lock order: hotspot_use → sharing. No archive read starts after `SharingCancellation::cancel`.
+Lock order: `hotspot_use` → `sharing`. No archive read starts after `SharingCancellation::cancel`; `SharingCancellation::drain_native` runs on `spawn_blocking` during shutdown so async worker threads are not blocked. `SessionHosts` caches interface/host bindings with a 2 s TTL, and `LibraryHosts` caps per-book HTTP listeners via LRU eviction (while `LibraryArchives` bounds cached library archive handles).
 
 ### 4.2 Hotspot (`hotspot.rs`)
 
@@ -222,11 +225,11 @@ Invariant: the accepted `descriptor` (route plus cancel token) is the authority 
 
 - **Library offer:** None → Offered → rebind (new generation and cancel token) → None (stop, supervisor, quiesce, iOS admission off).
 - **Jobs:** queued → downloading → verifying → publishing → complete; also paused / cancelled / failed.
-- **Seeds:** inserted → supervised → `finish_offer`.
+- **Seeds & setup fencing:** inserted → supervised → `finish_offer`. Provider `SourceSet::prepare` and `start()` network dials run outside the `operation` mutex under read leases of `seed_setup_gate` / `receive_setup_gate` and `sharing_lifetime`, so `stop()` / `stop_sharing()` still fences in-flight setup without blocking unrelated commands. `SourceSet::retained` uses `RwLock` with positional `read_exact_at`. Cleanup caches file digests keyed by `(swarm_id, index, dev, ino, len, mtime_ns, ctime_ns)` with racy-timestamp separation.
 
 ### 4.5 Private sync (`private_sync*.rs`)
 
-The runtime is serialized and revision-fenced; `cancel()` bumps the revision.
+The runtime is serialized and revision-fenced; `cancel()` bumps the revision. On mobile, if the pinned `LocalBinding` route disappears (`endpoints()` fails on an automatic-sync tick or before reuse), the listener exits and the next activation retires any prior runtime/session/activity before rebinding.
 
 Pairing: waiting → verifying → local confirm → Confirm exchange → capacity preflight → Ready exchange → policy and capacity recheck → durable local enrollment → confirmed. A pre-commit error retires the session and preserves the previous enrollment. A confirmed session stays confirmed. Invitations are single-use.
 
@@ -249,10 +252,11 @@ Status: `queued, downloading, validating, composing, paused, failed, cancelled, 
 Invariants:
 - At most one active worker.
 - Every unresolved partial or publication stays in `owned_partial ∪ recovery_records`, so it keeps a monitored-path claim.
+- `MapJob` tracks throttled `speed` and `eta_seconds` (reset on startup, resume, completion, finish, and error backoff). `RECIPE_CACHE` retains at most 1 (mobile) / 2 (desktop) parsed `Arc<Recipe>` entries for 5 minutes and is cleared by `clear_recipe_cache()` on `MapManager::clear_cache()`, `MapManager::cancel()`, `CatalogRegistry::retire()`, `Service::shutdown()`, privacy changes in `save_settings`, and mobile background entry.
 
 ### 5.2 Import verification (`imports.rs`, in memory)
 
-Queued → Verifying → Ready / Failed. Ready → `ack` removes the entry. Failed → `retry` → Queued.
+Queued → Verifying → Ready / Failed. Ready → `ack` removes the entry. Failed → `retry` → Queued. Verification reports throttled, monotonic `verified_bytes` / `verified_total` across single-file and multi-file batches (reset on start and retry).
 
 `retire_acquisition` cancels the acquisition's entries, adds a tombstone and reports whether this call inserted it. **When the delete or forget it guarded is refused, the caller that inserted the tombstone (and only that caller) releases it, together with its cancelled entries, through `unretire_acquisition`** (fix F-18). Shutdown cancels all entries.
 
@@ -269,6 +273,10 @@ Queued → Verifying → Ready / Failed. Ready → `ack` removes the entry. Fail
 ### 5.5 Catalog cache (`catalog_cache.rs`)
 
 absent → stored. The conditional request gives 200 (save), 304 (refresh the record only if the response still matches the durable representation) or an offline stale result, and is fenced by the privacy generation.
+
+### 5.6 Kokoro local speech (`kokoro.rs`)
+
+Lock order: `cache_gate` → `state`. Audio publication (`publish_audio`) and cache eviction (`clean_cache`) hold `cache_gate` rather than `state`, so `stop()`, `pause()`, `seek()`, and `status()` do not block on WAV `sync_data()` or cache sweeps. `delete()`, `drain_download()`, privacy cutover, and shutdown fence `cache_gate`.
 
 ---
 
@@ -288,22 +296,25 @@ Refs: `refreshSerial`, `hydrated`, `observedPrivacy`, `privacyPending`, `snapsho
 
 Only the newest refresh applies (`id === refreshSerial`).
 
-### 6.2 Tabs and closed-tab stack
+### 6.2 Tabs, live scroll cache and closed-tab stack
 
 `latestSession` is updated synchronously before `setTabs` in every mutation.
 
 - `appendTab` → `insertTab` (`src/tab-stack.ts`) **refuses an ID that is already open**.
 - `undoClose` pops exactly the reopened tab (`removeReopened`). If that tab is already open, its stale stack entry is dropped and the tab is selected, so older closed tabs stay reachable (fix F-9).
 - `closeTab`: freeze reader storage → re-check → push onto the closed stack (at most 20) → resume.
+- Scroll-only updates stay in `liveScrolls` and are merged lazily via `mergeLiveScrolls(tabs)` (cached on `(tabs, liveScrollVersion)` and cleared on tab/session commits), avoiding full-shell React re-renders while preserving reference stability for `flushSession` (`session.tabs === latest.tabs`) and `checkpointTabIndex`.
 
-Invariant: tab IDs are unique within a window (React keys, workspace keys, `closeTab` filter, saved session).
+Invariant: tab IDs are unique within a window (React keys, workspace keys, `closeTab` filter, saved session). `<ReaderHost>` stays continuously mounted across tab switches (its `<PaneBoundary>` sits inside `<div key={epoch}>`) so tab switches never bypass `retireReaderDocuments`.
 
-### 6.3 Reader (`src/components/Reader.tsx`)
+### 6.3 Reader (`src/components/Reader.tsx`, `src/reader-bridge.js`)
 
 - `openSequence` / `navigationSequence` are re-checked after every await.
 - `searchSequence`.
 - `bookmarkWrite` single-flight.
 - `authorityRefresh {generation, pending}`: **a refresh resolving `false` (or throwing) resets the generation, so a stale frame can ask again** (fix F-10).
+- `HistoryDisclosure` closes on `Escape` only when no `<dialog open>` is present and stops propagation.
+- `reader-bridge.js` defers `selectionchange` scans during primary-pointer drags (`pointerSelecting`) and resets on `pointerup`, `pointercancel`, `mouseup`, `blur`, `visibilitychange` (hidden), `contextmenu`, `dragstart`, `dragend`, and mouse `buttons === 0`.
 
 ### 6.4 Session save, Quit and launch queue
 
@@ -313,7 +324,7 @@ Invariant: tab IDs are unique within a window (React keys, workspace keys, `clos
 
 ### 6.5 Reader storage leases (`src/reader-storage.ts`)
 
-`freezeLeases`, `retiringDocuments`, `suppressFreezeRestore` (sticky), `deferredRestores`, `quarantinedBindings` (terminal). Restore waits until there are no leases, no retirement and no quarantine. The double-close race was traced and is handled.
+`freezeLeases`, `retiringDocuments`, `suppressFreezeRestore` (sticky), `deferredRestores`, `quarantinedBindings` (terminal; never cleared by `retireReaderStorageGeneration`). `adoptFreeze` skips pre-ready registered iframes (`!binding.ready`) rather than waiting 5 s. Restore waits until there are no leases, no retirement and no quarantine. The double-close race was traced and is handled.
 
 ---
 

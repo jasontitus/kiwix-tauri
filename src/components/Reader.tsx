@@ -652,8 +652,35 @@ function IconButton({
 
 function HistoryDisclosure({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      const details = detailsRef.current;
+      if (details?.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        details.open = false;
+        details.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
   return (
     <details
+      ref={detailsRef}
       className="rw-history-menu"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -1393,7 +1420,7 @@ export default function Reader(props: ReaderProps) {
         // The API boundary retries a suspended refresh on resume; it is not a
         // user-visible failure even if the retry is refused again.
         if (!isSuspendedError(value)) setError(message(value));
-        latest.current.onError(value);
+        latest.current.onError(value, undefined, false);
       })
       .finally(() => {
         authorityRefresh.current = {
@@ -1729,9 +1756,29 @@ export default function Reader(props: ReaderProps) {
     },
     [send],
   );
+  // Derive a content-addressed key for only the highlights belonging to the
+  // active passage document so unrelated snapshot refreshes never tear down
+  // and re-anchor highlights inside the article iframe.
+  const passageHighlightsKey = useMemo(() => {
+    if (!passageDocument) return "";
+    return JSON.stringify(
+      applicablePassages(bookmarks, passageDocument)
+        .slice(0, MAX_DOCUMENT_HIGHLIGHTS)
+        .map(({ bookmark, highlight }) => [
+          bookmark.id,
+          highlight.id,
+          highlight.documentPath,
+          highlight.exact,
+          highlight.prefix,
+          highlight.suffix,
+          highlight.start,
+          highlight.end,
+        ]),
+    );
+  }, [bookmarks, passageDocument]);
   useEffect(() => {
     if (frameReady && passageDocument) sendHighlights(passageDocument);
-  }, [bookmarks, frameReady, passageDocument, sendHighlights]);
+  }, [frameReady, passageDocument, passageHighlightsKey, sendHighlights]);
   useEffect(() => {
     setCommentDrafts({});
     setPassageSelection(null);

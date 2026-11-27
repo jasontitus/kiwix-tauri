@@ -53,7 +53,7 @@ use std::{
     future::Future,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -260,6 +260,10 @@ pub struct MapJob {
     pub total: u64,
     pub incoming: u64,
     pub incoming_total: u64,
+    #[serde(default)]
+    pub speed: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eta_seconds: Option<u64>,
     pub error: Option<String>,
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -642,6 +646,61 @@ pub async fn fetch_catalog(url: &str) -> Result<MapCatalog, String> {
 }
 
 /// Read only catalog/recipe JSON; never open source payload, cache or job state.
+#[cfg(mobile)]
+const RECIPE_CACHE_MAX: usize = 1;
+#[cfg(not(mobile))]
+const RECIPE_CACHE_MAX: usize = 2;
+const RECIPE_CACHE_TTL: Duration = Duration::from_secs(300);
+
+type RecipeCacheEntry = ((String, String), Instant, Arc<Recipe>);
+static RECIPE_CACHE: LazyLock<Mutex<Vec<RecipeCacheEntry>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
+
+pub(crate) fn clear_recipe_cache() {
+    RECIPE_CACHE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clear();
+}
+
+async fn fetch_recipe_cached(
+    client: &reqwest::Client,
+    url: Url,
+    expected_md5: &str,
+    control: &Control,
+) -> Result<Arc<Recipe>, String> {
+    control.check()?;
+    let key = (url.as_str().to_owned(), expected_md5.to_owned());
+    let now = Instant::now();
+    {
+        let mut cache = RECIPE_CACHE
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        cache.retain(|(_, at, _)| now.saturating_duration_since(*at) < RECIPE_CACHE_TTL);
+        if let Some(index) = cache.iter().position(|(cached_key, _, _)| *cached_key == key) {
+            let entry = cache.remove(index);
+            let recipe = entry.2.clone();
+            cache.push(entry);
+            return Ok(recipe);
+        }
+    }
+    let recipe = Arc::new(fetch_json::<Recipe>(client, url, control).await?);
+    if recipe.md5 == expected_md5 {
+        let mut cache = RECIPE_CACHE
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let now = Instant::now();
+        cache.retain(|(cached_key, at, _)| {
+            *cached_key != key && now.saturating_duration_since(*at) < RECIPE_CACHE_TTL
+        });
+        while cache.len() >= RECIPE_CACHE_MAX {
+            cache.remove(0);
+        }
+        cache.push((key, now, recipe.clone()));
+    }
+    Ok(recipe)
+}
+
 pub async fn fetch_recipe_metadata(
     url: &str,
     region_id: &str,
@@ -660,9 +719,13 @@ pub async fn fetch_recipe_metadata(
             .ok_or("Selected map region is not in the catalog")?;
         let version = region.menu.iter().find(|version| version.lang == language)
             .ok_or("Selected map language is not offered")?;
-        let recipe: Recipe = fetch_json(
-            &client, recipe_url(&checked_url(&url)?, &version.recipe)?, &worker_control,
-        ).await?;
+        let recipe = fetch_recipe_cached(
+            &client,
+            recipe_url(&checked_url(&url)?, &version.recipe)?,
+            &version.md5,
+            &worker_control,
+        )
+        .await?;
         if !recipe.matches_catalog(&region, version) {
             return Err("Recipe does not match the selected catalog version".into());
         }
@@ -740,6 +803,7 @@ impl CatalogRegistry {
 
     #[cfg(any(mobile, test))]
     async fn retire(&self) -> Result<(), String> {
+        clear_recipe_cache();
         let _retirement = self.retirement.lock().await;
         let mut tasks = {
             let mut workers = self.workers.lock().map_err(|_| "Catalog ownership lock poisoned")?;
@@ -930,6 +994,7 @@ pub(crate) mod evaluation {
             id: "android-evaluation".into(), status: "validating".into(), created_at: None,
             region_id: "synthetic".into(), language: "evaluation".into(),
             written: 0, total: recipe.size, incoming: 0, incoming_total: 0,
+            speed: 0, eta_seconds: None,
             error: None, path: None, owned_partial: None, recovery_records: Vec::new(),
             blocks_total: None, blocks_ready: None, blocks_downloaded: None, decision: None,
             resumable: false, resume: None, published: None,

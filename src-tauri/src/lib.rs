@@ -665,6 +665,12 @@ async fn open_paths(
         .collect::<Result<Vec<_>, String>>()?;
     // Queue before waking the shell: successful event emission is not delivery.
     // Startup has no native window yet and belongs to the default main shell.
+    if locations.is_empty() {
+        if imported["errors"].as_array().is_some_and(|e| !e.is_empty()) {
+            eprintln!("Archive open errors: {}", imported["errors"]);
+        }
+        return Ok(());
+    }
     if emit {
         let (label, window) = desktop_launch_target(&service)?;
         service
@@ -706,10 +712,13 @@ async fn maintenance(service: Arc<Service>) {
             _ = interval.tick() => {},
             _ = service.imports_changed() => {},
         }
-        let Ok(state) = service.store.read() else {
+        if service.ensure_running().is_err() {
+            break;
+        }
+        let Ok(read_only) = service.store.read_only() else {
             continue;
         };
-        if state.settings.read_only {
+        if read_only {
             continue;
         }
         if let Err(error) = service.clone().dispatch("downloads", json!({})).await {
@@ -1150,13 +1159,9 @@ fn run_application(options: Options) -> Result<(), String> {
             // A slow or failed frontend bundle must show the placeholder and
             // then diagnostics, never an unexplained white window.
             crate::windows::watch_startup(app.handle(), "main");
-            tauri::async_runtime::block_on(open_paths(
-                service.clone(),
-                options.paths,
-                options.article,
-                false,
-                None,
-            ))?;
+            let startup_generation = service.launch_generation();
+            let startup_paths = options.paths;
+            let startup_article = options.article;
             // A lookup only prefills a search: failing to queue it must never
             // stop the app from starting.
             if let Some(query) = options.search {
@@ -1191,6 +1196,32 @@ fn run_application(options: Options) -> Result<(), String> {
                 if let Err(error) = crate::windows::restore_native_tabs(app.handle(), &state.windows) {
                     service.note_startup_warning(format!("Window groups could not be restored: {error}"));
                 }
+            }
+            // Run CLI archive imports off the setup main thread so large files
+            // cannot freeze the UI or trip the 10 s startup watchdog. Capture
+            // the launch generation synchronously above and target "main".
+            if !startup_paths.is_empty() {
+                let startup_service = service.clone();
+                let main_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = open_paths(
+                        startup_service.clone(),
+                        startup_paths,
+                        startup_article,
+                        false,
+                        Some(startup_generation),
+                    )
+                    .await
+                    {
+                        eprintln!("Opening startup archives: {error}");
+                        startup_service.note_startup_warning(format!(
+                            "Could not open startup archive: {error}"
+                        ));
+                    }
+                    if let Some(window) = main_app.get_webview_window("main") {
+                        let _ = window.emit("kiwix-open", ());
+                    }
+                });
             }
             for (options, cwd) in pending {
                 spawn_secondary_paths(app.handle(), service.clone(), options, cwd);

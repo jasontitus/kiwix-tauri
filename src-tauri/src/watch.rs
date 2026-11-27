@@ -621,7 +621,14 @@ impl FolderWatch {
             }
         }
         if let Some(thread) = self.thread.take() {
-            let _ = tokio::task::spawn_blocking(move || thread.join()).await;
+            // A watcher blocked on a stalled network volume must not hang Quit
+            // indefinitely; bound the join and let an unresponsive OS thread
+            // detach as in Drop.
+            let _ = tokio::time::timeout(
+                DRAIN_LIMIT,
+                tokio::task::spawn_blocking(move || thread.join()),
+            )
+            .await;
         }
     }
 }

@@ -149,6 +149,13 @@ impl MapManager {
                 job.retain_current_path();
                 changed = true;
             }
+            if job.incoming != 0 || job.incoming_total != 0 || job.speed != 0 || job.eta_seconds.is_some() {
+                job.incoming = 0;
+                job.incoming_total = 0;
+                job.speed = 0;
+                job.eta_seconds = None;
+                changed = true;
+            }
             if let Some(warning) = recovery_warning {
                 job.error = Some(match job.error.take() {
                     Some(error) => format!("{error}; {warning}"),
@@ -461,6 +468,8 @@ impl MapManager {
             total: 0,
             incoming: 0,
             incoming_total: 0,
+            speed: 0,
+            eta_seconds: None,
             error: None,
             path: None,
             blocks_total: None, blocks_ready: None, blocks_downloaded: None,
@@ -624,6 +633,8 @@ impl MapManager {
         job.error = None;
         job.incoming = 0;
         job.incoming_total = 0;
+        job.speed = 0;
+        job.eta_seconds = None;
         persist(&self.inner.state_path, &job)?;
         state.job = Some(job.clone());
         state.admission = state.admission.wrapping_add(1);
@@ -649,6 +660,7 @@ impl MapManager {
     }
 
     pub async fn cancel(&self) -> Result<(), String> {
+        clear_recipe_cache();
         let (active, admission) = {
             let mut state = self.inner.state.lock().map_err(|_| "Map state lock poisoned")?;
             // Retirement joins the publication linearization point before
@@ -923,6 +935,7 @@ impl MapManager {
     }
 
     pub fn clear_cache(&self) -> Result<(), String> {
+        clear_recipe_cache();
         {
             let mut state = self
                 .inner
@@ -1075,6 +1088,8 @@ impl MapManager {
         checkpoint.written = checkpoint.total;
         checkpoint.incoming = 0;
         checkpoint.incoming_total = 0;
+        checkpoint.speed = 0;
+        checkpoint.eta_seconds = None;
         checkpoint.error = None;
         if let Some(mut record) = checkpoint.owned_partial.clone() {
             if let Some(publication) = record.publication.take() {
@@ -1107,6 +1122,8 @@ impl MapManager {
                 job.append_recovery_warning();
                 job.incoming = 0;
                 job.incoming_total = 0;
+                job.speed = 0;
+                job.eta_seconds = None;
                 if let Some(resume) = &job.resume {
                     job.written = resume.written;
                     job.blocks_ready = Some(resume.blocks.iter().filter(|state| **state & 1 != 0).count() as u64);
@@ -1164,9 +1181,10 @@ impl MapManager {
         let proxy = checked_url(proxy_url)?;
         let recipe_source = recipe_url(&index, &version.recipe)?;
         let client = self.inner.client(control).await?;
-        let recipe: Recipe = fetch_json(
+        let recipe = fetch_recipe_cached(
             client,
             recipe_source,
+            &version.md5,
             control,
         )
         .await?;
@@ -1201,12 +1219,13 @@ impl MapManager {
         &self,
         id: &str,
         control: &Control,
-        recipe: Recipe,
+        recipe: impl Into<Arc<Recipe>>,
         base_url: &str,
         proxy: &Url,
         destination: &Path,
         candidates: Vec<PathBuf>,
     ) -> Result<PathBuf, String> {
+        let recipe = recipe.into();
         self.update(id, |j| {
             j.status = "validating".into();
             j.total = recipe.size;

@@ -631,12 +631,39 @@ fn capture_positions(before: &State, after: &State, sync: &mut ReadingSync, boot
 /// History removal, visitedAt-only touches and retention never delete positions.
 pub fn capture(before: &State, after: &mut State) -> Result<(), String> {
     if after.settings.private_mode || after.settings.read_only { return Ok(()); }
+    let admitting_bookmarks = !after.reading_sync.tracked_categories.bookmarks
+        && after.reading_sync.enabled && after.reading_sync.categories.bookmarks;
+    let admitting_positions = !after.reading_sync.tracked_categories.positions
+        && after.reading_sync.enabled && after.reading_sync.categories.positions;
+    let track_bookmarks = after.reading_sync.tracked_categories.bookmarks || admitting_bookmarks;
+    let track_positions = after.reading_sync.tracked_categories.positions || admitting_positions;
+    if !track_bookmarks && !track_positions { return Ok(()); }
+    // Unrelated normal-mode Store mutations (settings, zoom, storage, geometry)
+    // cannot alter tracked reading data once bookmarks match their projection
+    // and no newly imported book can enrich a missing `legacy_book` descriptor.
+    // Skip cloning `ReadingSync` and repeating `capture`'s full validation pass
+    // (`Store::update` still validates `state.reading_sync` at the profile boundary).
+    let needs_legacy_enrichment = track_bookmarks
+        && before.books != after.books
+        && after.bookmarks.iter().any(|b| {
+            b.legacy_book.is_none()
+                && after.books.iter().any(|book| book.metadata.id == b.book_id)
+        });
+    if !before.settings.private_mode && !before.settings.read_only
+        && !admitting_bookmarks && !admitting_positions
+        && !needs_legacy_enrichment
+        && before.reading_sync == after.reading_sync
+        && (!track_bookmarks
+            || (before.bookmarks == after.bookmarks
+                && projected_bookmarks(&after.reading_sync)
+                    .is_ok_and(|projected| projected == after.bookmarks)))
+        && (!track_positions || position_producers(before) == position_producers(after))
+    {
+        return Ok(());
+    }
     let mut sync = after.reading_sync.clone();
-    let admitting_bookmarks = !sync.tracked_categories.bookmarks && sync.enabled && sync.categories.bookmarks;
-    let admitting_positions = !sync.tracked_categories.positions && sync.enabled && sync.categories.positions;
-    sync.tracked_categories.bookmarks |= sync.enabled && sync.categories.bookmarks;
-    sync.tracked_categories.positions |= sync.enabled && sync.categories.positions;
-    if !sync.tracked_categories.bookmarks && !sync.tracked_categories.positions { return Ok(()); }
+    sync.tracked_categories.bookmarks = track_bookmarks;
+    sync.tracked_categories.positions = track_positions;
     if sync.tracked_categories.bookmarks {
         let before_groups = bookmark_groups(before)?;
         let after_groups = bookmark_groups(after)?;

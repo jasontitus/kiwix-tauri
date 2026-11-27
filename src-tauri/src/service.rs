@@ -732,23 +732,16 @@ impl Service {
         store.set_runtime_mode(private, read_only)?;
         #[cfg(not(mobile))]
         crate::crash::set_read_only(store.read_only()?);
-        // Persisted validation outcomes seed the crash reporter so a later
-        // reader panic can name the archive's last known state without a new
-        // filesystem read on the panic path.
-        if let Ok(state) = store.read() {
-            for book in &state.books {
-                if let Some(record) = book.integrity.as_ref().filter(|record| record.matches(book)) {
-                    crate::crash::note_archive_validation(
-                        &book.metadata.id,
-                        &book.installation_id,
-                        match record.status {
-                            crate::integrity::IntegrityStatus::Valid => "valid",
-                            crate::integrity::IntegrityStatus::Invalid => "invalid",
-                        },
-                    );
-                }
-            }
-        }
+        let books_with_integrity: Vec<_> = store
+            .read()
+            .map(|state| {
+                state
+                    .books
+                    .into_iter()
+                    .filter(|book| book.integrity.is_some() && book.source_reference.is_none())
+                    .collect()
+            })
+            .unwrap_or_default();
         let settings = store.settings()?;
         let load_warnings = store.load_warnings().to_vec();
         #[cfg(mobile)]
@@ -881,6 +874,36 @@ impl Service {
         });
         #[cfg(mobile)]
         if !private && !read_only { service.kokoro.ensure_performance_probe(); }
+        // Seed persisted local-file validation status off the startup path so
+        // slow/network volumes never stall launch. Stops promptly on shutdown,
+        // skips active Windows moves, and never overwrites a live validation.
+        if !books_with_integrity.is_empty() {
+            let weak = Arc::downgrade(&service);
+            let _ = std::thread::Builder::new()
+                .name("kiwix-crash-seed".into())
+                .spawn(move || {
+                    for book in &books_with_integrity {
+                        let Some(service) = weak.upgrade() else { break };
+                        if service.stopping.load(Ordering::SeqCst)
+                            || service.migration_active.load(Ordering::SeqCst) != 0
+                        {
+                            break;
+                        }
+                        if let Some(record) =
+                            book.integrity.as_ref().filter(|record| record.matches(book))
+                        {
+                            crate::crash::seed_archive_validation(
+                                &book.metadata.id,
+                                &book.installation_id,
+                                match record.status {
+                                    crate::integrity::IntegrityStatus::Valid => "valid",
+                                    crate::integrity::IntegrityStatus::Invalid => "invalid",
+                                },
+                            );
+                        }
+                    }
+                });
+        }
         Ok(service)
     }
     pub fn mark_frontend_ready(&self, label: &str) -> Result<(), String> {
@@ -1431,7 +1454,10 @@ impl Service {
         self.retire_private_sync();
         self.nearby.cancel_all();
         {
-            let mut admission = self.localswarm_admission.lock().unwrap();
+            let mut admission = self
+                .localswarm_admission
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
             admission.retirements += 1;
             admission.generation += 1;
             admission.cancel.cancel();
@@ -1601,8 +1627,12 @@ impl Service {
                 cache.push_back(item);
                 slot
             } else {
+                #[cfg(mobile)]
+                const ARCHIVE_CACHE_SLOTS: usize = 4;
+                #[cfg(not(mobile))]
+                const ARCHIVE_CACHE_SLOTS: usize = 16;
                 let slot = Arc::new(OnceLock::new());
-                if cache.len() >= 16 {
+                if cache.len() >= ARCHIVE_CACHE_SLOTS {
                     cache.pop_front();
                 }
                 cache.push_back(CachedArchive {
@@ -2571,6 +2601,12 @@ impl Service {
             let label = args.get("__windowLabel").and_then(Value::as_str).unwrap_or("main");
             return self.search_control(label, command, &args);
         }
+        // Cancelling an in-flight desktop update download must never queue
+        // behind a privacy writer waiting for that download's read lease.
+        #[cfg(desktop)]
+        if command == "update_cancel" {
+            return Ok(Value::Bool(crate::update::cancel_download()));
+        }
         let label = args
             .get("__windowLabel")
             .and_then(Value::as_str)
@@ -2870,6 +2906,7 @@ impl Service {
             if let Err(error) = self.mobile_local_transfer_update_locked().await {
                 crate::mobile::error(&self, "local-transfers", error);
             }
+            self.mobile.transfer_signal_generation.fetch_add(1, Ordering::SeqCst);
             self.mobile.wake.notify_waiters();
         }
         // Location and catalog waits hold no global lease. Their diagnostics
@@ -3549,6 +3586,7 @@ impl Service {
                 errors.push(format!("Stopping LocalSwarm: {error}"));
             }
         }
+        crate::maps::clear_recipe_cache();
         let maps = self.maps.lock().unwrap_or_else(|error| {
             errors.push("Map manager unavailable".into());
             error.into_inner()

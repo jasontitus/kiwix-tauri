@@ -76,10 +76,8 @@ import {
   type MediaPlaybackPosition,
 } from "./reader-media-checkpoint";
 import Library from "./components/Library";
-import CrashReportPrompt from "./components/CrashReport";
-import IncomingArchiveDialog, { type IncomingArchiveRequest } from "./components/IncomingArchiveDialog";
+import type { IncomingArchiveRequest } from "./components/IncomingArchiveDialog";
 import { retryFailedSettings, SettingsDirectoryMigration, SettingsPolicyConfirmation } from "./components/SettingsAutosave";
-import UnifiedSearch from "./components/UnifiedSearch";
 import "./tabs.css";
 import Reader, {
   createReaderWorkspace,
@@ -89,13 +87,16 @@ import Reader, {
 } from "./components/Reader";
 import { ErrorNotice, Loading, Modal, confirmAction, errorText } from "./components/UI";
 
-// Keep secondary surfaces out of the reader/library startup module graph.
+// Keep secondary surfaces and dialogs out of the reader/library startup module graph.
 const Catalog = lazy(() => import("./components/Catalog"));
 const Downloads = lazy(() => import("./components/Downloads"));
 const LocalSwarmControls = lazy(() => import("./components/LocalSwarmControls"));
 const Maps = lazy(() => import("./components/Maps"));
 const Settings = lazy(() => import("./components/Settings"));
 const Collections = lazy(() => import("./components/Collections"));
+const CrashReportPrompt = lazy(() => import("./components/CrashReport"));
+const IncomingArchiveDialog = lazy(() => import("./components/IncomingArchiveDialog"));
+const UnifiedSearch = lazy(() => import("./components/UnifiedSearch"));
 
 type Pane =
   | "library"
@@ -291,7 +292,7 @@ function ReaderHost({ reader }: { reader: ReactElement | null }) {
         />
       )}
       <div key={epoch} style={{ display: "contents" }} inert={Boolean(failure)}>
-        {retained.current}
+        <PaneBoundary>{retained.current}</PaneBoundary>
       </div>
     </div>
   );
@@ -584,7 +585,41 @@ export default function App() {
   const observedPrivacy = useRef<{ mode: boolean; generation: number } | null>(
     null,
   );
-  const current = tabs.find((tab) => tab.id === activeTab);
+  // Live per-tab scroll positions updated during active reading without
+  // re-rendering the entire App tree; cached by (base tabs, scroll version) so
+  // unrelated App renders preserve referential stability for flushSession and
+  // checkpointTabIndex, and flushed into `tabs` state on tab switch/close/nav.
+  const liveScrolls = useRef(new Map<string, number>());
+  const liveScrollVersion = useRef(0);
+  const mergedTabsCache = useRef<{ base: Tab[]; version: number; merged: Tab[] }>({
+    base: tabs,
+    version: 0,
+    merged: tabs,
+  });
+  const mergeLiveScrolls = (list: Tab[]): Tab[] => {
+    const cache = mergedTabsCache.current;
+    if (cache.base === list && cache.version === liveScrollVersion.current)
+      return cache.merged;
+    let merged = list;
+    if (liveScrolls.current.size) {
+      let changed = false;
+      const next = list.map((item) => {
+        const scroll = liveScrolls.current.get(item.id);
+        if (scroll === undefined || scroll === item.scroll) return item;
+        changed = true;
+        return { ...item, scroll };
+      });
+      if (changed) merged = next;
+    }
+    mergedTabsCache.current = {
+      base: list,
+      version: liveScrollVersion.current,
+      merged,
+    };
+    return merged;
+  };
+  const mergedTabs = mergeLiveScrolls(tabs);
+  const current = mergedTabs.find((tab) => tab.id === activeTab);
   const tabFocusContext = useRef({
     activeTab, pane, workspaceEpoch,
     bookId: current?.bookId,
@@ -606,7 +641,7 @@ export default function App() {
       readOnly: snapshot?.settings.readOnly,
     };
   const latestSession = useRef({
-    tabs,
+    tabs: mergedTabs,
     activeTab,
     activeSurface: pane,
     settings: snapshot?.settings,
@@ -614,7 +649,7 @@ export default function App() {
     referenceRevision: referenceRevision.current,
   });
   latestSession.current = {
-    tabs,
+    tabs: mergedTabs,
     activeTab,
     activeSurface: pane,
     settings: snapshot?.settings,
@@ -878,6 +913,8 @@ export default function App() {
         consumedLaunches.current.clear();
         launchHistoryPending.current.clear();
         launchCapacityPending.current = false;
+        liveScrolls.current.clear();
+        liveScrollVersion.current++;
         sessionGeneration.current++;
         setClosed([]);
         setDownloadTarget(null);
@@ -1012,8 +1049,13 @@ export default function App() {
         privacyGeneration: data.privacyGeneration,
         referenceRevision: referenceRevision.current,
       };
-      if (restore || opened || referencesChanged || next.length !== previous.tabs.length)
+      if (restore || opened || referencesChanged || next.length !== previous.tabs.length) {
+        if (liveScrolls.current.size) {
+          liveScrolls.current.clear();
+          liveScrollVersion.current++;
+        }
         setTabs(next);
+      }
       if (restore || active !== previous.activeTab) setActiveTab(active);
       if (restore || opened) {
         if (selectedAtStartup !== "nearby" || opened || data.launchSearch) setNearbyDiscoveryIntent(0);
@@ -1226,12 +1268,14 @@ export default function App() {
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
-  useEffect(() => {
+  const scheduleSessionAutosave = useCallback(() => {
+    const currentSnapshot = latestSession.current;
     if (
       !hydrated.current ||
-      !snapshot ||
-      snapshot.settings.privateMode ||
-      snapshot.settings.readOnly ||
+      !currentSnapshot.settings ||
+      currentSnapshot.privacyGeneration === undefined ||
+      currentSnapshot.settings.privateMode ||
+      currentSnapshot.settings.readOnly ||
       privacyPending.current ||
       quitRequest.current ||
       sessionFlushes.current ||
@@ -1239,9 +1283,13 @@ export default function App() {
     )
       return;
     const privacy = capturePrivacyContext();
-    if (!privacy || privacy.generation !== snapshot.privacyGeneration) return;
+    if (!privacy || privacy.generation !== currentSnapshot.privacyGeneration) return;
     const generation = sessionGeneration.current;
     const privacyGeneration = privacy.generation;
+    if (sessionTimer.current !== undefined) {
+      window.clearTimeout(sessionTimer.current);
+      sessionTimer.current = undefined;
+    }
     const timer = window.setTimeout(() => {
       sessionTimer.current = undefined;
       if (quitRequest.current || sessionFlushes.current) return;
@@ -1282,11 +1330,17 @@ export default function App() {
     // publish; the timer still fires once shortly after scrolling stops.
     }, 600);
     sessionTimer.current = timer;
+  }, [onError]);
+  useEffect(() => {
+    scheduleSessionAutosave();
     return () => {
-      window.clearTimeout(timer);
-      if (sessionTimer.current === timer) sessionTimer.current = undefined;
+      if (sessionTimer.current !== undefined) {
+        window.clearTimeout(sessionTimer.current);
+        sessionTimer.current = undefined;
+      }
     };
   }, [
+    scheduleSessionAutosave,
     tabs,
     activeTab,
     pane,
@@ -1353,12 +1407,19 @@ export default function App() {
   );
   const selectTab = useCallback((id: string, focus = false) => {
     if (privacyPending.current || quitRequest.current) return;
+    readerScrollFlush.current?.();
     const current = latestSession.current;
     if (!current.tabs.some((tab) => tab.id === id)) return;
+    const commitScrolls = liveScrolls.current.size > 0;
+    if (commitScrolls) {
+      liveScrolls.current.clear();
+      liveScrollVersion.current++;
+    }
     latestSession.current = { ...current, activeTab: id, activeSurface: "reader" };
     if (focus && (current.activeTab !== id || current.activeSurface !== "reader"))
       retainedTabFocus.current = { activeTab: id, pane: "reader" };
     const select = () => {
+      if (commitScrolls) setTabs(current.tabs);
       setActiveTab(id);
       setPane("reader");
       if (focus && window.matchMedia("(max-width: 760px)").matches)
@@ -1378,6 +1439,10 @@ export default function App() {
     const next = [...current.tabs];
     const [tab] = next.splice(from, 1);
     next.splice(to, 0, tab);
+    if (liveScrolls.current.size) {
+      liveScrolls.current.clear();
+      liveScrollVersion.current++;
+    }
     latestSession.current = { ...current, tabs: next };
     setTabs(next);
   }, []);
@@ -1524,6 +1589,10 @@ export default function App() {
         if (restoreFocus &&
             (current.activeTab !== active || current.activeSurface !== surface))
           retainedTabFocus.current = { activeTab: active, pane: surface };
+        if (liveScrolls.current.size) {
+          liveScrolls.current.clear();
+          liveScrollVersion.current++;
+        }
         latestSession.current = {
           ...current,
           tabs: remaining,
@@ -3704,26 +3773,43 @@ export default function App() {
                           const session = latestSession.current;
                           const existing = session.tabs.find((item) => item.id === tab.id);
                           if (!existing || tab.id !== current.id) return;
-                          if (session.activeTab !== current.id || quitRequest.current) {
-                            // The reader may flush its trailing scroll after a
-                            // tab switch has moved activeTab or after quit has
-                            // begun. Accept only a scroll-only final update for
-                            // this tab; navigation/history changes still
-                            // require an active, non-quitting reader.
-                            const scrollOnly =
-                              tab.bookId === existing.bookId &&
-                              tab.path === existing.path &&
-                              tab.title === existing.title &&
-                              tab.restricted === existing.restricted &&
-                              JSON.stringify(tab.back) === JSON.stringify(existing.back) &&
-                              JSON.stringify(tab.forward) === JSON.stringify(existing.forward);
-                            if (!scrollOnly) return;
+                          const scrollOnly =
+                            tab.bookId === existing.bookId &&
+                            tab.path === existing.path &&
+                            tab.title === existing.title &&
+                            tab.restricted === existing.restricted &&
+                            (tab.back === existing.back ||
+                              JSON.stringify(tab.back) === JSON.stringify(existing.back)) &&
+                            (tab.forward === existing.forward ||
+                              JSON.stringify(tab.forward) === JSON.stringify(existing.forward));
+                          if (scrollOnly) {
+                            // Keep live scroll updates out of React `tabs` state
+                            // so scrolling never re-renders the whole App shell;
+                            // update the cached merged array so unrelated renders
+                            // preserve reference stability for flushSession.
+                            if (
+                              existing.scroll === tab.scroll &&
+                              liveScrolls.current.get(tab.id) === tab.scroll
+                            )
+                              return;
+                            liveScrolls.current.set(tab.id, tab.scroll);
+                            liveScrollVersion.current++;
                             const next = session.tabs.map((item) =>
                               item.id === tab.id ? { ...item, scroll: tab.scroll } : item,
                             );
+                            mergedTabsCache.current = {
+                              base: mergedTabsCache.current.base,
+                              version: liveScrollVersion.current,
+                              merged: next,
+                            };
                             latestSession.current = { ...session, tabs: next };
-                            setTabs(next);
+                            scheduleSessionAutosave();
                             return;
+                          }
+                          if (session.activeTab !== current.id || quitRequest.current) return;
+                          if (liveScrolls.current.size) {
+                            liveScrolls.current.clear();
+                            liveScrollVersion.current++;
                           }
                           const next = session.tabs.map((item) =>
                             item.id === tab.id ? tab : item,
@@ -3794,24 +3880,28 @@ export default function App() {
           </div>
         )}
         {globalSearch && snapshot && !quitting && (
-          <UnifiedSearch
-            books={snapshot.books}
-            tabs={tabs}
-            bookmarks={snapshot.bookmarks}
-            history={snapshot.history}
-            onSelectTab={selectTab}
-            onOpen={open}
-            onClose={() => setGlobalSearch(false)}
-          />
+          <Suspense fallback={null}>
+            <UnifiedSearch
+              books={snapshot.books}
+              tabs={tabs}
+              bookmarks={snapshot.bookmarks}
+              history={snapshot.history}
+              onSelectTab={selectTab}
+              onOpen={open}
+              onClose={() => setGlobalSearch(false)}
+            />
+          </Suspense>
         )}
       </div>
       {snapshot && !quitting && (
-        <CrashReportPrompt
-          available={!mobileSuspended}
-          books={snapshot.books}
-          readOnly={snapshot.settings.readOnly}
-          onError={onError}
-        />
+        <Suspense fallback={null}>
+          <CrashReportPrompt
+            available={!mobileSuspended}
+            books={snapshot.books}
+            readOnly={snapshot.settings.readOnly}
+            onError={onError}
+          />
+        </Suspense>
       )}
       <SettingsPolicyConfirmation available={!quitting && !mobileSuspended &&
         (!isMobile || mobileInteraction.interactive)} />
@@ -3851,21 +3941,23 @@ export default function App() {
         </dialog>
       )}
       {isMobile && !mobileSuspended && snapshot && mobileIncoming[0] && (
-        <IncomingArchiveDialog
-          key={mobileIncoming[0].requestId}
-          request={mobileIncoming[0]}
-          sessionOnly={snapshot.settings.privateMode || snapshot.settings.readOnly}
-          busy={mobileIncomingBusy || importing}
-          copiedBytes={documentProgress}
-          onCancel={() => void dismissMobileIncoming()}
-          onOpenOriginals={() => void acceptMobileIncoming(false)}
-          onSaveCopy={() => void acceptMobileIncoming(true)}
-          onChooseFiles={() => {
-            void pickArchives(false, false).then((opened) => {
-              if (opened) void dismissMobileIncoming();
-            });
-          }}
-        />
+        <Suspense fallback={null}>
+          <IncomingArchiveDialog
+            key={mobileIncoming[0].requestId}
+            request={mobileIncoming[0]}
+            sessionOnly={snapshot.settings.privateMode || snapshot.settings.readOnly}
+            busy={mobileIncomingBusy || importing}
+            copiedBytes={documentProgress}
+            onCancel={() => void dismissMobileIncoming()}
+            onOpenOriginals={() => void acceptMobileIncoming(false)}
+            onSaveCopy={() => void acceptMobileIncoming(true)}
+            onChooseFiles={() => {
+              void pickArchives(false, false).then((opened) => {
+                if (opened) void dismissMobileIncoming();
+              });
+            }}
+          />
+        </Suspense>
       )}
       <dialog
         ref={quitDialog}

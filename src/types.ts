@@ -385,6 +385,8 @@ export interface AcquisitionImport {
   paths: string[];
   state: "queued" | "verifying" | "ready" | "imported" | "failed" | "cancelled";
   error?: string;
+  verifiedBytes?: number;
+  verifiedTotal?: number;
 }
 export interface AcquisitionVerification {
   importState?: AcquisitionImport["state"] | "imported";
@@ -567,6 +569,8 @@ export interface MapJob extends AcquisitionVerification {
   total: number;
   incoming: number;
   incomingTotal: number;
+  speed?: number;
+  etaSeconds?: number | null;
   /** Unique required recipe blocks; absent in older job journals. */
   blocksTotal?: number | null;
   blocksReady?: number | null;

@@ -128,6 +128,21 @@ pub fn set_read_only(read_only: bool) {
 /// Remembers a completed libzim/retained-byte validation for this installation.
 /// Only the two terminal outcomes are useful in a crash report.
 pub fn note_archive_validation(archive_id: &str, installation_id: &str, status: &str) {
+    record_archive_validation(archive_id, installation_id, status, true);
+}
+
+/// Seeds crash-report validation state from persisted metadata without
+/// overwriting a fresher live validation recorded during this session.
+pub fn seed_archive_validation(archive_id: &str, installation_id: &str, status: &str) {
+    record_archive_validation(archive_id, installation_id, status, false);
+}
+
+fn record_archive_validation(
+    archive_id: &str,
+    installation_id: &str,
+    status: &str,
+    overwrite: bool,
+) {
     if !matches!(status, "valid" | "invalid") {
         return;
     }
@@ -135,6 +150,9 @@ pub fn note_archive_validation(archive_id: &str, installation_id: &str, status: 
     let Ok(mut entries) = VALIDATIONS.lock() else {
         return;
     };
+    if !overwrite && entries.contains_key(&key) {
+        return;
+    }
     if entries.len() >= MAX_VALIDATION_ENTRIES && !entries.contains_key(&key) {
         if let Some(first) = entries.keys().next().cloned() {
             entries.remove(&first);

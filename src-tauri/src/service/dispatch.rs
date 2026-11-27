@@ -1418,6 +1418,7 @@ impl Service {
                 let privacy_changed = settings.private_mode != previous.private_mode
                     || settings.read_only != previous.read_only;
                 if privacy_changed {
+                    crate::maps::clear_recipe_cache();
                     self.privacy_generation
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     self.privacy_policy_generation.fetch_add(1, Ordering::SeqCst);
@@ -1875,8 +1876,18 @@ impl Service {
                         })?;
                         service.notify_library_changed();
                     }
-                    let known: HashSet<_> =
-                        state.books.iter().map(|book| book.path.clone()).collect();
+                    if state.settings.monitor_directories.is_empty() {
+                        return Ok(Value::Null);
+                    }
+                    let known: HashSet<_> = state
+                        .books
+                        .iter()
+                        .map(|book| {
+                            std::fs::canonicalize(&book.path)
+                                .map(|path| path.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| book.path.clone())
+                        })
+                        .collect();
                     let mut paths = Vec::new();
                     for directory in &state.settings.monitor_directories {
                         service.store.validate_portable_directory(Path::new(directory))?;
@@ -1905,20 +1916,37 @@ impl Service {
                             {
                                 continue;
                             }
-                            let path = path
+                            let canonical = path
                                 .canonicalize()
-                                .map_err(|error| error.to_string())?
-                                .to_string_lossy()
-                                .into_owned();
-                            if !known.contains(&path) {
-                                paths.push(path);
+                                .map_err(|error| error.to_string())?;
+                            let path = canonical.to_string_lossy().into_owned();
+                            if known.contains(&path) {
+                                continue;
                             }
+                            // Skip unchanged corrupt archives recorded by live watch or a
+                            // previous maintenance scan; do not apply watch::is_settled here
+                            // so fallback scans still pick up future-mtime clock-skewed files
+                            // and immediate maintenance commands.
+                            #[cfg(desktop)]
+                            {
+                                let failures = service
+                                    .watch_failures
+                                    .lock()
+                                    .unwrap_or_else(|error| error.into_inner());
+                                if failures.should_skip(&canonical) {
+                                    continue;
+                                }
+                            }
+                            paths.push(path);
                         }
                     }
                     if paths.is_empty() {
                         Ok(Value::Null)
                     } else {
-                        service.import_monitored_paths(paths)
+                        let imported = service.import_monitored_paths(paths)?;
+                        #[cfg(desktop)]
+                        service.record_watch_result(&imported)?;
+                        Ok(imported)
                     }
                 })
                 .await;

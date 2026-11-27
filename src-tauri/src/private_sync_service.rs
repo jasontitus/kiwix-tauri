@@ -180,9 +180,20 @@ impl Service {
         drop(creation_policy);
         let _serial = manager.serial.lock().await;
         if let Ok(runtime) = manager.runtime() {
-            if runtime.generation == generation && self.private_sync_admit(&runtime).is_ok() { return Ok(manager.clone()); }
-            manager.cancel();
+            #[cfg(mobile)]
+            let route_ok = runtime.endpoints().is_ok();
+            #[cfg(not(mobile))]
+            let route_ok = true;
+            if runtime.generation == generation
+                && self.private_sync_admit(&runtime).is_ok()
+                && route_ok
+            {
+                return Ok(manager.clone());
+            }
         }
+        // Always retire any prior runtime/session/activity before rebinding so a
+        // self-exited listener never leaves a stale PairSession behind.
+        manager.cancel();
         let revision = manager.revision.load(Ordering::SeqCst);
         let previous = manager.listener_done.lock().map_err(|_| "Private sync retirement unavailable")?.clone();
         if let Some(mut done) = previous {
@@ -245,6 +256,16 @@ impl Service {
                         _ = automatic.tick() => {
                             let Some(service) = weak.upgrade() else { return Ok(()); };
                             service.private_sync_admit(&runtime)?;
+                            // On mobile, LocalBinding pins the socket to one OS route;
+                            // if that route disappears (Wi-Fi switch), exit so the next
+                            // activation rebinds cleanly. On desktop the wildcard socket
+                            // survives brief LAN blips, so just skip this tick.
+                            if runtime.endpoints().is_err() {
+                                #[cfg(mobile)]
+                                { return Ok(()); }
+                                #[cfg(not(mobile))]
+                                { continue; }
+                            }
                             let counter = service.store.reading_sync_counter()?;
                             for peer in service.store.private_sync_automatic_peers()?.iter().filter(|peer| peer.enabled) {
                                 // The peer already acknowledged everything this device

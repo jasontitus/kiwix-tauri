@@ -92,6 +92,10 @@ pub(crate) enum ImportState {
     Cancelled,
 }
 
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ImportStatus {
@@ -102,6 +106,10 @@ pub(crate) struct ImportStatus {
     pub(crate) state: ImportState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) error: Option<String>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub(crate) verified_bytes: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub(crate) verified_total: u64,
 }
 
 fn serialize_arc<T: ?Sized + Serialize, S: serde::Serializer>(
@@ -259,7 +267,11 @@ impl ImportManager {
         &self, receipt: &str, paths: Vec<String>,
         publication: Option<Result<crate::acquisition::ImportPublication, String>>,
     ) -> Result<ImportStatus, EnqueueError> {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped {
             return Err(EnqueueError::Rejected(
                 "Archive verification is shut down".into(),
@@ -279,6 +291,8 @@ impl ImportManager {
                 paths: paths.into(),
                 state: ImportState::Cancelled,
                 error: None,
+                verified_bytes: 0,
+                verified_total: 0,
             });
         }
         if receipt.is_empty() || paths.is_empty() {
@@ -294,6 +308,8 @@ impl ImportManager {
             paths: paths.into(),
             state: ImportState::Queued,
             error: None,
+            verified_bytes: 0,
+            verified_total: 0,
         };
         state.entries.insert(
             receipt.into(),
@@ -316,7 +332,7 @@ impl ImportManager {
         self.shared
             .state
             .lock()
-            .unwrap()
+            .unwrap_or_else(|error| error.into_inner())
             .entries
             .get(receipt)
             .map(|entry| entry.status.clone())
@@ -325,7 +341,11 @@ impl ImportManager {
     /// Avoid loading large saved producer journals for a row that cannot enter
     /// the verifier queue. enqueue_inner still rechecks capacity atomically.
     pub(crate) fn has_admission_capacity(&self) -> Result<bool, String> {
-        let state = self.shared.state.lock().unwrap();
+        let state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped { return Err("Archive verification is shut down".into()); }
         Ok(state.queue.len() < MAX_QUEUED)
     }
@@ -341,7 +361,11 @@ impl ImportManager {
     /// never be imported before restart. Cancelled entries for it are dropped
     /// so a fresh completion snapshot can enqueue again.
     pub(crate) fn unretire_acquisition(&self, acquisition: &str) {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if !state.retired.remove(acquisition) {
             return;
         }
@@ -355,7 +379,11 @@ impl ImportManager {
     /// `unretire_acquisition`: a concurrent deletion that found it already
     /// present must not lift another deletion's tombstone.
     pub(crate) fn retire_acquisition(&self, acquisition: &str) -> bool {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let inserted = state.retired.insert(acquisition.into());
         state.queue.retain(|receipt| !belongs_to_acquisition(receipt, acquisition));
         for (receipt, entry) in &mut state.entries {
@@ -374,7 +402,11 @@ impl ImportManager {
     }
 
     pub(crate) fn ready(&self) -> Vec<ReadyImport> {
-        let state = self.shared.state.lock().unwrap();
+        let state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         state
             .entries
             .iter()
@@ -413,7 +445,11 @@ impl ImportManager {
         ready: &ReadyImport,
         register: impl FnOnce(&[Book], &[crate::archive_source::RetainedSource], Option<&crate::acquisition::ImportPublication>) -> Result<(), String>,
     ) -> Result<bool, String> {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped || !owns_ready(&state, ready) {
             return Err("Verified import is no longer available".into());
         }
@@ -442,7 +478,11 @@ impl ImportManager {
         ready: &ReadyImport,
         commit: impl FnOnce(&[Book], &[crate::archive_source::RetainedSource], Option<&crate::acquisition::ImportPublication>) -> Result<T, String>,
     ) -> Result<T, String> {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped || !owns_ready(&state, ready) {
             return Err("Verified import is no longer available".into());
         }
@@ -462,7 +502,11 @@ impl ImportManager {
     /// A definitive edition artifact/publication mismatch is retryable
     /// verification failure, unlike an expired cutover authorization.
     pub(crate) fn fail_ready(&self, ready: &ReadyImport, error: &str) -> bool {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped || !owns_ready(&state, ready) { return false; }
         let entry = state.entries.get_mut(&ready.receipt).unwrap();
         entry.status.state = ImportState::Failed;
@@ -479,7 +523,11 @@ impl ImportManager {
     /// Acknowledgement evicts the entry; the durable receipt is the service's
     /// authority for rejecting already consumed acquisitions after eviction.
     pub(crate) fn ack(&self, ready: &ReadyImport) -> bool {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if !owns_ready(&state, ready) {
             return false;
         }
@@ -502,7 +550,11 @@ impl ImportManager {
         &self, receipt: &str,
         publication: Option<Result<crate::acquisition::ImportPublication, String>>,
     ) -> Result<ImportStatus, String> {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped {
             return Err("Archive verification is shut down".into());
         }
@@ -519,6 +571,8 @@ impl ImportManager {
         if publication.is_some() { entry.publication = publication.map(|value| value.map(Arc::new)); }
         entry.status.state = ImportState::Queued;
         entry.status.error = None;
+        entry.status.verified_bytes = 0;
+        entry.status.verified_total = 0;
         let status = entry.status.clone();
         state.queue.push_back(receipt.into());
         self.shared.work.notify_one();
@@ -529,7 +583,11 @@ impl ImportManager {
     /// Cancel active verification and invalidate queued and ready batches without joining.
     /// Already retained ReadyImport tickets are invalidated by with_ready.
     pub(crate) fn shutdown(&self) {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped {
             return;
         }
@@ -606,9 +664,15 @@ fn owns_ready(state: &State, ready: &ReadyImport) -> bool {
 fn verify_pending(shared: &Shared) {
     loop {
         let (receipt, paths, publication, cancel) = {
-            let mut state = shared.state.lock().unwrap();
+            let mut state = shared
+                .state
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
             while !state.stopped && state.queue.is_empty() {
-                state = shared.work.wait(state).unwrap();
+                state = shared
+                    .work
+                    .wait(state)
+                    .unwrap_or_else(|error| error.into_inner());
             }
             if state.stopped {
                 return;
@@ -616,6 +680,8 @@ fn verify_pending(shared: &Shared) {
             let receipt = state.queue.pop_front().unwrap();
             let entry = state.entries.get_mut(&receipt).unwrap();
             entry.status.state = ImportState::Verifying;
+            entry.status.verified_bytes = 0;
+            entry.status.verified_total = 0;
             let paths = entry.status.paths.clone();
             shared.changed.notify_one();
             (receipt, paths, entry.publication.clone(), entry.cancel.clone())
@@ -628,13 +694,32 @@ fn verify_pending(shared: &Shared) {
         let mut sources = Vec::with_capacity(paths.len());
         let mut identities = Vec::with_capacity(paths.len());
         let mut error = publication.as_ref().and_then(|value| value.as_ref().err()).cloned();
-        for path in paths.iter() {
+        // Estimate remaining hashed bytes (ZIM checksum covers all bytes except
+        // the trailing 16-byte MD5) so multi-archive batches advance monotonically
+        // and reach exact `verified_bytes == verified_total` on the last file.
+        let file_estimates: Vec<u64> = paths
+            .iter()
+            .map(|path| {
+                std::fs::metadata(path)
+                    .map(|metadata| metadata.len().saturating_sub(16))
+                    .unwrap_or(0)
+            })
+            .collect();
+        let mut completed_bytes = 0u64;
+        for (file_index, path) in paths.iter().enumerate() {
             if error.is_some() { break; }
             if cancel.is_cancelled() { break; }
             #[cfg(test)]
             {
                 shared.hooks.lock().unwrap().reads += 1;
             }
+            let file_base = completed_bytes;
+            let remaining_after: u64 = file_estimates
+                .iter()
+                .skip(file_index + 1)
+                .copied()
+                .fold(0u64, u64::saturating_add);
+            let mut file_total = 0u64;
             let verified = (|| {
                 let mut book = load_book_inner(path, true, false, Some(&cancel))?;
                 let source = crate::archive_source::retain(&book)?;
@@ -644,9 +729,31 @@ fn verify_pending(shared: &Shared) {
                 }
                 if cancel.is_cancelled() { return Err("Archive verification was cancelled".into()); }
                 let archive = source.open()?;
-                let intact = archive.check_integrity_cancellable(&cancel, |_checked, _total| {
+                let mut last_progress = std::time::Instant::now()
+                    .checked_sub(std::time::Duration::from_secs(1))
+                    .unwrap_or_else(std::time::Instant::now);
+                let intact = archive.check_integrity_cancellable(&cancel, |checked, total| {
+                    file_total = total;
                     #[cfg(test)]
-                    checksum_progress(shared, _checked, _total);
+                    checksum_progress(shared, checked, total);
+                    if checked == total || last_progress.elapsed() >= std::time::Duration::from_millis(250) {
+                        last_progress = std::time::Instant::now();
+                        let reported_bytes = file_base.saturating_add(checked);
+                        let reported_total = file_base
+                            .saturating_add(total)
+                            .saturating_add(remaining_after)
+                            .max(reported_bytes);
+                        let mut state = shared
+                            .state
+                            .lock()
+                            .unwrap_or_else(|error| error.into_inner());
+                        if let Some(entry) = state.entries.get_mut(&receipt) {
+                            if !cancel.is_cancelled() && entry.status.state == ImportState::Verifying {
+                                entry.status.verified_bytes = reported_bytes;
+                                entry.status.verified_total = reported_total;
+                            }
+                        }
+                    }
                 }).map_err(|error| {
                     if cancel.is_cancelled() { error } else { crate::archive::integrity_failure(error) }
                 })?;
@@ -659,6 +766,7 @@ fn verify_pending(shared: &Shared) {
             })();
             match verified {
                 Ok((book, source, identity)) => {
+                    completed_bytes = completed_bytes.saturating_add(file_total);
                     books.push(book);
                     sources.push(source);
                     identities.push(identity);
@@ -671,7 +779,10 @@ fn verify_pending(shared: &Shared) {
         }
         #[cfg(test)]
         test_gate(shared, false);
-        let mut state = shared.state.lock().unwrap();
+        let mut state = shared
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if state.stopped {
             return;
         }
@@ -1224,5 +1335,29 @@ mod tests {
         release.send(()).unwrap();
         exit.recv_timeout(DEADLINE).unwrap();
         assert_eq!(shared.hooks.lock().unwrap().reads, 0);
+    }
+
+    #[tokio::test]
+    async fn verification_records_byte_progress_and_resets_on_retry() {
+        let manager = ImportManager::new().unwrap();
+        manager.enqueue("progress", paths()).unwrap();
+        let ready = wait_for(&manager, "progress", ImportState::Ready).await;
+        assert!(ready.verified_total > 0);
+        assert_eq!(ready.verified_bytes, ready.verified_total);
+        let single_total = ready.verified_total;
+        let pair = vec![paths()[0].clone(), paths()[0].clone()];
+        manager.enqueue("batch", pair).unwrap();
+        let batch_ready = wait_for(&manager, "batch", ImportState::Ready).await;
+        assert_eq!(batch_ready.verified_total, single_total * 2);
+        assert_eq!(batch_ready.verified_bytes, batch_ready.verified_total);
+        let corrupt = TempArchive::corrupt();
+        manager.enqueue("retryable", corrupt.paths()).unwrap();
+        let failed = wait_for(&manager, "retryable", ImportState::Failed).await;
+        assert!(failed.verified_total > 0);
+        let retried = manager.retry("retryable").unwrap();
+        assert_eq!(retried.verified_bytes, 0);
+        assert_eq!(retried.verified_total, 0);
+        wait_for(&manager, "retryable", ImportState::Failed).await;
+        manager.shutdown();
     }
 }

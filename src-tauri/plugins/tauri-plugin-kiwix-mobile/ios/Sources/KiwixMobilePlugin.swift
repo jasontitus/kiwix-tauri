@@ -134,6 +134,9 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
   }
   private let worker = DispatchQueue(label: "org.kiwix.mobile.documents", qos: .userInitiated)
   private let providerWorker = DispatchQueue(label: "org.kiwix.mobile.providers", qos: .userInitiated)
+  // Dedicated lower-priority queue for multi-GB external archive intake/hashing
+  // so interactive acquire/release/forget calls on `providerWorker` never stall.
+  private let hashWorker = DispatchQueue(label: "org.kiwix.mobile.provider-intake", qos: .utility)
   private var operation: DocumentOperation?
   private var observers: [NSObjectProtocol] = []
   private var checkpoints: [Int: UIBackgroundTaskIdentifier] = [:]
@@ -665,7 +668,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
       let pick = ExternalPickArgs(persistent: args.persistent, folder: false, labels: args.labels)
       guard let (current, _) = self.start(invoke, kind: .external(pick)) else { return }
       current.working = true
-      self.providerWorker.async {
+      self.hashWorker.async {
         do {
           try current.cancellation.check()
           let selection = try self.externalDocuments.selectIncoming(url,
@@ -812,7 +815,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
     controller.dismiss(animated: true, completion: run)
     let queue: DispatchQueue
     switch current.kind {
-    case .external, .externalBatch: queue = providerWorker
+    case .external, .externalBatch: queue = hashWorker
     default: queue = worker
     }
     queue.async { self.processSelection(current, urls: urls) }

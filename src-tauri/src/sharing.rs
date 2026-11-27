@@ -65,7 +65,14 @@ const RESULTS_PER_BOOK: u32 = 20;
 const RESULTS_TOTAL: usize = 100;
 const OPDS_PAGE_DEFAULT: usize = 50;
 const OPDS_PAGE_MAX: usize = 200;
+#[cfg(not(mobile))]
+const LIBRARY_ARCHIVE_CACHE: usize = 32;
+#[cfg(mobile)]
 const LIBRARY_ARCHIVE_CACHE: usize = 8;
+#[cfg(not(mobile))]
+const MAX_LIBRARY_HOSTS: usize = 32;
+#[cfg(mobile)]
+const MAX_LIBRARY_HOSTS: usize = 8;
 /// Availability results are reused for this long, then re-stat'ed, so a file
 /// removed or replaced while sharing is refused within two seconds.
 const LIBRARY_AVAILABILITY_TTL: Duration = Duration::from_secs(2);
@@ -336,11 +343,13 @@ impl SharingCancellation {
         }
         Ok(work())
     }
-    fn cancel(&self) {
+    fn begin_cancel(&self) {
         self.0.search_cancel.cancel();
         self.0.workers.close();
         self.0.stopped.store(true, Ordering::Release);
         self.0.signal.send_replace(true);
+    }
+    fn drain_native(&self) {
         // No native work can begin after revocation, including work whose
         // spawn_blocking task had not started. Finish any in-flight call before
         // sharing_stop/privacy/read-only can report that sharing is off.
@@ -350,6 +359,10 @@ impl SharingCancellation {
                 .write()
                 .unwrap_or_else(|error| error.into_inner()),
         );
+    }
+    fn cancel(&self) {
+        self.begin_cancel();
+        self.drain_native();
     }
 }
 
@@ -863,10 +876,13 @@ impl BookArchive {
 struct SharedBook {
     archive: BookArchive,
     token: String,
-    authorities: Arc<Vec<(IpAddr, String)>>,
+    authorities: AcceptedAuthorities,
     port: u16,
     store: Arc<Store>,
     cancellation: SharingCancellation,
+    /// Tracks active reading traffic on library-mode per-book listeners so LRU
+    /// eviction retires idle listeners instead of actively read books.
+    activity: Option<(Arc<std::sync::atomic::AtomicU64>, Arc<std::sync::atomic::AtomicU64>)>,
 }
 #[derive(Clone)]
 struct IndexBook {
@@ -879,7 +895,7 @@ struct IndexBook {
 #[derive(Clone)]
 struct Index {
     token: String,
-    authorities: Arc<Vec<(IpAddr, String)>>,
+    authorities: AcceptedAuthorities,
     entries: Arc<Vec<IndexBook>>,
     store: Arc<Store>,
     cancellation: SharingCancellation,
@@ -926,13 +942,30 @@ struct LibraryBook {
 /// Bounded, re-validated handles for library archives. Every request first
 /// checks the live library record and the file stamp, so a removed or replaced
 /// archive is refused even while a handle from an earlier request is cached.
-#[derive(Default)]
 struct LibraryArchives {
     cached: Mutex<VecDeque<CachedLibraryArchive>>,
+    capacity: usize,
     #[cfg(test)]
     opens: std::sync::atomic::AtomicUsize,
 }
+impl Default for LibraryArchives {
+    fn default() -> Self {
+        Self {
+            cached: Mutex::new(VecDeque::new()),
+            capacity: LIBRARY_ARCHIVE_CACHE,
+            #[cfg(test)]
+            opens: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
 impl LibraryArchives {
+    #[cfg(test)]
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            capacity,
+            ..Self::default()
+        }
+    }
     fn record_open(&self) {
         #[cfg(test)]
         self.opens
@@ -1139,7 +1172,7 @@ fn library_archive_checked(book: &LibraryBook, current: &Book, access: LibraryAr
     // Two concurrent searches can open the same miss before either inserts.
     // Keep one cache slot per archive without accepting another request's stamp.
     cached.retain(|item| item.id != book.id);
-    if cached.len() >= LIBRARY_ARCHIVE_CACHE {
+    if cached.len() >= book.archives.capacity {
         if matches!(access, LibraryArchiveAccess::Search) {
             // An all-library query may walk every archive in a fixed order.
             // Its misses must not evict the handles the next query can reuse.
@@ -1183,17 +1216,19 @@ struct LibraryHosts {
     token: String,
     bind: IpAddr,
     binding: SharingBinding,
-    hosts: Arc<Vec<IpAddr>>,
+    hosts: SessionHosts,
     store: Arc<Store>,
     cancellation: SharingCancellation,
     archives: Arc<LibraryArchives>,
     entries: Arc<Mutex<HashMap<String, LibraryHost>>>,
+    seq: Arc<std::sync::atomic::AtomicU64>,
     retired: RetiredLibraryHosts,
 }
 struct LibraryHost {
     port: u16,
     installation_id: String,
     path: String,
+    used_seq: Arc<std::sync::atomic::AtomicU64>,
     handle: JoinHandle<Result<(), String>>,
 }
 impl LibraryHosts {
@@ -1202,9 +1237,21 @@ impl LibraryHosts {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
     }
+    fn next_seq(&self) -> u64 {
+        self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+    }
+    fn push_retired(&self, handle: JoinHandle<Result<(), String>>) {
+        let mut retired = self
+            .retired
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        retired.retain(|existing| !existing.is_finished());
+        retired.push(handle);
+    }
     /// Retire hosts whose book disappeared, then bind a listener only for the
     /// books a reader actually asked to open. Index and feed requests stay
-    /// allocation-free even for a large library.
+    /// allocation-free even for a large library, and idle listeners are evicted
+    /// LRU above `MAX_LIBRARY_HOSTS`.
     fn ensure(
         &self,
         available: &[Book],
@@ -1218,6 +1265,10 @@ impl LibraryHosts {
             .iter()
             .map(|book| book.metadata.id.as_str())
             .collect();
+        let requested_ids: HashSet<_> = requested
+            .iter()
+            .map(|book| book.metadata.id.as_str())
+            .collect();
         let stale: Vec<_> = entries
             .keys()
             .filter(|id| !current.contains(id.as_str()))
@@ -1226,24 +1277,38 @@ impl LibraryHosts {
         for id in stale {
             if let Some(host) = entries.remove(&id) {
                 host.handle.abort();
-                self.retired.lock().unwrap_or_else(|error| error.into_inner()).push(host.handle);
+                self.push_retired(host.handle);
             }
         }
         let mut ports = HashMap::new();
         for book in requested {
             let id = book.metadata.id.clone();
-            if let Some(host) = entries.get(&id) {
+            if let Some(host) = entries.get_mut(&id) {
                 if host.installation_id == book.installation_id && host.path == book.path {
+                    host.used_seq.store(self.next_seq(), std::sync::atomic::Ordering::Relaxed);
                     ports.insert(id, host.port);
                     continue;
                 }
                 if let Some(host) = entries.remove(&id) {
                     host.handle.abort();
-                    self.retired.lock().unwrap_or_else(|error| error.into_inner()).push(host.handle);
+                    self.push_retired(host.handle);
+                }
+            }
+            while entries.len() >= MAX_LIBRARY_HOSTS {
+                let evict = entries
+                    .iter()
+                    .filter(|(candidate, _)| !requested_ids.contains(candidate.as_str()))
+                    .min_by_key(|(_, host)| host.used_seq.load(std::sync::atomic::Ordering::Relaxed))
+                    .map(|(candidate, _)| candidate.clone());
+                let Some(evict) = evict else { break };
+                if let Some(host) = entries.remove(&evict) {
+                    host.handle.abort();
+                    self.push_retired(host.handle);
                 }
             }
             let listener = bind_listener(self.bind, 0, &self.binding)?;
             let port = listener.local_addr().map_err(|error| error.to_string())?.port();
+            let used_seq = Arc::new(std::sync::atomic::AtomicU64::new(self.next_seq()));
             let state = SharedBook {
                 archive: BookArchive::Library(Arc::new(LibraryBook {
                     id: id.clone(),
@@ -1253,10 +1318,11 @@ impl LibraryHosts {
                     archives: self.archives.clone(),
                 })),
                 token: self.token.clone(),
-                authorities: authorities(&self.hosts, port),
+                authorities: self.hosts.for_port(port),
                 port,
                 store: self.store.clone(),
                 cancellation: self.cancellation.clone(),
+                activity: Some((self.seq.clone(), used_seq.clone())),
             };
             let router = Router::new().fallback(any(shared_request)).with_state(state);
             let listener = SharingListener {
@@ -1276,6 +1342,7 @@ impl LibraryHosts {
                     port,
                     installation_id: book.installation_id.clone(),
                     path: book.path.clone(),
+                    used_seq,
                     handle,
                 },
             );
@@ -1318,7 +1385,7 @@ impl LibraryHosts {
 #[derive(Clone)]
 struct LibraryIndex {
     token: String,
-    authorities: Arc<Vec<(IpAddr, String)>>,
+    authorities: AcceptedAuthorities,
     port: u16,
     store: Arc<Store>,
     hosts: LibraryHosts,
@@ -1419,7 +1486,17 @@ impl SharingServer {
     /// visible until this returns, so a concurrent library removal cannot
     /// unlink an archive that is still being streamed.
     pub(crate) async fn shutdown(&mut self) -> Result<(), String> {
-        self.cancellation.cancel();
+        // Close admission and fire graceful-shutdown signals synchronously so
+        // no new request can enter while waiting for the blocking pool, then
+        // drain in-flight native archive searches off the Tokio async thread.
+        self.cancellation.begin_cancel();
+        let cancellation = self.cancellation.clone();
+        if tokio::task::spawn_blocking(move || cancellation.drain_native())
+            .await
+            .is_err()
+        {
+            self.cancellation.drain_native();
+        }
         let mut errors = Vec::new();
         if let Some(library) = &self.library {
             if let Err(error) = library.shutdown().await {
@@ -1519,6 +1596,7 @@ impl SharingServer {
         let mut prepared = Vec::new();
         let mut archives = Vec::new();
         let cancellation = SharingCancellation::new();
+        let session_hosts = SessionHosts::new(&hosts, &binding);
         // Prepare every archive and socket before spawning anything. Any error
         // drops all sockets, rather than leaving a partially started collection.
         for book in books {
@@ -1554,10 +1632,11 @@ impl SharingServer {
                 SharedBook {
                     archive: BookArchive::Selected { archive: Arc::downgrade(&archive), owner, store: service.store.clone(), stamp },
                     token: token.clone(),
-                    authorities: authorities(&hosts, book_port),
+                    authorities: session_hosts.for_port(book_port),
                     port: book_port,
                     store: service.store.clone(),
                     cancellation: cancellation.clone(),
+                    activity: None,
                 },
             ));
             archives.push(archive);
@@ -1584,16 +1663,18 @@ impl SharingServer {
             token: token.clone(),
             bind,
             binding: binding.clone(),
-            hosts: Arc::new(hosts.clone()),
+            hosts: session_hosts.clone(),
             store: service.store.clone(),
             cancellation: cancellation.clone(),
             archives: Arc::new(LibraryArchives::default()),
             entries: Arc::new(Mutex::new(HashMap::new())),
+            seq: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             retired: Arc::new(Mutex::new(Vec::new())),
         };
+        let index_authorities = session_hosts.for_port(port);
         let library_index = LibraryIndex {
             token: token.clone(),
-            authorities: authorities(&hosts, port),
+            authorities: index_authorities.clone(),
             port,
             store: service.store.clone(),
             hosts: library.clone(),
@@ -1604,7 +1685,7 @@ impl SharingServer {
         };
         let index = Index {
             token: token.clone(),
-            authorities: authorities(&hosts, port),
+            authorities: index_authorities,
             entries: Arc::new(entries),
             store: service.store.clone(),
             cancellation: cancellation.clone(),
@@ -1671,20 +1752,22 @@ impl SharingServer {
         let port = index_address.port();
         let token = Uuid::new_v4().simple().to_string();
         let cancellation = SharingCancellation::new();
+        let session_hosts = SessionHosts::new(&hosts, &binding);
         let library = LibraryHosts {
             token: token.clone(),
             bind,
             binding: binding.clone(),
-            hosts: Arc::new(hosts.clone()),
+            hosts: session_hosts.clone(),
             store: service.store.clone(),
             cancellation: cancellation.clone(),
             archives: Arc::new(LibraryArchives::default()),
             entries: Arc::new(Mutex::new(HashMap::new())),
+            seq: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             retired: Arc::new(Mutex::new(Vec::new())),
         };
         let index = LibraryIndex {
             token: token.clone(),
-            authorities: authorities(&hosts, port),
+            authorities: session_hosts.for_port(port),
             port,
             store: service.store.clone(),
             hosts: library.clone(),
@@ -1818,6 +1901,104 @@ fn accepted_host(
         }
     }
     Some(host)
+}
+const AUTHORITY_REFRESH_TTL: Duration = Duration::from_secs(2);
+type HostList = Arc<Vec<IpAddr>>;
+type LiveHosts = Arc<std::sync::RwLock<(Option<Instant>, HostList)>>;
+
+/// Shared allowed-IP set for one sharing session. Explicit, loopback, and
+/// hotspot bindings stay pinned to their startup addresses; wildcard bindings
+/// share one TTL-refreshed live IP list across the index listener and every
+/// per-book listener so post-DHCP `/open/{id}` redirects succeed immediately
+/// on newly bound book ports without per-listener `get_if_addrs()` storms.
+#[derive(Clone)]
+struct SessionHosts {
+    binding: SharingBinding,
+    static_hosts: HostList,
+    live: Option<LiveHosts>,
+}
+
+impl SessionHosts {
+    fn new(hosts: &[IpAddr], binding: &SharingBinding) -> Self {
+        let host_list = Arc::new(hosts.to_vec());
+        let wildcard = matches!(
+            binding,
+            SharingBinding::Ipv4All {}
+                | SharingBinding::Ipv6All {}
+                | SharingBinding::DualStackAll {}
+        );
+        Self {
+            binding: binding.clone(),
+            static_hosts: host_list.clone(),
+            live: wildcard
+                .then(|| Arc::new(std::sync::RwLock::new((Some(Instant::now()), host_list)))),
+        }
+    }
+
+    #[cfg(test)]
+    fn new_expired(hosts: &[IpAddr], binding: &SharingBinding) -> Self {
+        let this = Self::new(hosts, binding);
+        if let Some(live) = &this.live {
+            if let Ok(mut guard) = live.write() {
+                guard.0 = None;
+            }
+        }
+        this
+    }
+
+    fn current(&self) -> HostList {
+        let Some(live) = &self.live else {
+            return self.static_hosts.clone();
+        };
+        let now = Instant::now();
+        {
+            let guard = live.read().unwrap_or_else(|error| error.into_inner());
+            if guard
+                .0
+                .is_some_and(|at| now.saturating_duration_since(at) < AUTHORITY_REFRESH_TTL)
+            {
+                return guard.1.clone();
+            }
+        }
+        let mut guard = live.write().unwrap_or_else(|error| error.into_inner());
+        let now = Instant::now();
+        if !guard
+            .0
+            .is_some_and(|at| now.saturating_duration_since(at) < AUTHORITY_REFRESH_TTL)
+        {
+            guard.0 = Some(now);
+            if let Ok((_, hosts)) = binding_addresses(None, &self.binding) {
+                guard.1 = Arc::new(hosts);
+            }
+        }
+        guard.1.clone()
+    }
+
+    fn for_port(&self, port: u16) -> AcceptedAuthorities {
+        AcceptedAuthorities {
+            hosts: self.clone(),
+            port,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct AcceptedAuthorities {
+    hosts: SessionHosts,
+    port: u16,
+}
+
+impl AcceptedAuthorities {
+    #[cfg(test)]
+    fn new(hosts: &[IpAddr], binding: &SharingBinding, port: u16) -> Self {
+        SessionHosts::new(hosts, binding).for_port(port)
+    }
+
+    fn check(&self, headers: &HeaderMap, uri: &Uri) -> Option<IpAddr> {
+        let hosts = self.hosts.current();
+        let accepted = authorities(&hosts, self.port);
+        accepted_host(headers, uri, &accepted)
+    }
 }
 fn service_worker_request(headers: &HeaderMap) -> bool {
     headers.contains_key("service-worker")
@@ -2035,7 +2216,7 @@ async fn index_request(
     headers: HeaderMap,
     body: Body,
 ) -> Response {
-    let Some(host) = accepted_host(&headers, &uri, &state.authorities) else {
+    let Some(host) = state.authorities.check(&headers, &uri) else {
         return deny();
     };
     if state.cancellation.is_cancelled() || service_worker_request(&headers) { return deny(); }
@@ -2323,7 +2504,7 @@ async fn library_request(
     headers: HeaderMap,
     body: Body,
 ) -> Response {
-    let Some(host) = accepted_host(&headers, &uri, &state.authorities) else {
+    let Some(host) = state.authorities.check(&headers, &uri) else {
         return deny();
     };
     if state.cancellation.is_cancelled()
@@ -3132,7 +3313,7 @@ async fn shared_request(
     uri: Uri,
     headers: HeaderMap,
 ) -> Response {
-    if accepted_host(&headers, &uri, &state.authorities).is_none()
+    if state.authorities.check(&headers, &uri).is_none()
         || state.cancellation.is_cancelled()
         || service_worker_request(&headers)
         || !matches!(method, Method::GET | Method::HEAD)
@@ -3165,6 +3346,10 @@ async fn shared_request(
         .any(|c| c.split(';').any(|c| c.trim() == cookie))
     {
         return deny();
+    }
+    if let Some((seq, last_used)) = &state.activity {
+        let next = seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        last_used.store(next, std::sync::atomic::Ordering::Relaxed);
     }
     let path = match percent_encoding::percent_decode_str(uri.path().trim_start_matches('/'))
         .decode_utf8()

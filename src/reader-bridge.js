@@ -2436,11 +2436,15 @@
     )
       return;
     clearTimeout(annotationTimer);
-    // Live ranges track mutations before we can validate their quotes. Remove
-    // paint immediately rather than briefly highlighting unrelated replacement text.
-    annotationRanges = [];
-    window.CSS?.highlights?.delete(highlightName);
-    overlayMarks?.replaceChildren();
+    // Live ranges track text/child mutations before we can validate their
+    // quotes, so clear paint immediately for structural/text changes. Pure
+    // attribute toggles (e.g. expanding a collapsible section) do not mutate
+    // text content; let the debounced re-anchor repaint without flicker.
+    if (records.some((record) => record.type !== "attributes")) {
+      annotationRanges = [];
+      window.CSS?.highlights?.delete(highlightName);
+      overlayMarks?.replaceChildren();
+    }
     annotationTimer = setTimeout(renderAnnotations, 180);
   }
   const annotationObserverOptions = {
@@ -4119,9 +4123,46 @@
     true,
   );
   let selectionTimer;
+  let pointerSelecting = false;
+  let selectionDirty = false;
+  const finishPointerSelection = () => {
+    if (!pointerSelecting) return;
+    pointerSelecting = false;
+    if (selectionDirty) {
+      selectionDirty = false;
+      clearTimeout(selectionTimer);
+      selectionTimer = setTimeout(selectionReport, 20);
+    }
+  };
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    pointerSelecting = true;
+    selectionDirty = false;
+  }, true);
+  document.addEventListener("pointermove", (event) => {
+    if (pointerSelecting && event.pointerType === "mouse" && event.buttons === 0) {
+      finishPointerSelection();
+    }
+  }, true);
+  window.addEventListener("pointerup", finishPointerSelection, true);
+  window.addEventListener("pointercancel", finishPointerSelection, true);
+  window.addEventListener("mouseup", finishPointerSelection, true);
+  window.addEventListener("blur", finishPointerSelection);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") finishPointerSelection();
+  });
+  window.addEventListener("contextmenu", finishPointerSelection, true);
+  window.addEventListener("dragstart", finishPointerSelection, true);
+  window.addEventListener("dragend", finishPointerSelection, true);
   document.addEventListener("selectionchange", () => {
     clearTimeout(selectionTimer);
     if (!window.getSelection()?.isCollapsed) resetReadingPan();
+    // Avoid full-document textIndex() scans every 90 ms while actively dragging
+    // a pointer selection; compute the anchor once the pointer settles.
+    if (pointerSelecting) {
+      selectionDirty = true;
+      return;
+    }
     selectionTimer = setTimeout(selectionReport, 90);
   });
   window.addEventListener(

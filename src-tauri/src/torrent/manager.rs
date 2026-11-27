@@ -584,7 +584,7 @@ impl TorrentManager {
         };
         {
             let gate = self.storage_gate(id)?;
-            let _storage = gate.lock().map_err(display)?;
+            let _storage = gate.write().map_err(display)?;
         }
         retirement
     }
@@ -685,7 +685,7 @@ impl TorrentManager {
                 return Err("The transfer did not stop cleanly, so Kiwix did not delete any files. Restart the app, then retry".into());
             }
             let gate = self.storage_gate(id)?;
-            let _storage = gate.lock().map_err(display)?;
+            let _storage = gate.write().map_err(display)?;
             let record = self.record(id)?;
             if !record.can_authorize_cleanup() { return Err("Only finished torrents can authorize cleanup".into()); }
             let generation = self.inner.runtimes.lock().map_err(display)?.get(id).map(|runtime| runtime.generation);
@@ -788,7 +788,7 @@ impl TorrentManager {
         // held by every storage mutation of this job and stays held through
         // disk cleanup.
         let storage_gate = self.storage_gate(id)?;
-        let _storage = storage_gate.lock().map_err(display)?;
+        let _storage = storage_gate.write().map_err(display)?;
         let record = self.record(id)?;
         if self.inner.retirement_failures.lock().map_err(display)?.contains_key(id) {
             return Err("The transfer did not stop cleanly. Restart the app, then retry".into());
@@ -1010,7 +1010,7 @@ impl TorrentManager {
                 .collect();
             let _storage = gates
                 .iter()
-                .map(|gate| gate.lock())
+                .map(|gate| gate.write())
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(display)?;
         }
@@ -1133,7 +1133,7 @@ impl TorrentManager {
                 .collect();
             let _storage = gates
                 .iter()
-                .map(|gate| gate.lock())
+                .map(|gate| gate.write())
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(display)?;
         }
@@ -1261,7 +1261,7 @@ impl TorrentManager {
     /// files and its terminal cleanup take it, so a cleanup never unlinks a
     /// file while a storage call on it is in flight. Jobs never share a
     /// staging tree, so the fence is per job rather than app-wide.
-    pub(super) fn storage_gate(&self, id: &str) -> Result<Arc<Mutex<()>>, String> {
+    pub(super) fn storage_gate(&self, id: &str) -> Result<Arc<std::sync::RwLock<()>>, String> {
         Ok(self
             .inner
             .storage_gates

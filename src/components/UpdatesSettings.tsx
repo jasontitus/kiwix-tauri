@@ -49,6 +49,7 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
   const [unavailable, setUnavailable] = useState(false);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
 
@@ -71,7 +72,12 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
     let disposed = false;
     const unlisteners: (() => void)[] = [];
     void listen<UpdateProgress | null>("kiwix-update-progress", (event) => {
-      if (!disposed) setProgress(event.payload);
+      if (!disposed) {
+        setProgress(event.payload);
+        if (!event.payload || event.payload.phase !== "downloading") {
+          setCancelling(false);
+        }
+      }
     }).then((unlisten) => unlisteners.push(unlisten));
     void listen("kiwix-update-available", () => {
       if (!disposed) void refresh();
@@ -132,6 +138,7 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
     const context = capturePrivacyContext();
     if (!context) return;
     setInstalling(true);
+    setCancelling(false);
     setConfirming(false);
     try {
       await api("update_install", {
@@ -142,7 +149,20 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
     } catch (error) {
       onError(error);
       setInstalling(false);
+      setCancelling(false);
       void refresh();
+    }
+  }
+
+  async function cancelDownload() {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      const cancelled = await api<boolean>("update_cancel");
+      if (!cancelled) setCancelling(false);
+    } catch (error) {
+      onError(error);
+      setCancelling(false);
     }
   }
 
@@ -225,6 +245,15 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
                 max={progress.total ?? undefined}
               />
               <span className="muted">{progressLabel(progress)}</span>
+              {progress.phase === "downloading" && (
+                <button
+                  disabled={cancelling}
+                  onClick={() => void cancelDownload()}
+                  type="button"
+                >
+                  {t("Cancel")}
+                </button>
+              )}
             </div>
           )}
           {status.available ? (

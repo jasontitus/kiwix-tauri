@@ -30,10 +30,11 @@ use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::{Error as UpdaterError, Update, UpdaterExt};
+use tokio_util::sync::CancellationToken;
 use url::Url;
 
 pub(crate) const CHANNEL: &str = "stable";
@@ -258,6 +259,51 @@ impl Drop for OperationGuard<'_> {
 }
 
 static OPERATION: OperationGate = OperationGate::new();
+static NEXT_DOWNLOAD_CANCEL_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static DOWNLOAD_CANCEL: LazyLock<Mutex<Option<(u64, CancellationToken)>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+struct ActiveDownloadCancel {
+    id: u64,
+    token: CancellationToken,
+}
+
+impl ActiveDownloadCancel {
+    fn register() -> Self {
+        let id = NEXT_DOWNLOAD_CANCEL_ID.fetch_add(1, Ordering::Relaxed);
+        let token = CancellationToken::new();
+        *DOWNLOAD_CANCEL
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some((id, token.clone()));
+        Self { id, token }
+    }
+    fn token(&self) -> &CancellationToken {
+        &self.token
+    }
+}
+
+impl Drop for ActiveDownloadCancel {
+    fn drop(&mut self) {
+        let mut active = DOWNLOAD_CANCEL
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if active.as_ref().is_some_and(|(id, _)| *id == self.id) {
+            *active = None;
+        }
+    }
+}
+
+pub(crate) fn cancel_download() -> bool {
+    let active = DOWNLOAD_CANCEL
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    if let Some((_, token)) = active.as_ref() {
+        token.cancel();
+        true
+    } else {
+        false
+    }
+}
 
 /// Set by a completed install that must relaunch. The relaunch is performed by
 /// the ordinary Quit path only after every shell flushed and `Service::shutdown`
@@ -713,9 +759,25 @@ pub(crate) fn start_daily_check(service: Arc<Service>) {
 /// Run `work` to completion, or drop it as soon as `cancelled` reports true.
 /// Dropping the updater's download future also releases the response stream
 /// and its in-memory buffer; the caller reports the cancellation as an error.
+#[cfg(test)]
 async fn until_cancelled<T, F>(
     work: F,
+    cancelled: impl FnMut() -> bool,
+    poll: Duration,
+) -> Result<T, String>
+where
+    F: Future<Output = T>,
+{
+    let token = CancellationToken::new();
+    until_cancelled_or_token(work, cancelled, &token, poll).await
+}
+
+const USER_DOWNLOAD_CANCELLED: &str = "The update download was cancelled.";
+
+async fn until_cancelled_or_token<T, F>(
+    work: F,
     mut cancelled: impl FnMut() -> bool,
+    token: &CancellationToken,
     poll: Duration,
 ) -> Result<T, String>
 where
@@ -725,6 +787,7 @@ where
     loop {
         tokio::select! {
             result = &mut work => return Ok(result),
+            _ = token.cancelled() => return Err(USER_DOWNLOAD_CANCELLED.into()),
             _ = tokio::time::sleep(poll) => {
                 if cancelled() {
                     return Err(DOWNLOAD_CANCELLED.into());
@@ -797,6 +860,9 @@ pub(crate) async fn install(
     let mut downloaded = 0u64;
     let mut total: Option<u64> = None;
     let mut last_emit = Instant::now();
+    // Register cancellation before emitting `"downloading"` progress so a
+    // user clicking Cancel immediately never observes an unregistered slot.
+    let active_cancel = ActiveDownloadCancel::register();
     set_progress(
         &app,
         Some(Progress {
@@ -811,7 +877,7 @@ pub(crate) async fn install(
     // a disk-backed install needs an upstream plugin API. What this boundary
     // does own is cancellation: Quit waits for this command's privacy lease,
     // so the download is dropped as soon as the service starts retiring.
-    let download = until_cancelled(
+    let download = until_cancelled_or_token(
         update.download(
             move |chunk, content_length| {
                 downloaded = downloaded.saturating_add(chunk as u64);
@@ -833,11 +899,18 @@ pub(crate) async fn install(
             || {},
         ),
         || service.ensure_running().is_err(),
+        active_cancel.token(),
         SHUTDOWN_POLL,
     )
     .await;
+    let user_cancelled = active_cancel.token().is_cancelled();
+    drop(active_cancel);
     let bytes = match download {
-        Ok(Ok(bytes)) => bytes,
+        Ok(Ok(bytes)) if !user_cancelled => bytes,
+        Ok(Ok(_)) => {
+            set_progress(&app, None);
+            return Err(USER_DOWNLOAD_CANCELLED.into());
+        }
         Ok(Err(error)) => {
             set_progress(&app, None);
             return Err(plain_update_error(&error));
@@ -989,6 +1062,7 @@ pub(crate) async fn command(
             install(&service, expected, generation).await?;
             Ok(Value::Null)
         }
+        "update_cancel" => Ok(Value::Bool(cancel_download())),
         _ => Err("Unknown update action".into()),
     }
 }
@@ -1635,5 +1709,65 @@ mod tests {
         let loaded = load_state_at(&state_path);
         assert!(loaded.last_checked.is_some());
         assert!(!check_due(loaded.last_checked.as_deref(), now));
+    }
+
+    static DOWNLOAD_CANCEL_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+        LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+    #[tokio::test]
+    async fn user_cancel_aborts_active_update_download_immediately() {
+        let _serial = DOWNLOAD_CANCEL_TEST_LOCK.lock().await;
+        assert!(!cancel_download());
+        let active = ActiveDownloadCancel::register();
+        let token = active.token().clone();
+        let cancel_task = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            assert!(cancel_download());
+        });
+        let started = Instant::now();
+        let result = until_cancelled_or_token(
+            std::future::pending::<()>(),
+            || false,
+            &token,
+            Duration::from_secs(30),
+        )
+        .await;
+        cancel_task.await.unwrap();
+        assert_eq!(result.unwrap_err(), USER_DOWNLOAD_CANCELLED);
+        assert!(started.elapsed() < Duration::from_secs(2));
+        drop(active);
+        assert!(!cancel_download());
+    }
+
+    #[tokio::test]
+    async fn update_cancel_dispatch_does_not_deadlock_behind_a_pending_privacy_writer() {
+        let _serial = DOWNLOAD_CANCEL_TEST_LOCK.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let service =
+            Service::new(dir.path().to_path_buf(), false, false).expect("create test service");
+        // Simulate an active update download holding the read lease while a
+        // privacy cutover queues a writer on Tokio's write-fair `privacy_gate`.
+        let download_lease = service.update_download_lease().await;
+        let active = ActiveDownloadCancel::register();
+        let writer_service = service.clone();
+        let writer = tokio::spawn(async move {
+            let gate = writer_service.update_privacy_gate();
+            let _write = gate.write().await;
+        });
+        // Yield so the writer registers on the write-fair RwLock queue.
+        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(15)).await;
+        let cancelled = tokio::time::timeout(
+            Duration::from_secs(2),
+            service.clone().dispatch("update_cancel", json!({})),
+        )
+        .await
+        .expect("update_cancel must not queue behind pending privacy writer")
+        .expect("update_cancel succeeds");
+        assert_eq!(cancelled, Value::Bool(true));
+        assert!(active.token().is_cancelled());
+        drop(active);
+        drop(download_lease);
+        writer.await.unwrap();
     }
 }

@@ -127,6 +127,10 @@ fn normalize_currency(text: &str) -> String {
 
 pub(crate) struct KokoroManager {
     root: PathBuf,
+    /// Serializes audio-cache writes/eviction and model deletion without
+    /// holding `state`, so `stop()`, `pause()`, `seek()`, and `status()` never
+    /// stall behind WAV `sync_data()` or cache sweeps. Lock order: `cache_gate` -> `state`.
+    cache_gate: Arc<Mutex<()>>,
     state: Mutex<State>,
 }
 
@@ -234,7 +238,7 @@ impl KokoroManager {
         let downloaded = source.is_some();
         let performance = source.as_ref().and_then(|s| load_value(&root,PERFORMANCE_FILE,s));
         let performance_error = source.as_ref().and_then(|s| load_value(&root,PERFORMANCE_ERROR_FILE,s));
-        Self { root, state: Mutex::new(State {
+        Self { root, cache_gate: Arc::new(Mutex::new(())), state: Mutex::new(State {
             source, downloaded, download: None, last_job: None, engine: None, active: None, error: None,
             performance, probing: false, probe: None, performance_error, probe_generation: 0,
         }) }
@@ -489,10 +493,28 @@ impl KokoroManager {
         };
         if let Some(finished) = download { finished.cancelled().await; }
         if let Some(finished) = probe { finished.cancelled().await; }
+        // Fence any in-flight cache write started before active playback was
+        // stopped, without holding `state` across the disk sync.
+        let cache_gate = self.cache_gate.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let _guard = cache_gate.lock().unwrap_or_else(|error| error.into_inner());
+        })
+        .await;
         self.state.lock().unwrap_or_else(|error| error.into_inner()).probing = false;
     }
 
     pub(crate) fn delete(&self) -> Result<(), String> {
+        // Signal active playback first so synthesis exits promptly, then take
+        // `cache_gate` -> `state` in canonical lock order to fence cache I/O.
+        {
+            let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            if state.download.is_some() { return Err("Wait for the voice model download to finish or cancel it first".into()); }
+            if let Some(active) = state.active.as_ref() {
+                active.stopped.store(true, Ordering::SeqCst);
+                let _ = active.commands.send(Command::Stop);
+            }
+        }
+        let _cache = self.cache_gate.lock().unwrap_or_else(|error| error.into_inner());
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         if state.download.is_some() { return Err("Wait for the voice model download to finish or cancel it first".into()); }
         state.last_job = None;
@@ -629,8 +651,9 @@ impl KokoroManager {
         Ok(engine)
     }
 
-    // Stop, replacement, privacy and deletion take the same lock. A worker that
-    // was running native synthesis cannot perform later cache I/O after retirement.
+    // Verify this synthesis still owns the active playback slot before starting
+    // cache I/O. Privacy cutover, shutdown, and deletion fence `cache_gate`,
+    // while `stop()`/`pause()`/`seek()`/`status()` touch only `state`.
     fn with_playback<T>(&self, stopped: &Arc<AtomicBool>, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         if stopped.load(Ordering::SeqCst) || state.active.as_ref().is_none_or(|active| !Arc::ptr_eq(&active.stopped, stopped)) {
@@ -669,12 +692,16 @@ impl KokoroManager {
         })).ok_or("The natural voice produced no audio")?;
         if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
         let wav = wav_bytes(audio.samples(), audio.sample_rate());
+        // Hold `cache_gate` (not `state`) across disk sync and eviction so
+        // `stop()`, `pause()`, `seek()`, and `status()` remain responsive.
+        let _cache = self.cache_gate.lock().unwrap_or_else(|error| error.into_inner());
         self.with_playback(stopped, || {
             if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
-            let file = install::publish_audio(&cache, Path::new(name), &wav).map_err(|e| format!("Saving cached natural voice audio failed: {e}"))?;
-            let _ = install::clean_cache(&cache, false);
-            Ok(file)
-        })
+            Ok(())
+        })?;
+        let file = install::publish_audio(&cache, Path::new(name), &wav).map_err(|e| format!("Saving cached natural voice audio failed: {e}"))?;
+        let _ = install::clean_cache(&cache, false);
+        Ok(file)
     }
 }
 
@@ -1460,5 +1487,19 @@ mod tests {
         assert_eq!(u16::from_le_bytes([wav[22], wav[23]]), 1);
         assert_eq!(u16::from_le_bytes([wav[34], wav[35]]), 16);
         assert_eq!(wav.len(), 44 + 6);
+    }
+
+    #[test]
+    fn playback_controls_and_status_do_not_block_on_audio_cache_io() {
+        let dir = std::env::temp_dir().join(format!("kiwix-kokoro-lock-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let manager = KokoroManager::new(&dir);
+        let _cache_busy = manager.cache_gate.lock().unwrap();
+        let status = manager.status();
+        assert_eq!(status["available"], false);
+        assert!(!manager.stop("missing", "token"));
+        assert!(!manager.command("missing", "token", Command::Pause));
+        drop(_cache_busy);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

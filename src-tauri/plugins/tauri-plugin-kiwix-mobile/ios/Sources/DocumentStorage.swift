@@ -644,7 +644,9 @@ final class ExternalDocuments {
       if scoped { url.stopAccessingSecurityScopedResource() }
     }
   }
-  // All methods are serialized by the plugin's provider worker.
+  // Protected by `lock` so long intake hashing on `hashWorker` can run
+  // concurrently with interactive acquire/release/forget on `providerWorker`.
+  private let lock = NSLock()
   private var transient: [String: Record] = [:]
   private var selectedURLs: [String: URL] = [:]
   private var leases: [String: Lease] = [:]
@@ -665,17 +667,22 @@ final class ExternalDocuments {
     self.resolveBookmark = resolveBookmark
   }
 
+  private func locked<T>(_ body: () throws -> T) rethrows -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return try body()
+  }
 
   private func valid(_ reference: String) throws {
     guard UUID(uuidString: reference) != nil else { throw MobileFailure("invalid_provider_reference") }
   }
-  private func persisted() -> [String: Data] {
+  private func persistedLocked() -> [String: Data] {
     defaults.dictionary(forKey: key) as? [String: Data] ?? [:]
   }
-  private func record(_ reference: String) throws -> Record {
+  private func recordLocked(_ reference: String) throws -> Record {
     try valid(reference)
     if let record = transient[reference] { return record }
-    guard let data = persisted()[reference] else { throw MobileFailure("provider_reference_revoked") }
+    guard let data = persistedLocked()[reference] else { throw MobileFailure("provider_reference_revoked") }
     return try JSONDecoder().decode(Record.self, from: data)
   }
   private func names(_ url: URL, folder: Bool) throws -> [String] {
@@ -778,12 +785,16 @@ final class ExternalDocuments {
   }
   private func publish(_ url: URL, record: Record, admitted: AdmittedParts?, persistent: Bool,
                        cancellation: WorkCancellation) throws -> ExternalSelection {
-    // One reference-map read and write per selection, or per whole batch when
-    // the caller owns `stored`.
-    var stored = persistent ? persisted() : [:]
+    var added: [String: Data] = [:]
     let selection = try publish(url, record: record, admitted: admitted, persistent: persistent,
-                                stored: &stored, cancellation: cancellation)
-    if persistent { defaults.set(stored, forKey: key) }
+                                stored: &added, cancellation: cancellation)
+    if persistent, !added.isEmpty {
+      locked {
+        var stored = persistedLocked()
+        for (reference, data) in added { stored[reference] = data }
+        defaults.set(stored, forKey: key)
+      }
+    }
     return selection
   }
   /// Admits one reference. `admitted` carries part identities that were already
@@ -793,22 +804,32 @@ final class ExternalDocuments {
   private func publish(_ url: URL, record: Record, admitted: AdmittedParts?, persistent: Bool,
                        stored: inout [String: Data], cancellation: WorkCancellation) throws -> ExternalSelection {
     let reference = UUID().uuidString
-    transient[reference] = record
-    selectedURLs[reference] = url
+    locked {
+      transient[reference] = record
+      selectedURLs[reference] = url
+    }
     do {
       if let admitted = admitted {
-        transient[reference] = Record(bookmark: record.bookmark, names: record.names,
-          folder: record.folder, directory: record.directory,
-          identities: admitted.identities, archiveUUID: admitted.archiveUUID)
+        locked {
+          transient[reference] = Record(bookmark: record.bookmark, names: record.names,
+            folder: record.folder, directory: record.directory,
+            identities: admitted.identities, archiveUUID: admitted.archiveUUID)
+        }
       } else {
         // Reject nonseekable/nonregular providers before publishing a reference.
         let acquired = try acquire(reference, cancellation: cancellation)
         release(acquired.lease)
       }
-      if persistent { stored[reference] = try JSONEncoder().encode(try self.record(reference)) }
+      if persistent {
+        let finalRecord = try locked { try self.recordLocked(reference) }
+        stored[reference] = try JSONEncoder().encode(finalRecord)
+      }
       return ExternalSelection(reference: reference, displayName: record.names[0], persistent: persistent)
     } catch {
-      transient.removeValue(forKey: reference); selectedURLs.removeValue(forKey: reference)
+      locked {
+        transient.removeValue(forKey: reference)
+        selectedURLs.removeValue(forKey: reference)
+      }
       throw error
     }
   }
@@ -934,9 +955,11 @@ final class ExternalDocuments {
         }
       }
       if persistent, !added.isEmpty {
-        var stored = persisted()
-        for (reference, data) in added { stored[reference] = data }
-        defaults.set(stored, forKey: key)
+        locked {
+          var stored = persistedLocked()
+          for (reference, data) in added { stored[reference] = data }
+          defaults.set(stored, forKey: key)
+        }
       }
       return result
     } catch {
@@ -953,10 +976,12 @@ final class ExternalDocuments {
     }
   }
   func acquire(_ reference: String, cancellation: WorkCancellation) throws -> ExternalAcquisition {
-    let record = try record(reference)
+    let (record, selected) = try locked {
+      (try recordLocked(reference), selectedURLs[reference])
+    }
     var stale = false
     let url: URL
-    if let selected = selectedURLs[reference] { url = selected }
+    if let selected { url = selected }
     else {
       (url, stale) = try resolveBookmark(record.bookmark)
     }
@@ -1025,20 +1050,27 @@ final class ExternalDocuments {
         throw MobileFailure("provider_archive_parts_changed")
       }
       let lease = newLeaseID().uuidString
-      guard leases[lease] == nil else { throw MobileFailure("provider_lease_conflict") }
       // Only replace the persisted capability after every admitted part and the
       // archive UUID have been validated while its security scope is retained.
       let bookmark = stale ? try url.bookmarkData(options: .minimalBookmark,
         includingResourceValuesForKeys: nil, relativeTo: nil) : record.bookmark
       let refreshed = Record(bookmark: bookmark, names: record.names, folder: record.folder,
                              directory: record.directory, identities: identities, archiveUUID: uuid)
-      if (stale || record.identities == nil || record.archiveUUID == nil), persisted()[reference] != nil {
-        var stored = persisted()
-        stored[reference] = try JSONEncoder().encode(refreshed)
-        defaults.set(stored, forKey: key)
+      let encoded = (stale || record.identities == nil || record.archiveUUID == nil)
+        ? try JSONEncoder().encode(refreshed) : nil
+      try locked {
+        guard leases[lease] == nil else { throw MobileFailure("provider_lease_conflict") }
+        var stored = persistedLocked()
+        guard transient[reference] != nil || stored[reference] != nil else {
+          throw MobileFailure("provider_reference_revoked")
+        }
+        if let encoded, stored[reference] != nil {
+          stored[reference] = encoded
+          defaults.set(stored, forKey: key)
+        }
+        transient[reference] = refreshed
+        leases[lease] = Lease(reference: reference, url: url, scoped: scoped, files: files)
       }
-      transient[reference] = refreshed
-      leases[lease] = Lease(reference: reference, url: url, scoped: scoped, files: files)
       return ExternalAcquisition(lease: lease, files: files)
     } catch {
       files.forEach { close($0.fd) }
@@ -1046,12 +1078,17 @@ final class ExternalDocuments {
       throw error
     }
   }
-  func release(_ lease: String) { leases.removeValue(forKey: lease) }
+  func release(_ lease: String) {
+    let released = locked { leases.removeValue(forKey: lease) }
+    _ = released
+  }
   func forget(_ reference: String) throws {
     try valid(reference)
-    transient.removeValue(forKey: reference); selectedURLs.removeValue(forKey: reference)
-    var stored = persisted()
-    if stored.removeValue(forKey: reference) != nil { defaults.set(stored, forKey: key) }
+    locked {
+      transient.removeValue(forKey: reference); selectedURLs.removeValue(forKey: reference)
+      var stored = persistedLocked()
+      if stored.removeValue(forKey: reference) != nil { defaults.set(stored, forKey: key) }
+    }
     // Existing leases own their scope independently until the last archive drops.
   }
 }

@@ -399,7 +399,13 @@ pub(super) fn open_source(source: Arc<dyn PositionedInput>, len: u64) -> Result<
     };
     let archive = Zim::from_positioned(source, len, limits).map_err(archive_error)?;
     validate_layout(&archive)?;
-    archive.set_cluster_cache_max_bytes(32 << 20);
+    // Mobile processes have much tighter memory ceilings (Jetsam/LMK) than
+    // desktop, so keep per-archive decoded cluster caches smaller on mobile.
+    #[cfg(mobile)]
+    const CLUSTER_CACHE_MAX_BYTES: usize = 8 << 20;
+    #[cfg(not(mobile))]
+    const CLUSTER_CACHE_MAX_BYTES: usize = 32 << 20;
+    archive.set_cluster_cache_max_bytes(CLUSTER_CACHE_MAX_BYTES);
     Ok(archive)
 }
 

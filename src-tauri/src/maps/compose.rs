@@ -93,7 +93,7 @@ pub(super) async fn fetch_json<T: DeserializeOwned + Send + 'static>(
     let response = tokio::select! {
         biased;
         _ = control.cancelled() => return Err(CANCELLED.into()),
-        result = client.get(url).header("Accept", "application/json").header("Accept-Encoding", "identity").send() => result.map_err(|e| format!("StreetZim request failed: {e}"))?,
+        result = client.get(url).header("Accept", "application/json").header("Accept-Encoding", "gzip, identity").send() => result.map_err(|e| format!("StreetZim request failed: {e}"))?,
     };
     if response.status() != reqwest::StatusCode::OK {
         return Err(format!(
@@ -101,16 +101,56 @@ pub(super) async fn fetch_json<T: DeserializeOwned + Send + 'static>(
             response.status()
         ));
     }
-    let bytes = bounded_body(response, MAX_JSON, control, |_, _| {}).await?;
+    let mut encodings = response.headers().get_all(reqwest::header::CONTENT_ENCODING).iter();
+    let gzipped = match (encodings.next(), encodings.next()) {
+        (None, _) => false,
+        (Some(value), None) => {
+            let lower = value
+                .to_str()
+                .map_err(|_| "Unsupported StreetZim JSON encoding")?
+                .trim()
+                .to_ascii_lowercase();
+            match lower.as_str() {
+                "" | "identity" => false,
+                "gzip" => true,
+                other => return Err(format!("Unsupported StreetZim JSON encoding: {other}")),
+            }
+        }
+        (Some(_), Some(_)) => return Err("Unsupported StreetZim JSON encoding".into()),
+    };
+    let bytes = bounded_body_inner(response, MAX_JSON, gzipped, control, |_, _| {}).await?;
     let control = control.clone();
     tokio::task::spawn_blocking(move || {
+        control.check()?;
+        let payload = if gzipped {
+            use std::io::Read;
+            let mut decoder = flate2::read::GzDecoder::new(bytes.as_slice());
+            let mut decoded = Vec::new();
+            let mut chunk = [0u8; 64 * 1024];
+            loop {
+                control.check()?;
+                let read = decoder
+                    .read(&mut chunk)
+                    .map_err(|e| format!("Decompressing StreetZim JSON failed: {e}"))?;
+                if read == 0 {
+                    break;
+                }
+                if decoded.len().saturating_add(read) > MAX_JSON {
+                    return Err("StreetZim response exceeded size limit".into());
+                }
+                decoded.extend_from_slice(&chunk[..read]);
+            }
+            decoded
+        } else {
+            bytes
+        };
         control.check()?;
         #[cfg(test)]
         if let Some(hook) = control.before_json_parse.lock().unwrap().take() {
             hook();
         }
         let result =
-            serde_json::from_slice::<T>(&bytes).map_err(|e| format!("Invalid StreetZim JSON: {e}"));
+            serde_json::from_slice::<T>(&payload).map_err(|e| format!("Invalid StreetZim JSON: {e}"));
         control.check()?;
         result
     })
@@ -122,6 +162,16 @@ pub(super) async fn bounded_body(
     response: reqwest::Response,
     maximum: usize,
     control: &Control,
+    progress: impl FnMut(u64, u64),
+) -> Result<Vec<u8>, String> {
+    bounded_body_inner(response, maximum, false, control, progress).await
+}
+
+async fn bounded_body_inner(
+    response: reqwest::Response,
+    maximum: usize,
+    allow_gzip: bool,
+    control: &Control,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<Vec<u8>, String> {
     if response
@@ -130,10 +180,12 @@ pub(super) async fn bounded_body(
     {
         return Err("StreetZim response exceeds allowed length".into());
     }
-    if response
-        .headers()
-        .get(reqwest::header::CONTENT_ENCODING)
-        .is_some_and(|v| v != "identity")
+    if !allow_gzip
+        && response
+            .headers()
+            .get_all(reqwest::header::CONTENT_ENCODING)
+            .iter()
+            .any(|v| v != "identity")
     {
         return Err("Unexpected compressed StreetZim response".into());
     }
@@ -619,6 +671,12 @@ impl ChunkReader<'_> {
                     return Ok(self.remember_shared(name, bytes));
                 }
                 Err(error) => {
+                    self.manager.update(self.id, |j| {
+                        j.incoming = 0;
+                        j.incoming_total = 0;
+                        j.speed = 0;
+                        j.eta_seconds = None;
+                    });
                     self.control.check()?;
                     if attempt == 2 {
                         return Err(error);
@@ -702,14 +760,32 @@ impl ChunkReader<'_> {
         {
             return Err("StreetZim source returned an invalid HTTP range response".into());
         }
+        let started = Instant::now();
+        let mut last_report = started;
         let bytes = bounded_body(
             response,
             length as usize,
             self.control,
             |incoming, total| {
+                let now = Instant::now();
+                if incoming < total && now.saturating_duration_since(last_report) < Duration::from_millis(250) {
+                    return;
+                }
+                last_report = now;
+                let elapsed = now.saturating_duration_since(started).as_secs_f64();
+                let speed = if elapsed > 0.001 && incoming > 0 {
+                    (incoming as f64 / elapsed).round() as u64
+                } else {
+                    0
+                };
                 self.manager.update(self.id, |j| {
                     j.incoming = incoming;
                     j.incoming_total = total;
+                    if speed > 0 {
+                        j.speed = speed;
+                        let remaining = j.total.saturating_sub(j.written).saturating_sub(incoming);
+                        j.eta_seconds = Some(remaining.div_ceil(speed));
+                    }
                 });
             },
         )

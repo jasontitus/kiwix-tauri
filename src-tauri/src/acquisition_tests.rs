@@ -4979,3 +4979,66 @@ async fn a_crash_before_preallocation_resumes_its_journaled_ranges() {
     drop(store);
     fs::remove_dir_all(root).unwrap();
 }
+
+
+#[tokio::test]
+async fn single_stream_retries_transient_503_and_completes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let body = zim_bytes(b'r', 128 * 1024);
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let server_attempts = attempts.clone();
+    let server_body = body.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                break;
+            };
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = socket.read(&mut buffer).await.unwrap();
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let attempt = server_attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                socket
+                    .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Encoding: gzip\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await
+                    .unwrap();
+            } else {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: \"retry-v1\"\r\nConnection: close\r\n\r\n",
+                    server_body.len()
+                );
+                socket.write_all(header.as_bytes()).await.unwrap();
+                socket.write_all(&server_body).await.unwrap();
+            }
+        }
+    });
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(
+        root.join("state"),
+        store.clone(),
+        crate::update_admission::AdmissionGate::default(),
+    )
+    .unwrap();
+    let url = format!("http://{addr}/retry.zim");
+    let job = manager
+        .start(url, root.clone(), Some("retry.zim".into()), Some(body.len() as u64), None)
+        .await
+        .unwrap();
+    let done = finished_job(&manager, &job.id).await;
+    assert_eq!(done.status, "complete", "{:?}", done.error);
+    assert_eq!(fs::read(&done.destination).unwrap(), body);
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    server.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}

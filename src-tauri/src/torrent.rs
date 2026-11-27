@@ -635,7 +635,7 @@ struct Inner {
     /// cleanup) behind the slowest one. A job's init/reads/writes and its
     /// terminal cleanup take the same fence, so no storage call is in flight
     /// while that job's files are unlinked.
-    storage_gates: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    storage_gates: Mutex<HashMap<String, Arc<std::sync::RwLock<()>>>>,
     stop: CancellationToken,
     suspended: AtomicBool,
     /// Abandoned `add_torrent` calls whose session registration is still being
