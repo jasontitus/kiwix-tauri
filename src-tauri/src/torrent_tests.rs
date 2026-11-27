@@ -2762,11 +2762,16 @@ async fn shared_library_archive_downloads_from_magnet_in_second_profile() {
         .unwrap()
         .listen_addr()
         .expect("seeder listener address");
-    // The engine listens on the unspecified address ([::]). Unix connects that
-    // to loopback, but Windows refuses to connect to it (WSAEADDRNOTAVAIL), so
-    // dial the same port on loopback explicitly.
+    // The engine listens on the unspecified address ([::], or 0.0.0.0 on a
+    // host without IPv6). Unix connects that to loopback, but Windows refuses
+    // to connect to it (WSAEADDRNOTAVAIL), so dial the same port on the
+    // loopback address of the same family explicitly.
     if address.ip().is_unspecified() {
-        address.set_ip(std::net::Ipv6Addr::LOCALHOST.into());
+        address.set_ip(if address.is_ipv4() {
+            std::net::Ipv4Addr::LOCALHOST.into()
+        } else {
+            std::net::Ipv6Addr::LOCALHOST.into()
+        });
     }
 
     let downloader_profile = Profile::new();

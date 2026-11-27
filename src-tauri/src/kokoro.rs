@@ -450,7 +450,10 @@ impl KokoroManager {
                 Ok(())
             }
             Err(error) => {
-                state.error = Some(error.clone());
+                // Stopping the download (Cancel, or a privacy/read-only
+                // cutover) is the outcome that was asked for, not a fault to
+                // keep on screen until the next attempt.
+                if !download.cancel.cancel.is_cancelled() { state.error = Some(error.clone()); }
                 Err(error)
             }
         }
@@ -662,9 +665,11 @@ impl KokoroManager {
         f()
     }
 
+    /// `Ok(None)` means the chunk holds nothing this voice can pronounce; the
+    /// caller skips it. Engine failures and cancellation remain errors.
     #[allow(clippy::too_many_arguments)]
     fn synthesize(&self, engine: &OfflineTts, g2p: &G2P, text: &str, sid: i32, rate: f64,
-        stopped: &Arc<AtomicBool>, prefetch: Option<&CancellationToken>) -> Result<File, String> {
+        stopped: &Arc<AtomicBool>, prefetch: Option<&CancellationToken>) -> Result<Option<File>, String> {
         let cache = self.root.join("voice-audio-v2");
         let key = format!("misaki-v1\u{0}{text}\u{0}{sid}\u{0}{rate:.3}");
         let digest = chksum_hash_sha2_256::hash(key.as_bytes()).to_hex_lowercase();
@@ -674,12 +679,8 @@ impl KokoroManager {
         self.with_playback(stopped, || Ok(()))?;
         let cached = install::cached_audio(&cache, name).map_err(|e| format!("Reading cached natural voice audio failed: {e}"))?;
         if cancelled() { return Err("The natural voice synthesis was cancelled".into()); }
-        if let Some(file) = cached { return Ok(file); }
-        let spoken = normalize_currency(text);
-        let (phonemes, _) = g2p.g2p(&spoken).map_err(|error| format!("Preparing pronunciation failed: {error}"))?;
-        let phonemes: Vec<i32> = phonemes.chars().filter(|character| *character != '❓')
-            .map(|character| character as i32).collect();
-        if phonemes.is_empty() { return Err("The natural voice found no pronounceable text".into()); }
+        if let Some(file) = cached { return Ok(Some(file)); }
+        let Some(phonemes) = speakable_phonemes(g2p, text)? else { return Ok(None); };
         let config = GenerationConfig {
             sid, speed: rate as f32,
             phoneme_codepoints: Some(vec![phonemes]),
@@ -701,8 +702,21 @@ impl KokoroManager {
         })?;
         let file = install::publish_audio(&cache, Path::new(name), &wav).map_err(|e| format!("Saving cached natural voice audio failed: {e}"))?;
         let _ = install::clean_cache(&cache, false);
-        Ok(file)
+        Ok(Some(file))
     }
+}
+
+const NOTHING_PRONOUNCEABLE: &str = "The natural voice found no pronounceable text";
+
+/// Kokoro phoneme codepoints for one chunk, or `None` when there is nothing to
+/// speak. Misaki marks every token it cannot resolve with `❓` (no fallback
+/// phonemizer is compiled in), so a chunk made only of such tokens — a line of
+/// Chinese in an English article, say — leaves nothing but their spacing.
+fn speakable_phonemes(g2p: &G2P, text: &str) -> Result<Option<Vec<i32>>, String> {
+    let spoken = normalize_currency(text);
+    let (phonemes, _) = g2p.g2p(&spoken).map_err(|error| format!("Preparing pronunciation failed: {error}"))?;
+    if phonemes.chars().all(|character| character == '❓' || character.is_whitespace()) { return Ok(None); }
+    Ok(Some(phonemes.chars().filter(|character| *character != '❓').map(|character| character as i32).collect()))
 }
 
 /// UTF-16 offsets of sentence starts inside one synthesized chunk. Kokoro
@@ -732,7 +746,7 @@ fn sentence_starts(text: &str) -> Vec<usize> {
 struct Prefetch {
     index: usize,
     cancel: CancellationToken,
-    worker: Option<thread::JoinHandle<Result<File, String>>>,
+    worker: Option<thread::JoinHandle<Result<Option<File>, String>>>,
 }
 
 impl Prefetch {
@@ -747,7 +761,7 @@ impl Prefetch {
         Some(Self { index, cancel, worker: Some(worker) })
     }
 
-    fn finish(mut self) -> Result<File, String> {
+    fn finish(mut self) -> Result<Option<File>, String> {
         self.worker.take().unwrap().join().map_err(|_| "The natural voice prefetch worker panicked".to_string())?
     }
 }
@@ -787,9 +801,14 @@ fn run(
     let mut index = 0usize;
     let mut position = chunks[0].start_utf16;
     let mut paused = false;
+    let mut played = false;
+    let mut skipped = false;
     'playback: loop {
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
         let Some(chunk) = chunks.get(index) else {
+            // Skipping every chunk is still the failure it always was, not a
+            // finished article.
+            if skipped && !played { return Err(NOTHING_PRONOUNCEABLE.into()); }
             let _ = events.send(activity(false, false, total_utf16 as usize));
             return Ok(());
         };
@@ -819,7 +838,7 @@ fn run(
         if paused { return Ok(()); } // Sender disconnected.
 
         let file = match prepared.take() {
-            Some((prepared_index, file)) if prepared_index == index => file,
+            Some((prepared_index, file)) if prepared_index == index => Some(file),
             _ => match prefetched.take() {
                 Some(next) if next.index == index => next.finish()?,
                 other => {
@@ -827,6 +846,14 @@ fn run(
                     manager.synthesize(&engine, &g2p, &chunk.text, sid, request.rate, &stopped, None)?
                 }
             },
+        };
+        let Some(file) = file else {
+            // One unpronounceable chunk must not end the article: move the
+            // playhead to the next chunk exactly as if this one had played.
+            // No prefetch is outstanding here, so the loop synthesizes it.
+            skipped = true;
+            (index, position) = after_chunk(&chunks, index, total_utf16 as usize);
+            continue;
         };
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
         // Controls can arrive during synthesis. Do not play even a brief
@@ -856,6 +883,7 @@ fn run(
         let player = Sink::try_new(&stream)
             .map_err(|error| format!("Starting the audio output failed: {error}"))?;
         manager.with_playback(&stopped, || { player.append(source); Ok(()) })?;
+        played = true;
         if index + 1 < chunks.len() {
             prefetched = Prefetch::start(index + 1, manager.clone(), engine.clone(), g2p.clone(),
                 chunks[index + 1].text.clone(), sid, request.rate, stopped.clone());
@@ -902,9 +930,13 @@ fn run(
                 Err(RecvTimeoutError::Timeout) => {}
             }
         }
-        index += 1;
-        position = chunks.get(index).map_or(total_utf16 as usize, |chunk| chunk.start_utf16);
+        (index, position) = after_chunk(&chunks, index, total_utf16 as usize);
     }
+}
+
+/// The playhead once chunk `index` is finished, whether played or skipped.
+fn after_chunk(chunks: &[Chunk], index: usize, total: usize) -> (usize, usize) {
+    (index + 1, chunks.get(index + 1).map_or(total, |chunk| chunk.start_utf16))
 }
 
 fn transport_position(chunks: &[Chunk], index: usize, position: usize, total: usize, rate: f64, command: Command) -> (usize, usize) {
@@ -1187,6 +1219,39 @@ mod tests {
         assert_eq!(transport_position(&chunks, 1, second, total, 2.0, Command::Rewind(15.0)), (0, second - 450));
         assert_eq!(transport_position(&chunks, 0, 300, total, 1.0, Command::Forward(25.0)), (1, 675));
         assert_eq!(transport_position(&chunks, 1, second, total, 1.0, Command::Next), (chunks.len(), total));
+    }
+
+    #[test]
+    fn an_unpronounceable_chunk_is_skipped_and_the_playhead_moves_to_the_next_one() {
+        let text = "This opening sentence is long enough to stand alone.\n中华人民共和国是一个国家在东亚\nThis closing sentence is also long enough.";
+        let chunks = chunks(text);
+        assert_eq!(chunks.len(), 3);
+        let g2p = G2P::new(Language::EnglishUS);
+        let speakable: Vec<bool> = chunks.iter()
+            .map(|chunk| speakable_phonemes(&g2p, &chunk.text).unwrap().is_some()).collect();
+        assert_eq!(speakable, [true, false, true], "only the Chinese line has nothing to speak");
+        // What is spoken never carries the unknown-token marker to the engine.
+        let spoken = speakable_phonemes(&g2p, "Kiwix 中华 reads offline.").unwrap().unwrap();
+        assert!(!spoken.is_empty() && !spoken.contains(&('❓' as i32)));
+        // Skipping lands exactly where finishing the chunk would have.
+        let total = text.encode_utf16().count();
+        assert_eq!(after_chunk(&chunks, 1, total), (2, chunks[2].start_utf16));
+        assert_eq!(after_chunk(&chunks, 1, total), transport_position(&chunks, 1, chunks[1].start_utf16, total, 1.0, Command::Next));
+        assert_eq!(after_chunk(&chunks, 2, total), (3, total));
+    }
+
+    #[test]
+    fn stopping_a_voice_download_is_not_shown_as_an_error() {
+        let profile = fixtures::profile().unwrap();
+        let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
+        manager.begin_download().unwrap();
+        assert!(manager.cancel_download());
+        manager.finish_download(Err("The voice model download was cancelled".into())).unwrap_err();
+        assert!(manager.status()["error"].is_null());
+        // A download that fails on its own still says why.
+        manager.begin_download().unwrap();
+        manager.finish_download(Err("Downloading the voice model failed (HTTP 503)".into())).unwrap_err();
+        assert_eq!(manager.status()["error"], "Downloading the voice model failed (HTTP 503)");
     }
 
     #[test]

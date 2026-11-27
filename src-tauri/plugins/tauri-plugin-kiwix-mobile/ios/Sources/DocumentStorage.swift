@@ -571,21 +571,27 @@ func prepareExport(path: String, suggestedName: String, cancellation: WorkCancel
   }
 }
 
-func persistFolderBookmark(_ source: URL, destination: URL) throws {
-  let scoped = source.startAccessingSecurityScopedResource()
-  defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-  let bookmark = try source.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-  let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-  let directory = support.appendingPathComponent("kiwix-provider-bookmarks", isDirectory: true)
-  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-  let target = directory.appendingPathComponent(destination.lastPathComponent + ".bookmark")
-  let (parent, leaf) = try openOwnedParent(target.path, staging: false)
-  defer { close(parent) }
-  let output = openat(parent, leaf, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR)
-  guard output >= 0 else { throw posixFailure("create_bookmark") }
-  defer { close(output) }
-  try bookmark.withUnsafeBytes { try writeAll(output, $0, count: $0.count) }
-  guard fsync(output) == 0, fsync(parent) == 0 else { throw posixFailure("sync_failed") }
+/// Earlier builds saved a bookmark of the source folder here after every
+/// "import a folder copy". Nothing ever read one, so each was a leftover grant
+/// to a folder the person only meant to copy from. Remove exactly what that
+/// code created: `*.bookmark` entries directly inside its own directory. The
+/// directory itself goes only once it is empty, so anything unexpected stays.
+func removeUnreadFolderBookmarks(
+  in support: URL? = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+) {
+  guard let support = support else { return }
+  let url = support.appendingPathComponent("kiwix-provider-bookmarks", isDirectory: true)
+  let directory = open(url.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+  guard directory >= 0 else { return }
+  defer { close(directory) }
+  guard let children = try? FileManager.default.contentsOfDirectory(at: url,
+    includingPropertiesForKeys: nil, options: []) else { return }
+  for child in children where child.lastPathComponent.hasSuffix(".bookmark") {
+    // Without AT_REMOVEDIR this never removes a directory, and it removes a
+    // symbolic link itself rather than whatever the link names.
+    unlinkat(directory, child.lastPathComponent, 0)
+  }
+  rmdir(url.path)
 }
 
 // Authority is created only by UIDocumentPicker or the native Open-In queue.

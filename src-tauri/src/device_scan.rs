@@ -90,11 +90,18 @@ pub fn validate_token(token: &str) -> Result<(), String> {
 }
 
 fn clean(value: &str, limit: usize, what: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() || value.len() > limit {
+    let value = clean_optional(value, limit, what)?;
+    if value.is_empty() {
         return Err(format!("Invalid {what} in device scan"));
     }
-    if value.chars().any(char::is_control) {
+    Ok(value)
+}
+
+/// `clean` for a field that may legitimately be empty: an archive at the top
+/// level of a volume or of a granted folder has no location within it.
+fn clean_optional(value: &str, limit: usize, what: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.len() > limit || value.chars().any(char::is_control) {
         return Err(format!("Invalid {what} in device scan"));
     }
     Ok(value.to_owned())
@@ -127,6 +134,75 @@ fn identity(volume: &str, size: u64, modified: u64, location: &str, name: &str) 
     Some(format!("{volume}:{size}:{}:{location}/{name}", modified / 1000))
 }
 
+/// Validate one native candidate. An error rejects only this candidate.
+fn admit(candidate: Candidate, library_names: &HashSet<String>) -> Result<FoundArchive, String> {
+    let name = clean(&candidate.name, MAX_NAME, "archive name")?;
+    if name.starts_with('.') || name.contains('/') || name.contains('\\') {
+        return Err("Invalid archive name in device scan".into());
+    }
+    if candidate.names.len() > 676 {
+        return Err("Device scan archive has too many parts".into());
+    }
+    if candidate.problem.is_none() {
+        crate::provider_reference::validate_parts(
+            &candidate.names.iter().map(String::as_str).collect::<Vec<_>>(),
+        )?;
+    } else {
+        // A broken or incomplete set is reported as unreadable, not as a
+        // scan failure: the user still needs to see that it exists.
+        for part in &candidate.names {
+            let part = clean(part, MAX_NAME, "archive part")?;
+            if part.starts_with('.') || part.contains('/') || part.contains('\\')
+                || !is_archive_part(&part) {
+                return Err("Invalid archive part in device scan".into());
+            }
+        }
+    }
+    if candidate.names.first() != Some(&name) {
+        return Err("Device scan archive name does not match its parts".into());
+    }
+    let volume = clean(&candidate.volume, MAX_VOLUME, "volume")?;
+    // Empty for an archive at the root of a volume or of a granted folder.
+    let location = clean_optional(&candidate.location, MAX_LOCATION, "location")?;
+    let mut sources: Vec<String> = candidate
+        .sources
+        .iter()
+        .map(|source| {
+            source_name(source)
+                .map(str::to_owned)
+                .ok_or_else(|| "Unknown device scan source".to_string())
+        })
+        .collect::<Result<_, _>>()?;
+    sources.sort();
+    sources.dedup();
+    if sources.is_empty() {
+        return Err("Device scan entry has no source".into());
+    }
+    let problem = candidate
+        .problem
+        .as_deref()
+        .map(|problem| clean(problem, MAX_PROBLEM, "problem"))
+        .transpose()?;
+    let split = candidate.names.len() > 1;
+    let key = identity(&volume, candidate.size, candidate.modified, &location, &name)
+        .unwrap_or_else(|| format!("token:{}", candidate.token));
+    Ok(FoundArchive {
+        id: key,
+        name: name.clone(),
+        names: candidate.names,
+        size: candidate.size,
+        modified: candidate.modified,
+        volume,
+        location,
+        sources,
+        readable: candidate.readable && problem.is_none(),
+        split,
+        token: candidate.token,
+        problem,
+        in_library: library_names.contains(&name.to_ascii_lowercase()),
+    })
+}
+
 /// Validate, normalize and deduplicate a native scan response. `library_names`
 /// are the file names already represented in the library (lowercased); they
 /// only drive the advisory `inLibrary` flag, never admission.
@@ -147,75 +223,23 @@ pub fn scan(raw: Value, library_names: &HashSet<String>) -> Result<ScanResult, S
     let mut entries: Vec<FoundArchive> = Vec::new();
     let mut by_identity: HashMap<String, usize> = HashMap::new();
     let mut tokens = HashSet::new();
+    let mut skipped = 0usize;
     for candidate in native.entries {
         validate_token(&candidate.token)?;
         if !tokens.insert(candidate.token.clone()) {
             return Err("The file list is out of date. Scan your device again".into());
         }
-        let name = clean(&candidate.name, MAX_NAME, "archive name")?;
-        if name.starts_with('.') || name.contains('/') || name.contains('\\') {
-            return Err("Invalid archive name in device scan".into());
-        }
-        if candidate.names.len() > 676 {
-            return Err("Device scan archive has too many parts".into());
-        }
-        if candidate.problem.is_none() {
-            crate::provider_reference::validate_parts(
-                &candidate.names.iter().map(String::as_str).collect::<Vec<_>>(),
-            )?;
-        } else {
-            // A broken or incomplete set is reported as unreadable, not as a
-            // scan failure: the user still needs to see that it exists.
-            for part in &candidate.names {
-                let part = clean(part, MAX_NAME, "archive part")?;
-                if part.starts_with('.') || part.contains('/') || part.contains('\\')
-                    || !is_archive_part(&part) {
-                    return Err("Invalid archive part in device scan".into());
-                }
+        // Names, folders and provider text come from whatever is on the
+        // device. One entry that cannot be shown safely is left out and
+        // reported; it must not hide every other archive that was found.
+        let entry = match admit(candidate, library_names) {
+            Ok(entry) => entry,
+            Err(_) => {
+                skipped += 1;
+                continue;
             }
-        }
-        if candidate.names.first() != Some(&name) {
-            return Err("Device scan archive name does not match its parts".into());
-        }
-        let volume = clean(&candidate.volume, MAX_VOLUME, "volume")?;
-        let location = clean(&candidate.location, MAX_LOCATION, "location")?;
-        let mut sources: Vec<String> = candidate
-            .sources
-            .iter()
-            .map(|source| {
-                source_name(source)
-                    .map(str::to_owned)
-                    .ok_or_else(|| "Unknown device scan source".to_string())
-            })
-            .collect::<Result<_, _>>()?;
-        sources.sort();
-        sources.dedup();
-        if sources.is_empty() {
-            return Err("Device scan entry has no source".into());
-        }
-        let problem = candidate
-            .problem
-            .as_deref()
-            .map(|problem| clean(problem, MAX_PROBLEM, "problem"))
-            .transpose()?;
-        let split = candidate.names.len() > 1;
-        let key = identity(&volume, candidate.size, candidate.modified, &location, &name)
-            .unwrap_or_else(|| format!("token:{}", candidate.token));
-        let entry = FoundArchive {
-            id: key.clone(),
-            name: name.clone(),
-            names: candidate.names,
-            size: candidate.size,
-            modified: candidate.modified,
-            volume,
-            location,
-            sources,
-            readable: candidate.readable && problem.is_none(),
-            split,
-            token: candidate.token,
-            problem,
-            in_library: library_names.contains(&name.to_ascii_lowercase()),
         };
+        let key = entry.id.clone();
         match by_identity.get(&key).copied() {
             None => {
                 by_identity.insert(key, entries.len());
@@ -223,6 +247,13 @@ pub fn scan(raw: Value, library_names: &HashSet<String>) -> Result<ScanResult, S
             }
             Some(index) => merge(&mut entries[index], entry),
         }
+    }
+    if skipped > 0 {
+        limitations.push(if skipped == 1 {
+            "1 ZIM file was left out because its name or folder is hidden or cannot be shown safely.".to_owned()
+        } else {
+            format!("{skipped} ZIM files were left out because their names or folders are hidden or cannot be shown safely.")
+        });
     }
     entries.sort_by(|left, right| {
         left.name
@@ -342,16 +373,76 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_names_and_tokens() {
+        // An unsafe name never becomes an entry; it is counted, not shown.
         let unsafe_name = json!({
             "entries": [candidate(&uuid(5), "../escape.zim", 10, 1)],
             "limitations": []
         });
-        assert!(scan(unsafe_name, &HashSet::new()).is_err());
+        let result = scan(unsafe_name, &HashSet::new()).unwrap();
+        assert!(result.entries.is_empty());
+        assert_eq!(result.limitations.len(), 1);
+        assert!(!result.limitations[0].contains("escape"), "{}", result.limitations[0]);
+        // Tokens are minted by native code, never taken from the device: a bad
+        // or repeated one means the response itself cannot be trusted.
         let unsafe_token = json!({
             "entries": [candidate("not-a-uuid", "ok.zim", 10, 1)],
             "limitations": []
         });
         assert!(scan(unsafe_token, &HashSet::new()).is_err());
+        let repeated_token = json!({
+            "entries": [candidate(&uuid(5), "a.zim", 10, 1), candidate(&uuid(5), "b.zim", 10, 1)],
+            "limitations": []
+        });
+        assert!(scan(repeated_token, &HashSet::new()).is_err());
+    }
+
+    #[test]
+    fn an_archive_at_a_volume_root_has_an_empty_location() {
+        let mut root = candidate(&uuid(11), "wikipedia.zim", 1024, 1_700_000_000_123);
+        root["location"] = json!("");
+        let mut tree = candidate(&uuid(12), "wikipedia.zim", 1024, 1_700_000_000_456);
+        tree["location"] = json!("  ");
+        tree["sources"] = json!(["tree"]);
+        let raw = json!({ "entries": [root, tree], "limitations": [] });
+        let result = scan(raw, &HashSet::new()).unwrap();
+        assert!(result.limitations.is_empty(), "{:?}", result.limitations);
+        // Both sightings of the root-level file still collapse into one entry.
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].location, "");
+        assert_eq!(result.entries[0].sources, vec!["media", "tree"]);
+        assert_eq!(result.entries[0].id, "primary:1024:1700000000:/wikipedia.zim");
+        // The location is still bounded and may not carry control characters.
+        for location in ["Download\u{0}kiwix".to_owned(), "x".repeat(MAX_LOCATION + 1)] {
+            let mut unsafe_location = candidate(&uuid(13), "other.zim", 10, 1);
+            unsafe_location["location"] = json!(location);
+            let result = scan(json!({ "entries": [unsafe_location], "limitations": [] }), &HashSet::new()).unwrap();
+            assert!(result.entries.is_empty());
+            assert_eq!(result.limitations.len(), 1);
+        }
+    }
+
+    #[test]
+    fn one_unusable_candidate_does_not_hide_the_others() {
+        let mut no_volume = candidate(&uuid(16), "volume.zim", 10, 1);
+        no_volume["volume"] = json!("");
+        let raw = json!({
+            "entries": [
+                candidate(&uuid(14), "good.zim", 10, 1_000),
+                // A granted folder can list a hidden trashed copy.
+                candidate(&uuid(15), ".trashed-1700000000-old.zim", 10, 2_000),
+                no_volume,
+                candidate(&uuid(17), "also-good.zim", 20, 3_000)
+            ],
+            "limitations": ["Android 13 and later requires folder access"]
+        });
+        let result = scan(raw, &HashSet::new()).unwrap();
+        let names: Vec<_> = result.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names, ["also-good.zim", "good.zim"]);
+        // One summary line for everything that was left out, after the
+        // platform's own limitations; no rejected text is repeated in it.
+        assert_eq!(result.limitations.len(), 2);
+        assert!(result.limitations[1].starts_with("2 ZIM files were left out"), "{}", result.limitations[1]);
+        assert!(!result.limitations[1].contains("trashed"));
     }
 
     #[test]
@@ -394,7 +485,9 @@ mod tests {
             }],
             "limitations": []
         });
-        assert!(scan(raw, &HashSet::new()).is_err());
+        let result = scan(raw, &HashSet::new()).unwrap();
+        assert!(result.entries.is_empty());
+        assert_eq!(result.limitations.len(), 1);
     }
 
     #[test]

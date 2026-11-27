@@ -275,6 +275,7 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
 
   override func load(webview: WKWebView) {
     CrashIntake.install()
+    providerWorker.async { removeUnreadFolderBookmarks() }
     webView = webview
     if Thread.isMainThread {
       retireNearby()
@@ -889,7 +890,6 @@ final class KiwixMobilePlugin: Plugin, UIDocumentPickerDelegate, UIAdaptivePrese
         try current.cancellation.check()
         try destination.finish()
         committed = true
-        if folder { try persistFolderBookmark(urls[0], destination: destination.url) }
         let reply = ImportReply(paths: destination.paths, cancelled: false, directory: folder ? destination.url.path : nil)
         DispatchQueue.main.async {
           // Once fsync succeeds this is an owned publication candidate; a late

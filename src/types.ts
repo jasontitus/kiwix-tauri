@@ -569,8 +569,12 @@ export interface MapJob extends AcquisitionVerification {
   total: number;
   incoming: number;
   incomingTotal: number;
+  /**
+   * Bytes per second of the block being fetched from the network (or of the
+   * last one while the next is prepared); 0 or absent when the latest block
+   * came from the cache or a local map, and when idle. There is no ETA.
+   */
   speed?: number;
-  etaSeconds?: number | null;
   /** Unique required recipe blocks; absent in older job journals. */
   blocksTotal?: number | null;
   blocksReady?: number | null;
@@ -579,6 +583,13 @@ export interface MapJob extends AcquisitionVerification {
   resumable?: boolean;
   /** Native permission to hide this job without orphaning retained files. */
   canRemoveFromList?: boolean;
+  /**
+   * Files Kiwix kept because it could not prove they were its own to delete.
+   * Pass one unchanged as `path` to `map_forget_recovery` to dismiss its
+   * warning (the file is never touched). Absent when there are none, and in
+   * private or read-only mode.
+   */
+  recoveryPaths?: string[];
   error: string | null;
   path: string | null;
 }

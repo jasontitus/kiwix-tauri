@@ -26,4 +26,11 @@ struct ReadAloudActivityAttributes: ActivityAttributes {
   var title: String
   /// Human-readable voice name or URI.
   var voice: String
+  /// Names of the transport controls, already localized by Rust. Optional so
+  /// an activity that an earlier build started still decodes; the widget then
+  /// falls back to its English names.
+  var previousLabel: String?
+  var pauseLabel: String?
+  var resumeLabel: String?
+  var stopLabel: String?
 }

@@ -45,6 +45,33 @@ export function isSuspendedError(value: unknown): value is SuspendedError {
   );
 }
 
+/** Stable code of a cancellation the user explicitly chose. */
+export const CANCELLED_CODE = "KIWIX_USER_CANCELLED";
+
+/**
+ * The user declined or cancelled their own action (a consent prompt they
+ * answered "Cancel", a transfer they stopped). Like a lifecycle gate it is not
+ * a failure: it is never painted as an error. Only a decision the user made
+ * may be raised as this type; a prompt that could not be shown, or one the
+ * lifecycle withdrew, stays an ordinary error.
+ */
+export class UserCancelledError extends Error {
+  readonly code = CANCELLED_CODE;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "UserCancelledError";
+  }
+}
+
+export function isUserCancelledError(value: unknown): value is UserCancelledError {
+  return (
+    value instanceof Error &&
+    "code" in value &&
+    value.code === CANCELLED_CODE
+  );
+}
+
 /**
  * Translate the one Rust envelope (`{"code":"KIWIX_SUSPENDED",...}`) into the
  * typed error. Called once at the API boundary; every other layer uses
@@ -169,6 +196,24 @@ export type ErrorSite = keyof typeof ERROR_SITES;
 
 export function normalizeSeverity(severity?: ErrorSeverity): ErrorSeverity {
   return severity ?? "blocking";
+}
+
+/**
+ * The one surface that owns a rendered failure. The band sits in the page, so
+ * while a modal dialog is open it is under the backdrop, inert and cannot be
+ * dismissed. A blocking failure reported then is owned by an alert dialog in
+ * the top layer instead; it is never painted in both. A recoverable diagnostic
+ * (shown only with technical details on) does not interrupt a dialog.
+ */
+export type ErrorSurface = "band" | "dialog";
+
+export function errorSurface(
+  severity: ErrorSeverity | undefined,
+  coveredByDialog: boolean,
+): ErrorSurface {
+  return coveredByDialog && normalizeSeverity(severity) === "blocking"
+    ? "dialog"
+    : "band";
 }
 
 /** Whether a failure should paint a band for this setting state. */

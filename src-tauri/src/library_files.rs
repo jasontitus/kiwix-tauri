@@ -43,6 +43,10 @@ static DUPLICATE_INTAKE_HOOK: Mutex<Option<(std::thread::ThreadId, Box<dyn FnOnc
 /// restore path can be exercised without a second volume.
 #[cfg(test)]
 static MOVE_FAILURE_AT: Mutex<Option<(std::thread::ThreadId, u32)>> = Mutex::new(None);
+/// Test-only: the free space one thread sees on every volume, so the space
+/// check can be exercised without filling a disk.
+#[cfg(test)]
+static FREE_SPACE_OVERRIDE: Mutex<Option<(std::thread::ThreadId, u64)>> = Mutex::new(None);
 /// Test-only: the real Trash / Recycle Bin is refused unless a test opts in
 /// (none does), so a test cannot leave entries in the developer's Trash.
 #[cfg(test)]
@@ -199,6 +203,7 @@ fn read_filename(name: &str) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(mobile)]
 fn basename(path: &Path) -> Result<String, String> {
     let name = path
         .file_name()
@@ -206,6 +211,31 @@ fn basename(path: &Path) -> Result<String, String> {
         .ok_or("Archive filename must be valid Unicode")?;
     filename(name)?;
     Ok(name.to_string())
+}
+/// The file name of a library archive for an operation that moves, deletes or
+/// shares the file itself. Reading accepts every platform-valid name; these
+/// operations keep the stricter rule, and say which part of it the name fails
+/// and what the person can do instead.
+fn archive_basename(path: &Path) -> Result<String, String> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Archive filename must be valid Unicode")?;
+    if filename(name).is_ok() {
+        return Ok(name.to_string());
+    }
+    let reason = if name.len() > 240 {
+        "is longer than 240 bytes"
+    } else if name.chars().any(|c| c.is_control() || matches!(c, '\\' | ':')) {
+        "contains a colon, a backslash or a control character"
+    } else if name.ends_with(['.', ' ']) {
+        "ends with a dot or a space"
+    } else {
+        return Err("Invalid single-component archive filename".into());
+    };
+    Err(format!(
+        "This archive's file name {reason}, so Kiwix will not move or delete the file itself. Rename the file and use Locate to find it again, or remove the archive from the library and delete the file yourself"
+    ))
 }
 fn private_child(parent: &Directory, name: &str, create: bool) -> Result<Directory, String> {
     filename(name)?;
@@ -556,7 +586,7 @@ fn verified(
 pub fn archive_files(book: &Book) -> Result<Vec<PathBuf>, String> {
     let path = Path::new(&book.path);
     let directory = Directory::open(path.parent().ok_or("Archive has no parent directory")?)?;
-    Ok(verified_parts(&directory, &basename(path)?, &book.metadata.id)?
+    Ok(verified_parts(&directory, &archive_basename(path)?, &book.metadata.id)?
         .into_iter()
         .map(|(name, _)| directory.path.join(name))
         .collect())
@@ -568,7 +598,7 @@ pub fn archive_files(book: &Book) -> Result<Vec<PathBuf>, String> {
 pub fn verified_archive_files(book: &Book) -> Result<Vec<PathBuf>, String> {
     let path = Path::new(&book.path);
     let directory = Directory::open(path.parent().ok_or("Archive has no parent directory")?)?;
-    Ok(verified(&directory, &basename(path)?, &book.metadata.id)?
+    Ok(verified(&directory, &archive_basename(path)?, &book.metadata.id)?
         .into_iter()
         .map(|(name, _)| directory.path.join(name))
         .collect())
@@ -584,7 +614,7 @@ pub(crate) fn remove_duplicate_intake_copy(path: &str, uuid: &str) -> Result<(),
     let path = Path::new(path);
     let directory =
         Directory::open(path.parent().ok_or("Duplicate archive has no parent directory")?)?;
-    let primary = basename(path)?;
+    let primary = archive_basename(path)?;
     if directory.absent(&primary)? {
         return Ok(());
     }
@@ -664,7 +694,7 @@ pub(crate) struct PinnedArchive {
 }
 
 pub(crate) fn retain_archive_files(book: &Book) -> Result<PinnedArchive, String> {
-    basename(Path::new(&book.path))?;
+    archive_basename(Path::new(&book.path))?;
     let retained = retain_files(book, false)?;
     for stamp in &retained.stamps {
         FileStamp::of(stamp)?;
@@ -742,14 +772,28 @@ pub fn reveal_book(book: &Book) -> Result<(), String> {
         Err("This mobile platform cannot reveal archive folders in an external file manager. Use Export to save a copy.".into())
     }
     #[cfg(desktop)]
-    {
-    let path = Path::new(&book.path);
-    let directory = Directory::open(path.parent().ok_or("Archive has no parent directory")?)?;
-    // Reveal is nondestructive; do not checksum a multi-gigabyte book just to show it.
-    let primary = basename(path)?;
-    verified_parts(&directory, &primary, &book.metadata.id)?;
-    crate::os_open::open(&directory.path).map_err(err)
+    crate::os_open::open(reveal_target(book)?).map_err(err)
+}
+
+/// The folder a reveal opens. Reveal is nondestructive: do not checksum a
+/// multi-gigabyte book just to show it, and accept every name and link count
+/// that reading accepts. It grants no authority to move or delete the file.
+#[cfg(desktop)]
+fn reveal_target(book: &Book) -> Result<PathBuf, String> {
+    let retained = retain_read_archive_files(book)?;
+    if Archive::open_files(&retained.path, &retained.files)?.metadata()?.id != book.metadata.id {
+        return Err("The file at this archive's location is a different archive. Use Locate to find the right file".into());
     }
+    Ok(retained.path)
+}
+
+/// The staging folder is what the person finds in the Trash, so it must be
+/// visible and recognizable there on every desktop: NSFileManager Trash may
+/// omit Put Back, the Windows Recycle Bin lists the folder by name, and Linux
+/// file managers hide dot-names in the Trash view. A permanent delete never
+/// leaves the folder behind and keeps it hidden while it exists.
+fn deletion_staging_prefix(trash: bool) -> &'static str {
+    if trash { "kiwix-deleted" } else { ".kiwix-delete" }
 }
 
 /// Stage only the verified exact set in a private sibling directory. A failure
@@ -784,7 +828,7 @@ fn delete_book_impl(
     let path = Path::new(&book.path);
     let source = Directory::open(path.parent().ok_or("Archive has no parent directory")?)?;
     let working_directory = source.path.to_str().ok_or("Archive directory must be valid Unicode")?;
-    let primary = basename(path)?;
+    let primary = archive_basename(path)?;
     let parts = verified_parts(&source, &primary, &book.metadata.id)?;
     if let Some(ownership) = ownership {
         for (part, _) in &parts {
@@ -797,12 +841,7 @@ fn delete_book_impl(
             }
         }
     }
-    // NSFileManager Trash may omit Put Back; keep its private folder visible so
-    // the original archive filenames can still be found and dragged out. The
-    // Windows Recycle Bin also lists the folder by name, so use the same
-    // recognizable name there.
-    let prefix = if cfg!(any(target_os = "macos", windows)) && trash { "kiwix-deleted" } else { ".kiwix-delete" };
-    let name = format!("{prefix}-{}", Uuid::new_v4());
+    let name = format!("{}-{}", deletion_staging_prefix(trash), Uuid::new_v4());
     // Windows directory capabilities never share delete, so the staging
     // capability is released (taken) just before its directory is trashed or
     // removed. Unix keeps it for the whole operation, exactly as before.
@@ -922,6 +961,18 @@ fn delete_book_impl(
         #[cfg(windows)]
         drop(staging);
         let _ = source.dir.remove_dir(&name);
+        // Point at the staging folder only while it can still hold something.
+        if restoration.is_empty() {
+            if parts.iter().all(|(part, stamp)| source.stamp(part).as_ref() == Ok(stamp)) {
+                return Err(format!("{error}. The archive was left where it is"));
+            }
+            if source.absent(&name) == Ok(true) {
+                return Err(format!(
+                    "{error}. The archive files had already been {}",
+                    if trash { "moved to the Trash" } else { "deleted" }
+                ));
+            }
+        }
         return Err(format!(
             "{error}. Any retained archive parts are recoverable at {}. {}",
             crate::storage::display_path(&staging_path),
@@ -1675,7 +1726,7 @@ pub fn move_archives(
             let parent = relative.parent().ok_or("Archive has no relative parent")?;
             let target = destination_subdirectory(&to, parent)?;
             let source = Directory::open(path.parent().ok_or("Archive has no parent")?)?;
-            let primary = basename(path)?;
+            let primary = archive_basename(path)?;
             let files = verified(&source, &primary, &book.metadata.id)?;
             let mut parts = Vec::with_capacity(files.len());
             // Digests computed here prove these exact bytes to the rename,

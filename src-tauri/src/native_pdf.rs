@@ -328,6 +328,10 @@ pub async fn render(app: tauri::AppHandle, snapshot: Snapshot, scratch_root: Pat
     impl Drop for CancelOnDrop { fn drop(&mut self) { self.0.cancel(); } }
     let _cancel_on_drop = CancelOnDrop(cancel.clone());
     let read_cancel = cancel.clone();
+    // Scratch of a process that was killed mid-export holds a captured article.
+    // Reclaim it now, detached: a large leftover tree must not delay this export.
+    let (stale_root, stale_report) = (scratch_root.clone(), report.clone());
+    drop(tokio::task::spawn_blocking(move || cleanup::sweep_stale(&stale_root, &stale_report)));
     // Snapshot capture has already completed in the authenticated live frame.
     // No archive reload can erase interactive state between capture and export.
     let mut owned = OwnedPdf::create(&scratch_root, report, permit)?;

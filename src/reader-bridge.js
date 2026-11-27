@@ -1407,16 +1407,23 @@
   }
 
   function toc() {
-    return Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"))
+    const entries = [];
+    Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"))
       .slice(0, 2000)
-      .map((heading, index) => {
+      .forEach((heading, index) => {
+        // A heading with no text, or one the page hides, would be a blank,
+        // unnamed entry in the contents panel. Generated ids keep the index of
+        // the full heading list, so skipping never renumbers the others.
+        const title = heading.textContent.trim();
+        if (!title || heading.hidden || heading.getAttribute("aria-hidden") === "true") return;
         if (!heading.id) heading.id = `kiwix-heading-${index}`;
-        return {
+        entries.push({
           id: heading.id,
-          title: heading.textContent.trim(),
+          title,
           level: Number(heading.tagName.slice(1)),
-        };
+        });
       });
+    return entries;
   }
   function voices() {
     return (
@@ -3764,9 +3771,6 @@
       case "scroll":
         window.scrollTo(Number(message.x) || 0, Number(message.y) || 0);
         break;
-      case "selection":
-        selectionReport();
-        break;
       case "print":
         window.print();
         break;
@@ -3925,6 +3929,16 @@
       return;
     }
     if (!sessionId || message.sessionId !== sessionId) return;
+    if (message.type === "document-probe") {
+      // Some engines fire the embedding frame's load event for a same-document
+      // (fragment) navigation. Only this bridge instance, still holding the
+      // probed session, can answer with its private bootstrap token, so the
+      // shell can tell that case from a replaced document without trusting
+      // anything an archive script could send.
+      if (typeof message.nonce === "string" && uuid.test(message.nonce))
+        post("document-proof", { nonce: message.nonce, token: readingPanToken });
+      return;
+    }
     if (message.type === "photo-result" || message.type === "photo-cancel" || message.type === "photo-accepted") {
       photoResult(message);
       return;
@@ -3957,6 +3971,13 @@
       }
     } else if (message.type === "reader-command") command(message);
   }, true);
+  // The shell and the native opener accept only http, https and mailto. Every
+  // other scheme (tel:, sms:, geo:, data:, ...) stays blocked here; a genuine
+  // activation is answered with a quiet shell notice instead of nothing at all.
+  // javascript: pseudo-links are page controls, not destinations.
+  function reportUnsupportedLink(event, url) {
+    if (event.isTrusted && url.protocol !== "javascript:") post("unsupported-link", {});
+  }
   document.addEventListener(
     "click",
     (event) => {
@@ -3968,8 +3989,9 @@
       } catch (_) {
         return;
       }
-      if (!["http:", "https:", "mailto:", "tel:"].includes(url.protocol)) {
+      if (!["http:", "https:", "mailto:"].includes(url.protocol)) {
         event.preventDefault();
+        reportUnsupportedLink(event, url);
         return;
       }
       const newTab =
@@ -4050,7 +4072,8 @@
       url.origin !== location.origin ||
       !["http:", "https:"].includes(url.protocol) ||
       url.href.length > 16384 ||
-      url.href === location.href
+      // A footnote, section or back link of this page has nothing to preview.
+      (url.pathname === location.pathname && url.search === location.search)
     )
       return;
     previewTimer = setTimeout(() => {
@@ -4116,9 +4139,10 @@
       }
       if (
         url.href.length <= 16384 &&
-        ["http:", "https:", "mailto:", "tel:"].includes(url.protocol)
+        ["http:", "https:", "mailto:"].includes(url.protocol)
       )
         post("external-link", { url: url.href, newTab: true });
+      else reportUnsupportedLink(event, url);
     },
     true,
   );
@@ -4228,7 +4252,11 @@
   }
   document.addEventListener("visibilitychange", () => {
     resetReadingPan();
-    if (document.hidden) stopSpeech();
+    // A hidden window only loses its read-along paint. Reading itself goes on,
+    // like native speech does: stop, navigation and pagehide still end it.
+    if (document.hidden) {
+      try { clearReadAloudPaint(); } catch (_) { /* paint only */ }
+    }
   });
   window.speechSynthesis?.addEventListener("voiceschanged", () =>
     post("voices", { voices: voices() }),

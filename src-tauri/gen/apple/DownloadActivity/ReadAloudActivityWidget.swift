@@ -11,7 +11,8 @@ import WidgetKit
 struct KiwixReadAloudLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: ReadAloudActivityAttributes.self) { context in
-      ReadAloudLockScreenView(attributes: context.attributes, state: context.state)
+      ReadAloudLockScreenView(attributes: context.attributes,
+        state: ReadAloudActivityStyle.presented(context.state, isStale: context.isStale))
         .activityBackgroundTint(ReadAloudActivityStyle.background)
         .activitySystemActionForegroundColor(.white)
         // Tapping the card body must never synthesize a speech action. This
@@ -20,7 +21,7 @@ struct KiwixReadAloudLiveActivity: Widget {
         // links remain the only transport controls.
         .widgetURL(URL(string: "kiwix://library")!)
     } dynamicIsland: { context in
-      let state = context.state
+      let state = ReadAloudActivityStyle.presented(context.state, isStale: context.isStale)
       let attributes = context.attributes
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
@@ -40,12 +41,12 @@ struct KiwixReadAloudLiveActivity: Widget {
             Text(attributes.title)
               .font(.subheadline.weight(.semibold))
               .lineLimit(1)
-            Text("\(state.statusLabel) · \(ReadAloudActivityStyle.voice(attributes.voice))")
+            Text(ReadAloudActivityStyle.subtitle(state, voice: attributes.voice))
               .font(.caption)
               .foregroundStyle(.secondary)
               .lineLimit(1)
             ReadAloudActivityStyle.bar(state)
-            ReadAloudActivityStyle.controls(state, sessionId: attributes.sessionId)
+            ReadAloudActivityStyle.controls(state, attributes: attributes)
           }
           .padding(.horizontal, 4)
           .padding(.bottom, 4)
@@ -54,13 +55,16 @@ struct KiwixReadAloudLiveActivity: Widget {
       } compactLeading: {
         Image(systemName: "book.pages.fill")
           .foregroundStyle(ReadAloudActivityStyle.tint(state))
+          .accessibilityLabel(ReadAloudActivityStyle.spoken(state, title: attributes.title))
       } compactTrailing: {
         Text(ReadAloudActivityStyle.compact(state))
           .font(.system(.caption2, design: .rounded).monospacedDigit())
           .foregroundStyle(.secondary)
+          .accessibilityLabel(ReadAloudActivityStyle.spokenProgress(state, title: attributes.title))
       } minimal: {
         Image(systemName: "book.pages.fill")
           .foregroundStyle(ReadAloudActivityStyle.tint(state))
+          .accessibilityLabel(ReadAloudActivityStyle.spoken(state, title: attributes.title))
       }
       .keylineTint(ReadAloudActivityStyle.tint(state))
       .widgetURL(URL(string: "kiwix://library")!)
@@ -83,7 +87,7 @@ struct ReadAloudLockScreenView: View {
           Text(attributes.title)
             .font(.headline)
             .lineLimit(1)
-          Text("\(state.statusLabel) · \(ReadAloudActivityStyle.voice(attributes.voice))")
+          Text(ReadAloudActivityStyle.subtitle(state, voice: attributes.voice))
             .font(.caption)
             .foregroundStyle(.secondary)
             .lineLimit(1)
@@ -99,7 +103,7 @@ struct ReadAloudLockScreenView: View {
           .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
         Spacer()
-        ReadAloudActivityStyle.controls(state, sessionId: attributes.sessionId)
+        ReadAloudActivityStyle.controls(state, attributes: attributes)
       }
     }
     .padding(12)
@@ -110,6 +114,40 @@ struct ReadAloudLockScreenView: View {
 enum ReadAloudActivityStyle {
   static let background = Color(red: 0.09, green: 0.10, blue: 0.12)
 
+  /// ActivityKit only flags content that passed its stale date; it keeps
+  /// drawing the last state. The app renews that date with every progress
+  /// update while it reads, so stale means it stopped reporting and "Reading
+  /// aloud 40%" is no longer known to be true. Such a state is shown under the
+  /// widget-only status "stale": no status wording and no percentage. A paused
+  /// session never expires and is left alone. The status never leaves this
+  /// process.
+  static func presented(_ state: ReadAloudActivityAttributes.ContentState,
+                        isStale: Bool) -> ReadAloudActivityAttributes.ContentState {
+    guard isStale, state.status != "paused" else { return state }
+    var shown = state
+    shown.status = "stale"
+    // The extension has no localized wording for this, so it shows none.
+    shown.statusLabel = ""
+    return shown
+  }
+
+  static func subtitle(_ state: ReadAloudActivityAttributes.ContentState, voice value: String) -> String {
+    let name = voice(value)
+    return state.statusLabel.isEmpty ? name : "\(state.statusLabel) · \(name)"
+  }
+
+  /// VoiceOver name for a region that only draws a symbol or a glyph.
+  static func spoken(_ state: ReadAloudActivityAttributes.ContentState, title: String) -> String {
+    state.statusLabel.isEmpty ? title : state.statusLabel
+  }
+
+  /// VoiceOver name for the compact percentage, which is a bare glyph while
+  /// paused or of unknown length.
+  static func spokenProgress(_ state: ReadAloudActivityAttributes.ContentState, title: String) -> String {
+    let text = percent(state)
+    return text.isEmpty ? spoken(state, title: title) : text
+  }
+
   static func fraction(_ state: ReadAloudActivityAttributes.ContentState) -> Double {
     guard state.total > 0 else { return 0 }
     let value = Double(state.offset) / Double(state.total)
@@ -117,18 +155,18 @@ enum ReadAloudActivityStyle {
   }
 
   static func percent(_ state: ReadAloudActivityAttributes.ContentState) -> String {
-    guard state.total > 0 else { return "" }
+    guard state.total > 0, state.status != "stale" else { return "" }
     return "\(Int((fraction(state) * 100).rounded()))%"
   }
 
   static func compact(_ state: ReadAloudActivityAttributes.ContentState) -> String {
     if state.status == "paused" { return "❚❚" }
-    guard state.total > 0 else { return "…" }
+    guard state.total > 0, state.status != "stale" else { return "…" }
     return "\(Int((fraction(state) * 100).rounded()))%"
   }
 
   static func offset(_ state: ReadAloudActivityAttributes.ContentState) -> String {
-    guard state.total > 0 else { return "" }
+    guard state.total > 0, state.status != "stale" else { return "" }
     return "\(Int((fraction(state) * 100).rounded()))% read"
   }
 
@@ -139,7 +177,8 @@ enum ReadAloudActivityStyle {
   }
 
   static func tint(_ state: ReadAloudActivityAttributes.ContentState) -> Color {
-    state.status == "paused" ? .orange : .accentColor
+    if state.status == "stale" { return .gray }
+    return state.status == "paused" ? .orange : .accentColor
   }
 
   @ViewBuilder
@@ -160,21 +199,25 @@ enum ReadAloudActivityStyle {
   }
 
   @ViewBuilder
-  static func controls(_ state: ReadAloudActivityAttributes.ContentState, sessionId: String) -> some View {
-    if let sessionId = UUID(uuidString: sessionId) {
+  static func controls(_ state: ReadAloudActivityAttributes.ContentState,
+                       attributes: ReadAloudActivityAttributes) -> some View {
+    // The control names arrive localized from Rust with the activity; an
+    // activity started without them keeps the English names.
+    if let sessionId = UUID(uuidString: attributes.sessionId) {
       HStack(spacing: 18) {
         Link(destination: speechURL("previous", sessionId: sessionId)) {
           Image(systemName: "backward.end.fill")
         }
-        .accessibilityLabel("Previous paragraph")
+        .accessibilityLabel(attributes.previousLabel ?? "Previous paragraph")
         Link(destination: speechURL(state.status == "paused" ? "play" : "pause", sessionId: sessionId)) {
           Image(systemName: state.status == "paused" ? "play.fill" : "pause.fill")
         }
-        .accessibilityLabel(state.status == "paused" ? "Resume reading" : "Pause reading")
+        .accessibilityLabel(state.status == "paused"
+          ? (attributes.resumeLabel ?? "Resume reading") : (attributes.pauseLabel ?? "Pause reading"))
         Link(destination: speechURL("stop", sessionId: sessionId)) {
           Image(systemName: "stop.fill")
         }
-        .accessibilityLabel("Stop reading")
+        .accessibilityLabel(attributes.stopLabel ?? "Stop reading")
       }
       .font(.system(size: 17, weight: .semibold))
       .foregroundStyle(.white)

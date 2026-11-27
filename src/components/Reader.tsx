@@ -553,6 +553,16 @@ function sameHistoryStack(left: TabLocation[], right: TabLocation[]): boolean {
   }
   return true;
 }
+// A tab's back and forward stacks are saved with every session write and
+// rendered as one menu entry each; keep the nearest entries only. The bridge
+// refuses longer single traversals as well.
+const MAX_TAB_HISTORY = 200;
+function boundedHistory(stack: TabLocation[]): TabLocation[] {
+  return stack.length > MAX_TAB_HISTORY ? stack.slice(-MAX_TAB_HISTORY) : stack;
+}
+// How long the bridge of an unchanged document may take to prove itself after
+// a frame load that no new document announced. Unproven loads re-session.
+const DOCUMENT_PROOF_TIMEOUT = 1000;
 function validExternal(value: string): boolean {
   try {
     return ["http:", "https:", "mailto:"].includes(new URL(value).protocol);
@@ -957,6 +967,9 @@ export default function Reader(props: ReaderProps) {
   // hides from archive scripts); a photo request must carry it.
   const photoSecrets = useRef(new Map<string, string>());
   const photoSecretFor = useCallback((sessionId: string) => {
+    // Only the session being initialised can still ask; earlier ones are gone.
+    for (const known of [...photoSecrets.current.keys()])
+      if (known !== sessionId) photoSecrets.current.delete(known);
     let secret = photoSecrets.current.get(sessionId);
     if (!secret) {
       secret = crypto.randomUUID();
@@ -965,6 +978,24 @@ export default function Reader(props: ReaderProps) {
     return secret;
   }, []);
   const awaitingGestureHello = useRef(true);
+  // WebKit fires the frame's load event for same-document (fragment)
+  // navigations too, so a load alone is not a new document. A document that
+  // replaced the previous one announces itself (the bridge's bootstrap hello);
+  // a load nothing announced keeps the session only if the bridge that owns it
+  // proves, with its private token, that it is still the live document.
+  const documentAnnounced = useRef(false);
+  const documentProbe = useRef<{
+    nonce: string;
+    sessionId: string;
+    frameId: string;
+    node: HTMLIFrameElement;
+    painted: boolean;
+    timer: number;
+  } | null>(null);
+  // The frame whose paint is kept while a child navigation re-sessions: the
+  // page was already on screen under the previous session, so hiding it for
+  // the handshake would only blink. Admission and controls stay withheld.
+  const [heldPaint, setHeldPaint] = useState("");
   const readingViewport = useRef<{ sessionId: string; url: string; top: number; hidden: boolean } | null>(null);
   const panCanHide = useRef(false);
   const revealReadingControls = useCallback(() => setPanHidden(false), []);
@@ -1872,12 +1903,21 @@ export default function Reader(props: ReaderProps) {
       setConsentBusy(false);
     }
   }, []);
+  const clearDocumentProbe = useCallback(() => {
+    const probe = documentProbe.current;
+    if (probe) clearTimeout(probe.timer);
+    documentProbe.current = null;
+  }, []);
   const deactivateFrame = useCallback((): Promise<void> => {
     clearHistoryTraversal();
+    clearDocumentProbe();
     navigationSequence.current++;
     openSequence.current++;
     const session = activeFrame.current;
-    if (alive.current) setLinkContext(null);
+    if (alive.current) {
+      setLinkContext(null);
+      setHeldPaint("");
+    }
     resetFind();
     if (!session) return Promise.resolve();
     send({ command: "stop-speech" });
@@ -1889,7 +1929,168 @@ export default function Reader(props: ReaderProps) {
     return lifecycle(() =>
       api("sensor_deactivate", { sessionId: session.sessionId }),
     ).then(() => undefined);
-  }, [cancelSensors, clearHistoryTraversal, resetFind, send]);
+  }, [cancelSensors, clearDocumentProbe, clearHistoryTraversal, resetFind, send]);
+  // The one place a session and its photo secret are handed to the frame.
+  const initializeDocument = useCallback((session: FrameSession) => {
+    // This reaches the document that last announced itself, or a later one
+    // whose own announcement is still to come: nothing older is left to answer.
+    documentAnnounced.current = false;
+    frameRef.current?.contentWindow?.postMessage(
+      {
+        channel: "kiwix-reader",
+        version: 1,
+        type: "reader-init",
+        sessionId: session.sessionId,
+        sensorStatus: session.status,
+        linkPreviews: latest.current.settings.linkPreviews,
+        photoChooser: isWindows && session.location.restricted !== true,
+        photoSecret: photoSecretFor(session.sessionId),
+        mediaNotice: {
+          text: t(
+            "This video uses a format this device cannot play smoothly. It may stutter. The same video plays smoothly in the desktop app.",
+          ),
+          dismiss: t("Dismiss"),
+        },
+      },
+      session.location.origin,
+    );
+  }, [photoSecretFor]);
+  // A document replaced the one this session was handed to (or nothing proved
+  // otherwise): retire that session and give the frame's document a new one.
+  const resessionFrame = useCallback(
+    (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
+      clearDocumentProbe();
+      setLinkContext(null);
+      latest.current.clearMediaCheckpoint();
+      retainedActivation.current = null;
+      cancelSensors(active.sessionId);
+      const sequence = ++openSequence.current;
+      activeFrame.current = null;
+      // The outgoing page was on screen and usable until now. Keep it painted
+      // through the handshake; anything short of a new session hides it again.
+      setHeldPaint(painted ? active.frameId : "");
+      const releasePaint = () => {
+        if (alive.current)
+          setHeldPaint((held) => (held === active.frameId ? "" : held));
+      };
+      setFrameReady(false);
+      setLoading(true);
+      void lifecycle(async () => {
+        await api("sensor_deactivate", {
+          sessionId: active.sessionId,
+        });
+        if (
+          !alive.current ||
+          !canNavigateReaderStorage() ||
+          openSequence.current !== sequence ||
+          frameRef.current !== node ||
+          node.dataset.frameId !== active.frameId ||
+          latest.current.privacyGeneration !==
+            active.privacyGeneration
+        ) {
+          releasePaint();
+          return;
+        }
+        const sessionId = crypto.randomUUID();
+        const status = await api<SensorStatus>("sensor_activate", {
+          sessionId,
+          archiveId: active.location.bookId,
+          origin: active.location.origin,
+        }).catch((value) => {
+          if (
+            !alive.current ||
+            openSequence.current !== sequence ||
+            frameRef.current !== node ||
+            node.dataset.frameId !== active.frameId
+          )
+            throw value;
+          report(value, ERROR_SITES["reader.sensor-activate"]);
+          return {
+            camera: "notAsked",
+            location: "notAsked",
+            nativeLocation: false,
+          } satisfies SensorStatus;
+        });
+        if (
+          !alive.current ||
+          !canNavigateReaderStorage() ||
+          latest.current.privacyGeneration !==
+            active.privacyGeneration ||
+          openSequence.current !== sequence ||
+          frameRef.current !== node ||
+          node.dataset.frameId !== active.frameId
+        ) {
+          releasePaint();
+          await api("sensor_deactivate", { sessionId });
+          return;
+        }
+        const updated = { ...active, sessionId, status };
+        activeFrame.current = updated;
+        setFrame(updated);
+        initializeDocument(updated);
+      }).catch((value) => {
+        releasePaint();
+        if (alive.current && openSequence.current === sequence) {
+          setLoading(false);
+          report(value);
+        }
+      });
+    },
+    [cancelSensors, clearDocumentProbe, initializeDocument, report],
+  );
+  // A frame load nothing proved, or a document that announced itself while the
+  // proof was awaited. The frame must still be the one that was probed.
+  const resessionUnproven = useCallback(
+    (probe: NonNullable<typeof documentProbe.current>) => {
+      const active = activeFrame.current;
+      if (
+        !alive.current ||
+        !active ||
+        active.sessionId !== probe.sessionId ||
+        active.frameId !== probe.frameId ||
+        displayedFrame.current?.frameId !== active.frameId ||
+        !canNavigateReaderStorage() ||
+        active.privacyGeneration !== latest.current.privacyGeneration ||
+        frameRef.current !== probe.node ||
+        frameNavigation.current?.node !== probe.node ||
+        frameNavigation.current.frameId !== active.frameId
+      )
+        return;
+      resessionFrame(probe.node, active, probe.painted);
+    },
+    [resessionFrame],
+  );
+  const probeDocument = useCallback(
+    (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
+      clearDocumentProbe();
+      const nonce = crypto.randomUUID();
+      const timer = window.setTimeout(() => {
+        const probe = documentProbe.current;
+        if (probe?.nonce !== nonce) return;
+        documentProbe.current = null;
+        resessionUnproven(probe);
+      }, DOCUMENT_PROOF_TIMEOUT);
+      documentProbe.current = {
+        nonce,
+        sessionId: active.sessionId,
+        frameId: active.frameId,
+        node,
+        painted,
+        timer,
+      };
+      node.contentWindow?.postMessage(
+        {
+          channel: "kiwix-reader",
+          version: 1,
+          type: "document-probe",
+          sessionId: active.sessionId,
+          nonce,
+        },
+        active.location.origin,
+      );
+    },
+    [clearDocumentProbe, resessionUnproven],
+  );
   const restoreFrame = useCallback(
     (url: string) => {
       const previous = displayedFrame.current;
@@ -1955,8 +2156,9 @@ export default function Reader(props: ReaderProps) {
       }
       latest.current.onMediaState?.({ audible: false, pictureInPicture: false });
       activeFrame.current = null;
+      clearDocumentProbe();
     };
-  }, [cancelSensors, clearHistoryTraversal, persistVisit, stopSearch]);
+  }, [cancelSensors, clearDocumentProbe, clearHistoryTraversal, persistVisit, stopSearch]);
 
   useLayoutEffect(() => {
     const session = displayedFrame.current;
@@ -2144,6 +2346,8 @@ export default function Reader(props: ReaderProps) {
       retained.privacyGeneration === props.privacyGeneration &&
       !freshOrigin.current;
     if (!reuseContext) setFrame(null);
+    clearDocumentProbe();
+    setHeldPaint("");
     setFrameReady(false);
     setToc([]);
     setSelection("");
@@ -2354,6 +2558,7 @@ export default function Reader(props: ReaderProps) {
     props.interactive,
     reload,
     cancelSensors,
+    clearDocumentProbe,
     clearHistoryTraversal,
     persistVisit,
     publishTab,
@@ -2403,7 +2608,7 @@ export default function Reader(props: ReaderProps) {
       publishTab({
         ...current,
         ...location,
-        back: previous ? [...current.back, previous] : current.back,
+        back: previous ? boundedHistory([...current.back, previous]) : current.back,
         forward: [],
       });
     },
@@ -2499,11 +2704,11 @@ export default function Reader(props: ReaderProps) {
         ...current,
         ...destination,
         [direction]: stack.slice(0, -count),
-        [direction === "back" ? "forward" : "back"]: [
+        [direction === "back" ? "forward" : "back"]: boundedHistory([
           ...current[direction === "back" ? "forward" : "back"],
           ...(previous ? [previous] : []),
           ...stack.slice(stack.length - count + 1).reverse(),
-        ],
+        ]),
       };
       const session = activeFrame.current;
       const locations = stack.slice(-count).reverse();
@@ -3173,6 +3378,29 @@ export default function Reader(props: ReaderProps) {
     const receive = (event: MessageEvent<unknown>) => {
       const session = activeFrame.current;
       const source = frameRef.current?.contentWindow;
+      // Every archive document's bridge announces itself at bootstrap, before
+      // archive scripts. Record it even while no session is admitted: it marks
+      // the frame's document as one the current session was never handed to.
+      // Archive code can forge an announcement, which only costs it a
+      // re-session; it can never suppress the genuine one.
+      if (
+        source &&
+        event.source === source &&
+        event.isTrusted &&
+        event.origin === displayedFrame.current?.location.origin &&
+        object(event.data) &&
+        event.data.channel === "kiwix-reader" &&
+        event.data.version === 1 &&
+        event.data.type === "reading-gesture-hello"
+      ) {
+        documentAnnounced.current = true;
+        // The load that was being proved belonged to this new document.
+        const probe = documentProbe.current;
+        if (probe) {
+          clearDocumentProbe();
+          resessionUnproven(probe);
+        }
+      }
       if (
         !session ||
         !source ||
@@ -3206,6 +3434,25 @@ export default function Reader(props: ReaderProps) {
         return;
       }
       if (data.sessionId !== session.sessionId) return;
+      if (data.type === "document-proof") {
+        // Only the bridge that answered this session's reader-init holds the
+        // token bound to it, and it answers with the nonce of the latest probe.
+        // The proof settles that one load and grants nothing else.
+        const probe = documentProbe.current;
+        const authority = panAuthority.current;
+        if (
+          event.isTrusted &&
+          probe &&
+          probe.sessionId === session.sessionId &&
+          text(data.nonce, 36) &&
+          data.nonce === probe.nonce &&
+          authority?.sessionId === session.sessionId &&
+          text(data.token, 36) &&
+          data.token === authority.token
+        )
+          clearDocumentProbe();
+        return;
+      }
       if (session.privacyGeneration !== latest.current.privacyGeneration) {
         clearHistoryTraversal();
         // The mounted document predates this window's generation: it cannot
@@ -3448,7 +3695,8 @@ export default function Reader(props: ReaderProps) {
             document.querySelector('dialog[open], [role="dialog"], .app-shell[hidden]') ||
             !text(data.url, 16_384)) return;
         const path = articlePath(data.url, session.location);
-        if (!path || path === tabRef.current.path) return;
+        // A link into the page already on screen has nothing to preview.
+        if (!path || path.split("#", 1)[0] === tabRef.current.path.split("#", 1)[0]) return;
         previewQueued.current = {
           session,
           path,
@@ -3571,6 +3819,8 @@ export default function Reader(props: ReaderProps) {
             ];
           }
         }
+        next.back = boundedHistory(next.back);
+        next.forward = boundedHistory(next.forward);
         resolvedKey.current = `${next.id}\n${next.bookId ?? ""}\n${next.path}\n${reload}\n${session.privacyGeneration}`;
         publishTab(next);
         if (changed) {
@@ -3594,6 +3844,8 @@ export default function Reader(props: ReaderProps) {
                   object(entry) &&
                   text(entry.id, 4096) &&
                   text(entry.title, 4096) &&
+                  // An entry without visible text would be an unnamed button.
+                  entry.title.trim() !== "" &&
                   typeof entry.level === "number" &&
                   Number.isInteger(entry.level) &&
                   entry.level >= 1 &&
@@ -3619,6 +3871,7 @@ export default function Reader(props: ReaderProps) {
           }
           setLoading(false);
           setFrameReady(true);
+          setHeldPaint("");
           setProviderUnavailable((previous) => {
             const book = latest.current.books.find((item) => item.id === session.location.bookId);
             return book?.installationId === session.installationId &&
@@ -3764,12 +4017,17 @@ export default function Reader(props: ReaderProps) {
           return;
         }
         if (!validExternal(data.url)) {
-          report(new Error(t("This type of external link is not permitted.")));
+          // Nothing failed and nothing needs reloading: say so quietly.
+          setNotice(t("This type of external link is not permitted."));
           return;
         }
         setExternal({
           url: data.url,
         });
+      } else if (data.type === "unsupported-link") {
+        // The bridge blocked a link whose scheme (tel:, sms:, geo:, ...) neither
+        // the shell nor the native opener accepts. It carries no address.
+        setNotice(t("This type of external link is not permitted."));
       } else if (
         data.type === "find-result" &&
         typeof data.found === "boolean"
@@ -3925,6 +4183,8 @@ export default function Reader(props: ReaderProps) {
     send,
     sendHighlights,
     stepZoom,
+    clearDocumentProbe,
+    resessionUnproven,
   ]);
 
   const changeSensorDecision = async (sensor: Sensor, reset = false) => {
@@ -4486,6 +4746,60 @@ export default function Reader(props: ReaderProps) {
         setExportBusy(false);
     }
   };
+  // Reopen the article as a genuinely new document. Assigning the live frame
+  // the address it already shows is only a same-document navigation whenever
+  // that address carries a fragment: nothing is fetched and the old document,
+  // with the policy it was served under, stays. So retire the document through
+  // its real pagehide and storage handoff, drop the browsing context, and let
+  // the open effect build a new one. An unconfirmed handoff removes the frame
+  // rather than leave the old document presented as reloaded.
+  const reopenFreshDocument = async () => {
+    const current = tabRef.current;
+    const privacyGeneration = latest.current.privacyGeneration;
+    const source = frameRef.current?.contentWindow;
+    // Whatever interrupts this still reopens instead of keeping the old key.
+    resolvedKey.current = "";
+    // A frame that never registered storage is not deactivated by retirement.
+    void deactivateFrame().catch(report);
+    setFrameReady(false);
+    setLoading(true);
+    const retirement = retireReaderDocuments({ restoreOnFailure: false });
+    const sequence = openSequence.current;
+    let retirementFailure: unknown = null;
+    try {
+      await retirement;
+    } catch (value) {
+      retirementFailure = value;
+    }
+    if (retirementFailure !== null) {
+      if (source) quarantineReaderStorage(source);
+      const message = t("Kiwix could not confirm that the article finished saving. Reading is paused to protect it. Close and reopen this window to continue.");
+      // Still the frame this started with (or still none): never show the
+      // unretired document as reloaded, and never leave a spinner behind.
+      if (alive.current && frameRef.current?.contentWindow === source) {
+        // The storage host retains the old bounded authority; this is not an ack.
+        setFrame(null);
+        setFrameReady(false);
+        setSpeaking(false);
+        setLoading(false);
+        setError(message);
+      }
+      report(new Error(message, { cause: retirementFailure }));
+      return;
+    }
+    if (
+      alive.current &&
+      openSequence.current === sequence &&
+      !activeFrame.current &&
+      latest.current.privacyGeneration === privacyGeneration &&
+      tabRef.current.id === current.id &&
+      tabRef.current.bookId === current.bookId &&
+      tabRef.current.path === current.path
+    ) {
+      setFrame(null);
+      setReload((value) => value + 1);
+    }
+  };
   const [restrictedBusy, setRestrictedBusy] = useState(false);
   const restricted = frame?.location.restricted === true;
   const toggleRestricted = async () => {
@@ -4495,7 +4809,9 @@ export default function Reader(props: ReaderProps) {
     try {
       const next = await setReaderRestricted(current.bookId, !restricted);
       publishTab({ ...tabRef.current, restricted: next });
-      setReload((value) => value + 1);
+      // The policy is the Content-Security-Policy of a newly served document.
+      // The banner follows the frame, so it changes only with that document.
+      await reopenFreshDocument();
     } catch (value) {
       if (alive.current) report(value);
     } finally {
@@ -4813,6 +5129,8 @@ export default function Reader(props: ReaderProps) {
       )
         return;
       setLoading(false);
+      // A document that never authenticated is not left on screen.
+      setHeldPaint("");
       watchdogFrame.current = frameId;
       report(
         new Error(
@@ -5648,8 +5966,7 @@ export default function Reader(props: ReaderProps) {
             onClick={() => {
               discardQuarantinedReaderStorage();
               leaveDocument();
-              resolvedKey.current = "";
-              setReload((value) => value + 1);
+              void reopenFreshDocument();
             }}
           >
             {t("Reload article")}
@@ -6534,7 +6851,7 @@ export default function Reader(props: ReaderProps) {
             <iframe
               key={frame.contextId}
               ref={bindFrame}
-              className={`rw-archive-frame${frameReady ? "" : " is-pending"}`}
+              className={`rw-archive-frame${frameReady || heldPaint === frame.frameId ? "" : " is-pending"}`}
               title={t("Article: {title}", {
                 title: tab.title || book?.title || t("Archive"),
               })}
@@ -6563,109 +6880,16 @@ export default function Reader(props: ReaderProps) {
                 resetFind();
                 if (initializedFrame.current !== frame.frameId) {
                   initializedFrame.current = frame.frameId;
-                  frameRef.current?.contentWindow?.postMessage(
-                    {
-                      channel: "kiwix-reader",
-                      version: 1,
-                      type: "reader-init",
-                      sessionId: active.sessionId,
-                      sensorStatus: active.status,
-                      linkPreviews: latest.current.settings.linkPreviews,
-                      photoChooser: isWindows && active.location.restricted !== true,
-                      photoSecret: photoSecretFor(active.sessionId),
-                      mediaNotice: {
-                        text: t(
-                          "This video uses a format this device cannot play smoothly. It may stutter. The same video plays smoothly in the desktop app.",
-                        ),
-                        dismiss: t("Dismiss"),
-                      },
-                    },
-                    active.location.origin,
-                  );
+                  clearDocumentProbe();
+                  initializeDocument(active);
                   return;
                 }
-                setLinkContext(null);
-                latest.current.clearMediaCheckpoint();
-                retainedActivation.current = null;
-                cancelSensors(active.sessionId);
-                const sequence = ++openSequence.current;
-                activeFrame.current = null;
-                setFrameReady(false);
-                setLoading(true);
-                void lifecycle(async () => {
-                  await api("sensor_deactivate", {
-                    sessionId: active.sessionId,
-                  });
-                  if (
-                    !alive.current ||
-                    !canNavigateReaderStorage() ||
-                    openSequence.current !== sequence ||
-                    frameRef.current !== node ||
-                    node.dataset.frameId !== active.frameId ||
-                    latest.current.privacyGeneration !==
-                      active.privacyGeneration
-                  )
-                    return;
-                  const sessionId = crypto.randomUUID();
-                  const status = await api<SensorStatus>("sensor_activate", {
-                    sessionId,
-                    archiveId: active.location.bookId,
-                    origin: active.location.origin,
-                  }).catch((value) => {
-                    if (
-                      !alive.current ||
-                      openSequence.current !== sequence ||
-                      frameRef.current !== node ||
-                      node.dataset.frameId !== active.frameId
-                    )
-                      throw value;
-                    report(value, ERROR_SITES["reader.sensor-activate"]);
-                    return {
-                      camera: "notAsked",
-                      location: "notAsked",
-                      nativeLocation: false,
-                    } satisfies SensorStatus;
-                  });
-                  if (
-                    !alive.current ||
-                    !canNavigateReaderStorage() ||
-                    latest.current.privacyGeneration !==
-                      active.privacyGeneration ||
-                    openSequence.current !== sequence ||
-                    frameRef.current !== node ||
-                    node.dataset.frameId !== active.frameId
-                  ) {
-                    await api("sensor_deactivate", { sessionId });
-                    return;
-                  }
-                  const updated = { ...active, sessionId, status };
-                  activeFrame.current = updated;
-                  setFrame(updated);
-                  frameRef.current?.contentWindow?.postMessage(
-                    {
-                      channel: "kiwix-reader",
-                      version: 1,
-                      type: "reader-init",
-                      sessionId,
-                      sensorStatus: status,
-                      linkPreviews: latest.current.settings.linkPreviews,
-                      photoChooser: isWindows && active.location.restricted !== true,
-                      photoSecret: photoSecretFor(sessionId),
-                      mediaNotice: {
-                        text: t(
-                          "This video uses a format this device cannot play smoothly. It may stutter. The same video plays smoothly in the desktop app.",
-                        ),
-                        dismiss: t("Dismiss"),
-                      },
-                    },
-                    active.location.origin,
-                  );
-                }).catch((value) => {
-                  if (alive.current && openSequence.current === sequence) {
-                    setLoading(false);
-                    report(value);
-                  }
-                });
+                // A later load of an initialised frame is a child navigation
+                // only when a new document announced itself. Otherwise the
+                // session survives solely on its own bridge's proof.
+                if (documentAnnounced.current)
+                  resessionFrame(node, active, frameReady);
+                else probeDocument(node, active, frameReady);
               }}
               data-frame-id={frame.frameId}
             />

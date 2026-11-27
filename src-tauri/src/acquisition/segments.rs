@@ -211,6 +211,9 @@ pub(super) async fn segment_worker(
     let mut writer = BufWriter::with_capacity(WRITE_BUDGET, file);
     let mut buffer = vec![0u8; READ_BUDGET];
     let mut retries = 0usize;
+    // Ranges that ended early without a transport error. Unlike `retries` this
+    // never resets, so such a server cannot keep the worker requesting forever.
+    let mut short_bodies = 0u32;
     let mut since_sync = Instant::now();
     let mut retry_delay = None;
     loop {
@@ -429,6 +432,10 @@ pub(super) async fn segment_worker(
             received += count as u64;
             done += count as u64;
             counters.written[index].store(done, Ordering::Release);
+            // Payload is flowing again, so earlier transient failures are over.
+            // Like the single-stream path, count only failures in a row: a
+            // multi-gigabyte range must survive more than eight drops in total.
+            retries = 0;
             if since_sync.elapsed() >= SYNC_INTERVAL {
                 flush_segment(&mut writer, counters, index, done).await?;
                 since_sync = Instant::now();
@@ -436,8 +443,11 @@ pub(super) async fn segment_worker(
         };
         flush_segment(&mut writer, counters, index, done).await?;
         if received < expected {
+            if body_error.is_none() {
+                short_bodies += 1;
+            }
             retries += 1;
-            if retries > SEGMENT_RETRIES {
+            if retries > SEGMENT_RETRIES || short_bodies > SHORT_BODY_CONTINUES {
                 return Err(SegmentError::fatal(match body_error {
                     Some(error) => format!("Receiving download segment: {error}"),
                     None => "Download segment ended before its declared length".into(),

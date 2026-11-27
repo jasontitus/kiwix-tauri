@@ -973,9 +973,12 @@ fn check_published_part(parent: &cap_std::fs::Dir, part: &JournalPart) -> Result
 
 fn publish_exclusive(source: &cap_std::fs::Dir, destination: &cap_std::fs::Dir, name: &str) -> Result<(), String> {
     validate_part_name(name)?;
+    // One exclusive-rename implementation, including its fallback for
+    // filesystems without RENAME_NOREPLACE (NFS, FUSE).
     #[cfg(unix)]
-    let result = rustix::fs::renameat_with(source, name, destination, name, rustix::fs::RenameFlags::NOREPLACE)
-        .map_err(std::io::Error::from);
+    let result = std::ffi::CString::new(name)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid library filename"))
+        .and_then(|name| crate::publication::rename_noreplace_at(source, &name, destination, &name));
     #[cfg(windows)]
     let result = {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};

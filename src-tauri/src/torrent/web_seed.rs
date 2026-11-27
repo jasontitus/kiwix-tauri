@@ -5,8 +5,9 @@
 //! The torrent engine has no web-seed support. This adapter downloads the
 //! advertised files into the same confined staging files the engine will hash
 //! and verify. It never writes outside `ConfinedFactory`, never trusts the
-//! seed's length or contents, and verifies every torrent piece before handing
-//! the job to the engine.
+//! seed's length or contents, and checks every torrent piece itself. Pieces it
+//! could not obtain are left for the engine, whose own check decides what the
+//! staged files really hold.
 use super::*;
 use futures_util::StreamExt;
 use sha1::{Digest, Sha1};
@@ -17,6 +18,13 @@ use url::Url;
 const MAX_BENCODE_DEPTH: usize = 32;
 const MAX_SEED_REDIRECTS: usize = 5;
 const SEED_TIMEOUT: Duration = Duration::from_secs(90);
+/// Consecutive passes that add nothing before the engine continues with peers.
+const SEED_STALLED_PASSES: u32 = 6;
+/// Delay before the next pass; it doubles per stalled pass, sixteenfold at most.
+#[cfg(not(test))]
+const SEED_BACKOFF: Duration = Duration::from_secs(1);
+#[cfg(test)]
+const SEED_BACKOFF: Duration = Duration::from_millis(10);
 
 #[derive(Debug, Clone)]
 pub(super) struct WebSeedTorrent {
@@ -375,77 +383,77 @@ fn seed_url(base: &str, seed: &WebSeedTorrent, file: &WebSeedFile) -> Result<Url
 
 #[derive(Debug)]
 enum SeedError {
+    /// May clear on its own: a lost connection, a timeout, a busy mirror.
     Transport(String),
+    /// Asking again cannot help: local I/O, or an answer no retry changes.
+    Fatal(String),
+    /// Every mirror delivered its bytes and torrent pieces still fail.
     Verify(String),
 }
 
 impl From<String> for SeedError {
     fn from(error: String) -> Self {
-        Self::Transport(error)
+        Self::Fatal(error)
     }
 }
 
 impl SeedError {
     fn message(self) -> String {
         match self {
-            Self::Transport(error) | Self::Verify(error) => error,
+            Self::Transport(error) | Self::Fatal(error) | Self::Verify(error) => error,
         }
     }
+
+    fn status(status: reqwest::StatusCode) -> Self {
+        let message = format!("Web seed returned HTTP {status}");
+        if status == reqwest::StatusCode::REQUEST_TIMEOUT
+            || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || status.is_server_error()
+        {
+            Self::Transport(message)
+        } else {
+            Self::Fatal(message)
+        }
+    }
+
+    /// The failure one pass reports after several mirrors: a transient one
+    /// wins, because it is the only kind another pass can outlast.
+    fn after(earlier: Option<Self>, error: Self) -> Self {
+        match (earlier, error) {
+            (Some(Self::Transport(kept)), Self::Fatal(_)) => Self::Transport(kept),
+            (_, error) => error,
+        }
+    }
+}
+
+/// What one `download` call has established about the staged files. It is
+/// carried across passes so a retry neither hashes nor fetches again what an
+/// earlier pass already settled.
+struct SeedProgress {
+    /// Pieces that failed the full hash pass and have not verified since.
+    /// `None` until every file has its full length and that pass has run.
+    missing: Option<Vec<usize>>,
+    /// Highest front-to-back byte count reached while files were still short.
+    sequential: u64,
+    /// Whether the current pass raised `sequential` or shrank `missing`.
+    advanced: bool,
 }
 
 /// Download every advertised file into the confined staging factory and verify
 /// all torrent pieces. The engine still hashes the same bytes before it can
 /// publish, so this is an acquisition shortcut, not a verification substitute.
+///
+/// Nothing a pass finds on disk is discarded for failing verification. A file
+/// already at its full length was sized by the engine or by partial reuse and
+/// can hold valid pieces among unwritten ones, so only the byte ranges of the
+/// pieces that fail are fetched again, in place. On failure the files are left
+/// as they are for the engine's own check.
 pub(super) async fn download(
     token: &CancellationToken,
     factory: &ConfinedFactory,
     seed: &WebSeedTorrent,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
 ) -> Result<(), String> {
-    let mut force_redownload = false;
-    for attempt in 0..3 {
-        match download_once(token, factory, seed, progress, force_redownload).await {
-            Ok(()) => return Ok(()),
-            Err(_) if token.is_cancelled() => return Ok(()),
-            Err(SeedError::Verify(_)) if attempt < 2 && !force_redownload => {
-                // The bytes looked complete but failed piece verification.
-                // Discard them and acquire once from scratch.
-                reset_files(factory, seed)?;
-                progress(0, seed.total, 0.0);
-                force_redownload = true;
-            }
-            Err(SeedError::Transport(_)) if attempt < 2 => {
-                // Keep partial files so the next attempt can use Range
-                // resume instead of re-downloading from byte zero.
-                force_redownload = false;
-            }
-            Err(error) => return Err(error.message()),
-        }
-    }
-    unreachable!("web seed download attempts are bounded")
-}
-
-fn reset_files(factory: &ConfinedFactory, seed: &WebSeedTorrent) -> Result<(), String> {
-    for file in &seed.files {
-        if file.padding {
-            continue;
-        }
-        let handle = factory
-            .open_file(&file.path, file.length)
-            .map_err(display)?;
-        handle.set_len(0).map_err(display)?;
-        handle.sync_all().map_err(display)?;
-    }
-    Ok(())
-}
-
-async fn download_once(
-    token: &CancellationToken,
-    factory: &ConfinedFactory,
-    seed: &WebSeedTorrent,
-    progress: &(dyn Fn(u64, u64, f64) + Sync),
-    force_redownload: bool,
-) -> Result<(), SeedError> {
     let client = reqwest::Client::builder()
         .connect_timeout(SEED_TIMEOUT)
         .read_timeout(SEED_TIMEOUT)
@@ -461,6 +469,40 @@ async fn download_once(
         }))
         .build()
         .map_err(display)?;
+    let mut state = SeedProgress { missing: None, sequential: 0, advanced: false };
+    let mut stalled = 0u32;
+    loop {
+        state.advanced = false;
+        let error = match download_once(&client, token, factory, seed, progress, &mut state).await {
+            Ok(()) => return Ok(()),
+            Err(_) if token.is_cancelled() => return Ok(()),
+            Err(SeedError::Transport(error)) => error,
+            Err(error) => return Err(error.message()),
+        };
+        // Only a pass that added nothing counts against the limit, and every
+        // other pass raised a high-water mark that the torrent size bounds. A
+        // long transfer over an unreliable link is therefore neither abandoned
+        // after a few drops nor able to loop without end.
+        stalled = if state.advanced { 0 } else { stalled + 1 };
+        if stalled >= SEED_STALLED_PASSES {
+            return Err(error);
+        }
+        let delay = SEED_BACKOFF * (1 << stalled.saturating_sub(1).min(4));
+        tokio::select! {
+            _ = token.cancelled() => return Ok(()),
+            _ = tokio::time::sleep(delay) => {}
+        }
+    }
+}
+
+async fn download_once(
+    client: &reqwest::Client,
+    token: &CancellationToken,
+    factory: &ConfinedFactory,
+    seed: &WebSeedTorrent,
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
+    state: &mut SeedProgress,
+) -> Result<(), SeedError> {
     let mut files: Vec<Option<Arc<File>>> = Vec::with_capacity(seed.files.len());
     let mut completed = 0u64;
     for file in &seed.files {
@@ -476,12 +518,17 @@ async fn download_once(
             .open_file(&file.path, file.length)
             .map_err(display)?;
         let mut current = handle.metadata().map_err(display)?.len();
-        if current > file.length || (force_redownload && current == file.length) {
+        if current > file.length {
             handle.set_len(0).map_err(display)?;
             current = 0;
         }
         if current < file.length {
-            let mut last_error = None;
+            // A file shorter than the torrent says was only ever written front
+            // to back by this adapter: the engine and partial reuse both give a
+            // file its full length before writing into it. Its length is
+            // therefore the offset to continue from.
+            state.sequential = state.sequential.max(completed.saturating_add(current));
+            let mut failure = None;
             for base in &seed.urls {
                 if token.is_cancelled() {
                     return Ok(());
@@ -489,12 +536,12 @@ async fn download_once(
                 let url = match seed_url(base, seed, file) {
                     Ok(url) => url,
                     Err(error) => {
-                        last_error = Some(error);
+                        failure = Some(SeedError::after(failure, SeedError::Fatal(error)));
                         continue;
                     }
                 };
-                match download_file(
-                    &client,
+                let result = download_file(
+                    client,
                     token,
                     &url,
                     &handle,
@@ -504,48 +551,207 @@ async fn download_once(
                     seed.total,
                     progress,
                 )
-                .await
-                {
-                    Ok(_) => {
-                        current = handle.metadata().map_err(display)?.len();
-                        if current >= file.length {
-                            last_error = None;
-                            break;
-                        }
-                        last_error = Some("Web seed returned a short file".into());
-                    }
-                    Err(error) => last_error = Some(error),
+                .await;
+                // Whatever this mirror did, the next request continues from
+                // the bytes now on disk instead of repeating them.
+                current = handle.metadata().map_err(display)?.len();
+                let reached = completed.saturating_add(current.min(file.length));
+                if reached > state.sequential {
+                    state.sequential = reached;
+                    state.advanced = true;
                 }
+                let error = match result {
+                    Ok(()) if current >= file.length => {
+                        failure = None;
+                        break;
+                    }
+                    Ok(()) => SeedError::Transport("Web seed returned a short file".into()),
+                    Err(error) => error,
+                };
+                failure = Some(SeedError::after(failure, error));
             }
             if current < file.length {
-                return Err(SeedError::Transport(last_error.unwrap_or_else(|| {
-                    "Web seed did not provide the complete file".into()
-                })));
+                return Err(failure.unwrap_or_else(|| {
+                    SeedError::Fatal("Web seed did not provide the complete file".into())
+                }));
             }
+            handle.set_len(file.length).map_err(display)?;
+            handle.sync_all().map_err(display)?;
+            progress(completed.saturating_add(file.length), seed.total, 0.0);
         }
-        handle.set_len(file.length).map_err(display)?;
-        handle.sync_all().map_err(display)?;
         completed = completed.saturating_add(file.length);
-        progress(completed, seed.total, 0.0);
         files.push(Some(handle));
     }
     if token.is_cancelled() {
         return Ok(());
     }
-    let verify_seed = seed.clone();
-    let verify_files = files.clone();
-    let verify_token = token.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        verify_pieces(&verify_seed, &verify_files, &verify_token)
-    })
-    .await
-    .map_err(display)?;
+    let mut missing = match state.missing.take() {
+        Some(missing) => missing,
+        None => match unverified_pieces(seed, &files, None, token).await {
+            Ok(missing) => missing,
+            Err(_) if token.is_cancelled() => return Ok(()),
+            Err(error) => return Err(SeedError::Fatal(error)),
+        },
+    };
+    let result = repair(client, token, seed, &files, &mut missing, &mut state.advanced, progress).await;
+    state.missing = Some(missing);
+    result?;
     if token.is_cancelled() {
         return Ok(());
     }
-    result.map_err(SeedError::Verify)?;
     progress(seed.total, seed.total, 0.0);
     Ok(())
+}
+
+/// Fetch the byte ranges of `missing` pieces in place until every piece
+/// verifies. Bytes outside those ranges are never written, so a piece that
+/// already verified cannot be damaged by a mirror serving something else.
+async fn repair(
+    client: &reqwest::Client,
+    token: &CancellationToken,
+    seed: &WebSeedTorrent,
+    files: &[Option<Arc<File>>],
+    missing: &mut Vec<usize>,
+    advanced: &mut bool,
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
+) -> Result<(), SeedError> {
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let mut failure = None;
+    for base in &seed.urls {
+        if token.is_cancelled() {
+            return Ok(());
+        }
+        let verified = seed.total.saturating_sub(piece_bytes(seed, missing));
+        let mut written = 0u64;
+        let mut outcome = Ok(());
+        for (index, start, end) in missing_ranges(seed, missing) {
+            let handle = files
+                .get(index)
+                .and_then(Option::as_ref)
+                .ok_or_else(|| "Web seed file handle is missing".to_string())?;
+            let file = &seed.files[index];
+            outcome = match seed_url(base, seed, file) {
+                Ok(url) => {
+                    fetch_range(
+                        client,
+                        token,
+                        &url,
+                        handle,
+                        start..end,
+                        file.length,
+                        verified,
+                        seed.total,
+                        progress,
+                        &mut written,
+                    )
+                    .await
+                }
+                Err(error) => Err(SeedError::Fatal(error)),
+            };
+            if outcome.is_err() || token.is_cancelled() {
+                break;
+            }
+        }
+        if token.is_cancelled() {
+            return Ok(());
+        }
+        if written > 0 {
+            // Trust the hashes, not the mirror: only pieces that verify now
+            // leave the list, including after a response that failed part way.
+            let before = missing.len();
+            *missing = match unverified_pieces(seed, files, Some(missing.clone()), token).await {
+                Ok(missing) => missing,
+                Err(_) if token.is_cancelled() => return Ok(()),
+                Err(error) => return Err(SeedError::Fatal(error)),
+            };
+            *advanced |= missing.len() < before;
+            progress(seed.total.saturating_sub(piece_bytes(seed, missing)), seed.total, 0.0);
+        }
+        if missing.is_empty() {
+            for handle in files.iter().flatten() {
+                handle.sync_all().map_err(display)?;
+            }
+            return Ok(());
+        }
+        if let Err(error) = outcome {
+            failure = Some(SeedError::after(failure, error));
+        }
+    }
+    Err(failure.unwrap_or_else(|| {
+        SeedError::Verify(format!(
+            "Web seed content failed verification at piece {}",
+            missing[0]
+        ))
+    }))
+}
+
+/// Cumulative end offset of every file within the torrent's piece space.
+fn file_ends(seed: &WebSeedTorrent) -> Vec<u64> {
+    let mut end = 0u64;
+    seed.files
+        .iter()
+        .map(|file| {
+            end = end.saturating_add(file.length);
+            end
+        })
+        .collect()
+}
+
+fn piece_span(seed: &WebSeedTorrent, piece: usize) -> (u64, u64) {
+    let start = (piece as u64).saturating_mul(seed.piece_length);
+    (start.min(seed.total), start.saturating_add(seed.piece_length).min(seed.total))
+}
+
+fn piece_bytes(seed: &WebSeedTorrent, pieces: &[usize]) -> u64 {
+    pieces
+        .iter()
+        .map(|piece| {
+            let (start, end) = piece_span(seed, *piece);
+            end - start
+        })
+        .sum()
+}
+
+/// The parts of `[start, end)` in torrent offsets that lie in real files, as
+/// `(file index, start, end)` in that file's own offsets.
+fn file_ranges(seed: &WebSeedTorrent, ends: &[u64], start: u64, end: u64) -> Vec<(usize, u64, u64)> {
+    let mut ranges = Vec::new();
+    let mut index = ends.partition_point(|file_end| *file_end <= start);
+    while index < seed.files.len() {
+        let file = &seed.files[index];
+        let file_start = ends[index] - file.length;
+        if file_start >= end {
+            break;
+        }
+        let from = start.max(file_start);
+        let to = end.min(ends[index]);
+        if from < to && !file.padding {
+            ranges.push((index, from - file_start, to - file_start));
+        }
+        index += 1;
+    }
+    ranges
+}
+
+/// The file byte ranges that ascending `missing` pieces cover, with adjacent
+/// pieces merged into one range per file.
+fn missing_ranges(seed: &WebSeedTorrent, missing: &[usize]) -> Vec<(usize, u64, u64)> {
+    let ends = file_ends(seed);
+    let mut ranges = Vec::new();
+    let mut pieces = missing.iter().copied().peekable();
+    while let Some(first) = pieces.next() {
+        let mut last = first;
+        while pieces.peek() == Some(&(last + 1)) {
+            last += 1;
+            pieces.next();
+        }
+        let (start, _) = piece_span(seed, first);
+        let (_, end) = piece_span(seed, last);
+        ranges.extend(file_ranges(seed, &ends, start, end));
+    }
+    ranges
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -559,7 +765,7 @@ async fn download_file(
     completed: u64,
     total: u64,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
-) -> Result<(), String> {
+) -> Result<(), SeedError> {
     let mut request = client
         .get(url.clone())
         .header(reqwest::header::ACCEPT_ENCODING, "identity");
@@ -568,20 +774,13 @@ async fn download_file(
     }
     let response = tokio::select! {
         _ = token.cancelled() => return Ok(()),
-        result = request.send() => result.map_err(display)?,
+        result = request.send() => result.map_err(|error| SeedError::Transport(display(error)))?,
     };
     let status = response.status();
     let mut write_offset = current;
     if status == reqwest::StatusCode::PARTIAL_CONTENT {
-        let start = response
-            .headers()
-            .get(reqwest::header::CONTENT_RANGE)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.strip_prefix("bytes "))
-            .and_then(|value| value.split('-').next())
-            .and_then(|value| value.parse::<u64>().ok());
-        if start != Some(current) {
-            return Err("Web seed returned an unexpected byte range".into());
+        if content_range_start(&response) != Some(current) {
+            return Err(SeedError::Fatal("Web seed returned an unexpected byte range".into()));
         }
     } else if status == reqwest::StatusCode::OK {
         if current > 0 {
@@ -591,7 +790,7 @@ async fn download_file(
     } else if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE && current == length {
         return Ok(());
     } else {
-        return Err(format!("Web seed returned HTTP {status}"));
+        return Err(SeedError::status(status));
     }
     let mut writer = file;
     writer
@@ -599,7 +798,7 @@ async fn download_file(
         .map_err(display)?;
     if let Some(content_length) = response.content_length() {
         if content_length > length.saturating_sub(write_offset) {
-            return Err("Web seed response is larger than the torrent file".into());
+            return Err(SeedError::Fatal("Web seed response is larger than the torrent file".into()));
         }
     }
     let mut stream = response.bytes_stream();
@@ -615,9 +814,9 @@ async fn download_file(
         let Some(chunk) = chunk else {
             break;
         };
-        let chunk = chunk.map_err(display)?;
+        let chunk = chunk.map_err(|error| SeedError::Transport(display(error)))?;
         if offset.saturating_add(chunk.len() as u64) > length {
-            return Err("Web seed response exceeded the torrent file length".into());
+            return Err(SeedError::Fatal("Web seed response exceeded the torrent file length".into()));
         }
         writer.write_all(&chunk).map_err(display)?;
         offset = offset.saturating_add(chunk.len() as u64);
@@ -633,55 +832,128 @@ async fn download_file(
     Ok(())
 }
 
-fn verify_pieces(
+fn content_range_start(response: &reqwest::Response) -> Option<u64> {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("bytes "))
+        .and_then(|value| value.split('-').next())
+        .and_then(|value| value.parse::<u64>().ok())
+}
+
+/// Write exactly `range` of one staged file from a mirror, in place. A mirror
+/// without range support answers with the whole file; only the requested
+/// bytes are taken from it, so nothing outside `range` is ever overwritten.
+#[allow(clippy::too_many_arguments)]
+async fn fetch_range(
+    client: &reqwest::Client,
+    token: &CancellationToken,
+    url: &Url,
+    file: &File,
+    range: std::ops::Range<u64>,
+    length: u64,
+    verified: u64,
+    total: u64,
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
+    written: &mut u64,
+) -> Result<(), SeedError> {
+    let request = client
+        .get(url.clone())
+        .header(reqwest::header::ACCEPT_ENCODING, "identity")
+        .header(reqwest::header::RANGE, format!("bytes={}-{}", range.start, range.end - 1));
+    let response = tokio::select! {
+        _ = token.cancelled() => return Ok(()),
+        result = request.send() => result.map_err(|error| SeedError::Transport(display(error)))?,
+    };
+    let status = response.status();
+    // File offset of the next response byte.
+    let mut at = if status == reqwest::StatusCode::PARTIAL_CONTENT {
+        if content_range_start(&response) != Some(range.start) {
+            return Err(SeedError::Fatal("Web seed returned an unexpected byte range".into()));
+        }
+        range.start
+    } else if status == reqwest::StatusCode::OK {
+        if response.content_length().is_some_and(|content_length| content_length != length) {
+            return Err(SeedError::Fatal("Web seed file is not the size the torrent describes".into()));
+        }
+        0
+    } else {
+        return Err(SeedError::status(status));
+    };
+    let mut writer = file;
+    writer
+        .seek(SeekFrom::Start(range.start))
+        .map_err(display)?;
+    let mut stream = response.bytes_stream();
+    // File offset of the next byte this call still has to write.
+    let mut next = range.start;
+    let mut sample = *written;
+    let mut last_progress = Instant::now();
+    progress(verified.saturating_add(*written).min(total), total, 0.0);
+    while next < range.end {
+        let chunk = tokio::select! {
+            _ = token.cancelled() => return Ok(()),
+            chunk = stream.next() => chunk,
+        };
+        let Some(chunk) = chunk else {
+            return Err(SeedError::Transport("Web seed returned a short file".into()));
+        };
+        let chunk = chunk.map_err(|error| SeedError::Transport(display(error)))?;
+        let chunk_end = at.saturating_add(chunk.len() as u64);
+        if chunk_end > next {
+            let skip = (next - at) as usize;
+            let take = (chunk_end.min(range.end) - next) as usize;
+            writer.write_all(&chunk[skip..skip + take]).map_err(display)?;
+            next += take as u64;
+            *written += take as u64;
+        }
+        at = chunk_end;
+        let now = Instant::now();
+        let elapsed = now.duration_since(last_progress);
+        if elapsed >= Duration::from_millis(250) {
+            let speed = (*written - sample) as f64 / elapsed.as_secs_f64();
+            progress(verified.saturating_add(*written).min(total), total, speed);
+            sample = *written;
+            last_progress = now;
+        }
+    }
+    Ok(())
+}
+
+/// Hash `candidates` (every piece when `None`) off the async runtime and
+/// return, in ascending order, those that do not match the torrent.
+async fn unverified_pieces(
     seed: &WebSeedTorrent,
     files: &[Option<Arc<File>>],
+    candidates: Option<Vec<usize>>,
     token: &CancellationToken,
-) -> Result<(), String> {
-    let mut buffer = Vec::with_capacity(seed.piece_length as usize);
-    let mut piece = 0usize;
-    let feed = |bytes: &[u8], buffer: &mut Vec<u8>, piece: &mut usize| -> Result<(), String> {
-        if token.is_cancelled() {
-            return Err("cancelled".into());
-        }
-        let mut at = 0usize;
-        while at < bytes.len() {
-            let take = (seed.piece_length as usize - buffer.len()).min(bytes.len() - at);
-            buffer.extend_from_slice(&bytes[at..at + take]);
-            at += take;
-            if buffer.len() == seed.piece_length as usize {
-                if &Sha1::digest(&buffer)[..]
-                    != seed
-                        .pieces
-                        .get(*piece)
-                        .ok_or("Torrent piece count is inconsistent")?
-                {
-                    return Err(format!(
-                        "Web seed content failed verification at piece {piece}"
-                    ));
-                }
-                *piece += 1;
-                buffer.clear();
-            }
-        }
-        Ok(())
-    };
+) -> Result<Vec<usize>, String> {
+    let seed = seed.clone();
+    let files = files.to_vec();
+    let token = token.clone();
+    tokio::task::spawn_blocking(move || match candidates {
+        Some(candidates) => failed_pieces(&seed, &files, candidates.into_iter(), &token),
+        None => failed_pieces(&seed, &files, 0..seed.pieces.len(), &token),
+    })
+    .await
+    .map_err(display)?
+}
+
+fn failed_pieces(
+    seed: &WebSeedTorrent,
+    files: &[Option<Arc<File>>],
+    candidates: impl Iterator<Item = usize>,
+    token: &CancellationToken,
+) -> Result<Vec<usize>, String> {
     for (index, file) in seed.files.iter().enumerate() {
-        if token.is_cancelled() {
-            return Err("cancelled".into());
-        }
-        let handle = files.get(index).and_then(Option::as_ref);
         if file.padding {
-            let zeros = vec![0u8; 64 * 1024];
-            let mut remaining = file.length;
-            while remaining > 0 {
-                let take = remaining.min(zeros.len() as u64) as usize;
-                feed(&zeros[..take], &mut buffer, &mut piece)?;
-                remaining -= take as u64;
-            }
             continue;
         }
-        let handle = handle.ok_or("Web seed file handle is missing")?;
+        let handle = files
+            .get(index)
+            .and_then(Option::as_ref)
+            .ok_or("Web seed file handle is missing")?;
         let actual = handle.metadata().map_err(display)?.len();
         if actual != file.length {
             return Err(format!(
@@ -689,38 +961,39 @@ fn verify_pieces(
                 file.length
             ));
         }
-        let mut remaining = file.length;
-        let mut chunk = vec![0u8; 64 * 1024];
-        while remaining > 0 {
-            let take = remaining.min(chunk.len() as u64) as usize;
+    }
+    let ends = file_ends(seed);
+    let mut buffer = vec![0u8; seed.piece_length.min(seed.total) as usize];
+    let mut failed = Vec::new();
+    for piece in candidates {
+        if token.is_cancelled() {
+            return Err("cancelled".into());
+        }
+        let expected = seed
+            .pieces
+            .get(piece)
+            .ok_or("Torrent piece count is inconsistent")?;
+        let (start, end) = piece_span(seed, piece);
+        let bytes = &mut buffer[..(end - start) as usize];
+        // Padding files hold no bytes on disk and count as zeros.
+        bytes.fill(0);
+        for (index, from, to) in file_ranges(seed, &ends, start, end) {
+            let handle = files
+                .get(index)
+                .and_then(Option::as_ref)
+                .ok_or("Web seed file handle is missing")?;
+            let file_start = ends[index] - seed.files[index].length;
             let mut reader = &**handle;
+            reader.seek(SeekFrom::Start(from)).map_err(display)?;
             reader
-                .seek(SeekFrom::Start(file.length - remaining))
-                .map_err(display)?;
-            reader.read_exact(&mut chunk[..take]).map_err(|error| {
-                format!("Reading web seed file for verification failed: {error}")
-            })?;
-            feed(&chunk[..take], &mut buffer, &mut piece)?;
-            remaining -= take as u64;
+                .read_exact(&mut bytes[(file_start + from - start) as usize..(file_start + to - start) as usize])
+                .map_err(|error| format!("Reading web seed file for verification failed: {error}"))?;
+        }
+        if Sha1::digest(&*bytes)[..] != expected[..] {
+            failed.push(piece);
         }
     }
-    if !buffer.is_empty() {
-        if &Sha1::digest(&buffer)[..]
-            != seed
-                .pieces
-                .get(piece)
-                .ok_or("Torrent piece count is inconsistent")?
-        {
-            return Err(format!(
-                "Web seed content failed verification at piece {piece}"
-            ));
-        }
-        piece += 1;
-    }
-    if piece != seed.pieces.len() {
-        return Err("Web seed content did not cover every torrent piece".into());
-    }
-    Ok(())
+    Ok(failed)
 }
 
 #[cfg(test)]
@@ -828,7 +1101,7 @@ mod tests {
         let root_dir =
             cap_std::fs::Dir::open_ambient_dir(&temp, cap_std::ambient_authority()).unwrap();
         // A preallocated full-length but corrupt staging file must be
-        // verified before it is discarded, then re-acquired on failure.
+        // verified first, then have every failing piece acquired again.
         std::fs::write(temp.join("map.zim"), vec![0u8; body.len()]).unwrap();
         let factory = ConfinedFactory {
             root: Arc::new(root_dir),
@@ -995,6 +1268,209 @@ mod tests {
         assert_eq!(std::fs::read(temp.join("a.bin")).unwrap(), first);
         assert_eq!(std::fs::read(temp.join("b.bin")).unwrap(), second);
         server.join().unwrap();
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    const BODY: &[u8] = b"0123456789abcdef";
+
+    /// A single-file torrent of `BODY` in five-byte pieces with these mirrors.
+    fn body_seed(ports: &[u16]) -> WebSeedTorrent {
+        let hashes: Vec<u8> = BODY.chunks(5).flat_map(|chunk| Sha1::digest(chunk).to_vec()).collect();
+        let info = dict(&[
+            (b"length", bint(BODY.len() as u64)),
+            (b"name", bstr(b"map.zim")),
+            (b"piece length", bint(5)),
+            (b"pieces", bstr(&hashes)),
+        ]);
+        let mut urls = b"l".to_vec();
+        for port in ports {
+            urls.extend(bstr(format!("http://127.0.0.1:{port}/map.zim").as_bytes()));
+        }
+        urls.push(b'e');
+        parse(&dict(&[(b"info", info), (b"url-list", urls)])).unwrap().unwrap()
+    }
+
+    /// A staging directory for `body_seed`, holding `staged` when it is given.
+    fn body_staging(staged: Option<&[u8]>) -> (PathBuf, ConfinedFactory) {
+        let temp = std::env::temp_dir().join(format!("kiwix-webseed-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp).unwrap();
+        if let Some(staged) = staged {
+            std::fs::write(temp.join("map.zim"), staged).unwrap();
+        }
+        let root = cap_std::fs::Dir::open_ambient_dir(&temp, cap_std::ambient_authority()).unwrap();
+        let factory = ConfinedFactory {
+            root: Arc::new(root),
+            path: temp.clone(),
+            expected: Arc::new(HashMap::from([(PathBuf::from("map.zim"), BODY.len() as u64)])),
+            sources: Arc::new(Mutex::new(HashMap::new())),
+            existing: staged.is_some(),
+            stop: CancellationToken::new(),
+            gate: Arc::new(std::sync::RwLock::new(())),
+            dirs: Arc::new(Mutex::new(HashSet::new())),
+            owner: None,
+        };
+        (temp, factory)
+    }
+
+    /// A loopback mirror answering connection `index` with `respond(index,
+    /// request head in lower case)`. Returns its port and the heads it saw.
+    fn mirror(respond: impl Fn(usize, &str) -> Vec<u8> + Send + 'static) -> (u16, Arc<Mutex<Vec<String>>>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let seen = requests.clone();
+        std::thread::spawn(move || {
+            for (index, stream) in listener.incoming().enumerate() {
+                let Ok(mut stream) = stream else { return };
+                let mut request = Vec::new();
+                let mut byte = [0u8; 1];
+                while !request.ends_with(b"\r\n\r\n") && stream.read(&mut byte).unwrap_or(0) == 1 {
+                    request.push(byte[0]);
+                }
+                let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+                seen.lock().unwrap().push(request.clone());
+                let _ = stream.write_all(&respond(index, &request));
+            }
+        });
+        (port, requests)
+    }
+
+    fn requested_range(request: &str) -> Option<String> {
+        request.lines().find_map(|line| line.strip_prefix("range: bytes=")).map(str::to_owned)
+    }
+
+    /// An honest answer for `content`: 206 for a range request, 200 otherwise.
+    /// Only `sent` body bytes follow the full-length header when it is given,
+    /// which the client sees as a connection lost part way.
+    fn answer(content: &[u8], request: &str, sent: Option<usize>) -> Vec<u8> {
+        let (status, start, end) = match requested_range(request) {
+            Some(range) => {
+                let (start, end) = range.split_once('-').unwrap();
+                let start: usize = start.parse().unwrap();
+                let end = end.parse().map_or(content.len(), |end: usize| end + 1);
+                (format!("206 Partial Content\r\nContent-Range: bytes {start}-{}/{}", end - 1, content.len()), start, end)
+            }
+            None => ("200 OK".to_owned(), 0, content.len()),
+        };
+        let payload = &content[start..end];
+        let mut response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", payload.len()).into_bytes();
+        response.extend_from_slice(&payload[..sent.unwrap_or(payload.len()).min(payload.len())]);
+        response
+    }
+
+    /// Runs `download` and returns its result with every reported byte count.
+    async fn run_seed(token: &CancellationToken, factory: &ConfinedFactory, seed: &WebSeedTorrent) -> (Result<(), String>, Vec<u64>) {
+        let reported = Mutex::new(Vec::new());
+        let result = download(token, factory, seed, &|done, total, _| {
+            assert_eq!(total, BODY.len() as u64);
+            reported.lock().unwrap().push(done);
+        }).await;
+        (result, reported.into_inner().unwrap())
+    }
+
+    #[tokio::test]
+    async fn full_length_file_keeps_its_valid_pieces_and_fetches_only_the_others() {
+        // The shape the engine leaves behind: full length, with the second and
+        // the last piece never written.
+        let mut staged = BODY.to_vec();
+        staged[5..10].fill(0);
+        staged[15..].fill(0);
+        let (port, requests) = mirror(|_, request| answer(BODY, request, None));
+        let (temp, factory) = body_staging(Some(&staged));
+        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+        result.unwrap();
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        let ranges: Vec<_> = requests.lock().unwrap().iter().map(|request| requested_range(request)).collect();
+        assert_eq!(ranges, [Some("5-9".to_owned()), Some("15-15".to_owned())]);
+        // Progress starts from the ten bytes that were already valid.
+        assert_eq!(reported.first(), Some(&10));
+        assert!(reported.is_sorted(), "{reported:?}");
+        assert_eq!(reported.last(), Some(&16));
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn failed_web_seed_leaves_a_full_length_file_as_it_was() {
+        let mut staged = BODY.to_vec();
+        staged[10..].fill(0);
+        let (port, requests) = mirror(|_, _| b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec());
+        let (temp, factory) = body_staging(Some(&staged));
+        let (result, _) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+        assert!(result.unwrap_err().contains("503"));
+        // The valid leading pieces stay for the engine's own check.
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), staged);
+        // A busy mirror is retried, but only a bounded number of times.
+        assert_eq!(requests.lock().unwrap().len(), SEED_STALLED_PASSES as usize);
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn repair_never_overwrites_a_piece_that_already_verified() {
+        // This mirror ignores ranges and its copy differs in the first piece,
+        // which the staged file already holds correctly.
+        let mut served = BODY.to_vec();
+        served[..5].fill(b'X');
+        let mut staged = BODY.to_vec();
+        staged[5..].fill(0);
+        let (port, requests) = mirror(move |_, _| answer(&served, "", None));
+        let (temp, factory) = body_staging(Some(&staged));
+        let (result, _) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+        result.unwrap();
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        assert_eq!(requests.lock().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn the_next_mirror_continues_from_the_bytes_a_dropped_one_wrote() {
+        let (dropped, _) = mirror(|_, request| answer(BODY, request, Some(6)));
+        let (port, requests) = mirror(|_, request| answer(BODY, request, None));
+        let (temp, factory) = body_staging(None);
+        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[dropped, port])).await;
+        result.unwrap();
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        let ranges: Vec<_> = requests.lock().unwrap().iter().map(|request| requested_range(request)).collect();
+        assert_eq!(ranges, [Some("6-".to_owned())]);
+        assert!(reported.is_sorted(), "{reported:?}");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn drops_that_still_add_bytes_do_not_use_up_the_retry_limit() {
+        // More drops than the stall limit allows, each after three new bytes.
+        let drops = SEED_STALLED_PASSES as usize - 1;
+        assert!(drops * 3 < BODY.len());
+        let (port, requests) = mirror(move |index, request| answer(BODY, request, (index < drops).then_some(3)));
+        let (temp, factory) = body_staging(None);
+        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+        result.unwrap();
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        let ranges: Vec<_> = requests.lock().unwrap().iter().map(|request| requested_range(request)).collect();
+        let expected: Vec<_> = (0..=drops).map(|index| (index > 0).then(|| format!("{}-", index * 3))).collect();
+        assert_eq!(ranges, expected);
+        assert!(reported.is_sorted(), "{reported:?}");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_web_seed_fails_after_its_bounded_retries_and_stops_when_cancelled() {
+        // A port nothing listens on: every pass fails without adding a byte.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let seed = body_seed(&[port]);
+        let (temp, factory) = body_staging(None);
+        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &seed).await;
+        assert!(result.is_err());
+        assert!(reported.is_empty(), "{reported:?}");
+        // A pause or cancel during the wait between passes ends the stage at
+        // once, as a stop rather than as a web-seed failure.
+        let token = CancellationToken::new();
+        let stop = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(SEED_BACKOFF / 2).await;
+            stop.cancel();
+        });
+        let (result, _) = run_seed(&token, &factory, &seed).await;
+        assert_eq!(result, Ok(()));
         let _ = std::fs::remove_dir_all(temp);
     }
 

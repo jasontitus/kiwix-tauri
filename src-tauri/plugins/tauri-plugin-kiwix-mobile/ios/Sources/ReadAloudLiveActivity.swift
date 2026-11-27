@@ -22,6 +22,8 @@ struct ReadAloudActivityArgs: Decodable {
   let statusLabel: String?
   let offset: Int64?
   let total: Int64?
+  /// Sent with "start" only; the control names are fixed for a session.
+  let labels: NativeSpeechLabels?
 }
 
 @MainActor
@@ -136,7 +138,11 @@ final class ReadAloudLiveActivityBridge {
         attributes: ReadAloudActivityAttributes(
           sessionId: sessionId,
           title: title,
-          voice: args.voice ?? ""
+          voice: args.voice ?? "",
+          previousLabel: args.labels?.previous,
+          pauseLabel: args.labels?.pause,
+          resumeLabel: args.labels?.resume,
+          stopLabel: args.labels?.stop
         ),
         content: ActivityContent(state: content, staleDate: staleDate),
         pushType: nil

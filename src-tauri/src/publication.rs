@@ -349,8 +349,10 @@ fn publish_verified_with_hook_in(
         return Err(publication_changed());
     }
     before_commit();
-    // Do not use link/unlink here: unlinking a mutable source name can delete a
-    // substituted file. Native exclusive rename works on FAT/exFAT as well.
+    // Never unlink a checked source pathname here: that can delete a
+    // substituted file. Native exclusive rename works on FAT/exFAT as well;
+    // where a filesystem lacks it, `exclusive_rename_fallback` captures the
+    // old name by rename before it inspects and removes it.
     platform_publish_in(directory, source, destination)?;
     if !verified.matches_in(directory, destination)? {
         return Err(publication_changed());
@@ -1406,6 +1408,248 @@ mod tests {
         assert_eq!(parent.read("from/partial").unwrap(), b"unrelated source");
         assert_eq!(parent.read("to/complete").unwrap(), b"unrelated destination");
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A filesystem whose rename rejects `RENAME_NOREPLACE` with `errno`, as
+    /// NFS and FUSE servers without rename2 do. Real NFS/FUSE mounts are not
+    /// available to the test suite.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn rename_without_flag(
+        errno: i32,
+        from: &Dir,
+        source: &std::ffi::CStr,
+        to: &Dir,
+        destination: &std::ffi::CStr,
+        after_link: impl FnOnce(),
+    ) -> io::Result<()> {
+        use std::os::fd::AsFd;
+        rename_noreplace_with(
+            from.as_fd(),
+            source,
+            to.as_fd(),
+            destination,
+            |_, _, _, _| Err(io::Error::from_raw_os_error(errno)),
+            native_link,
+            after_link,
+        )
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn fallback_root() -> (std::path::PathBuf, Dir) {
+        let root = std::env::temp_dir().join(format!("kiwix-publication-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let directory = Dir::open_ambient_dir(&root, cap_std::ambient_authority()).unwrap();
+        (root, directory)
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn names(root: &Path) -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(root).unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
+        names.sort();
+        names
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn unsupported_exclusive_rename_falls_back_to_an_exclusive_move() {
+        for errno in [libc::EINVAL, libc::ENOSYS, libc::EOPNOTSUPP] {
+            let (root, directory) = fallback_root();
+            let (verified, bytes) = verified_fixture(&root);
+            directory.create_dir("library").unwrap();
+            let library = directory.open_dir("library").unwrap();
+            // Within one directory, then across two retained directories.
+            rename_without_flag(errno, &directory, c"partial", &directory, c"complete", || {}).unwrap();
+            assert_eq!(names(&root), ["complete", "library"]);
+            assert!(verified.matches_in(&directory, Path::new("complete")).unwrap());
+            rename_without_flag(errno, &directory, c"complete", &library, c"book.zim", || {}).unwrap();
+            assert_eq!(names(&root), ["library"]);
+            assert_eq!(names(&root.join("library")), ["book.zim"]);
+            assert!(verified.matches_in(&library, Path::new("book.zim")).unwrap());
+            assert_eq!(library.read("book.zim").unwrap(), bytes);
+            // One name again, so later ownership checks still accept the file.
+            assert_eq!(Metadata::from_file(verified.file()).unwrap().nlink(), 1);
+            drop((verified, library, directory));
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_preserves_an_existing_destination_as_already_exists() {
+        let (root, directory) = fallback_root();
+        directory.write("partial", b"new").unwrap();
+        directory.write("complete", b"existing").unwrap();
+        std::os::unix::fs::symlink("missing-user-target", root.join("dangling")).unwrap();
+        directory.create_dir("occupied").unwrap();
+        for destination in [c"complete", c"dangling", c"occupied"] {
+            let error = rename_without_flag(libc::EINVAL, &directory, c"partial", &directory, destination, || {
+                panic!("nothing was linked, so nothing may be retired")
+            })
+            .unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::AlreadyExists, "{error}");
+        }
+        assert_eq!(directory.read("partial").unwrap(), b"new");
+        assert_eq!(directory.read("complete").unwrap(), b"existing");
+        assert_eq!(directory.read_link("dangling").unwrap(), Path::new("missing-user-target"));
+        assert_eq!(names(&root), ["complete", "dangling", "occupied", "partial"]);
+        drop(directory);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_is_taken_only_when_the_filesystem_lacks_the_flag() {
+        use std::os::fd::AsFd;
+        let (root, directory) = fallback_root();
+        directory.write("partial", b"new").unwrap();
+        for errno in [libc::EEXIST, libc::EACCES, libc::EXDEV, libc::ENOENT, libc::EIO, libc::EROFS, libc::ENOSPC] {
+            let error = rename_noreplace_with(
+                directory.as_fd(), c"partial", directory.as_fd(), c"complete",
+                |_, _, _, _| Err(io::Error::from_raw_os_error(errno)),
+                |_, _, _, _| panic!("errno {errno} must not reach the link fallback"),
+                || panic!("errno {errno} must not reach the link fallback"),
+            )
+            .unwrap_err();
+            assert_eq!(error.raw_os_error(), Some(errno));
+        }
+        assert_eq!(directory.read("partial").unwrap(), b"new");
+        assert_eq!(names(&root), ["partial"]);
+        // The real kernel answer for an occupied name is likewise final.
+        directory.write("complete", b"existing").unwrap();
+        let error = rename_noreplace_at(&directory, c"partial", &directory, c"complete").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(directory.read("complete").unwrap(), b"existing");
+        drop(directory);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_never_unlinks_a_source_name_that_was_reused_after_the_link() {
+        // (how the old name was reused, whether the original keeps another name)
+        for case in ["renamed-aside", "renamed-over", "directory", "removed"] {
+            let (root, directory) = fallback_root();
+            directory.write("partial", b"verified archive").unwrap();
+            directory.write("incoming", b"somebody else's file").unwrap();
+            let original = directory.symlink_metadata("partial").unwrap();
+            rename_without_flag(libc::EINVAL, &directory, c"partial", &directory, c"complete", || match case {
+                "renamed-aside" => {
+                    directory.rename("partial", &directory, "kept-aside").unwrap();
+                    directory.rename("incoming", &directory, "partial").unwrap();
+                }
+                "renamed-over" => directory.rename("incoming", &directory, "partial").unwrap(),
+                "directory" => {
+                    directory.remove_file("partial").unwrap();
+                    directory.create_dir("partial").unwrap();
+                    directory.write("partial/child", b"somebody else's folder").unwrap();
+                }
+                _ => directory.remove_file("partial").unwrap(),
+            })
+            .unwrap();
+            // The original was published exactly once, under the new name.
+            let published = directory.symlink_metadata("complete").unwrap();
+            assert_eq!((published.dev(), published.ino()), (original.dev(), original.ino()), "{case}");
+            assert_eq!(directory.read("complete").unwrap(), b"verified archive", "{case}");
+            let expected: &[&str] = match case {
+                "renamed-aside" => {
+                    assert_eq!(directory.read("partial").unwrap(), b"somebody else's file");
+                    assert_eq!(directory.read("kept-aside").unwrap(), b"verified archive");
+                    &["complete", "kept-aside", "partial"]
+                }
+                "renamed-over" => {
+                    assert_eq!(directory.read("partial").unwrap(), b"somebody else's file");
+                    &["complete", "partial"]
+                }
+                "directory" => {
+                    assert_eq!(directory.read("partial/child").unwrap(), b"somebody else's folder");
+                    &["complete", "incoming", "partial"]
+                }
+                _ => &["complete", "incoming"],
+            };
+            // Nothing was deleted, and no private capture name is left behind.
+            assert_eq!(names(&root), expected, "{case}");
+            drop(directory);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_keeps_the_source_when_the_destination_changes_after_the_link() {
+        for replaced in [false, true] {
+            let (root, directory) = fallback_root();
+            directory.write("partial", b"verified archive").unwrap();
+            let error = rename_without_flag(libc::EINVAL, &directory, c"partial", &directory, c"complete", || {
+                directory.rename("complete", &directory, "moved-away").unwrap();
+                if replaced {
+                    directory.write("complete", b"another program's file").unwrap();
+                }
+            })
+            .unwrap_err();
+            assert_ne!(error.kind(), io::ErrorKind::AlreadyExists, "{error}");
+            // The old name still holds the file; nothing was unlinked.
+            assert_eq!(directory.read("partial").unwrap(), b"verified archive");
+            assert_eq!(directory.read("moved-away").unwrap(), b"verified archive");
+            if replaced {
+                assert_eq!(directory.read("complete").unwrap(), b"another program's file");
+                assert_eq!(names(&root), ["complete", "moved-away", "partial"]);
+            } else {
+                assert_eq!(names(&root), ["moved-away", "partial"]);
+            }
+            drop(directory);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_moves_a_directory_only_onto_its_own_exclusive_placeholder() {
+        let (root, directory) = fallback_root();
+        directory.create_dir("staging").unwrap();
+        directory.write("staging/book.zim", b"archive").unwrap();
+        let original = directory.symlink_metadata("staging").unwrap();
+        directory.create_dir("empty").unwrap();
+        directory.create_dir("full").unwrap();
+        directory.write("full/user.txt", b"user data").unwrap();
+        directory.write("file", b"user file").unwrap();
+        for destination in [c"empty", c"full", c"file"] {
+            let error = rename_without_flag(libc::EINVAL, &directory, c"staging", &directory, destination, || {}).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::AlreadyExists, "{error}");
+        }
+        assert_eq!(directory.read("full/user.txt").unwrap(), b"user data");
+        assert_eq!(directory.read("file").unwrap(), b"user file");
+        assert_eq!(names(&root), ["empty", "file", "full", "staging"]);
+        rename_without_flag(libc::EINVAL, &directory, c"staging", &directory, c"complete", || {}).unwrap();
+        let published = directory.symlink_metadata("complete").unwrap();
+        assert_eq!((published.dev(), published.ino()), (original.dev(), original.ino()));
+        assert_eq!(directory.read("complete/book.zim").unwrap(), b"archive");
+        assert_eq!(names(&root), ["complete", "empty", "file", "full"]);
+        drop(directory);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_refuses_a_filesystem_without_hard_links_instead_of_risking_an_overwrite() {
+        use std::os::fd::AsFd;
+        for errno in [libc::EPERM, libc::ENOSYS, libc::EOPNOTSUPP] {
+            let (root, directory) = fallback_root();
+            directory.write("partial", b"verified archive").unwrap();
+            let error = rename_noreplace_with(
+                directory.as_fd(), c"partial", directory.as_fd(), c"complete",
+                |_, _, _, _| Err(io::Error::from_raw_os_error(libc::EINVAL)),
+                |_, _, _, _| Err(io::Error::from_raw_os_error(errno)),
+                || panic!("nothing was linked, so nothing may be retired"),
+            )
+            .unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::Unsupported);
+            assert!(error.to_string().contains("neither an exclusive rename nor hard links"), "{error}");
+            assert_eq!(directory.read("partial").unwrap(), b"verified archive");
+            assert_eq!(names(&root), ["partial"]);
+            drop(directory);
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[cfg(unix)]

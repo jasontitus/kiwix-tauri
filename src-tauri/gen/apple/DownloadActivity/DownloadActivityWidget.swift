@@ -18,11 +18,12 @@ struct KiwixDownloadWidgetBundle: WidgetBundle {
 struct KiwixDownloadLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: DownloadActivityAttributes.self) { context in
-      DownloadActivityLockScreenView(state: context.state)
+      DownloadActivityLockScreenView(
+        state: DownloadActivityStyle.presented(context.state, isStale: context.isStale))
         .activityBackgroundTint(DownloadActivityStyle.background)
         .activitySystemActionForegroundColor(.white)
     } dynamicIsland: { context in
-      let state = context.state
+      let state = DownloadActivityStyle.presented(context.state, isStale: context.isStale)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           Image(systemName: DownloadActivityStyle.symbol(state))
@@ -56,13 +57,16 @@ struct KiwixDownloadLiveActivity: Widget {
       } compactLeading: {
         Image(systemName: DownloadActivityStyle.symbol(state))
           .foregroundStyle(DownloadActivityStyle.tint(state))
+          .accessibilityLabel(DownloadActivityStyle.spoken(state))
       } compactTrailing: {
         Text(DownloadActivityStyle.compactPercent(state))
           .font(.system(.caption2, design: .rounded).monospacedDigit())
           .foregroundStyle(.secondary)
+          .accessibilityLabel(DownloadActivityStyle.spokenProgress(state))
       } minimal: {
         Image(systemName: DownloadActivityStyle.symbol(state))
           .foregroundStyle(DownloadActivityStyle.tint(state))
+          .accessibilityLabel(DownloadActivityStyle.spoken(state))
       }
       .keylineTint(DownloadActivityStyle.tint(state))
     }
@@ -104,6 +108,39 @@ struct DownloadActivityLockScreenView: View {
 enum DownloadActivityStyle {
   static let background = Color(red: 0.09, green: 0.10, blue: 0.12)
 
+  /// ActivityKit only flags content that passed its stale date; it keeps
+  /// drawing the last state. The app sets that date on every refresh of a
+  /// running transfer, so stale means the app stopped reporting (suspended or
+  /// gone) and the last "Downloading 40%" is no longer known to be true. Such a
+  /// state is shown under the widget-only status "stale": last known bytes, no
+  /// percentage, no activity wording. Paused and finished transfers never
+  /// expire and are left alone. The status never leaves this process.
+  static func presented(_ state: DownloadActivityAttributes.ContentState,
+                        isStale: Bool) -> DownloadActivityAttributes.ContentState {
+    guard isStale else { return state }
+    switch state.status {
+    case "paused", "complete", "completed", "failed", "error", "cancelled", "canceled": return state
+    default: break
+    }
+    var shown = state
+    shown.status = "stale"
+    // The extension has no localized wording for this, so it shows none.
+    shown.statusLabel = ""
+    return shown
+  }
+
+  /// VoiceOver name for a region that only draws a symbol or a glyph.
+  static func spoken(_ state: DownloadActivityAttributes.ContentState) -> String {
+    state.statusLabel.isEmpty ? state.fileName : state.statusLabel
+  }
+
+  /// VoiceOver name for the compact percentage, which is a bare glyph while
+  /// paused, failed or of unknown size.
+  static func spokenProgress(_ state: DownloadActivityAttributes.ContentState) -> String {
+    let text = percent(state)
+    return text.isEmpty ? spoken(state) : text
+  }
+
   static func fraction(_ state: DownloadActivityAttributes.ContentState) -> Double {
     if state.status == "complete" { return 1 }
     guard let total = state.total, total > 0 else { return 0 }
@@ -120,6 +157,7 @@ enum DownloadActivityStyle {
 
   static func percent(_ state: DownloadActivityAttributes.ContentState) -> String {
     if state.status == "complete" { return "100%" }
+    if state.status == "stale" { return "" }
     guard let total = state.total, total > 0 else { return "" }
     return "\(Int((fraction(state) * 100).rounded()))%"
   }
@@ -129,6 +167,7 @@ enum DownloadActivityStyle {
     case "complete": return "100%"
     case "paused": return "❚❚"
     case "failed", "cancelled": return "!"
+    case "stale": return "…"
     default: break
     }
     guard let total = state.total, total > 0 else { return "…" }
@@ -153,6 +192,7 @@ enum DownloadActivityStyle {
     case "failed": return "exclamationmark.triangle.fill"
     case "cancelled": return "xmark.circle.fill"
     case "queued": return "clock.fill"
+    case "stale": return "arrow.down.circle"
     default: return "arrow.down.circle.fill"
     }
   }
@@ -163,7 +203,7 @@ enum DownloadActivityStyle {
     case "verifying": return .cyan
     case "complete": return .green
     case "failed": return .red
-    case "cancelled": return .gray
+    case "cancelled", "stale": return .gray
     default: return .accentColor
     }
   }

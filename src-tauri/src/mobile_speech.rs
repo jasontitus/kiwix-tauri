@@ -725,6 +725,8 @@ mod transport {
                         "status": if paused { "paused" } else { "reading" },
                         "statusLabel": if paused { &paused_label } else { &reading_label },
                         "offset": 0, "total": length,
+                        // Localized names for the Live Activity's controls.
+                        "labels": labels,
                     });
                     self.kokoro.start(crate::service::kokoro::StartRequest {
                         id: native_id.clone(), token: capability.token.clone(), text, voice, rate,
