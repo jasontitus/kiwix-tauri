@@ -152,24 +152,6 @@ internal class MobileNetworkPolicy(context: Context, private val changed: (JSObj
 
     private fun accessPointName(name: String): Boolean =
         name == "wlan1" || name.startsWith("ap") || name.startsWith("swlan") || name.startsWith("softap")
-    /** Prefix containment without hidden IpPrefix constructors (Android 9 safe). */
-    private fun inPrefix(address: java.net.InetAddress, peer: java.net.InetAddress, prefix: Int): Boolean {
-        val bytes = address.address
-        val other = peer.address
-        if (bytes.size != other.size || prefix !in 0..bytes.size * 8) return false
-        var bits = prefix
-        var index = 0
-        while (bits >= 8) {
-            if (bytes[index] != other[index]) return false
-            index++
-            bits -= 8
-        }
-        if (bits > 0) {
-            val mask = (0xFF shl (8 - bits)) and 0xFF
-            if ((bytes[index].toInt() and mask) != (other[index].toInt() and mask)) return false
-        }
-        return true
-    }
     private fun hotspotPrefixes(): List<Pair<java.net.Inet4Address, Int>> =
         java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
             .filter { it.isUp && !it.isLoopback && accessPointName(it.name) }
@@ -211,4 +193,28 @@ internal class MobileNetworkPolicy(context: Context, private val changed: (JSObj
         if (after == null || !physicalLan(after)) throw NativeDocumentError("LOCAL_NETWORK_CHANGED")
         attached || routed
     }
+}
+
+/**
+ * Whether [peer] lies inside the [prefix]-bit network of [address]. The public
+ * IpPrefix(InetAddress, Int) constructor only exists from API 33; before that
+ * it is a hidden member whose use fails with an Error no caller here catches,
+ * so every prefix test goes through this byte-wise comparison instead.
+ */
+internal fun inPrefix(address: java.net.InetAddress, peer: java.net.InetAddress, prefix: Int): Boolean {
+    val bytes = address.address
+    val other = peer.address
+    if (bytes.size != other.size || prefix !in 0..bytes.size * 8) return false
+    var bits = prefix
+    var index = 0
+    while (bits >= 8) {
+        if (bytes[index] != other[index]) return false
+        index++
+        bits -= 8
+    }
+    if (bits > 0) {
+        val mask = (0xFF shl (8 - bits)) and 0xFF
+        if ((bytes[index].toInt() and mask) != (other[index].toInt() and mask)) return false
+    }
+    return true
 }

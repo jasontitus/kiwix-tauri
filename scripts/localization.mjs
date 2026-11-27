@@ -260,7 +260,7 @@ export async function inventory(directory = path.join(root, "src")) {
   const untranslated = [];
   const invalidCounts = [];
   for (const file of await walk(directory)) {
-    if (!/\.(tsx?|jsx?)$/.test(file) || file.endsWith("i18n.tsx")) continue;
+    if (!/\.(tsx?|jsx?)$/.test(file)) continue;
     const source = ts.createSourceFile(
       file,
       await fs.readFile(file, "utf8"),
@@ -344,7 +344,12 @@ export async function inventory(directory = path.join(root, "src")) {
         untranslated.push({ location, text: node.initializer.text });
       ts.forEachChild(node, visit);
     }
+    const reported = [dynamic.length, untranslated.length, invalidCounts.length];
     visit(source);
+    // The catalog implementation forwards its callers' sources to t(); only its
+    // own literal copy is inventoried, so generation keeps it in the catalogs.
+    if (file.endsWith("i18n.tsx"))
+      [dynamic.length, untranslated.length, invalidCounts.length] = reported;
   }
   return { sources: [...sources].sort(), dynamic, untranslated, invalidCounts };
 }

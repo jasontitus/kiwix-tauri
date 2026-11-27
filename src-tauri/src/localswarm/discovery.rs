@@ -220,6 +220,15 @@ impl Discovery {
         self.browse = Some((cancel, task));
         Ok(())
     }
+    /// Leave the browse exactly as a session that ended by itself leaves it:
+    /// a finished task still in the slot, and its error.
+    #[cfg(test)]
+    pub(super) async fn end_browse_for_test(&mut self, error: &str) {
+        let task = tokio::spawn(async {});
+        while !task.is_finished() { tokio::task::yield_now().await; }
+        self.browse = Some((CancellationToken::new(), task));
+        *self.error.lock().unwrap_or_else(|e| e.into_inner()) = Some(error.into());
+    }
     pub async fn stop_browse(&mut self) -> Result<(), String> {
         let mut result = Ok(());
         if let Some((cancel, task)) = self.browse.take() {

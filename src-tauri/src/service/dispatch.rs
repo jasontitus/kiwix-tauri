@@ -2113,7 +2113,8 @@ impl Service {
                 let mut errors = Vec::new();
                 if let Err(error) = self.localswarm_manager(None).await?.discovery(enabled).await { errors.push(error); }
                 #[cfg(mobile)]
-                if let Err(error) = self.clone().nearby_command("nearby_discover", args.clone()).await { errors.push(error); }
+                // This arm already holds the privacy read lease from `operation`.
+                if let Err(error) = self.clone().nearby_discover_leased(args.clone()).await { errors.push(error); }
                 #[cfg(target_os = "android")]
                 if let Err(error) = self.mobile_discovery_update().await { errors.push(error); }
                 if errors.is_empty() { self.localswarm_status().await } else { Err(errors.join("; ")) }
@@ -2239,7 +2240,10 @@ impl Service {
                             return Err("NEARBY_LAN_REQUIRED".into());
                         }
                     }
-                    let status = match self.nearby_library_socket(&label).await? {
+                    let socket = self.nearby_library_socket(&label).await?;
+                    #[cfg(target_os = "android")]
+                    let hosted = socket.is_some();
+                    let status = match socket {
                         Some((socket, addresses, cancel)) => manager.share_library_on_socket(name, socket, addresses, cancel).await?,
                         None => manager.share_library(name).await?,
                     };
@@ -2247,7 +2251,22 @@ impl Service {
                     self.ensure_window_active(&label)?;
                     self.ensure_generation(&args)?;
                     let descriptor = manager.library_descriptor().await.ok_or("Nearby sharing ended before it was ready")?;
+                    #[cfg(target_os = "android")]
+                    let ended = descriptor.cancel.clone();
                     self.nearby_publish_library(&label, descriptor).await?;
+                    // A share on the temporary Wi-Fi can end without Stop (an
+                    // archive changed, the listener or route ended). Its network
+                    // must not stay up, and a later plain Share all must not
+                    // find and reuse it. The release keeps a hotspot that Web
+                    // sharing, a receive or a newer share is still using.
+                    #[cfg(target_os = "android")]
+                    if hosted {
+                        let service = self.clone();
+                        tauri::async_runtime::spawn(async move {
+                            ended.cancelled().await;
+                            let _ = service.nearby_release_hotspot_if_unused().await;
+                        });
+                    }
                     value(status)
                 }.await;
                 if started.is_err() {

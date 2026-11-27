@@ -213,6 +213,8 @@ struct LibraryOffer {
     server: library::LibraryServer,
     advertisement: String,
 }
+/// Shown in the share card, so it must say what to do next.
+const LIBRARY_STOPPED: &str = "Nearby sharing stopped because an archive in your library changed or the connection ended. Choose Share all to start again.";
 struct ReceiveProgress { downloaded: u64, speed: u64, updated_at: String }
 struct Running { cancel: CancellationToken, task: tokio::task::JoinHandle<()>, progress: Option<ReceiveProgress> }
 struct State { jobs: BTreeMap<String, StoredJob>, running: HashMap<String, Running> }
@@ -230,6 +232,9 @@ struct Inner {
     offers: tokio::sync::Mutex<HashMap<String, Offer>>, operation: tokio::sync::Mutex<()>,
     library: tokio::sync::Mutex<Option<LibraryOffer>>,
     library_retirement: Mutex<Option<String>>,
+    /// Why the last library offer ended when nobody stopped it. Shown where
+    /// "Share all" lives until the next start or explicit stop clears it.
+    library_stopped: Mutex<Option<String>>,
     lifetime: Mutex<CancellationToken>,
     sharing_lifetime: Mutex<CancellationToken>,
     seed_setup_gate: tokio::sync::RwLock<()>,
@@ -621,7 +626,7 @@ impl LocalSwarmManager {
         let discovery = Discovery::new(peer_id.clone())?;
         let lifetime = admission.child_token();
         let sharing_lifetime = lifetime.child_token();
-        Ok(Self { inner: Arc::new(Inner { #[cfg(target_os = "ios")] sharing_admission: std::sync::atomic::AtomicBool::new(true), #[cfg(target_os = "ios")] receive_work: std::sync::atomic::AtomicUsize::new(0), store, directory, peer_id, _process_lock: process_lock, state: Mutex::new(State { jobs, running: HashMap::new() }), discovery: tokio::sync::Mutex::new(discovery), offers: tokio::sync::Mutex::new(HashMap::new()), library: tokio::sync::Mutex::new(None), library_retirement: Mutex::new(None), operation: tokio::sync::Mutex::new(()), lifetime: Mutex::new(lifetime), sharing_lifetime: Mutex::new(sharing_lifetime), seed_setup_gate: tokio::sync::RwLock::new(()), receive_setup_gate: tokio::sync::RwLock::new(()), download_budget: Arc::new(RateBudget::new(settings.download_limit)), upload_budget: Arc::new(RateBudget::new(settings.upload_limit)), slots: tokio::sync::Semaphore::new(3), receive_activity: Arc::new(network::ReceiveActivity::default()), error: Mutex::new(None), last_start_manifest: Mutex::new(None), persist_order: Mutex::new(PersistOrder { next: 0, written: 0 }), cleanup_digests: Mutex::new(HashMap::new()) }) })
+        Ok(Self { inner: Arc::new(Inner { #[cfg(target_os = "ios")] sharing_admission: std::sync::atomic::AtomicBool::new(true), #[cfg(target_os = "ios")] receive_work: std::sync::atomic::AtomicUsize::new(0), store, directory, peer_id, _process_lock: process_lock, state: Mutex::new(State { jobs, running: HashMap::new() }), discovery: tokio::sync::Mutex::new(discovery), offers: tokio::sync::Mutex::new(HashMap::new()), library: tokio::sync::Mutex::new(None), library_retirement: Mutex::new(None), library_stopped: Mutex::new(None), operation: tokio::sync::Mutex::new(()), lifetime: Mutex::new(lifetime), sharing_lifetime: Mutex::new(sharing_lifetime), seed_setup_gate: tokio::sync::RwLock::new(()), receive_setup_gate: tokio::sync::RwLock::new(()), download_budget: Arc::new(RateBudget::new(settings.download_limit)), upload_budget: Arc::new(RateBudget::new(settings.upload_limit)), slots: tokio::sync::Semaphore::new(3), receive_activity: Arc::new(network::ReceiveActivity::default()), error: Mutex::new(None), last_start_manifest: Mutex::new(None), persist_order: Mutex::new(PersistOrder { next: 0, written: 0 }), cleanup_digests: Mutex::new(HashMap::new()) }) })
     }
     fn allowed(&self) -> Result<(), String> { if self.inner.store.private_mode()? || self.inner.store.read_only()? { Err("LocalSwarm is disabled in private/read-only mode".into()) } else { Ok(()) } }
     /// Clone the job map for a durable write. Callers hold the state lock for
@@ -742,7 +747,16 @@ impl LocalSwarmManager {
         self.allowed()?; let _operation = self.inner.operation.lock().await;
         let mut discovery = self.inner.discovery.lock().await;
         discovery.set_direct(self.inner.store.settings()?.direct_connection).await?;
-        if enabled { discovery.start_browse().await?; } else { discovery.stop_browse().await?; }
+        if enabled {
+            // A browse that ended by itself (a denied permission, a browse
+            // error, the traffic limit) leaves a latch that only Stop clears,
+            // and the interface offers Stop only while browsing. This explicit
+            // request is that reset; nothing here retries by itself. Reaping
+            // can only fail for a session that is already gone, and the start
+            // below reports the state that matters.
+            if !discovery.is_browsing() { let _ = discovery.stop_browse().await; }
+            discovery.start_browse().await?;
+        } else { discovery.stop_browse().await?; }
         drop(discovery); self.status().await
     }
     pub async fn share_library(&self, name: String) -> Result<library::LibrarySharingStatus, String> {
@@ -791,6 +805,7 @@ impl LocalSwarmManager {
         let status = server.status();
         let generation = server.generation.clone();
         *self.inner.library.lock().await = Some(LibraryOffer { server, advertisement });
+        *self.inner.library_stopped.lock().unwrap_or_else(|e| e.into_inner()) = None;
         self.supervise_library(descriptor, generation);
         Ok(status)
     }
@@ -803,8 +818,21 @@ impl LocalSwarmManager {
             let _operation = manager.inner.operation.lock().await;
             let same = manager.inner.library.lock().await.as_ref()
                 .is_some_and(|offer| offer.server.generation == generation);
-            if same { let _ = manager.stop_library_locked().await; }
+            if same {
+                let _ = manager.stop_library_locked().await;
+                manager.note_library_stopped();
+            }
         });
+    }
+    /// A running library offer was retired by something other than its own
+    /// Stop: a shared archive changed, or the listener or its route ended.
+    /// Without this the card silently returns to "Share your library".
+    fn note_library_stopped(&self) {
+        // Stop all and a privacy or read-only change cancel the lifetime
+        // first; those are the person's own decision and need no explanation.
+        if self.inner.lifetime.lock().unwrap_or_else(|e| e.into_inner()).is_cancelled() || self.allowed().is_err() { return; }
+        *self.inner.library_stopped.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some(LIBRARY_STOPPED.into());
     }
     pub async fn rebind_library_on_socket(&self, session_id: &str, socket: std::net::UdpSocket, addresses: Vec<String>,
         route_cancel: CancellationToken) -> Result<library::LibraryPeerDescriptor, String> {
@@ -819,17 +847,18 @@ impl LocalSwarmManager {
         if let Err(error) = self.inner.discovery.lock().await.unadvertise(&offer.advertisement).await {
             *self.inner.library_retirement.lock().unwrap_or_else(|e| e.into_inner()) = Some(offer.advertisement);
             offer.server.shutdown().await;
+            self.note_library_stopped();
             return Err(error);
         }
         if let Err(error) = offer.server.rebind(socket, addresses).await {
-            offer.server.shutdown().await; return Err(error);
+            offer.server.shutdown().await; self.note_library_stopped(); return Err(error);
         }
         let descriptor = offer.server.descriptor.clone();
         let generation = self.next_library_generation()?;
         let advertisement = match self.inner.discovery.lock().await.advertise_library(&descriptor.session_id, descriptor.port,
             offer.server.status().library_count, &descriptor.addresses, &descriptor.name, generation, offer.server.native_listener()).await {
             Ok(id) => id,
-            Err(error) => { offer.server.shutdown().await; return Err(error); }
+            Err(error) => { offer.server.shutdown().await; self.note_library_stopped(); return Err(error); }
         };
         let stopped = descriptor.cancel.clone();
         tokio::spawn(async move {
@@ -856,11 +885,20 @@ impl LocalSwarmManager {
     }
     pub async fn stop_library(&self) -> Result<library::LibrarySharingStatus, String> {
         let _operation = self.inner.operation.lock().await;
-        self.stop_library_locked().await?;
+        // The person's own Stop needs no explanation. On a phone the Bluetooth
+        // publisher is stopped first, which cancels the offer and lets the
+        // supervisor record a reason before this runs.
+        let stopped = self.stop_library_locked().await;
+        *self.inner.library_stopped.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        stopped?;
         Ok(self.library_status().await)
     }
     pub async fn library_status(&self) -> library::LibrarySharingStatus {
-        self.inner.library.lock().await.as_ref().map_or_else(Default::default, |offer| offer.server.status())
+        let stopped = || library::LibrarySharingStatus {
+            error: self.inner.library_stopped.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+            ..Default::default()
+        };
+        self.inner.library.lock().await.as_ref().map_or_else(stopped, |offer| offer.server.status())
     }
     pub async fn library_descriptor(&self) -> Option<library::LibraryPeerDescriptor> {
         self.inner.library.lock().await.as_ref().filter(|offer| offer.server.status().running)
@@ -1482,7 +1520,11 @@ impl LocalSwarmManager {
     pub async fn quiesce_sources(&self, book_id: Option<&str>) -> Result<tokio::sync::MutexGuard<'_, ()>, String> {
         let guard = self.inner.operation.lock().await;
         let retire_library = self.inner.library.lock().await.as_ref().is_some_and(|offer| offer.server.contains(book_id));
-        if retire_library { self.stop_library_locked().await?; }
+        if retire_library {
+            let stopped = self.stop_library_locked().await;
+            self.note_library_stopped();
+            stopped?;
+        }
         let offers = {
             let mut offers = self.inner.offers.lock().await;
             let ids: Vec<_> = offers.iter().filter(|(_, offer)| book_id.is_none_or(|id| offer.row.book_id == id)).map(|(id, _)| id.clone()).collect();
@@ -1496,7 +1538,11 @@ impl LocalSwarmManager {
     pub async fn revoke_invalid_sources(&self) -> Result<(), String> {
         let _guard = self.inner.operation.lock().await;
         let invalid_library = self.inner.library.lock().await.as_ref().is_some_and(|offer| !offer.server.valid_sources());
-        if invalid_library { self.stop_library_locked().await?; }
+        if invalid_library {
+            let stopped = self.stop_library_locked().await;
+            self.note_library_stopped();
+            stopped?;
+        }
         let offers = {
             let mut offers = self.inner.offers.lock().await;
             let ids: Vec<_> = offers.iter().filter(|(_, offer)| offer.source.principal().is_err()).map(|(id, _)| id.clone()).collect();
@@ -1538,6 +1584,7 @@ impl LocalSwarmManager {
         let _receive_fence = self.inner.receive_setup_gate.write().await;
         let _operation = self.inner.operation.lock().await;
         let mut errors: Vec<_> = self.stop_library_locked().await.err().into_iter().collect();
+        *self.inner.library_stopped.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let ids: Vec<_> = self.inner.state.lock().unwrap_or_else(|e| e.into_inner()).running.keys().cloned().collect();
         for id in ids { if let Err(e) = self.pause_locked(&id, false).await { errors.push(e); } }
         let offers = std::mem::take(&mut *self.inner.offers.lock().await);

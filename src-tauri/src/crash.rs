@@ -462,11 +462,11 @@ fn replace_urls(value: &str) -> String {
         {
             continue;
         }
-        let end = if scheme.eq_ignore_ascii_case("file") {
+        let end = if scheme.eq_ignore_ascii_case("file") && tail.starts_with('/') {
             // A file URL is a path and may be written with unencoded spaces.
-            let chars: Vec<char> = value[start..].chars().collect();
+            let chars: Vec<char> = tail.chars().collect();
             let length = path_end(&chars, 0);
-            start + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
+            colon + 1 + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
         } else {
             tail.find(|character: char| {
                 character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
@@ -759,24 +759,61 @@ mod tests {
     }
 
     #[test]
+    fn redaction_keeps_no_part_of_a_path_that_contains_spaces() {
+        // Stopping at the first space kept ` Doe\AppData\…` and
+        // ` Backup/Health Records/…`: the rest of the profile or library path.
+        let windows = redact(
+            "Failed to setup app: Cannot parse C:\\Users\\Jane Doe\\AppData\\Roaming\\kiwix\\My Library\\state.json: expected value at line 1 column 1",
+        );
+        assert_eq!(windows, "Failed to setup app: Cannot parse [path]: expected value at line 1 column 1");
+        let volume = redact("open /Volumes/Family Backup/Health Records/medical_wikipedia.zim failed");
+        assert_eq!(volume, "open [path]");
+        for leaked in ["Doe", "AppData", "Library", "Backup", "Health", "medical_wikipedia"] {
+            assert!(!windows.contains(leaked) && !volume.contains(leaked), "{windows} / {volume}");
+        }
+        // Quoted paths end at their closing quote, so the cause survives.
+        assert_eq!(
+            redact("cannot read \"/home/jane doe/My Books/a.zim\" (os error 13)"),
+            "cannot read \"[path]\" (os error 13)"
+        );
+        assert_eq!(
+            redact("cannot read \"C:\\\\Users\\\\Jane Doe\\\\\" (os error 5)"),
+            "cannot read \"[path]\" (os error 5)"
+        );
+        // An apostrophe is part of a name, not the end of the path.
+        let apostrophe = redact("missing '/Volumes/Jane's Backup/Private Notes/a.zim' on disk");
+        assert_eq!(apostrophe, "missing '[path]");
+        // A UNC share, a home-relative path and a file URL with raw spaces.
+        assert_eq!(redact("at \\\\nas\\Family Share\\a.zim now"), "at [path]");
+        assert_eq!(redact("at ~/My Documents/Private Notes.txt now"), "at [path]");
+        assert_eq!(redact("open file:///Users/Jane Doe/Private Notes.txt now"), "open [url]");
+        // The frame line of a backtrace is redacted the same way.
+        assert_eq!(redact_line("3: read /Users/Jane Doe/Secret Notes/a.zim again"), "3: read [path]");
+    }
+
+    #[test]
     fn local_reader_and_non_http_urls_keep_no_path_or_host_identity() {
         let text = redact(
             "reader HTTP://12b34567-1234-5678-90ab-123456789abc-deadbeef.localhost.:9/A/Pri)vate_page?secret=1 \
              loopback http://127.0.0.2:9/book-uuid/A/Private \
              ipv6 http://[::1]:9/book-uuid/A/Private \
              bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private \
-             path=/book-uuid/A/Private relative=/.kiwix/token/A/Private \
              ZIM://book-uuid/A/Private MAILTO:private@example.org \
-             content://provider/Private file:///Documents/Private%20Notes.txt \
+             content://provider/Private \
              custom://host/Private public https://user:pass@example.org/a/b?token=secret#x \
-             adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
+             adjacent https://example.org/a,http://book-uuid.localhost/A/Private \
+             path=/book-uuid/A/Private relative=/.kiwix/token/A/Private",
         );
+        // A path may contain spaces, so it is redacted to the end of its clause:
+        // the path-like reader routes come last here and are checked one by one below.
         assert_eq!(
             text,
             "reader [reader-url] loopback [reader-url] ipv6 [reader-url] bridge [reader-url] \
-             path=[path] relative=[path] [url] [url] [url] [url] [url] public https://example.org/a/b \
-             adjacent [reader-url]"
+             [url] [url] [url] [url] public https://example.org/a/b \
+             adjacent [reader-url] path=[path]"
         );
+        assert_eq!(redact("relative=/.kiwix/token/A/Private"), "relative=[path]");
+        assert_eq!(redact("file:///Documents/Private%20Notes.txt"), "[url]");
     }
 
     #[test]

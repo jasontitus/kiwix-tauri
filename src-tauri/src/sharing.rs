@@ -837,6 +837,12 @@ pub struct SharingServer {
     // Library mode allocates one listener per book lazily, when the index or a
     // reader first asks for it. Selected mode keeps every listener for its life.
     library: Option<LibraryHosts>,
+    // The same host set every listener of this session checks `Host` against.
+    // Status reads it so the links shown are the ones the server answers on.
+    hosts: SessionHosts,
+    // Last observation of whether an interface binding's address is still on
+    // this device, so a status poll does not enumerate interfaces every time.
+    address_lost: Mutex<(Option<Instant>, bool)>,
 }
 impl Drop for SharingServer {
     fn drop(&mut self) {
@@ -1731,6 +1737,8 @@ impl SharingServer {
             servers,
             archives,
             library: Some(library),
+            hosts: session_hosts,
+            address_lost: Mutex::new((None, false)),
         })
     }
 
@@ -1827,11 +1835,13 @@ impl SharingServer {
             servers: vec![handle],
             archives: Vec::new(),
             library: Some(library),
+            hosts: session_hosts,
+            address_lost: Mutex::new((None, false)),
         })
     }
 
     pub fn status(&self) -> Value {
-        json!({
+        let mut status = json!({
             "running": true,
             "scope": self.scope,
             "sessionId": self.session_id,
@@ -1847,8 +1857,64 @@ impl SharingServer {
             "catalogUrl": self.catalog_url,
             "catalogUrls": self.catalog_urls,
             "libraryCount": self.library_count,
-        })
+        });
+        // The listener outlives the network it started on: a laptop changes
+        // Wi-Fi or its lease while this still says "running". Report what is
+        // true now. This describes the server only; which `Host` values it
+        // answers is decided by `SessionHosts`, and is not changed here.
+        match &self.binding {
+            SharingBinding::Interface { address } => {
+                status["addressLost"] = json!(self.interface_address_lost(address));
+            }
+            SharingBinding::Ipv4All {} | SharingBinding::Ipv6All {} | SharingBinding::DualStackAll {} => {
+                // A wildcard listener already answers on the refreshed set.
+                let hosts = self.hosts.current();
+                if !hosts.is_empty() {
+                    let links = |port: u16, path: &str| -> Vec<String> {
+                        hosts.iter().map(|host| access_url(*host, port, path)).collect()
+                    };
+                    let urls = links(self.port, &format!("/nearby/{}", self.session_id));
+                    status["url"] = json!(urls[0]);
+                    status["urls"] = json!(urls);
+                    if self.catalog_url.is_some() {
+                        let catalogs = links(self.port, &format!("/{}/catalog/v2/root.xml", self.token));
+                        status["catalogUrl"] = json!(catalogs[0]);
+                        status["catalogUrls"] = json!(catalogs);
+                    }
+                    if let Some(books) = status["books"].as_array_mut() {
+                        for book in books {
+                            let port = book["port"].as_u64().and_then(|port| u16::try_from(port).ok());
+                            if let Some(port) = port {
+                                book["urls"] = json!(links(port, &format!("/.kiwix-access/{}", self.token)));
+                            }
+                        }
+                    }
+                }
+            }
+            SharingBinding::Loopback {} | SharingBinding::Hotspot {} => {}
+        }
+        status
     }
+
+    /// An interface binding names one literal address. When that address is
+    /// no longer on any local interface the listener cannot be reached, and
+    /// only stopping and starting again can bind the new one.
+    fn interface_address_lost(&self, address: &str) -> bool {
+        let mut seen = self.address_lost.lock().unwrap_or_else(|error| error.into_inner());
+        let now = Instant::now();
+        if !seen.0.is_some_and(|at| now.saturating_duration_since(at) < AUTHORITY_REFRESH_TTL) {
+            seen.0 = Some(now);
+            // An enumeration failure proves nothing; keep the last answer.
+            if let Ok(current) = interfaces() {
+                seen.1 = address_absent(address, &current);
+            }
+        }
+        seen.1
+    }
+}
+fn address_absent(address: &str, current: &[SharingInterface]) -> bool {
+    let bound = address.parse::<IpAddr>().ok();
+    !current.iter().any(|interface| interface.address.parse::<IpAddr>().ok() == bound)
 }
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;")

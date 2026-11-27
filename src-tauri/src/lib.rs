@@ -225,11 +225,11 @@ fn parse_options(args: impl Iterator<Item = String>) -> Result<Options, String> 
                 )
             }
             "--help" | "-h" => {
-                println!("Kiwix — offline knowledge reader\n\nUsage: kiwix-workbench [OPTIONS] [ARCHIVE.zim ...]\n  --article PATH     Open a path, query, and fragment in the specified archive\n  --search TEXT      Look up TEXT in the library (also kiwix://search?q=TEXT)\n  --data-dir PATH    Isolated application state directory\n  --private          Do not persist browsing/session/archive storage changes\n  --read-only        Existing profile only; prohibit filesystem mutation\n  --headless         Serve the real app and API on authenticated loopback\n  --port NUMBER      Headless port (default: an available port)\n  --version          Display version");
+                print_cli_answer("Kiwix — offline knowledge reader\n\nUsage: kiwix-workbench [OPTIONS] [ARCHIVE.zim ...]\n  --article PATH     Open a path, query, and fragment in the specified archive\n  --search TEXT      Look up TEXT in the library (also kiwix://search?q=TEXT)\n  --data-dir PATH    Isolated application state directory\n  --private          Do not persist browsing/session/archive storage changes\n  --read-only        Existing profile only; prohibit filesystem mutation\n  --headless         Serve the real app and API on authenticated loopback\n  --port NUMBER      Headless port (default: an available port)\n  --version          Display version");
                 std::process::exit(0);
             }
             "--version" => {
-                println!("Kiwix Rust {}", env!("CARGO_PKG_VERSION"));
+                print_cli_answer(&format!("Kiwix Rust {}", env!("CARGO_PKG_VERSION")));
                 std::process::exit(0);
             }
             "--" => {
@@ -247,6 +247,22 @@ fn parse_options(args: impl Iterator<Item = String>) -> Result<Options, String> 
         return Err("--search cannot be combined with archive paths or --headless".into());
     }
     Ok(result)
+}
+
+/// Answer `--help` or `--version` on stdout. A Windows release build has no
+/// console (`windows_subsystem = "windows"`), so unless stdout was redirected
+/// its handle is null and the answer would vanish: show it in a message box
+/// there instead.
+#[cfg(desktop)]
+fn print_cli_answer(text: &str) {
+    println!("{text}");
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        if std::io::stdout().as_raw_handle().is_null() {
+            show_native_message("Kiwix", text, false);
+        }
+    }
 }
 
 /// A forwarded launch must never run the first-launch help/version exit path:
@@ -377,16 +393,20 @@ fn validate_secondary_launch(
     Ok(())
 }
 
+/// Returns what `open_paths` returns: the archives of this launch that could
+/// not be opened, after the readable ones were.
 #[cfg(desktop)]
 async fn open_secondary_paths(
     service: Arc<Service>,
     mut options: Options,
     cwd: &Path,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let generation = service.launch_generation();
     validate_secondary_launch(&service, &options, cwd)?;
     if let Some(query) = options.search.take() {
-        return open_search(service, query, true, Some(generation)).await;
+        return open_search(service, query, true, Some(generation))
+            .await
+            .map(|()| Vec::new());
     }
     for path in &mut options.paths {
         if Path::new(path).is_relative() {
@@ -413,20 +433,89 @@ fn spawn_secondary_paths(
     let app = app.clone();
     let title = if options.search.is_some() { "Look up in Kiwix" } else { "Import archives" };
     tauri::async_runtime::spawn(async move {
-        if let Err(error) = open_secondary_paths(service.clone(), options, &cwd).await {
-            eprintln!("{title}: {error}");
-            let locale = service.store.locale().unwrap_or_else(|_| "system".into());
-            let strings = localization::Localizer::for_app(&locale);
-            app.dialog()
-                .message(format!(
-                    "{}\n\n{error}",
-                    strings.text("The operation could not be completed.", &[])
-                ))
-                .title(strings.text(title, &[]))
-                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-                .show(|_| {});
-        }
+        let outcome = open_secondary_paths(service.clone(), options, &cwd).await;
+        report_launch_outcome(&app, &service, title, outcome);
     });
+}
+
+/// What to tell the person after a launch asked a running Kiwix to open
+/// something: the whole launch was refused, or some of its archives could not
+/// be opened (one line each) after the readable ones were. `None` when there is
+/// nothing to report.
+#[cfg(desktop)]
+fn launch_failure_detail(outcome: Result<Vec<String>, String>) -> Option<String> {
+    match outcome {
+        Ok(failures) if failures.is_empty() => None,
+        Ok(failures) => Some(failures.join("\n")),
+        Err(error) => Some(error),
+    }
+}
+
+/// Show a failed or partly failed launch in a native dialog. A second launch,
+/// "Open with" and a double-clicked archive have no other place to report to:
+/// stderr is not visible, and the window that came forward shows nothing new.
+#[cfg(desktop)]
+fn report_launch_outcome(
+    app: &tauri::AppHandle,
+    service: &Service,
+    title: &str,
+    outcome: Result<Vec<String>, String>,
+) {
+    let Some(detail) = launch_failure_detail(outcome) else {
+        return;
+    };
+    eprintln!("{title}: {detail}");
+    let locale = service.store.locale().unwrap_or_else(|_| "system".into());
+    let strings = localization::Localizer::for_app(&locale);
+    app.dialog()
+        .message(format!(
+            "{}\n\n{detail}",
+            strings.text("The operation could not be completed.", &[])
+        ))
+        .title(strings.text(title, &[]))
+        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+        .show(|_| {});
+}
+
+/// One line for each archive of a launch that could not be opened: its file
+/// name and the reason the import gave.
+#[cfg(desktop)]
+fn launch_failures(errors: &Value) -> Vec<String> {
+    errors
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|entry| {
+            let reason = entry
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("The archive could not be opened");
+            match entry
+                .get("path")
+                .and_then(Value::as_str)
+                .and_then(|path| Path::new(path).file_name())
+            {
+                Some(name) => format!("{}: {reason}", name.to_string_lossy()),
+                None => reason.to_owned(),
+            }
+        })
+        .collect()
+}
+
+/// Startup has no window to hang a dialog on yet: keep each unopened archive
+/// in the shell's startup notice instead. Returns whether there was anything
+/// to report.
+#[cfg(desktop)]
+fn note_startup_launch_outcome(service: &Service, outcome: Result<Vec<String>, String>) -> bool {
+    let failures = match outcome {
+        Ok(failures) => failures,
+        Err(error) => vec![error],
+    };
+    for failure in &failures {
+        eprintln!("Opening startup archives: {failure}");
+        service.note_startup_warning(format!("Could not open startup archive: {failure}"));
+    }
+    !failures.is_empty()
 }
 
 #[cfg(desktop)]
@@ -529,6 +618,203 @@ fn profile_busy_in_setup(
     Ok(())
 }
 
+/// Title of the dialog that explains why Kiwix did not start. Like the
+/// busy-profile dialog it is English: no profile, and so no saved language, has
+/// been read when it is needed.
+#[cfg(desktop)]
+const STARTUP_FAILURE_TITLE: &str = "Kiwix — cannot start";
+
+/// How a fatal startup error reaches the person who launched Kiwix.
+#[cfg(desktop)]
+#[derive(Debug, PartialEq, Eq)]
+struct StartupFailure {
+    /// Text for a native dialog. `None` for a `--headless` launch, whose
+    /// operator reads stderr and must never be left waiting on a dialog.
+    dialog: Option<String>,
+    /// The process exit status, unchanged by how the error is shown.
+    exit_code: i32,
+}
+
+/// A windowed launch from Finder, the Start menu or a desktop launcher has no
+/// visible stderr (and a Windows release build has no console at all), so the
+/// error also goes to a dialog. The store's own recovery text is kept whole.
+#[cfg(desktop)]
+fn startup_failure(error: &str, headless: bool) -> StartupFailure {
+    StartupFailure {
+        dialog: (!headless).then(|| format!("Kiwix could not start.\n\n{error}")),
+        exit_code: 1,
+    }
+}
+
+/// Show one message and wait for it to be dismissed, before any Tauri runtime
+/// exists. Returns whether a dialog was shown.
+#[cfg(all(desktop, unix))]
+fn show_native_message(title: &str, message: &str, error: bool) -> bool {
+    let kind = if error {
+        instance::NativeMessageKind::Error
+    } else {
+        instance::NativeMessageKind::Warning
+    };
+    instance::show_native_message(kind, title, message)
+}
+
+/// Show one message and wait for it to be dismissed, before any Tauri runtime
+/// exists. Returns whether a dialog was shown.
+#[cfg(windows)]
+fn show_native_message(title: &str, message: &str, error: bool) -> bool {
+    use windows::{
+        core::HSTRING,
+        Win32::UI::WindowsAndMessaging::{
+            MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND,
+        },
+    };
+    let title = HSTRING::from(title);
+    let message = HSTRING::from(message);
+    let icon = if error { MB_ICONERROR } else { MB_ICONINFORMATION };
+    // SAFETY: `message` and `title` are owned, NUL-terminated UTF-16 strings
+    // that live until the call returns, and the call keeps neither pointer.
+    // No owner window is passed, which the API permits.
+    let pressed = unsafe { MessageBoxW(None, &message, &title, MB_OK | icon | MB_SETFOREGROUND) };
+    pressed.0 != 0
+}
+
+/// Report a fatal error from before the Tauri runtime exists, then exit. The
+/// stderr line stays for terminals, logs and `--headless`.
+#[cfg(desktop)]
+fn exit_after_startup_failure(error: &str, headless: bool) -> ! {
+    eprintln!("Kiwix: {error}");
+    let failure = startup_failure(error, headless);
+    if let Some(message) = &failure.dialog {
+        show_native_message(STARTUP_FAILURE_TITLE, message, true);
+    }
+    std::process::exit(failure.exit_code);
+}
+
+/// A fatal error inside Tauri's setup hook. Returning it would make Tauri
+/// panic ("Failed to setup app"), which closes the app with no explanation, so
+/// it is shown here and the process exits with the same status once the dialog
+/// is dismissed. Same pattern as `profile_busy_in_setup`.
+#[cfg(desktop)]
+fn startup_failed_in_setup(app: &mut tauri::App, error: &str) -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!("Kiwix: {error}");
+    let failure = startup_failure(error, false);
+    let exit_code = failure.exit_code;
+    let Some(message) = failure.dialog else {
+        std::process::exit(exit_code);
+    };
+    // A window that was already built has nothing to show. Hide it instead of
+    // closing it: closing the last window asks for an ordinary Quit, which
+    // would end the process with status 0 before the message is read.
+    for (_, window) in app.webview_windows() {
+        let _ = window.hide();
+    }
+    app.handle()
+        .dialog()
+        .message(message)
+        .title(STARTUP_FAILURE_TITLE)
+        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+        .show(move |_| {
+            // Startup did not finish, so there is no running session to save
+            // and no Quit handshake to run.
+            std::process::exit(exit_code);
+        });
+    Ok(())
+}
+
+/// Wrap the setup hook so that no error from it reaches Tauri as `Err`.
+#[cfg(desktop)]
+fn setup_reporting_failure<F>(
+    setup: F,
+) -> impl FnOnce(&mut tauri::App) -> Result<(), Box<dyn std::error::Error>> + Send + 'static
+where
+    F: FnOnce(&mut tauri::App) -> Result<(), Box<dyn std::error::Error>> + Send + 'static,
+{
+    move |app| match setup(app) {
+        Ok(()) => Ok(()),
+        Err(error) => startup_failed_in_setup(app, &error.to_string()),
+    }
+}
+
+/// The exit was authorized: relaunch if an installed update asked for it,
+/// otherwise exit with the requested status.
+#[cfg(desktop)]
+fn finish_authorized_quit(app: &tauri::AppHandle, code: Option<i32>) {
+    if update::take_restart_after_quit() {
+        // An installed update relaunches only now that the service is retired.
+        app.request_restart();
+        return;
+    }
+    app.exit(code.unwrap_or(0));
+}
+
+/// "Quit Without Saving": attempt every stage of `Service::shutdown` once
+/// more, so transfers still stop at a checkpoint and listeners, locks and
+/// native resources are still released, then let the exit proceed whatever it
+/// reported. Only what could not be written is given up.
+#[cfg(desktop)]
+async fn retire_without_saving(service: &Service) {
+    if let Err(error) = service.shutdown().await {
+        eprintln!("Quitting without saving; not everything could be saved or stopped cleanly: {error}");
+    }
+}
+
+/// Quit could not save or retire cleanly. Ask the person whether to retry,
+/// keep Kiwix open, or quit knowing what is lost. `exiting` stays set until
+/// they answer, so a second Quit cannot stack another dialog, and nothing but
+/// the explicit "Quit Without Saving" button authorizes an exit that gives up
+/// state (`quit::failed_quit_action`).
+#[cfg(desktop)]
+fn ask_after_failed_quit(
+    app: tauri::AppHandle,
+    service: Arc<Service>,
+    failure: quit::QuitFailure,
+    error: String,
+    code: Option<i32>,
+    exiting: Arc<AtomicBool>,
+    authorized: Arc<AtomicBool>,
+) {
+    let locale = service.store.locale().unwrap_or_else(|_| "system".into());
+    let strings = localization::Localizer::for_app(&locale);
+    let labels = quit::FailedQuitLabels {
+        retry: strings.text("Retry", &[]),
+        quit_without_saving: strings.text("Quit Without Saving", &[]),
+        cancel: strings.text("Cancel", &[]),
+    };
+    let dialog = app
+        .dialog()
+        .message(quit::failed_quit_message(&strings, failure, &error))
+        .title(strings.text("Quit", &[]))
+        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+        .buttons(tauri_plugin_dialog::MessageDialogButtons::YesNoCancelCustom(
+            labels.retry.clone(),
+            labels.quit_without_saving.clone(),
+            labels.cancel.clone(),
+        ));
+    dialog.show_with_result(move |result| {
+        match quit::failed_quit_action(failure, &result, &labels) {
+            quit::FailedQuitAction::Retry => {
+                exiting.store(false, Ordering::SeqCst);
+                app.exit(code.unwrap_or(0));
+            }
+            quit::FailedQuitAction::QuitWithoutSaving => {
+                // `exiting` stays set: this attempt ends in the exit below.
+                tauri::async_runtime::spawn(async move {
+                    retire_without_saving(&service).await;
+                    authorized.store(true, Ordering::SeqCst);
+                    finish_authorized_quit(&app, code);
+                });
+            }
+            quit::FailedQuitAction::Stay { clear_relaunch } => {
+                if clear_relaunch {
+                    // The shells resumed; a later plain Quit must not relaunch.
+                    update::clear_restart_after_quit();
+                }
+                exiting.store(false, Ordering::SeqCst);
+            }
+        }
+    });
+}
+
 #[cfg(target_os = "macos")]
 async fn open_zim_links(service: Arc<Service>, links: Vec<String>) -> Result<(), String> {
     if links.is_empty() {
@@ -590,6 +876,10 @@ async fn open_search(
     Ok(())
 }
 
+/// Open the given archives in the launch target window. `Err` means nothing was
+/// opened. `Ok` lists the archives that could not be opened (see
+/// `launch_failures`) after every readable one was queued; the caller must show
+/// that list to the person, because nothing else does.
 #[cfg(desktop)]
 async fn open_paths(
     service: Arc<Service>,
@@ -597,9 +887,9 @@ async fn open_paths(
     article: Option<String>,
     emit: bool,
     expected_generation: Option<u64>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     if paths.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     if let Some(app) = service
         .app
@@ -663,13 +953,11 @@ async fn open_paths(
             store::ShellBook::new(value).map(|book| book.tab_location(article.as_deref()))
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let failures = launch_failures(&imported["errors"]);
     // Queue before waking the shell: successful event emission is not delivery.
     // Startup has no native window yet and belongs to the default main shell.
     if locations.is_empty() {
-        if imported["errors"].as_array().is_some_and(|e| !e.is_empty()) {
-            eprintln!("Archive open errors: {}", imported["errors"]);
-        }
-        return Ok(());
+        return Ok(failures);
     }
     if emit {
         let (label, window) = desktop_launch_target(&service)?;
@@ -685,10 +973,7 @@ async fn open_paths(
             .queue_launch_locations("main", locations, launch_generation)
             .await?;
     }
-    if imported["errors"].as_array().is_some_and(|e| !e.is_empty()) {
-        eprintln!("Archive open errors: {}", imported["errors"]);
-    }
-    Ok(())
+    Ok(failures)
 }
 
 #[cfg(desktop)]
@@ -916,7 +1201,9 @@ fn run_application(options: Options) -> Result<(), String> {
                 }
                 Err(error) => return Err(error.to_string()),
             };
-            open_paths(service.clone(), options.paths, options.article, false, None).await?;
+            let unopened = open_paths(service.clone(), options.paths, options.article, false, None).await?;
+            // A headless launch reports on stderr and in the served shell.
+            note_startup_launch_outcome(&service, Ok(unopened));
             let background = tokio::spawn(maintenance(service.clone()));
             let url = server::start_preview(service.clone(), options.port).await?;
             println!("KIWIX_READY {url}");
@@ -1080,7 +1367,7 @@ fn run_application(options: Options) -> Result<(), String> {
             quit::validate_quit_flush,
             quit::ack_quit_flush
         ])
-        .setup(move |app| {
+        .setup(setup_reporting_failure(move |app| {
             // The lock is held now. Reuse the pre-lock bytes only if the file
             // still has the identity that was inspected; otherwise let the
             // store read the profile once under its own lock.
@@ -1110,6 +1397,8 @@ fn run_application(options: Options) -> Result<(), String> {
                 Err(store::StoreOpenError::Busy(error)) => {
                     return profile_busy_in_setup(app, &path, &error.to_string());
                 }
+                // The profile cannot be opened. `setup_reporting_failure`
+                // shows this text and exits 1; Tauri never sees the error.
                 Err(error) => return Err(error.to_string().into()),
             };
             *service
@@ -1204,22 +1493,25 @@ fn run_application(options: Options) -> Result<(), String> {
                 let startup_service = service.clone();
                 let main_app = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(error) = open_paths(
+                    let outcome = open_paths(
                         startup_service.clone(),
                         startup_paths,
                         startup_article,
                         false,
                         Some(startup_generation),
                     )
-                    .await
-                    {
-                        eprintln!("Opening startup archives: {error}");
-                        startup_service.note_startup_warning(format!(
-                            "Could not open startup archive: {error}"
-                        ));
-                    }
+                    .await;
+                    let unopened = note_startup_launch_outcome(&startup_service, outcome);
                     if let Some(window) = main_app.get_webview_window("main") {
                         let _ = window.emit("kiwix-open", ());
+                        // The notice is in the main window: bring that window
+                        // forward so a failed "Open with" is not left behind
+                        // another restored window.
+                        if unopened {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
                     }
                 });
             }
@@ -1236,7 +1528,7 @@ fn run_application(options: Options) -> Result<(), String> {
             tauri::async_runtime::spawn(maintenance(service));
             eprintln!("KIWIX_DESKTOP_READY");
             Ok(())
-        })
+        }))
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(state) = window.try_state::<Arc<Service>>() {
@@ -1280,41 +1572,22 @@ fn run_application(options: Options) -> Result<(), String> {
                     let authorized = authorized.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(error) = quit::prepare(&app).await {
+                            // prepare cancelled the attempt and the shells resumed.
+                            // The relaunch of an installed update is decided by the
+                            // person's answer, not dropped behind their back.
                             eprintln!("Application Quit cancelled: {error}");
-                            #[cfg(desktop)]
-                            update::clear_restart_after_quit();
-                            exiting.store(false, Ordering::SeqCst);
+                            ask_after_failed_quit(app, service, quit::QuitFailure::Flush, error, code, exiting, authorized);
                             return;
                         }
                         if let Err(error) = service.shutdown().await {
                             eprintln!("Application Quit needs a retry: service retirement failed: {error}");
                             // Keep the acknowledged shells frozen. Their ordinary commands
                             // cannot run once the service has started retiring.
-                            let locale = service.store.locale().unwrap_or_else(|_| "system".into());
-                            let strings = localization::Localizer::for_app(&locale);
-                            let retry_app = app.clone();
-                            app.dialog()
-                                .message(format!("{}\n\n{error}",
-                                    strings.text("The operation could not be completed.", &[])))
-                                .title(strings.text("Quit", &[]))
-                                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-                                .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCustom(
-                                    strings.text("Retry", &[])))
-                                .show(move |retry| {
-                                    exiting.store(false, Ordering::SeqCst);
-                                    if retry { retry_app.exit(code.unwrap_or(0)); }
-                                });
+                            ask_after_failed_quit(app, service, quit::QuitFailure::Retirement, error, code, exiting, authorized);
                             return;
                         }
                         authorized.store(true, Ordering::SeqCst);
-                        #[cfg(desktop)]
-                        if update::take_restart_after_quit() {
-                            // An installed update relaunches only now that the
-                            // service is retired.
-                            app.request_restart();
-                            return;
-                        }
-                        app.exit(code.unwrap_or(0));
+                        finish_authorized_quit(&app, code);
                     });
                 } else {
                     exiting.store(false, Ordering::SeqCst);
@@ -1355,9 +1628,9 @@ fn run_application(options: Options) -> Result<(), String> {
                         // sandbox build needs to read the archive.
                         #[cfg(target_os = "macos")]
                         request_folder_access(&app, &paths).await;
-                        if let Err(error) = open_paths(service, paths, None, true, Some(generation)).await {
-                            eprintln!("Opening document: {error}");
-                        }
+                        // Same report as a second launch (spawn_secondary_paths).
+                        let outcome = open_paths(service.clone(), paths, None, true, Some(generation)).await;
+                        report_launch_outcome(&app, &service, "Import archives", outcome);
                     });
                 }
                 if !links.is_empty() {
@@ -1398,9 +1671,12 @@ pub(crate) fn install_crypto_provider() {
 #[cfg(desktop)]
 pub fn run() {
     install_crypto_provider();
-    if let Err(error) = parse_options(std::env::args()).and_then(run_application) {
-        eprintln!("Kiwix: {error}");
-        std::process::exit(1);
+    let arguments: Vec<String> = std::env::args().collect();
+    // Decided from the raw arguments, so an unparsable command line that asks
+    // for `--headless` still reports on stderr only.
+    let headless = arguments.iter().any(|argument| argument == "--headless");
+    if let Err(error) = parse_options(arguments.into_iter()).and_then(run_application) {
+        exit_after_startup_failure(&error, headless);
     }
 }
 

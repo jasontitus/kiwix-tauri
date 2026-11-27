@@ -23,6 +23,8 @@
     "test:frontend-surfaces": "node --test scripts/test-frontend-surfaces.mjs",
     "update:manifest": "node scripts/make-update-manifest.mjs",
     "docs:errors": "node scripts/generate-error-docs.mjs",
+    "check:errors": "node scripts/generate-error-docs.mjs --check",
+    "check:localization": "node scripts/localization.mjs inventory",
     "check:unsafe": "node scripts/check-unsafe-census.mjs",
     "tauri": "node scripts/tauri-cli.mjs",
     "iphone": "python3 scripts/iphone.py",

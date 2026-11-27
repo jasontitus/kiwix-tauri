@@ -21,6 +21,9 @@ pub(crate) fn download_identity(session: &str, peer: &str, book: &str) -> String
     url.to_string()
 }
 
+/// How long an open list is kept when room is needed for a newer one. Age is
+/// never authority: a list left open stays usable for as long as its grant
+/// passes `check()`, which every admission and request repeats.
 const RECEIPT_TTL: Duration = Duration::from_secs(300);
 /// Revocation poll for a receipt that is not serving a request. Every admission
 /// and every request re-checks the grant, so an idle receipt only has to stop
@@ -137,11 +140,12 @@ impl SharedLibraryClient {
                 session_id: descriptor.session_id.clone(), name: inventory.name, books: books.clone() };
             let mut state = self.state.lock().map_err(|_| REVOKED)?;
             grant.require()?;
-            state.1.retain(|_, receipt| receipt.created.elapsed() < RECEIPT_TTL);
+            let now = Instant::now();
+            make_room(&mut state.1, now);
             if state.1.len() >= MAX_RECEIPTS {
                 return Err("Too many shared libraries are open; close discovery and try again".into());
             }
-            state.1.insert(result.receipt_id.clone(), Receipt { created: Instant::now(), grant: grant.clone(), books });
+            state.1.insert(result.receipt_id.clone(), Receipt { created: now, grant: grant.clone(), books });
             Ok(result)
         };
         let result = tokio::select! {
@@ -157,15 +161,7 @@ impl SharedLibraryClient {
     pub async fn download(&self, downloads: &DownloadManager, destination_dir: PathBuf, receipt_id: &str,
         book_id: &str, space_acknowledgement: Option<String>, replace_earlier: bool) -> Result<DownloadSnapshot, String>
     {
-        let grant = {
-            let state = self.state.lock().map_err(|_| REVOKED)?;
-            let receipt = state.1.get(receipt_id).ok_or(REVOKED)?;
-            if receipt.created.elapsed() >= RECEIPT_TTL { return Err(REVOKED.into()); }
-            let book = receipt.books.iter().find(|book| book.id == book_id).ok_or("Book is not in this shared library")?;
-            let mut grant = receipt.grant.clone();
-            grant.book = Some(book.clone());
-            grant
-        };
+        let grant = self.receipt_grant(receipt_id, book_id)?;
         grant.check().await?;
         if let Some(id) = grant.book.as_ref().and_then(|book| book.archive_id.as_deref()) {
             let id = uuid::Uuid::parse_str(id).map_err(|_| "Invalid shared library book")?.to_string();
@@ -178,6 +174,33 @@ impl SharedLibraryClient {
             }
         }
         downloads.start_shared_library(grant, destination_dir, space_acknowledgement, replace_earlier).await
+    }
+}
+
+impl SharedLibraryClient {
+    /// The grant an open list holds for one of its books. How long the list
+    /// has been open decides nothing here: the caller's `check()` does.
+    fn receipt_grant(&self, receipt_id: &str, book_id: &str) -> Result<ScopedDownloadGrant, String> {
+        let state = self.state.lock().map_err(|_| REVOKED)?;
+        let receipt = state.1.get(receipt_id).ok_or(REVOKED)?;
+        let book = receipt.books.iter().find(|book| book.id == book_id).ok_or("Book is not in this shared library")?;
+        let mut grant = receipt.grant.clone();
+        grant.book = Some(book.clone());
+        Ok(grant)
+    }
+}
+
+/// Keep the receipt table bounded without revoking a list somebody still has
+/// open. A receipt whose grant was revoked can never admit anything again and
+/// goes first. Only when the table is full do the oldest lists past the
+/// retention age make way, so age matters under pressure and never by itself.
+fn make_room(receipts: &mut HashMap<String, Receipt>, now: Instant) {
+    receipts.retain(|_, receipt| !receipt.grant.retired());
+    while receipts.len() >= MAX_RECEIPTS {
+        let oldest = receipts.iter()
+            .filter(|(_, receipt)| now.saturating_duration_since(receipt.created) >= RECEIPT_TTL)
+            .min_by_key(|(_, receipt)| receipt.created).map(|(id, _)| id.clone());
+        match oldest { Some(id) => { receipts.remove(&id); }, None => break }
     }
 }
 
@@ -217,6 +240,12 @@ impl ScopedDownloadGrant {
                 tokio::time::sleep(IDLE_REVOCATION_POLL).await;
             }
         });
+    }
+
+    /// Authority this grant has permanently lost. Cheap flags only: the full
+    /// proof is `check()`.
+    fn retired(&self) -> bool {
+        self.inner.cancel.is_cancelled() || self.inner.revoked.is_cancelled() || self.inner.descriptor.cancel.is_cancelled()
     }
 
     pub(crate) fn book(&self) -> Result<&SharedBook, String> { self.book.as_ref().ok_or_else(|| REVOKED.into()) }

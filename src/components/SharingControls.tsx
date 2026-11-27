@@ -63,6 +63,12 @@ export default function SharingControls({
   const optionsDetails = useRef<HTMLDetailsElement>(null);
   const errorHandler = useRef(onError);
   errorHandler.current = onError;
+  const refreshHandler = useRef(onRefresh);
+  refreshHandler.current = onRefresh;
+  // The status that arrived with the page describes the network at that
+  // moment. While sharing is on and this view is visible, ask again so the
+  // links follow an address change and a dead link is not shown as working.
+  const [observed, setObserved] = useState<SharingStatus | null>(null);
   const bindingTouched = useRef(false);
   const hotspotChosen = useRef(false);
   const alive = useRef(false);
@@ -90,6 +96,42 @@ export default function SharingControls({
   useEffect(() => {
     if (!sharing.running) setVisibleQrUrl(null);
   }, [sharing.running]);
+
+  useEffect(() => {
+    setObserved(null);
+    if (!sharing.running) return;
+    let active = true;
+    let reported = false;
+    let timer: number | undefined;
+    async function poll() {
+      if (!active || document.hidden) return;
+      try {
+        const value = await api<SharingStatus>("sharing_status");
+        if (!active) return;
+        if (value.running && value.sessionId === sharing.sessionId) setObserved(value);
+        else if (!reported) {
+          // Sharing ended or was replaced elsewhere; let the page catch up.
+          reported = true;
+          setObserved(null);
+          refreshHandler.current();
+        }
+      } catch {
+        // The page's own status stays on screen; the next poll asks again.
+      }
+      if (active && !document.hidden) timer = window.setTimeout(() => void poll(), 4000);
+    }
+    function visibility() {
+      window.clearTimeout(timer);
+      if (!document.hidden) void poll();
+    }
+    document.addEventListener("visibilitychange", visibility);
+    void poll();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, [sharing.running, sharing.sessionId]);
 
   useEffect(() => {
     let active = true;
@@ -303,10 +345,14 @@ export default function SharingControls({
     (mode !== "interface" ||
       interfaces.some((item) => item.address === address)) &&
     (mode !== "hotspot" || hotspotActive);
+  const shown =
+    observed && sharing.running && observed.sessionId === sharing.sessionId
+      ? observed
+      : sharing;
   const qrUrl = sharing.running
-    ? sharing.urls.includes(qrSelection)
+    ? shown.urls.includes(qrSelection)
       ? qrSelection
-      : (sharing.urls[0] ?? "")
+      : (shown.urls[0] ?? "")
     : "";
   const qrVisible = qrUrl !== "" && visibleQrUrl === qrUrl;
 
@@ -337,6 +383,13 @@ export default function SharingControls({
         {sharing.running && <span className="muted">{sharing.locked ? t("PIN protected") : t("Open share")}</span>}
       </div>
       {localError && <p className="inline-error" role="alert">{localError}</p>}
+      {sharing.running && shown.addressLost && (
+        <p className="inline-error" role="alert">
+          {t(
+            "This device is no longer connected at the address this share uses, so its link and QR code will not open. Reconnect to that network, or stop web sharing and enable it again to share on the current one.",
+          )}
+        </p>
+      )}
       {!sharing.running && availableBooks.length === 0 && <p className="muted">{t("Import an available archive before starting sharing.")}</p>}
       <details className="sharing-secondary">
         <summary>{t("Device name")}</summary>
@@ -587,7 +640,7 @@ export default function SharingControls({
               "Choose the address reachable from the other device. IPv6 addresses appear in brackets.",
             )}
           </p>
-          {sharing.urls.map((url) => (
+          {shown.urls.map((url) => (
             <div className="sharing-address" key={url}>
               <code>{url}</code>
               <button type="button" onClick={() => copy(url)}>
@@ -604,22 +657,22 @@ export default function SharingControls({
               </button>
             </div>
           ))}
-          {sharing.scope === "library" && sharing.catalogUrl && (
+          {sharing.scope === "library" && shown.catalogUrl && (
             <div className="sharing-address">
-              <code>{sharing.catalogUrl}</code>
-              <button type="button" onClick={() => copy(sharing.catalogUrl!)}>
-                {copied === sharing.catalogUrl ? (
+              <code>{shown.catalogUrl}</code>
+              <button type="button" onClick={() => copy(shown.catalogUrl!)}>
+                {copied === shown.catalogUrl ? (
                   <Check size={16} aria-hidden="true" />
                 ) : (
                   <Copy size={16} aria-hidden="true" />
                 )}
-                {copied === sharing.catalogUrl
+                {copied === shown.catalogUrl
                   ? t("Copied")
                   : t("Copy catalog link")}
               </button>
               <button
                 type="button"
-                onClick={() => openInBrowser(sharing.catalogUrl!)}
+                onClick={() => openInBrowser(shown.catalogUrl!)}
               >
                 <ExternalLink size={16} aria-hidden="true" />{" "}
                 {t("Open catalog in browser")}
@@ -638,7 +691,7 @@ export default function SharingControls({
                     setVisibleQrUrl(null);
                   }}
                 >
-                  {sharing.urls.map((url) => (
+                  {shown.urls.map((url) => (
                     <option key={url} value={url}>
                       {url}
                     </option>
@@ -684,7 +737,7 @@ export default function SharingControls({
           {sharing.scope === "selected" && (
             <details>
               <summary>{t("Individual archive access links")}</summary>
-              {sharing.books.map((book) => (
+              {shown.books.map((book) => (
                 <div className="sharing-book-links" key={book.id}>
                   <h4>
                     {bookById.get(book.id)?.title ||

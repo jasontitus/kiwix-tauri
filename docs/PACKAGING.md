@@ -822,8 +822,10 @@ platform limits and the loopback acceptance procedure are in
 ```sh
 # One long-lived keypair; keep the private key and password in the release secret store.
 npx tauri signer generate -w updater.key
-# Put the base64 contents of updater.key.pub into plugins.updater.pubkey in
-# src-tauri/tauri.conf.json. Change plugins.updater.endpoints to the real HTTPS host.
+# Set KIWIX_UPDATER_PUBLIC_KEY to the contents of updater.key.pub. Release builds take
+# the key and endpoint from the .updater-release.json overlay that
+# `node scripts/stage-update-release.mjs --configure` writes; the checked-in
+# src-tauri/tauri.conf.json keeps an empty pubkey and no endpoints.
 
 # After the notarized .app / signed Windows installer / Linux package is built:
 node scripts/make-update-manifest.mjs \
@@ -836,18 +838,21 @@ node scripts/make-update-manifest.mjs \
   --out dist/update.json
 ```
 
-The script packages a `.app` into `Kiwix.app.tar.gz`, copies or packages every
-other artifact into `--stage-dir`, reads an existing `.sig` or signs with
-`TAURI_SIGNING_PRIVATE_KEY_PATH`, and writes the static manifest atomically.
+The script packages a `.app` into `<target>-<version>-Kiwix.app.tar.gz`, copies
+every other artifact into `--stage-dir` under the same `<target>-<version>-`
+prefix, signs the staged bytes with `TAURI_SIGNING_PRIVATE_KEY_PATH`, and writes
+the static manifest atomically. It never reuses a `.sig` it finds; only
+`--no-sign --public-key <key>` takes the `.sig` next to an already packaged
+artifact, after verifying it against that key and the version.
 Every signature is created with `--app-version`, because
 `requireSignedVersion: true` rejects a manifest whose announced version differs
 from the signed version.
 
 Upload artifacts before replacing `update.json`, and keep the previous
 release's artifacts reachable. Verify the feed from the previous build before
-announcing it. The checked-in public key is a placeholder, so a build that has
-not been configured reports that updates are unavailable instead of trusting
-the wrong key.
+announcing it. The checked-in configuration has an empty public key and no
+endpoint, so a build that has not been configured reports that updates are
+unavailable instead of trusting the wrong key.
 
 macOS distribution requires a Developer ID signature and notarization (above).
 Windows requires Authenticode for the installer. Linux packages follow their
@@ -868,4 +873,4 @@ Before publication, record and perform the following on clean machines/VMs witho
 5. On every target: launch from the platform launcher; open a known local ZIM through the dialog and file association; read text/images, navigate links, and run full-text search. Exercise a split ZIM, persistence after restart, library import/removal, download pause/resume, export, window close/reopen, and the actual offline behavior. For StreetZim, fetch the real HTTPS catalog, assemble a known recipe, validate/open the completed archive, restart and reopen the saved map, then demonstrate local-part reuse and offline reopening with networking disabled. Run those map checks on Windows, macOS, and Linux; a successful local fixture on one OS is not evidence for the other two. Record app and locked reader versions, OS/architecture, and results. Packaging success alone does not verify these behaviors.
 6. Publish corresponding source and dependency license notices/source offers as required by GPL and bundled dependency licenses. SDK provenance metadata alone is not a complete license-compliance package.
 
-Stable/beta publication requires an authorized release manager, appropriate repository/channel write credentials, and platform signing/notarization credentials. Upload only accepted artifacts to the intended GitHub release or other authenticated channel. No workflow here creates a release or asserts notarization without Apple's response. The in-app updater is implemented (see [UPDATE.md](UPDATE.md)), but the release manifest, public key, HTTPS endpoint and platform signing credentials must be configured with the actual publication infrastructure before advertising a channel.
+Stable/beta publication requires an authorized release manager, appropriate repository/channel write credentials, and platform signing/notarization credentials. Upload only accepted artifacts to the intended GitHub release or other authenticated channel. The only release a workflow here creates is the **draft** that the `release` job of `build.yml` assembles on a manual run with a release version (see [UPDATE.md](UPDATE.md#protected-release-workflow)); no workflow publishes a release or asserts notarization without Apple's response. The in-app updater is implemented (see [UPDATE.md](UPDATE.md)), but the release manifest, public key, HTTPS endpoint and platform signing credentials must be configured with the actual publication infrastructure before advertising a channel.

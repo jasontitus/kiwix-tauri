@@ -847,15 +847,14 @@ export default function App() {
   showTechnicalErrors.current = snapshot?.settings.showTechnicalErrors === true;
   const onError = useCallback(
     (value: unknown, severity: ErrorSeverity = "blocking", showGlobally = true) => {
-      // The user's own cancellation is not a failure: nothing to record or paint.
-      if (isUserCancelledError(value)) return;
       const render = reportError(
         diagnostics,
         value,
         severity,
         showTechnicalErrors.current,
       );
-      if (!render || !showGlobally) return;
+      // The user's own cancellation is not a failure: there is nothing to paint.
+      if (!render || !showGlobally || isUserCancelledError(value)) return;
       // The band is in the page. Under an open modal it is behind the
       // backdrop, inert and cannot be dismissed, so a failure reported then
       // is presented above the modal instead. The quit and recovery dialogs

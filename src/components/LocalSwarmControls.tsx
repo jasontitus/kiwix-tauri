@@ -241,6 +241,17 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
   }, [blocked, loading, nativeDiscoveryReady, status.discovery, status.nearby?.discovery, discoveryIntent]);
 
   function closeReceive() {
+    // Closing while a Bluetooth sender is still being joined abandons that
+    // connection. Without telling the device, the Wi-Fi join prompt can still
+    // appear after the dialog is gone and the phone stays on the sender's
+    // network. A list that already loaded keeps its connection: accepted
+    // downloads depend on it, and the device refuses to end one that has any.
+    const peer = selectedPeerRef.current;
+    const consumer = status.nearby?.consumer;
+    const abandoned = peer?.transport === "quic-library" && peer.discovery === "bluetooth" &&
+      pendingPeerRef.current === peer.id && !inventoryRef.current && consumer?.peerId === peer.id &&
+      (consumer.phase === "connecting" || consumer.phase === "joining") ? consumer.owner : null;
+    const finding = !!status.nearby?.discovery;
     revision.current++;
     operationToken.current++;
     pendingPeerRef.current = null;
@@ -249,6 +260,14 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
     if (alive.current) setBusy(false);
     selectPeer(null);
     setError("");
+    if (abandoned) {
+      void run(async (current) => {
+        await api("nearby_stop", { owner: abandoned, pendingOnly: true });
+        // Stopping the connection also stops looking over Bluetooth; the
+        // person was finding devices, so keep finding them.
+        if (finding && current()) await api("localswarm_discovery", { enabled: true });
+      });
+    }
   }
   function openExisting(book: Book) {
     if (blockedRef.current || !book.available) return;
@@ -511,6 +530,11 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
     group.push(peer);
     groups.set(key, group);
   }
+  // Bluetooth off or not allowed fails after "Share all" and "Find nearby"
+  // have already returned, so it is only visible here.
+  const publisher = status.nearby?.publisher;
+  const publisherError = publisher?.phase === "failed" ? publisher.error : null;
+  const finderError = status.nearby?.error;
   const connection = selectedPeer?.transport === "quic-library" && selectedPeer.discovery === "bluetooth" &&
     status.nearby?.consumer?.peerId === selectedPeer.id ? status.nearby.consumer : null;
   const connectionText = connection?.phase === "joining"
@@ -553,7 +577,8 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
         {librarySharing?.running && librarySharing.publisherName && <p className="muted">{t("This device")}: <bdi>{librarySharing.publisherName}</bdi></p>}
         <p className="muted">{t("Keep this app open while sharing. Received downloads are never shared automatically.")}</p>
         {isAndroid && !librarySharing?.running && <p className="muted">{t("On a different Wi-Fi network? Use temporary Wi-Fi.")}</p>}
-        {librarySharing?.error && <p className="inline-error" role="alert">{errorText(librarySharing.error)}</p>}
+        {librarySharing?.error && !busy && <p className="inline-error" role="alert">{errorText(librarySharing.error)}</p>}
+        {librarySharing?.running && publisherError && <p className="inline-error" role="alert">{t("Devices on other Wi-Fi networks cannot find this share over Bluetooth: {reason} Devices on this Wi-Fi can still find it. To try Bluetooth again, stop sharing and choose Share all.", { reason: errorText(publisherError) })}</p>}
       </section>
       {isAndroid && status.hotspot?.phase === "active" && (
         <section className="localswarm-hotspot" aria-labelledby={`${id}-hotspot-title`}>
@@ -577,7 +602,7 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
         </section>
       )}
       {blocked && <p className="localswarm-notice" role="status">{t("Nearby is unavailable in private or read-only mode. Finding, receiving and sharing are stopped.")}</p>}
-      {!selectedPeer && (error || statusError || status.error || status.nearby?.error) && <p className="inline-error" role="alert">{errorText(error || statusError || status.error || status.nearby?.error)}</p>}
+      {!selectedPeer && (error || statusError || status.error) && <p className="inline-error" role="alert">{errorText(error || statusError || status.error)}</p>}
       <section className="localswarm-receive" aria-labelledby={`${id}-receive-title`}>
         <div className="localswarm-toolbar">
           <div className="localswarm-row-copy"><h2 id={`${id}-receive-title`}>{t("Receive from a nearby device")}</h2></div>
@@ -591,6 +616,13 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
         <p className="muted">{t("Ask the other person to open Nearby and choose Share all. Then choose their device below.")}</p>
         {isIOS && status.discovery && <p className="muted">{t("If iOS asks, allow Local Network access to find devices on this Wi-Fi.")}</p>}
         {loading && <p className="muted" role="status">{t("Loading…")}</p>}
+        {!blocked && finderError && <div className="localswarm-finder-error">
+          <p className="inline-error" role="alert">{t("Finding devices over Bluetooth stopped: {reason} Devices on this Wi-Fi can still appear below.", { reason: errorText(finderError) })}</p>
+          <button type="button" disabled={busy || loading || !nativeDiscoveryReady} onClick={() => {
+            autoDiscovery.current = true;
+            void run(async () => { await api("localswarm_discovery", { enabled: true }); });
+          }}><Radio size={17} aria-hidden="true" />{t("Try Bluetooth again")}</button>
+        </div>}
         {!blocked && status.discovery && <div className="localswarm-peers">
           {groups.size === 0 && <p className="localswarm-empty muted" role="status">{t("Looking for nearby devices… Keep both apps open.")}</p>}
           {[...groups].map(([key, peers]) => {

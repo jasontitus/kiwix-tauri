@@ -319,7 +319,7 @@ async function signArtifact(file, version, options) {
     }
   } else {
     fail(
-      "No signing key supplied. Set TAURI_SIGNING_PRIVATE_KEY_PATH (or --private-key-path), or place a .sig file next to every artifact.",
+      "No signing key supplied. Set TAURI_SIGNING_PRIVATE_KEY_PATH (or --private-key-path). To publish artifacts that are already signed, pass --no-sign --public-key KEY with a .sig file next to every artifact.",
     );
   }
   if (options.privateKeyPassword != null) env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = options.privateKeyPassword;

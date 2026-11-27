@@ -16,8 +16,9 @@ Already configured on this workstation:
 - `[profile.dev] debug = "line-tables-only"` in `src-tauri/Cargo.toml`; test
   builds inherit it. This keeps backtraces but drops most debug-object size.
 
-`scripts/dev.sh` resolves the patched desktop SDK, the rustup toolchain (the
-Homebrew `rustc` has no iOS/Android targets), and the Android NDK. Run:
+`scripts/dev.sh` puts the rustup toolchain first on `PATH` (the Homebrew `rustc`
+has no iOS/Android targets) and sets default Java and Android SDK/NDK locations;
+it resolves no desktop SDK. Run:
 
 ```sh
 scripts/dev.sh doctor

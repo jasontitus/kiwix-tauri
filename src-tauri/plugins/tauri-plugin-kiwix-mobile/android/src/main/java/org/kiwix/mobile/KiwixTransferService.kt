@@ -90,6 +90,28 @@ internal object TransferEvents {
     }
 }
 
+internal enum class TransferStartStep { STALE, CONTROL_PENDING, ADMIT }
+
+/**
+ * What one delivered transfer update does. [foregroundFirst] marks a delivery
+ * that is about to stop a service which has not entered the foreground yet:
+ * when it was started with startForegroundService, Android kills the process
+ * unless Service.startForeground runs once before the service stops.
+ */
+internal data class TransferStartDecision(val step: TransferStartStep, val foregroundFirst: Boolean)
+
+/** [pendingEvents] is read only for an admitted start; it is disk-backed. */
+internal fun transferStartDecision(
+    admitted: Boolean, foreground: Boolean, pendingEvents: () -> Boolean,
+): TransferStartDecision {
+    val step = when {
+        !admitted -> TransferStartStep.STALE
+        pendingEvents() -> TransferStartStep.CONTROL_PENDING
+        else -> TransferStartStep.ADMIT
+    }
+    return TransferStartDecision(step, step != TransferStartStep.ADMIT && !foreground)
+}
+
 class KiwixTransferService : Service() {
     companion object {
         const val ACTION_UPDATE = "org.kiwix.mobile.TRANSFER_UPDATE"
@@ -143,6 +165,8 @@ class KiwixTransferService : Service() {
     }
     private var wakeLock: PowerManager.WakeLock? = null
     private var admittedGeneration: Long? = null
+    /** This instance is in the foreground state Android requires of it. */
+    private var foreground = false
     private val destroyed = CountDownLatch(1)
 
     override fun onCreate() {
@@ -166,7 +190,11 @@ class KiwixTransferService : Service() {
         val confirmation = intent.getParcelableExtra<ResultReceiver>("confirmation")
         try {
             val admitted = admission(intent)
-            if (admitted == null) {
+            val decision = transferStartDecision(admitted != null, foreground) {
+                TransferEvents.peek(this).length() != 0
+            }
+            if (decision.foregroundFirst) enterForegroundBeforeStop(intent)
+            if (admitted == null || decision.step == TransferStartStep.STALE) {
                 confirmation?.send(Activity.RESULT_CANCELED, Bundle().apply {
                     putString("code", "TRANSFER_START_CANCELLED")
                 })
@@ -174,7 +202,7 @@ class KiwixTransferService : Service() {
                 if (!running) stopSelf(startId)
                 return START_NOT_STICKY
             }
-            if (TransferEvents.peek(this).length() != 0) {
+            if (decision.step == TransferStartStep.CONTROL_PENDING) {
                 finish()
                 confirmation?.send(Activity.RESULT_CANCELED, Bundle().apply {
                     putString("code", "TRANSFER_CONTROL_PENDING")
@@ -213,6 +241,7 @@ class KiwixTransferService : Service() {
             } else builder.setProgress(0, 0, true)
             ServiceCompat.startForeground(this, NOTIFICATION, builder.build(),
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
+            foreground = true
             if (wakeLock == null) {
                 wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:kiwix-transfers")
@@ -226,6 +255,7 @@ class KiwixTransferService : Service() {
         } catch (error: Exception) {
             TransferEvents.emit(this, "transfers-error",
                 if (error is NativeDocumentError) error.code else error.javaClass.simpleName)
+            enterForegroundBeforeStop(intent)
             finish()
             confirmation?.send(Activity.RESULT_CANCELED, Bundle().apply {
                 putString("code", if (error is NativeDocumentError) error.code else "TRANSFER_FOREGROUND_START_FAILED")
@@ -245,12 +275,46 @@ class KiwixTransferService : Service() {
         finish()
     }
 
+    /**
+     * The platform contract requires one startForeground call from a service
+     * started with startForegroundService, even when it is about to stop;
+     * [SpeechPlayback.foreground] follows the same rule. The notification is
+     * removed again by the stop that follows, and reuses the labels this start
+     * carried, falling back to the application's own name.
+     */
+    private fun enterForegroundBeforeStop(intent: Intent?) {
+        if (foreground) return
+        try {
+            val application = applicationInfo.loadLabel(packageManager).toString()
+            val channelName = intent?.getStringExtra("channelName")?.takeIf { it.isNotBlank() }
+            if (Build.VERSION.SDK_INT >= 26) {
+                val manager = getSystemService(NotificationManager::class.java)
+                // Never rename an existing channel to the fallback label.
+                if (channelName != null || manager.getNotificationChannel(CHANNEL) == null) {
+                    manager.createNotificationChannel(NotificationChannel(CHANNEL, channelName ?: application,
+                        NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+                }
+            }
+            val notification = NotificationCompat.Builder(this, CHANNEL)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle(intent?.getStringExtra("title")?.takeIf { it.isNotBlank() } ?: application)
+                .setOngoing(true).setOnlyAlertOnce(true).build()
+            ServiceCompat.startForeground(this, NOTIFICATION, notification,
+                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0)
+            foreground = true
+        } catch (_: Exception) {
+            // Android refused foreground admission. Nothing more can satisfy the
+            // contract; the caller still stops the service.
+        }
+    }
+
     private fun finish() {
         retire()
         running = false
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        foreground = false
         stopSelf()
     }
 

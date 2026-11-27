@@ -381,7 +381,8 @@ impl Service {
             "nativeReady":self.nearby.native_ready.load(Ordering::SeqCst),
             "consumer":state.consumer.as_ref().map(|owner| &owner.status),
             "discovery":state.consumer.as_ref().is_some_and(|owner|owner.scanning && !owner.work.cancel.is_cancelled()),
-            "peers":state.consumer.as_ref().filter(|owner|!owner.work.cancel.is_cancelled()).map(|owner|owner.peers.clone()).unwrap_or_default()}))
+            "peers":state.consumer.as_ref().filter(|owner|!owner.work.cancel.is_cancelled()).map(|owner|owner.peers.clone()).unwrap_or_default(),
+            "error":state.consumer.as_ref().and_then(discovery_failure)}))
     }
     pub(super) fn nearby_resolve(&self, peer_id: &str) -> Result<LibraryPeerDescriptor, String> {
         let (work, descriptor) = {
@@ -395,12 +396,33 @@ impl Service {
         if let Some(route) = &descriptor.route { route.check()?; }
         Ok(descriptor)
     }
+    /// The lease-free entry (`operation` returns to this before it takes the
+    /// privacy lease), so starting discovery takes that lease here.
     pub(super) async fn nearby_command(self: Arc<Self>, command: &str, args: Value) -> Result<Value, String> {
+        self.nearby_command_with(command, args, false).await
+    }
+    /// For a dispatch arm that already holds the privacy read lease. Taking it
+    /// again would nest two read guards: a writer queued between them blocks
+    /// the second read while it waits for the first, and nothing ever runs.
+    #[cfg_attr(not(mobile), expect(dead_code, reason = "Only the mobile localswarm_discovery arm also starts Bluetooth finding"))]
+    pub(super) async fn nearby_discover_leased(self: Arc<Self>, args: Value) -> Result<Value, String> {
+        self.nearby_command_with("nearby_discover", args, true).await
+    }
+    async fn nearby_command_with(self: Arc<Self>, command: &str, args: Value, leased: bool) -> Result<Value, String> {
         let label = args.get("__windowLabel").and_then(Value::as_str).unwrap_or("main").to_string();
         self.ensure_window_active(&label)?;
         if command == "nearby_stop" {
             let _gate = self.nearby.gate.lock().await;
-            self.nearby_stop_owner(args.get("owner").and_then(Value::as_str)).await?;
+            let owner = args.get("owner").and_then(Value::as_str);
+            if args.get("pendingOnly").and_then(Value::as_bool) == Some(true) {
+                // The person closed a connection that was still being made.
+                // Never end one that already carries accepted downloads: its
+                // route is theirs until Stop all or another connection.
+                let state = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?;
+                let pending = owner.and_then(|id| state.owner(id)).is_some_and(|owner| owner.descriptor.is_none());
+                if !pending { return Ok(Value::Null); }
+            }
+            self.nearby_stop_owner(owner).await?;
             return Ok(Value::Null);
         }
         #[cfg(mobile)]
@@ -447,7 +469,12 @@ impl Service {
         if !enabled { return self.nearby_status(); }
         if !cfg!(mobile) { return self.nearby_status(); }
         if !self.nearby.native_ready.load(Ordering::SeqCst) { return Err("Native Nearby listeners are not ready yet. Try again.".into()); }
-        let _mode = self.privacy_gate.read().await;
+        let _mode = if leased { None } else { Some(self.privacy_gate.read().await) };
+        self.nearby_discover_start(label).await
+    }
+    /// Replace a stopped or failed finder with a new one. The caller holds the
+    /// privacy read lease for the whole call; this never takes it.
+    async fn nearby_discover_start(self: &Arc<Self>, label: String) -> Result<Value, String> {
         let _gate = self.nearby.gate.lock().await;
         let old = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?.consumer.as_ref().map(|owner|(owner.work.id.clone(),owner.status.phase.clone(),owner.work.cancel.is_cancelled()));
         if let Some((id,phase,cancelled)) = old {
@@ -1003,6 +1030,16 @@ impl Service {
         let ids = self.nearby_cancel_window(label);
         let _ = self.nearby_release_owners(ids).await;
     }
+}
+/// Why Bluetooth finding is not running, when its own task ended in failure
+/// (Bluetooth off, permission denied, the radio stopped). That task records
+/// the failure and then cancels its owner; a failed connection to one sender
+/// leaves the owner scanning and is reported with that sender instead. The
+/// sharing side reports its failure through `publisher`.
+fn discovery_failure(owner: &Owner) -> Option<&str> {
+    if owner.status.phase != "failed" || !owner.work.cancel.is_cancelled() { return None; }
+    // A lifecycle gate is not a failure and is never shown.
+    owner.status.error.as_deref().filter(|error| !error.contains(crate::user_error::SUSPENDED_CODE))
 }
 fn decode_packet(encoded: Option<&str>) -> Result<Vec<u8>,String> {
     let encoded = encoded.ok_or("Bluetooth packet is missing")?;

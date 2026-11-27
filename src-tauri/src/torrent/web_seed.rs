@@ -628,21 +628,27 @@ async fn repair(
         }
         let verified = seed.total.saturating_sub(piece_bytes(seed, missing));
         let mut written = 0u64;
+        let ranges = missing_ranges(seed, missing);
         let mut outcome = Ok(());
-        for (index, start, end) in missing_ranges(seed, missing) {
+        let mut done = 0usize;
+        while done < ranges.len() {
+            let index = ranges[done].0;
+            // Offer every further range of the same file with it: a mirror
+            // that ignores range requests fills them all from one answer.
+            let run = ranges[done..].iter().take_while(|range| range.0 == index).count();
             let handle = files
                 .get(index)
                 .and_then(Option::as_ref)
                 .ok_or_else(|| "Web seed file handle is missing".to_string())?;
             let file = &seed.files[index];
-            outcome = match seed_url(base, seed, file) {
+            let fetched = match seed_url(base, seed, file) {
                 Ok(url) => {
-                    fetch_range(
+                    fetch_ranges(
                         client,
                         token,
                         &url,
                         handle,
-                        start..end,
+                        &ranges[done..done + run],
                         file.length,
                         verified,
                         seed.total,
@@ -653,8 +659,14 @@ async fn repair(
                 }
                 Err(error) => Err(SeedError::Fatal(error)),
             };
-            if outcome.is_err() || token.is_cancelled() {
-                break;
+            match fetched {
+                Ok(count) if count > 0 => done += count,
+                // Cancelled part way.
+                Ok(_) => break,
+                Err(error) => {
+                    outcome = Err(error);
+                    break;
+                }
             }
         }
         if token.is_cancelled() {
@@ -845,83 +857,92 @@ fn content_range_start(response: &reqwest::Response) -> Option<u64> {
         .and_then(|value| value.parse::<u64>().ok())
 }
 
-/// Write exactly `range` of one staged file from a mirror, in place. A mirror
-/// without range support answers with the whole file; only the requested
-/// bytes are taken from it, so nothing outside `range` is ever overwritten.
+/// Write `ranges` of one staged file from a mirror, in place, and return how
+/// many were written in full. They are `(file index, start, end)` in ascending
+/// file offsets. A range request is sent for the first one. A mirror without
+/// range support answers with the whole file instead, and then every range is
+/// filled from that single answer. Either way only the requested bytes are
+/// taken, so nothing outside `ranges` is ever overwritten.
 #[allow(clippy::too_many_arguments)]
-async fn fetch_range(
+async fn fetch_ranges(
     client: &reqwest::Client,
     token: &CancellationToken,
     url: &Url,
     file: &File,
-    range: std::ops::Range<u64>,
+    ranges: &[(usize, u64, u64)],
     length: u64,
     verified: u64,
     total: u64,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
     written: &mut u64,
-) -> Result<(), SeedError> {
+) -> Result<usize, SeedError> {
+    let Some(&(_, first, first_end)) = ranges.first() else {
+        return Ok(0);
+    };
     let request = client
         .get(url.clone())
         .header(reqwest::header::ACCEPT_ENCODING, "identity")
-        .header(reqwest::header::RANGE, format!("bytes={}-{}", range.start, range.end - 1));
+        .header(reqwest::header::RANGE, format!("bytes={first}-{}", first_end - 1));
     let response = tokio::select! {
-        _ = token.cancelled() => return Ok(()),
+        _ = token.cancelled() => return Ok(0),
         result = request.send() => result.map_err(|error| SeedError::Transport(display(error)))?,
     };
     let status = response.status();
-    // File offset of the next response byte.
-    let mut at = if status == reqwest::StatusCode::PARTIAL_CONTENT {
-        if content_range_start(&response) != Some(range.start) {
+    // The ranges this answer covers, and the file offset of its first byte.
+    let (ranges, mut at) = if status == reqwest::StatusCode::PARTIAL_CONTENT {
+        if content_range_start(&response) != Some(first) {
             return Err(SeedError::Fatal("Web seed returned an unexpected byte range".into()));
         }
-        range.start
+        (&ranges[..1], first)
     } else if status == reqwest::StatusCode::OK {
         if response.content_length().is_some_and(|content_length| content_length != length) {
             return Err(SeedError::Fatal("Web seed file is not the size the torrent describes".into()));
         }
-        0
+        (ranges, 0)
     } else {
         return Err(SeedError::status(status));
     };
-    let mut writer = file;
-    writer
-        .seek(SeekFrom::Start(range.start))
-        .map_err(display)?;
     let mut stream = response.bytes_stream();
-    // File offset of the next byte this call still has to write.
-    let mut next = range.start;
+    // The response bytes in hand; `at` is the file offset of the first one.
+    let mut chunk = bytes::Bytes::new();
     let mut sample = *written;
     let mut last_progress = Instant::now();
     progress(verified.saturating_add(*written).min(total), total, 0.0);
-    while next < range.end {
-        let chunk = tokio::select! {
-            _ = token.cancelled() => return Ok(()),
-            chunk = stream.next() => chunk,
-        };
-        let Some(chunk) = chunk else {
-            return Err(SeedError::Transport("Web seed returned a short file".into()));
-        };
-        let chunk = chunk.map_err(|error| SeedError::Transport(display(error)))?;
-        let chunk_end = at.saturating_add(chunk.len() as u64);
-        if chunk_end > next {
+    let mut writer = file;
+    for &(_, start, end) in ranges {
+        writer.seek(SeekFrom::Start(start)).map_err(display)?;
+        // File offset of the next byte of this range still to be written.
+        let mut next = start;
+        while next < end {
+            let chunk_end = at.saturating_add(chunk.len() as u64);
+            if chunk_end <= next {
+                at = chunk_end;
+                let received = tokio::select! {
+                    _ = token.cancelled() => return Ok(0),
+                    received = stream.next() => received,
+                };
+                chunk = match received {
+                    Some(received) => received.map_err(|error| SeedError::Transport(display(error)))?,
+                    None => return Err(SeedError::Transport("Web seed returned a short file".into())),
+                };
+                continue;
+            }
             let skip = (next - at) as usize;
-            let take = (chunk_end.min(range.end) - next) as usize;
+            let take = (chunk_end.min(end) - next) as usize;
             writer.write_all(&chunk[skip..skip + take]).map_err(display)?;
             next += take as u64;
             *written += take as u64;
-        }
-        at = chunk_end;
-        let now = Instant::now();
-        let elapsed = now.duration_since(last_progress);
-        if elapsed >= Duration::from_millis(250) {
-            let speed = (*written - sample) as f64 / elapsed.as_secs_f64();
-            progress(verified.saturating_add(*written).min(total), total, speed);
-            sample = *written;
-            last_progress = now;
+            let now = Instant::now();
+            let elapsed = now.duration_since(last_progress);
+            if elapsed >= Duration::from_millis(250) {
+                let speed = (*written - sample) as f64 / elapsed.as_secs_f64();
+                progress(verified.saturating_add(*written).min(total), total, speed);
+                sample = *written;
+                last_progress = now;
+            }
         }
     }
-    Ok(())
+    Ok(ranges.len())
 }
 
 /// Hash `candidates` (every piece when `None`) off the async runtime and
@@ -1411,12 +1432,15 @@ mod tests {
 
     #[tokio::test]
     async fn repair_never_overwrites_a_piece_that_already_verified() {
-        // This mirror ignores ranges and its copy differs in the first piece,
-        // which the staged file already holds correctly.
+        // This mirror ignores ranges, and its copy differs in the first and
+        // third piece, which the staged file already holds correctly. Both
+        // missing pieces are taken from its one whole-file answer.
         let mut served = BODY.to_vec();
         served[..5].fill(b'X');
+        served[10..15].fill(b'X');
         let mut staged = BODY.to_vec();
-        staged[5..].fill(0);
+        staged[5..10].fill(0);
+        staged[15..].fill(0);
         let (port, requests) = mirror(move |_, _| answer(&served, "", None));
         let (temp, factory) = body_staging(Some(&staged));
         let (result, _) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;

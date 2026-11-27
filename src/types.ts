@@ -224,6 +224,12 @@ export interface SharingStatus {
   sessionId?: string | null;
   locked?: boolean;
   discoveryError?: string | null;
+  /**
+   * A share bound to one interface address whose address is no longer on this
+   * device: the links cannot work until it returns or sharing is restarted.
+   * Absent for other bindings, whose links follow the live addresses.
+   */
+  addressLost?: boolean;
 }
 export interface Snapshot {
   books: Book[];
@@ -528,6 +534,14 @@ export interface PublicNearbyStatus {
     phase: string;
     error?: string | null;
   } | null;
+  /** The Bluetooth side of "Share all"; phase "failed" means it is not advertising. */
+  publisher?: {
+    owner: string;
+    peerId: string | null;
+    phase: string;
+    error?: string | null;
+  } | null;
+  /** Why Bluetooth finding stopped by itself; a failed connection is on `consumer`. */
   error?: string | null;
 }
 export interface LocalSwarmStatus {

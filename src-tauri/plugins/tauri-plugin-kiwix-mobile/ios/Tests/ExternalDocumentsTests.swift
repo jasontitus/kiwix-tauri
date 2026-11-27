@@ -528,15 +528,27 @@ final class ExternalDocumentsTests: XCTestCase {
   func testChangedResourceIdentifierCannotAdmitReplacementWithSameSizeAndArchiveUUID() throws {
     try fixture { root, defaults in
       let file = root.appendingPathComponent("book.zim")
+      let retained = root.appendingPathComponent("retained-original")
+      // A whole-second time can be given to the replacement exactly.
+      let admittedTime = Date(timeIntervalSince1970: 1_700_000_000)
       try archive(file)
+      try FileManager.default.setAttributes([.modificationDate: admittedTime], ofItemAtPath: file.path)
       let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
         persistent: true, cancellation: WorkCancellation())
       try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
       let before = defaults.dictionary(forKey: key) as? [String: Data]
-      // Same name, size and archive UUID, but another file: the original is
-      // kept so its inode cannot be reused.
-      try FileManager.default.moveItem(at: file, to: root.appendingPathComponent("retained-original"))
+      // Same name, size, archive UUID and modification time, but another file:
+      // the original is kept so its inode cannot be reused.
+      try FileManager.default.moveItem(at: file, to: retained)
       try archive(file)
+      try FileManager.default.setAttributes([.modificationDate: admittedTime], ofItemAtPath: file.path)
+      var kept = stat()
+      var replacement = stat()
+      XCTAssertEqual(stat(retained.path, &kept), 0)
+      XCTAssertEqual(stat(file.path, &replacement), 0)
+      XCTAssertEqual(kept.st_mtimespec.tv_sec, replacement.st_mtimespec.tv_sec)
+      XCTAssertEqual(kept.st_mtimespec.tv_nsec, replacement.st_mtimespec.tv_nsec)
+      XCTAssertNotEqual(kept.st_ino, replacement.st_ino)
       let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
       XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
         XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")

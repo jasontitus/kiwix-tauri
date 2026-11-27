@@ -87,7 +87,7 @@ internal class LocalHotspot(
                 val number = peer.address.fold(0L) { result, byte -> (result shl 8) or (byte.toLong() and 255L) }
                 val hostBits = 32 - iface.prefix
                 val hostMask = if (hostBits == 0) 0L else (1L shl hostBits) - 1L
-                nearbyRequire(peer != iface.address && android.net.IpPrefix(iface.address, iface.prefix).contains(peer) &&
+                nearbyRequire(peer != iface.address && inPrefix(iface.address, peer, iface.prefix) &&
                     (hostBits <= 1 || (number and hostMask) != 0L && (number and hostMask) != hostMask), "NEARBY_ENDPOINT_NOT_ON_HOTSPOT")
             }
             nearbyRequire(currentQuicInterface() == iface, "NEARBY_HOTSPOT_ROUTE_LOST")

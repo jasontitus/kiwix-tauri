@@ -104,8 +104,16 @@ pub(crate) fn busy_dialog_message(data_dir: &Path, detail: &str) -> String {
     } else {
         format!("\n\nDetails: {detail}")
     };
+    // Name the tool this platform actually has for ending a process.
+    let process_tool = if cfg!(target_os = "macos") {
+        "Activity Monitor"
+    } else if cfg!(windows) {
+        "Task Manager"
+    } else {
+        "your system monitor"
+    };
     format!(
-        "Another Kiwix instance is already running with this data directory:\n\n{}\n\nThat instance keeps the profile; this launch changed nothing. To use a separate library, launch Kiwix with --data-dir PATH (for example a new folder). If no Kiwix window is visible, quit the running instance from its window or Activity Monitor; do not delete store.lock.{detail}",
+        "Another Kiwix instance is already running with this data directory:\n\n{}\n\nThat instance keeps the profile; this launch changed nothing. To use a separate library, launch Kiwix with --data-dir PATH (for example a new folder). If no Kiwix window is visible, quit the running instance from its window or {process_tool}; do not delete store.lock.{detail}",
         data_dir.display()
     )
 }
@@ -116,24 +124,44 @@ pub(crate) fn busy_dialog_message(data_dir: &Path, detail: &str) -> String {
 #[cfg(unix)]
 pub(crate) fn show_profile_busy(data_dir: &Path, detail: &str) {
     let message = busy_dialog_message(data_dir, detail);
-    show_native_message("Kiwix — data directory in use", &message);
+    let title = "Kiwix — data directory in use";
+    if !show_native_message(NativeMessageKind::Warning, title, &message) {
+        eprintln!("{title}: {message}");
+    }
 }
 
+/// Which icon a pre-Tauri native message carries.
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NativeMessageKind {
+    /// The launch changed nothing and another instance carries on.
+    Warning,
+    /// Kiwix cannot start.
+    Error,
+}
+
+/// Show one message with an OK button before any Tauri runtime exists, and
+/// wait for it to be dismissed. Returns whether a dialog was shown; the caller
+/// owns the stderr fallback.
+///
+/// The text reaches the helper program as argument values, never through a
+/// shell: a profile path in it cannot be read as a command or an option.
 #[cfg(target_os = "macos")]
-fn show_native_message(title: &str, message: &str) {
+pub(crate) fn show_native_message(kind: NativeMessageKind, title: &str, message: &str) -> bool {
+    let icon = match kind {
+        NativeMessageKind::Warning => "caution",
+        NativeMessageKind::Error => "stop",
+    };
     let script = format!(
-        "display dialog {} with title {} buttons {{\"OK\"}} default button \"OK\" with icon caution",
+        "display dialog {} with title {} buttons {{\"OK\"}} default button \"OK\" with icon {icon}",
         apple_script_string(message),
         apple_script_string(title),
     );
-    let shown = std::process::Command::new("/usr/bin/osascript")
+    std::process::Command::new("/usr/bin/osascript")
         .args(["-e", &script])
         .status()
         .map(|status| status.success())
-        .unwrap_or(false);
-    if !shown {
-        eprintln!("{title}: {message}");
-    }
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "macos")]
@@ -153,22 +181,62 @@ fn apple_script_string(value: &str) -> String {
     quoted
 }
 
+/// Whether a graphical session exists to show a dialog in. Without one the
+/// helpers can only fail, so a terminal, service or SSH launch must not wait
+/// on them.
 #[cfg(all(unix, not(target_os = "macos")))]
-fn show_native_message(title: &str, message: &str) {
-    for (program, arguments) in [
-        ("zenity", vec!["--warning", "--no-wrap", "--title", title, "--text", message]),
-        ("kdialog", vec!["--title", title, "--msgbox", message]),
-    ] {
+fn has_display(display: Option<&std::ffi::OsStr>, wayland_display: Option<&std::ffi::OsStr>) -> bool {
+    [display, wayland_display]
+        .into_iter()
+        .flatten()
+        .any(|value| !value.is_empty())
+}
+
+/// The dialog helpers to try, in order, with their complete argument lists.
+/// Every piece of caller text is the value of the option before it, and
+/// `--no-markup` keeps zenity from parsing `&` or `<` in a path as Pango markup
+/// (which blanks the whole message).
+#[cfg(all(unix, not(target_os = "macos")))]
+fn native_message_commands<'a>(
+    kind: NativeMessageKind,
+    title: &'a str,
+    message: &'a str,
+) -> [(&'static str, Vec<&'a str>); 2] {
+    let (zenity_kind, kdialog_kind) = match kind {
+        NativeMessageKind::Warning => ("--warning", "--msgbox"),
+        NativeMessageKind::Error => ("--error", "--error"),
+    };
+    [
+        ("zenity", vec![zenity_kind, "--no-wrap", "--no-markup", "--title", title, "--text", message]),
+        ("kdialog", vec!["--title", title, kdialog_kind, message]),
+    ]
+}
+
+/// Show one message with an OK button before any Tauri runtime exists, and
+/// wait for it to be dismissed. Returns whether a dialog was shown; the caller
+/// owns the stderr fallback.
+///
+/// The text reaches the helper program as argument values, never through a
+/// shell: a profile path in it cannot be read as a command or an option.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn show_native_message(kind: NativeMessageKind, title: &str, message: &str) -> bool {
+    if !has_display(
+        std::env::var_os("DISPLAY").as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+    ) {
+        return false;
+    }
+    for (program, arguments) in native_message_commands(kind, title, message) {
         let shown = std::process::Command::new(program)
             .args(arguments)
             .status()
             .map(|status| status.success())
             .unwrap_or(false);
         if shown {
-            return;
+            return true;
         }
     }
-    eprintln!("{title}: {message}");
+    false
 }
 
 #[cfg(unix)]
@@ -540,6 +608,55 @@ mod tests {
         assert!(message.contains("--data-dir"));
         assert!(message.contains("do not delete store.lock"));
         assert!(!message.to_lowercase().contains("delete its lock file"));
+        // Activity Monitor is a macOS application; Linux and Windows users
+        // were being sent to a tool they do not have.
+        assert_eq!(message.contains("Activity Monitor"), cfg!(target_os = "macos"), "{message}");
+        assert_eq!(message.contains("Task Manager"), cfg!(windows), "{message}");
+        assert_eq!(
+            message.contains("your system monitor"),
+            cfg!(not(any(target_os = "macos", windows))),
+            "{message}"
+        );
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn native_message_needs_a_display_and_passes_text_only_as_argument_values() {
+        use std::ffi::OsStr;
+
+        // A headless launch must not wait on a dialog helper.
+        assert!(!has_display(None, None));
+        assert!(!has_display(Some(OsStr::new("")), Some(OsStr::new(""))));
+        assert!(has_display(Some(OsStr::new(":0")), None));
+        assert!(has_display(None, Some(OsStr::new("wayland-0"))));
+
+        // Text that looks like an option, markup or a shell command is still
+        // exactly one argument, directly after the option that takes it.
+        let title = "Kiwix — cannot start";
+        let message = "--version; $(rm -rf ~) <b>&amp;</b>\n/home/jane doe/My Library/state.json";
+        for kind in [NativeMessageKind::Warning, NativeMessageKind::Error] {
+            for (program, arguments) in native_message_commands(kind, title, message) {
+                let text = arguments.iter().position(|argument| *argument == message).unwrap();
+                let caption = arguments.iter().position(|argument| *argument == title).unwrap();
+                let (text_option, markup) = match program {
+                    "zenity" => ("--text", true),
+                    _ if kind == NativeMessageKind::Error => ("--error", false),
+                    _ => ("--msgbox", false),
+                };
+                assert_eq!(arguments[text - 1], text_option, "{program}: {arguments:?}");
+                assert_eq!(arguments[caption - 1], "--title", "{program}: {arguments:?}");
+                assert_eq!(arguments.contains(&"--no-markup"), markup, "{program}: {arguments:?}");
+                assert_eq!(arguments.iter().filter(|argument| argument.contains("jane doe")).count(), 1);
+            }
+        }
+        assert_eq!(
+            native_message_commands(NativeMessageKind::Error, title, message)[0].1[0],
+            "--error"
+        );
+        assert_eq!(
+            native_message_commands(NativeMessageKind::Warning, title, message)[0].1[0],
+            "--warning"
+        );
     }
 
     #[cfg(unix)]

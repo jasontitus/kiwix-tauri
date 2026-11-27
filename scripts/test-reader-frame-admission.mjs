@@ -15,7 +15,7 @@ function visit(node) {
   if (ts.isVariableDeclaration(node) && node.name.getText(tree) === "receive") receive = node.initializer;
   if (ts.isVariableDeclaration(node) &&
       ["clearHistoryTraversal", "historySourceCurrent", "reopenHistoryTraversal", "travel", "navigate",
-        "clearDocumentProbe", "initializeDocument", "resessionFrame", "resessionUnproven", "probeDocument",
+        "clearDocumentProbe", "initializeDocument", "documentReplaced", "resessionFrame", "resessionUnproven", "probeDocument",
         "photoSecretFor"].includes(node.name.getText(tree)))
     callbacks.set(node.name.getText(tree), node.initializer.arguments[0]);
   ts.forEachChild(node, visit);
@@ -71,7 +71,7 @@ function reader() {
     URL, crypto, clearTimeout: (id) => { timers.delete(id); },
     window: { setTimeout(callback, delay) { timers.set(++nextTimer, { callback, at: now + delay }); return nextTimer; } },
     pendingHistoryTraversal: ref(null), freshOrigin: ref(false),
-    documentAnnounced: ref(false), documentProbe: ref(null), panAuthority: ref(null),
+    documentAnnounced: ref(null), documentProbe: ref(null), panAuthority: ref(null),
     awaitingGestureHello: ref(true), gestureHello: ref(null),
     photoSecrets: ref(new Map()), heldPaint: "",
     setHeldPaint(value) { context.heldPaint = typeof value === "function" ? value(context.heldPaint) : value; },
@@ -172,8 +172,7 @@ test("load initializes the archive without publishing readiness before its authe
 });
 
 test("child navigation withholds readiness until the replacement session authenticates its changed document", async () => {
-  const r = reader();
-  r.load(); r.ready();
+  const { r } = settled();
   const outgoing = r.context.activeFrame.current.sessionId;
   const gate = r.gateDeactivate();
   r.hello(); r.load();
@@ -206,8 +205,7 @@ test("retired privacy or storage admission cannot reopen a pending document", as
     (r) => r.forbidNavigation(),
     (r) => { r.context.openSequence.current++; },
   ]) {
-    const r = reader();
-    r.load(); r.ready();
+    const { r } = settled();
     const gate = r.gateDeactivate();
     r.hello(); r.load(); await turn(); retire(r); gate.resolve(); await r.drain();
     assertPending(r);
@@ -217,8 +215,7 @@ test("retired privacy or storage admission cannot reopen a pending document", as
 });
 
 test("a stale activation is deactivated without publishing readiness or initializing the archive", async () => {
-  const r = reader();
-  r.load(); r.ready();
+  const { r } = settled();
   const gate = r.gateActivate();
   r.hello(); r.load(); await turn();
   r.context.latest.current.privacyGeneration++;
@@ -226,7 +223,8 @@ test("a stale activation is deactivated without publishing readiness or initiali
   assertPending(r);
   assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate", "sensor_deactivate"]);
   assert.equal(r.context.activeFrame.current, null);
-  assert.equal(r.messages.length, 1, "stale activation cannot init the archive");
+  assert.equal(r.inits().length, 1, "stale activation cannot init the archive");
+  assert.equal(r.probes().length, 0);
 });
 
 // A session that completed its handshake: the bridge announced itself, bound
@@ -352,7 +350,55 @@ test("a forged announcement only costs the page a re-session", async () => {
   other.r.hello(crypto.randomUUID(), { source: {} });
   other.r.hello(crypto.randomUUID(), { origin: "http://unrelated.localhost:8123" });
   other.r.hello(crypto.randomUUID(), { isTrusted: false });
-  assert.equal(other.r.context.documentAnnounced.current, false);
+  other.r.hello("not-a-token");
+  assert.equal(other.r.context.documentAnnounced.current, other.token, "none of those is recorded");
+  other.r.load();
+  assert.equal(other.r.probes().length, 1);
+});
+
+test("the session's own announcement may follow its load without costing a re-session", async () => {
+  // WebKit delivers a quickly loaded document's load event before its bootstrap announcement.
+  const r = reader();
+  const token = crypto.randomUUID();
+  r.load(); r.hello(token); r.bind(token); r.ready();
+  const session = r.context.activeFrame.current.sessionId;
+  r.load();
+  assert.equal(r.probes().length, 1, "the anchor jump is proved, not treated as a navigation");
+  // The same announcement arriving inside the proof window settles nothing either way.
+  r.hello(token);
+  assert.ok(r.context.documentProbe.current);
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  r.proof(token);
+  r.advance(60_000); await r.drain();
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  assert.deepEqual(r.calls, []);
+});
+
+test("a navigation whose load precedes its announcement is still re-sessioned without waiting", async () => {
+  const { r, session } = settled();
+  // The replacing document loads first (it cannot prove the old session), then announces.
+  r.load();
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  const next = crypto.randomUUID();
+  r.hello(next);
+  assert.equal(r.context.activeFrame.current, null);
+  await r.drain();
+  const incoming = r.context.activeFrame.current.sessionId;
+  r.bind(next); r.ready();
+  // Its own anchor jumps are then proved with its own token.
+  r.load(); r.proof(next);
+  assert.equal(r.context.documentProbe.current, null);
+  assert.equal(r.context.activeFrame.current.sessionId, incoming);
+});
+
+test("an announcement for a session no bridge has bound waits for the proof window", async () => {
+  const r = reader();
+  r.hello(); r.load(); r.ready();
+  const session = r.context.activeFrame.current.sessionId;
+  r.load(); r.hello();
+  assert.equal(r.context.activeFrame.current.sessionId, session, "nothing identifies the announcer yet");
+  r.advance(1000); await r.drain();
+  assert.notEqual(r.context.activeFrame.current.sessionId, session, "and nothing proved the load, so it re-sessions");
 });
 
 test("an announcement made while a re-session is in flight is answered by that re-session's initialisation", async () => {
@@ -460,8 +506,10 @@ test("only the session being initialised keeps a photo secret", async () => {
   const secret = r.inits()[0].data.photoSecret;
   assert.deepEqual([...r.context.photoSecrets.current.keys()], [session]);
   for (let index = 0; index < 5; index++) {
-    r.hello(); r.load(); await r.drain(); r.ready();
+    const next = crypto.randomUUID();
+    r.hello(next); r.load(); await r.drain(); r.bind(next); r.ready();
   }
+  assert.equal(r.inits().length, 6, "every navigation was handed a new session");
   const incoming = r.context.activeFrame.current.sessionId;
   assert.deepEqual([...r.context.photoSecrets.current.keys()], [incoming]);
   assert.notEqual(r.inits().at(-1).data.photoSecret, secret);

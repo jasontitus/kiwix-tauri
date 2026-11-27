@@ -200,9 +200,11 @@ The Rust test performs:
 - a state-file round trip proving `lastChecked` persists and suppresses a second
   check within 24 hours.
 
-The mock Tauri runtime cannot restart a process, so the final `app.restart()` in
-the production command is not exercised by this test. It is a single call after
-a successful install; the installed bundle replacement is verified. A real
+The mock Tauri runtime cannot restart a process, so the relaunch is not
+exercised by this test. On macOS and Linux the production command requests an
+ordinary exit after a successful install, and the Quit path relaunches the app
+once the service is retired; on Windows the installer is started and the app
+exits. The installed bundle replacement is verified. A real
 windowed 0.1.0 → 0.1.1 restart still needs a signed/notarized release build and
 is not claimed here.
 
@@ -225,8 +227,8 @@ release-address validation are covered by `npm run test:update-manifest`.
 
 - A production Developer ID/notarized macOS update and a signed Windows
   installer. The loopback proof uses debug/ad-hoc artifacts.
-- The actual `app.restart()` after install in a real bundle (the install itself
-  is verified by the loopback test).
+- The actual relaunch after install in a real bundle (the install itself is
+  verified by the loopback test).
 - Play Store / App Store submission. Mobile has no self-update by design.
 - A metered desktop connection. No portable desktop metered signal exists in
   this build; automatic checks never download, and the metered rule is unit

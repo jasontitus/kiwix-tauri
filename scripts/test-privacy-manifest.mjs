@@ -25,10 +25,11 @@ const sharedWithExtension = [
 ];
 
 // Apple's required-reason API families, the symbols that put code in each one,
-// and the reason codes Apple accepts for it.
+// and the reason codes an application may declare for it. Apple's two codes
+// that only a third-party SDK may declare (0A2A.1, C56D.1) are left out.
 const families = {
   NSPrivacyAccessedAPICategoryFileTimestamp: {
-    reasons: ["DDA9.1", "C617.1", "3B52.1", "0A2A.1"],
+    reasons: ["DDA9.1", "C617.1", "3B52.1"],
     patterns: [
       /\b(?:l|f)?stat(?:at)?\s*\(/,
       /\bf?getattrlist(?:bulk|at)?\b/,
@@ -55,7 +56,7 @@ const families = {
     patterns: [/\bactiveInputModes\b/],
   },
   NSPrivacyAccessedAPICategoryUserDefaults: {
-    reasons: ["CA92.1", "1C8F.1", "C56D.1", "AC6B.1"],
+    reasons: ["CA92.1", "1C8F.1", "AC6B.1"],
     patterns: [/\b(?:NS)?UserDefaults\b/],
   },
 };
@@ -187,7 +188,7 @@ test("the application privacy manifest declares every required-reason API its na
     `${manifestPath} must declare these required-reason API categories:\n  ${missing.join("\n  ")}`);
 });
 
-test("every declared category carries reasons Apple accepts for it", () => {
+test("every declared category carries reasons Apple accepts from an application", () => {
   const manifest = declared(read(manifestPath));
   assert.notDeepEqual(Object.keys(manifest), []);
   for (const [category, reasons] of Object.entries(manifest)) {

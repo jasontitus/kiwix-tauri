@@ -1298,183 +1298,6 @@ mod tests {
         refreshed.entry.url = "https://example.org/substituted.zim".into();
         assert!(!same_selection(&intent.selection, &refreshed));
     }
-}
-
-#[cfg(test)]
-mod authorization_tests {
-    use super::*;
-
-    #[test]
-    fn durable_reservation_survives_restart_but_window_and_policy_authority_do_not() {
-        let directory = std::env::temp_dir().join(format!("kiwix-edition-intent-{}", new_id()));
-        let store = Store::new(directory.clone()).unwrap();
-        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
-        let mut old = crate::imports::load_book(fixture.to_str().unwrap(), false, false).unwrap();
-        old.metadata.name = "encyclopedia_eng".into();
-        old.metadata.language = "eng".into();
-        old.metadata.date = "2025-01".into();
-        old.metadata.tags = vec!["_flavour:maxi".into()];
-        let root = "https://example.org/catalog";
-        let selection = EditionSelection {
-            source_id: crate::catalog::source_id(root).unwrap(), source_url: root.into(),
-            entry_id: "opaque-newer-entry".into(), catalog_generation: 1,
-            entry: CatalogEntry {
-                id: "opaque-newer-entry".into(), title: old.metadata.title.clone(),
-                description: String::new(), language: old.metadata.language.clone(),
-                creator: String::new(), publisher: String::new(), date: "2026-01".into(),
-                name: old.metadata.name.clone(), tags: old.metadata.tags.clone(), size: old.metadata.size,
-                article_count: 1, media_count: 0, url: "https://example.org/new.zim".into(),
-                thumbnail_url: None, torrent_url: None, torrent_resolver_url: None,
-            },
-        };
-        // Real ZIM metadata may omit the flavour inferred by the catalog parser.
-        old.metadata.tags.clear();
-        store.update(|state| {
-            state.books.push(old.clone());
-            state.settings.catalog_url = root.into();
-            state.settings.download_directory = directory.join("archives").to_string_lossy().into_owned();
-            Ok(())
-        }).unwrap();
-        let manager = EditionManager::new();
-        assert!(manager.prepare(&store, 7, "main", &old, selection.clone(), false).is_err());
-        let prepared = manager.prepare(&store, 7, "main", &old, selection.clone(), true).unwrap();
-        assert!(manager.reserve(&store, &prepared.token, 8, "main").is_err());
-        assert!(manager.reserve(&store, &prepared.token, 7, "other-window").is_err());
-        let reserved = manager.reserve(&store, &prepared.token, 7, "main").unwrap();
-        assert!(reserved.lineage_associated);
-        let mut different_flavour = selection.clone();
-        different_flavour.entry.tags = vec!["_flavour:mini".into()];
-        assert!(manager.prepare(&store, 7, "main", &old, different_flavour, false).is_err());
-        let binding = store.read().unwrap().edition_bindings[0].clone();
-        let selected_series = crate::catalog::series_key(&selection.entry.name,
-            &selection.entry.language, &selection.entry.tags).unwrap();
-        assert!(binding.matches_series(&selection.source_id, &selected_series));
-        let mut legacy_binding = binding;
-        legacy_binding.series = None;
-        assert!(!legacy_binding.matches_series(&selection.source_id, &selected_series));
-        assert!(std::path::Path::new(&reserved.destination).file_name().unwrap().to_string_lossy().starts_with("edition-"));
-        assert!(!std::path::Path::new(&reserved.destination).exists());
-        assert!(store.read().unwrap().edition_bindings.iter().any(|binding| binding.installation_id == old.installation_id));
-        assert_eq!(manager.reserve(&store, &prepared.token, 7, "main").unwrap().id, reserved.id);
-        store.update(|state| {
-            let intent = state.edition_intents.iter_mut().find(|intent| intent.id == reserved.id).unwrap();
-            intent.status = "ready".into();
-            intent.download_id = Some("retained-transfer".into());
-            intent.receipt = Some("retained-transfer".into());
-            let mut verified = old.clone();
-            verified.path = intent.destination.clone();
-            verified.metadata.date = selection.entry.date.clone();
-            intent.verified = Some(verified);
-            intent.verified_identity = Some(intent.original_identity.clone());
-            Ok(())
-        }).unwrap();
-        let retained = store.read().unwrap().edition_intents[0].clone();
-        drop(manager);
-        drop(store);
-        let store = Store::new(directory.clone()).unwrap();
-        let manager = EditionManager::new();
-        assert!(manager.status(&store, 7, "main").unwrap()[0].needs_authorization);
-        assert!(manager.reserve(&store, &prepared.token, 7, "main").is_err());
-        let mut refreshed = selection;
-        refreshed.catalog_generation += 1;
-        let fresh = manager.prepare(&store, 7, "main", &old, refreshed, false).unwrap();
-        assert_eq!(fresh.intent_id.as_deref(), Some(reserved.id.as_str()));
-        assert_eq!(fresh.selection.catalog_generation, retained.selection.catalog_generation + 1);
-        let saved = store.read().unwrap().edition_intents[0].clone();
-        assert_eq!(saved.selection.catalog_generation, fresh.selection.catalog_generation);
-        assert_eq!(saved.status, retained.status);
-        assert_eq!(saved.download_id, retained.download_id);
-        assert_eq!(saved.receipt, retained.receipt);
-        assert_eq!(saved.destination, retained.destination);
-        assert_eq!(serde_json::to_value(&saved.verified).unwrap(), serde_json::to_value(&retained.verified).unwrap());
-        let mut substituted = fresh.selection.clone();
-        substituted.entry.url = "https://example.org/substituted.zim".into();
-        let changed = manager.prepare(&store, 7, "main", &old, substituted, false).unwrap();
-        assert!(changed.intent_id.is_none());
-        assert_eq!(serde_json::to_value(store.read().unwrap().edition_intents).unwrap(),
-            serde_json::to_value(vec![saved]).unwrap());
-        let fresh = manager.prepare(&store, 7, "main", &old, fresh.selection, false).unwrap();
-        assert_eq!(store.read().unwrap().edition_intents.len(), 1);
-        assert_eq!(manager.reserve(&store, &fresh.token, 7, "main").unwrap().id, reserved.id);
-        let other = manager.prepare(&store, 7, "other-window", &old, fresh.selection.clone(), false).unwrap();
-        manager.retire_window_authorizations("main");
-        assert!(manager.reserve(&store, &fresh.token, 7, "main").is_err());
-        assert_eq!(manager.reserve(&store, &other.token, 7, "other-window").unwrap().id, reserved.id);
-        manager.retire_authorizations();
-        assert!(manager.reserve(&store, &fresh.token, 7, "main").is_err());
-        assert!(manager.reserve(&store, &other.token, 7, "other-window").is_err());
-        drop(manager);
-        drop(store);
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn reserve_rejects_an_original_rewritten_after_prepare() {
-        use std::{fs, io::{Seek, SeekFrom, Write}};
-        let directory = std::env::temp_dir().join(format!("kiwix-edition-original-{}", new_id()));
-        fs::create_dir_all(&directory).unwrap();
-        let source = directory.join("original.zim");
-        fs::copy(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim"),
-            &source,
-        ).unwrap();
-        let mut old = crate::imports::load_book(source.to_str().unwrap(), false, false).unwrap();
-        old.metadata.name = "encyclopedia_eng".into();
-        old.metadata.language = "eng".into();
-        old.metadata.date = "2025-01".into();
-        old.metadata.tags = vec!["_flavour:maxi".into()];
-        let root = "https://example.org/catalog";
-        let selection = EditionSelection {
-            source_id: crate::catalog::source_id(root).unwrap(), source_url: root.into(),
-            entry_id: "opaque-newer-entry".into(), catalog_generation: 1,
-            entry: CatalogEntry {
-                id: "opaque-newer-entry".into(), title: old.metadata.title.clone(),
-                description: String::new(), language: old.metadata.language.clone(),
-                creator: String::new(), publisher: String::new(), date: "2026-01".into(),
-                name: old.metadata.name.clone(), tags: old.metadata.tags.clone(), size: old.metadata.size,
-                article_count: 1, media_count: 0, url: "https://example.org/new.zim".into(),
-                thumbnail_url: None, torrent_url: None, torrent_resolver_url: None,
-            },
-        };
-        // Real ZIM metadata may omit the flavour inferred by the catalog parser.
-        old.metadata.tags.clear();
-        let store = Store::new(directory.join("profile")).unwrap();
-        store.update(|state| {
-            state.books.push(old.clone());
-            state.settings.catalog_url = root.into();
-            state.settings.download_directory = directory.join("archives").to_string_lossy().into_owned();
-            Ok(())
-        }).unwrap();
-        let manager = EditionManager::new();
-        let prepared = manager.prepare(&store, 7, "main", &old, selection, true).unwrap();
-        // Rewrite the original in place without changing its length, then put
-        // mtime back. The stamp-only path still accepts it; the full content
-        // identity (which includes ctime) must not.
-        let modified = fs::metadata(&source).unwrap().modified().unwrap();
-        let mut file = fs::OpenOptions::new().write(true).open(&source).unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
-        file.write_all(b"changed!").unwrap();
-        file.sync_all().unwrap();
-        drop(file);
-        fs::OpenOptions::new().write(true).open(&source).unwrap()
-            .set_modified(modified).unwrap();
-        {
-            let decisions = manager.decisions.lock().unwrap();
-            let decision = decisions.get(&prepared.token).unwrap();
-            assert!(
-                decision.source.unchanged().is_ok(),
-                "the stamp check cannot see a rewrite whose mtime was restored"
-            );
-            assert!(recheck_original(decision).is_err());
-        }
-        let error = manager.reserve(&store, &prepared.token, 7, "main").unwrap_err();
-        assert!(error.contains("installed archive changed"), "{error}");
-        assert!(store.read().unwrap().edition_intents.is_empty());
-        drop(manager);
-        drop(store);
-        fs::remove_dir_all(directory).unwrap();
-    }
 
     #[test]
     fn a_discarded_original_closes_its_transaction_and_refuses_rollback() {
@@ -1710,5 +1533,182 @@ mod authorization_tests {
         assert!(!store.retains_provider_reference(&provider.reference).unwrap());
         drop(store);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod authorization_tests {
+    use super::*;
+
+    #[test]
+    fn durable_reservation_survives_restart_but_window_and_policy_authority_do_not() {
+        let directory = std::env::temp_dir().join(format!("kiwix-edition-intent-{}", new_id()));
+        let store = Store::new(directory.clone()).unwrap();
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
+        let mut old = crate::imports::load_book(fixture.to_str().unwrap(), false, false).unwrap();
+        old.metadata.name = "encyclopedia_eng".into();
+        old.metadata.language = "eng".into();
+        old.metadata.date = "2025-01".into();
+        old.metadata.tags = vec!["_flavour:maxi".into()];
+        let root = "https://example.org/catalog";
+        let selection = EditionSelection {
+            source_id: crate::catalog::source_id(root).unwrap(), source_url: root.into(),
+            entry_id: "opaque-newer-entry".into(), catalog_generation: 1,
+            entry: CatalogEntry {
+                id: "opaque-newer-entry".into(), title: old.metadata.title.clone(),
+                description: String::new(), language: old.metadata.language.clone(),
+                creator: String::new(), publisher: String::new(), date: "2026-01".into(),
+                name: old.metadata.name.clone(), tags: old.metadata.tags.clone(), size: old.metadata.size,
+                article_count: 1, media_count: 0, url: "https://example.org/new.zim".into(),
+                thumbnail_url: None, torrent_url: None, torrent_resolver_url: None,
+            },
+        };
+        // Real ZIM metadata may omit the flavour inferred by the catalog parser.
+        old.metadata.tags.clear();
+        store.update(|state| {
+            state.books.push(old.clone());
+            state.settings.catalog_url = root.into();
+            state.settings.download_directory = directory.join("archives").to_string_lossy().into_owned();
+            Ok(())
+        }).unwrap();
+        let manager = EditionManager::new();
+        assert!(manager.prepare(&store, 7, "main", &old, selection.clone(), false).is_err());
+        let prepared = manager.prepare(&store, 7, "main", &old, selection.clone(), true).unwrap();
+        assert!(manager.reserve(&store, &prepared.token, 8, "main").is_err());
+        assert!(manager.reserve(&store, &prepared.token, 7, "other-window").is_err());
+        let reserved = manager.reserve(&store, &prepared.token, 7, "main").unwrap();
+        assert!(reserved.lineage_associated);
+        let mut different_flavour = selection.clone();
+        different_flavour.entry.tags = vec!["_flavour:mini".into()];
+        assert!(manager.prepare(&store, 7, "main", &old, different_flavour, false).is_err());
+        let binding = store.read().unwrap().edition_bindings[0].clone();
+        let selected_series = crate::catalog::series_key(&selection.entry.name,
+            &selection.entry.language, &selection.entry.tags).unwrap();
+        assert!(binding.matches_series(&selection.source_id, &selected_series));
+        let mut legacy_binding = binding;
+        legacy_binding.series = None;
+        assert!(!legacy_binding.matches_series(&selection.source_id, &selected_series));
+        assert!(std::path::Path::new(&reserved.destination).file_name().unwrap().to_string_lossy().starts_with("edition-"));
+        assert!(!std::path::Path::new(&reserved.destination).exists());
+        assert!(store.read().unwrap().edition_bindings.iter().any(|binding| binding.installation_id == old.installation_id));
+        assert_eq!(manager.reserve(&store, &prepared.token, 7, "main").unwrap().id, reserved.id);
+        store.update(|state| {
+            let intent = state.edition_intents.iter_mut().find(|intent| intent.id == reserved.id).unwrap();
+            intent.status = "ready".into();
+            intent.download_id = Some("retained-transfer".into());
+            intent.receipt = Some("retained-transfer".into());
+            let mut verified = old.clone();
+            verified.path = intent.destination.clone();
+            verified.metadata.date = selection.entry.date.clone();
+            intent.verified = Some(verified);
+            intent.verified_identity = Some(intent.original_identity.clone());
+            Ok(())
+        }).unwrap();
+        let retained = store.read().unwrap().edition_intents[0].clone();
+        drop(manager);
+        drop(store);
+        let store = Store::new(directory.clone()).unwrap();
+        let manager = EditionManager::new();
+        assert!(manager.status(&store, 7, "main").unwrap()[0].needs_authorization);
+        assert!(manager.reserve(&store, &prepared.token, 7, "main").is_err());
+        let mut refreshed = selection;
+        refreshed.catalog_generation += 1;
+        let fresh = manager.prepare(&store, 7, "main", &old, refreshed, false).unwrap();
+        assert_eq!(fresh.intent_id.as_deref(), Some(reserved.id.as_str()));
+        assert_eq!(fresh.selection.catalog_generation, retained.selection.catalog_generation + 1);
+        let saved = store.read().unwrap().edition_intents[0].clone();
+        assert_eq!(saved.selection.catalog_generation, fresh.selection.catalog_generation);
+        assert_eq!(saved.status, retained.status);
+        assert_eq!(saved.download_id, retained.download_id);
+        assert_eq!(saved.receipt, retained.receipt);
+        assert_eq!(saved.destination, retained.destination);
+        assert_eq!(serde_json::to_value(&saved.verified).unwrap(), serde_json::to_value(&retained.verified).unwrap());
+        let mut substituted = fresh.selection.clone();
+        substituted.entry.url = "https://example.org/substituted.zim".into();
+        let changed = manager.prepare(&store, 7, "main", &old, substituted, false).unwrap();
+        assert!(changed.intent_id.is_none());
+        assert_eq!(serde_json::to_value(store.read().unwrap().edition_intents).unwrap(),
+            serde_json::to_value(vec![saved]).unwrap());
+        let fresh = manager.prepare(&store, 7, "main", &old, fresh.selection, false).unwrap();
+        assert_eq!(store.read().unwrap().edition_intents.len(), 1);
+        assert_eq!(manager.reserve(&store, &fresh.token, 7, "main").unwrap().id, reserved.id);
+        let other = manager.prepare(&store, 7, "other-window", &old, fresh.selection.clone(), false).unwrap();
+        manager.retire_window_authorizations("main");
+        assert!(manager.reserve(&store, &fresh.token, 7, "main").is_err());
+        assert_eq!(manager.reserve(&store, &other.token, 7, "other-window").unwrap().id, reserved.id);
+        manager.retire_authorizations();
+        assert!(manager.reserve(&store, &fresh.token, 7, "main").is_err());
+        assert!(manager.reserve(&store, &other.token, 7, "other-window").is_err());
+        drop(manager);
+        drop(store);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reserve_rejects_an_original_rewritten_after_prepare() {
+        use std::{fs, io::{Seek, SeekFrom, Write}};
+        let directory = std::env::temp_dir().join(format!("kiwix-edition-original-{}", new_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("original.zim");
+        fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim"),
+            &source,
+        ).unwrap();
+        let mut old = crate::imports::load_book(source.to_str().unwrap(), false, false).unwrap();
+        old.metadata.name = "encyclopedia_eng".into();
+        old.metadata.language = "eng".into();
+        old.metadata.date = "2025-01".into();
+        old.metadata.tags = vec!["_flavour:maxi".into()];
+        let root = "https://example.org/catalog";
+        let selection = EditionSelection {
+            source_id: crate::catalog::source_id(root).unwrap(), source_url: root.into(),
+            entry_id: "opaque-newer-entry".into(), catalog_generation: 1,
+            entry: CatalogEntry {
+                id: "opaque-newer-entry".into(), title: old.metadata.title.clone(),
+                description: String::new(), language: old.metadata.language.clone(),
+                creator: String::new(), publisher: String::new(), date: "2026-01".into(),
+                name: old.metadata.name.clone(), tags: old.metadata.tags.clone(), size: old.metadata.size,
+                article_count: 1, media_count: 0, url: "https://example.org/new.zim".into(),
+                thumbnail_url: None, torrent_url: None, torrent_resolver_url: None,
+            },
+        };
+        // Real ZIM metadata may omit the flavour inferred by the catalog parser.
+        old.metadata.tags.clear();
+        let store = Store::new(directory.join("profile")).unwrap();
+        store.update(|state| {
+            state.books.push(old.clone());
+            state.settings.catalog_url = root.into();
+            state.settings.download_directory = directory.join("archives").to_string_lossy().into_owned();
+            Ok(())
+        }).unwrap();
+        let manager = EditionManager::new();
+        let prepared = manager.prepare(&store, 7, "main", &old, selection, true).unwrap();
+        // Rewrite the original in place without changing its length, then put
+        // mtime back. The stamp-only path still accepts it; the full content
+        // identity (which includes ctime) must not.
+        let modified = fs::metadata(&source).unwrap().modified().unwrap();
+        let mut file = fs::OpenOptions::new().write(true).open(&source).unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        file.write_all(b"changed!").unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        fs::OpenOptions::new().write(true).open(&source).unwrap()
+            .set_modified(modified).unwrap();
+        {
+            let decisions = manager.decisions.lock().unwrap();
+            let decision = decisions.get(&prepared.token).unwrap();
+            assert!(
+                decision.source.unchanged().is_ok(),
+                "the stamp check cannot see a rewrite whose mtime was restored"
+            );
+            assert!(recheck_original(decision).is_err());
+        }
+        let error = manager.reserve(&store, &prepared.token, 7, "main").unwrap_err();
+        assert!(error.contains("installed archive changed"), "{error}");
+        assert!(store.read().unwrap().edition_intents.is_empty());
+        drop(manager);
+        drop(store);
+        fs::remove_dir_all(directory).unwrap();
     }
 }

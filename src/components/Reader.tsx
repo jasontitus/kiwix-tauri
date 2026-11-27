@@ -980,11 +980,14 @@ export default function Reader(props: ReaderProps) {
   }, []);
   const awaitingGestureHello = useRef(true);
   // WebKit fires the frame's load event for same-document (fragment)
-  // navigations too, so a load alone is not a new document. A document that
-  // replaced the previous one announces itself (the bridge's bootstrap hello);
-  // a load nothing announced keeps the session only if the bridge that owns it
-  // proves, with its private token, that it is still the live document.
-  const documentAnnounced = useRef(false);
+  // navigations too, so a load alone is not a new document. Every document's
+  // bridge announces a private token at bootstrap and binds that same token to
+  // the session it is handed. The latest announced token therefore names the
+  // newest document: when it is not the session's own, the session's document
+  // was replaced. Announcement and load arrive in either order, so a load that
+  // no other document has announced keeps the session only once the bridge
+  // holding it proves, with that token, that it is still the live document.
+  const documentAnnounced = useRef<string | null>(null);
   const documentProbe = useRef<{
     nonce: string;
     sessionId: string;
@@ -1933,9 +1936,6 @@ export default function Reader(props: ReaderProps) {
   }, [cancelSensors, clearDocumentProbe, clearHistoryTraversal, resetFind, send]);
   // The one place a session and its photo secret are handed to the frame.
   const initializeDocument = useCallback((session: FrameSession) => {
-    // This reaches the document that last announced itself, or a later one
-    // whose own announcement is still to come: nothing older is left to answer.
-    documentAnnounced.current = false;
     frameRef.current?.contentWindow?.postMessage(
       {
         channel: "kiwix-reader",
@@ -1956,6 +1956,17 @@ export default function Reader(props: ReaderProps) {
       session.location.origin,
     );
   }, [photoSecretFor]);
+  // Another document's bridge announced itself after the one this session is
+  // bound to. Archive code can forge that (it only costs a re-session) but can
+  // neither suppress a genuine announcement nor learn the bound token.
+  const documentReplaced = useCallback((session: FrameSession) => {
+    const authority = panAuthority.current;
+    return (
+      documentAnnounced.current !== null &&
+      authority?.sessionId === session.sessionId &&
+      authority.token !== documentAnnounced.current
+    );
+  }, []);
   // A document replaced the one this session was handed to (or nothing proved
   // otherwise): retire that session and give the frame's document a new one.
   const resessionFrame = useCallback(
@@ -3380,10 +3391,8 @@ export default function Reader(props: ReaderProps) {
       const session = activeFrame.current;
       const source = frameRef.current?.contentWindow;
       // Every archive document's bridge announces itself at bootstrap, before
-      // archive scripts. Record it even while no session is admitted: it marks
-      // the frame's document as one the current session was never handed to.
-      // Archive code can forge an announcement, which only costs it a
-      // re-session; it can never suppress the genuine one.
+      // archive scripts. Record the newest announcement even while no session
+      // is admitted, so a re-session in flight cannot hide a further navigation.
       if (
         source &&
         event.source === source &&
@@ -3392,12 +3401,17 @@ export default function Reader(props: ReaderProps) {
         object(event.data) &&
         event.data.channel === "kiwix-reader" &&
         event.data.version === 1 &&
-        event.data.type === "reading-gesture-hello"
+        event.data.type === "reading-gesture-hello" &&
+        text(event.data.token, 36) &&
+        /^[0-9a-f-]{36}$/.test(event.data.token)
       ) {
-        documentAnnounced.current = true;
-        // The load that was being proved belonged to this new document.
+        documentAnnounced.current = event.data.token;
+        // The load being proved belonged to this other document (its
+        // announcement can follow its load). The session's own late
+        // announcement, or one for a session not yet bound, leaves the proof
+        // window to decide.
         const probe = documentProbe.current;
-        if (probe) {
+        if (probe && session && probe.sessionId === session.sessionId && documentReplaced(session)) {
           clearDocumentProbe();
           resessionUnproven(probe);
         }
@@ -3450,8 +3464,11 @@ export default function Reader(props: ReaderProps) {
           authority?.sessionId === session.sessionId &&
           text(data.token, 36) &&
           data.token === authority.token
-        )
+        ) {
           clearDocumentProbe();
+          // Proven live: an older document's announcement is no longer news.
+          documentAnnounced.current = authority.token;
+        }
         return;
       }
       if (session.privacyGeneration !== latest.current.privacyGeneration) {
@@ -3541,8 +3558,12 @@ export default function Reader(props: ReaderProps) {
           text(data.token, 36) &&
           /^[0-9a-f-]{36}$/.test(data.token) &&
           panAuthority.current?.sessionId !== session.sessionId
-        )
+        ) {
           panAuthority.current = { sessionId: session.sessionId, token: data.token, sequence: 0 };
+          // The bridge that answered reader-init is the frame's document as of
+          // that answer; whatever announced itself earlier has been replaced.
+          documentAnnounced.current = data.token;
+        }
         return;
       }
       if (data.type === "reading-pan") {
@@ -4185,6 +4206,7 @@ export default function Reader(props: ReaderProps) {
     sendHighlights,
     stepZoom,
     clearDocumentProbe,
+    documentReplaced,
     resessionUnproven,
   ]);
 
@@ -6894,9 +6916,9 @@ export default function Reader(props: ReaderProps) {
                   return;
                 }
                 // A later load of an initialised frame is a child navigation
-                // only when a new document announced itself. Otherwise the
+                // when another document has announced itself. Otherwise the
                 // session survives solely on its own bridge's proof.
-                if (documentAnnounced.current)
+                if (documentReplaced(active))
                   resessionFrame(node, active, frameReady);
                 else probeDocument(node, active, frameReady);
               }}

@@ -2,7 +2,6 @@ package org.kiwix.mobile
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.IpPrefix
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -59,7 +58,7 @@ internal object NearbyRouteChecks {
         properties!!
         if (properties.linkAddresses.any { it.address == peer }) return false
         val attached = properties.linkAddresses.any { link ->
-            if (link.address !is Inet4Address || link.prefixLength !in 1..32 || !IpPrefix(link.address, link.prefixLength).contains(peer)) false
+            if (link.address !is Inet4Address || link.prefixLength !in 1..32 || !inPrefix(link.address, peer, link.prefixLength)) false
             else {
                 val hostBits = 32 - link.prefixLength
                 val number = peer.address.fold(0L) { result, byte -> (result shl 8) or (byte.toLong() and 255L) }

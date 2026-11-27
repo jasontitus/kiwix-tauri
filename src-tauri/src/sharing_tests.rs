@@ -520,6 +520,8 @@ async fn dropping_server_closes_active_responses_and_every_listener() {
         servers,
         archives: Vec::new(),
         library: None,
+        hosts: SessionHosts::new(&[], &SharingBinding::Loopback {}),
+        address_lost: Mutex::new((None, false)),
     };
     drop(server);
     for mut response in responses {

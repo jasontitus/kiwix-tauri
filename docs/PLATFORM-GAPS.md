@@ -97,5 +97,4 @@ Goal: every feature works on every platform that can support it. This audit comp
 
 ## Docs that don't match the code
 - **Natural voices:** README says "on desktop and Android", but iOS is also included (`KOKORO.md`, `Cargo.toml`).
-- **Flatpak:** README offers a Linux `.flatpak`, but there is no Flatpak manifest; `PACKAGING.md` covers only AppImage.
 - **`zim:` registration:** `PLATFORM-INTEGRATIONS.md` says only macOS/iOS register `zim:`, but Android does too (`AndroidManifest.xml`).

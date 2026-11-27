@@ -293,6 +293,9 @@ internal class DeviceZimScan(private val context: Context, private val externalD
                 if (out.size >= cap) return
                 val childId = cursor.getString(0) ?: continue
                 val name = runCatching { safeName(cursor.getString(1) ?: "") }.getOrNull() ?: continue
+                // Hidden entries (trashed or partial files, private folders) are
+                // skipped exactly as the MediaStore and shared-storage walks do.
+                if (hiddenScanName(name)) continue
                 val mime = cursor.getString(2) ?: ""
                 if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                     directories.add(childId)
@@ -496,3 +499,6 @@ internal class DeviceZimScan(private val context: Context, private val externalD
         const val NOT_READABLE = "This location is not readable in place; import a copy."
     }
 }
+
+/** Dot-named files and folders are never device-scan candidates or walked. */
+internal fun hiddenScanName(name: String): Boolean = name.startsWith('.')

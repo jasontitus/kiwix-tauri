@@ -56,6 +56,17 @@ internal data class SpeechLabels(
 }
 
 /**
+ * Audio obligations of one read-aloud session. Every engine pauses when the
+ * headphones go away. Only Kiwix's own audio output (the bundled voice) asks
+ * for audio focus: the system text-to-speech service requests focus for each
+ * utterance itself, and a second request here would make the focus listener
+ * pause the very speech it is presenting.
+ */
+internal data class SpeechAudioPolicy(val noisyReceiver: Boolean, val audioFocus: Boolean)
+
+internal fun speechAudioPolicy(external: Boolean) = SpeechAudioPolicy(noisyReceiver = true, audioFocus = external)
+
+/**
  * Application-scoped media presentation for native read-aloud.
  *
  * The foreground service keeps the process alive while the Activity is in the
@@ -109,11 +120,12 @@ internal object SpeechPlayback {
         this.speaking = speaking
         this.paused = !speaking
         this.canPrevious = canPrevious
-        if (external && !acquireFocus(app, id)) {
+        val audio = speechAudioPolicy(external)
+        if (audio.audioFocus && !acquireFocus(app, id)) {
             stop(app, id)
             return false
         }
-        if (external) {
+        if (audio.noisyReceiver) {
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) dispatchAction(id, "pause")
@@ -346,12 +358,13 @@ internal object SpeechPlayback {
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL) == null) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL, labels.title, NotificationManager.IMPORTANCE_LOW)
-                    .apply { setShowBadge(false) },
-            )
-        }
+        // Creating an existing channel again is how Android updates its name, so
+        // the channel follows the current language like the transfer channels do.
+        // The importance a person chose in system settings is left untouched.
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL, labels.title, NotificationManager.IMPORTANCE_LOW)
+                .apply { setShowBadge(false) },
+        )
     }
 
     private fun notification(context: Context): Notification {

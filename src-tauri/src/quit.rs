@@ -256,9 +256,90 @@ fn cancel(app: &AppHandle, manager: &QuitManager, request_id: &str, error: &str)
     }
 }
 
-/// Call before Service::shutdown; on Err leave the application running and reset
-/// the caller's exiting flag. Repeated ExitRequested events must stay prevented.
-/// The ten-second deadline fails closed for an unresponsive or unhydrated shell.
+/// Why a Quit attempt stopped before the process could exit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum QuitFailure {
+    /// A shell could not save or acknowledge its session. `prepare` cancelled
+    /// the attempt and every shell resumed.
+    Flush,
+    /// The sessions were flushed but `Service::shutdown` reported an error. The
+    /// attempt stays prepared and its shells stay frozen.
+    Retirement,
+}
+
+/// The button labels of the failed-Quit dialog, as shown to the person.
+pub(crate) struct FailedQuitLabels {
+    pub retry: String,
+    pub quit_without_saving: String,
+    pub cancel: String,
+}
+
+/// What the lib.rs exit handler does after the failed-Quit dialog closes.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum FailedQuitAction {
+    /// Request Quit again. A pending relaunch stays armed.
+    Retry,
+    /// The person accepted the loss: retire the service once more and exit
+    /// whatever that reports.
+    QuitWithoutSaving,
+    /// Keep Kiwix running. After a failed flush the attempt is over, so a
+    /// pending relaunch is dropped; a prepared attempt keeps it for its retry.
+    Stay { clear_relaunch: bool },
+}
+
+/// Only the button labelled "Quit Without Saving" may give up unsaved state.
+/// Closing the dialog, an unexpected result, or labels that a translation made
+/// identical all leave Kiwix running: the dialog plugin reports a closed dialog
+/// as the Cancel button, so that slot must never mean "quit".
+pub(crate) fn failed_quit_action(
+    failure: QuitFailure,
+    result: &tauri_plugin_dialog::MessageDialogResult,
+    labels: &FailedQuitLabels,
+) -> FailedQuitAction {
+    use tauri_plugin_dialog::MessageDialogResult::Custom;
+    let distinct = labels.quit_without_saving != labels.retry
+        && labels.quit_without_saving != labels.cancel
+        && labels.retry != labels.cancel;
+    match result {
+        Custom(label) if distinct && *label == labels.quit_without_saving => {
+            FailedQuitAction::QuitWithoutSaving
+        }
+        Custom(label) if distinct && *label == labels.retry => FailedQuitAction::Retry,
+        _ => FailedQuitAction::Stay {
+            clear_relaunch: failure == QuitFailure::Flush,
+        },
+    }
+}
+
+/// The failed-Quit dialog text: what could not be done, the cause, how to fix
+/// it, and exactly what quitting without saving gives up.
+pub(crate) fn failed_quit_message(
+    strings: &crate::localization::Localizer,
+    failure: QuitFailure,
+    error: &str,
+) -> String {
+    let summary = match failure {
+        QuitFailure::Flush => strings.text(
+            "Kiwix could not save your open tabs and reading positions, so it did not quit.",
+            &[],
+        ),
+        QuitFailure::Retirement => strings.text(
+            "Kiwix could not finish saving its work, so it did not quit.",
+            &[],
+        ),
+    };
+    let choices = strings.text(
+        "Retry after fixing the problem, for example by freeing disk space or reconnecting the drive that holds your Kiwix data. If you quit without saving, changes to open tabs and reading positions since the last successful save are lost, and unfinished transfers may have to repeat their most recent progress.",
+        &[],
+    );
+    format!("{summary}\n\n{error}\n\n{choices}")
+}
+
+/// Call before Service::shutdown. On Err the attempt is cancelled and every
+/// shell resumes; the caller keeps its exiting flag set until the person has
+/// answered the failed-Quit dialog. Repeated ExitRequested events must stay
+/// prevented. The ten-second deadline fails closed for an unresponsive or
+/// unhydrated shell.
 pub async fn prepare(app: &AppHandle) -> Result<(), String> {
     let manager = app
         .try_state::<QuitManager>()
@@ -303,7 +384,13 @@ pub async fn prepare(app: &AppHandle) -> Result<(), String> {
         }
         // Geometry is persisted only after all session acknowledgements succeeded.
         let service = app.try_state::<Arc<crate::service::Service>>().ok_or("Library service unavailable during Quit")?;
-        crate::windows::capture(app, &service.store)?;
+        // Window positions are a convenience, like the session snapshot below.
+        // A profile that can no longer be written must not make Quit impossible
+        // for them: with no shell left to flush, this was the write that kept
+        // the process alive with no window.
+        if let Err(error) = crate::windows::capture(app, &service.store) {
+            eprintln!("Saving window positions: {error}");
+        }
         // Snapshot only the windows that were actually open. Private and
         // read-only profiles skip this inside the store; a failure to write the
         // convenience snapshot must not cancel a user's Quit.
@@ -342,5 +429,69 @@ mod tests {
         // Ordinary shell-flush cancellation clears the attempt and must flush again.
         slot = None;
         assert!(needs_flush(&mut slot, "after cancellation").unwrap());
+    }
+
+    fn labels() -> FailedQuitLabels {
+        FailedQuitLabels {
+            retry: "Retry".into(),
+            quit_without_saving: "Quit Without Saving".into(),
+            cancel: "Cancel".into(),
+        }
+    }
+
+    #[test]
+    fn a_failed_quit_can_be_retried_left_open_or_overridden_only_by_the_explicit_button() {
+        use tauri_plugin_dialog::MessageDialogResult::{Cancel, Custom, No, Ok, Yes};
+        for failure in [QuitFailure::Flush, QuitFailure::Retirement] {
+            // The person can always leave: a profile that cannot be written no
+            // longer makes Quit impossible.
+            assert_eq!(
+                failed_quit_action(failure, &Custom("Quit Without Saving".into()), &labels()),
+                FailedQuitAction::QuitWithoutSaving
+            );
+            assert_eq!(
+                failed_quit_action(failure, &Custom("Retry".into()), &labels()),
+                FailedQuitAction::Retry
+            );
+            // Closing the dialog arrives as the Cancel button or as a bare
+            // Cancel. Neither that nor any other result may discard state.
+            let stay = FailedQuitAction::Stay { clear_relaunch: failure == QuitFailure::Flush };
+            for dismissed in [Custom("Cancel".into()), Cancel, Ok, Yes, No, Custom(String::new()), Custom("quit without saving".into())] {
+                assert_eq!(failed_quit_action(failure, &dismissed, &labels()), stay, "{dismissed:?}");
+            }
+        }
+        // A translation that gives two buttons one label cannot tell a closed
+        // dialog from the destructive button, so nothing is discarded.
+        for ambiguous in [
+            FailedQuitLabels { cancel: "Quit Without Saving".into(), ..labels() },
+            FailedQuitLabels { retry: "Quit Without Saving".into(), ..labels() },
+            FailedQuitLabels { retry: "Cancel".into(), ..labels() },
+        ] {
+            for label in ["Quit Without Saving", "Retry", "Cancel"] {
+                assert_eq!(
+                    failed_quit_action(QuitFailure::Retirement, &Custom(label.into()), &ambiguous),
+                    FailedQuitAction::Stay { clear_relaunch: false }
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_failed_quit_dialog_states_the_cause_and_what_quitting_without_saving_loses() {
+        let strings = crate::localization::Localizer::new("en", "en");
+        let cause = "Session flush failed for main: No space left on device (os error 28)";
+        let flush = failed_quit_message(&strings, QuitFailure::Flush, cause);
+        let retirement = failed_quit_message(&strings, QuitFailure::Retirement, cause);
+        assert!(flush.starts_with("Kiwix could not save your open tabs and reading positions"), "{flush}");
+        assert!(retirement.starts_with("Kiwix could not finish saving its work"), "{retirement}");
+        for message in [flush, retirement] {
+            assert!(message.contains(cause), "{message}");
+            assert!(message.contains("Retry after fixing the problem"), "{message}");
+            assert!(
+                message.contains("changes to open tabs and reading positions since the last successful save are lost"),
+                "{message}"
+            );
+            assert!(message.contains("unfinished transfers may have to repeat"), "{message}");
+        }
     }
 }

@@ -19,24 +19,46 @@ impl PositionedInput for Bytes {
     }
 }
 
+// The limits and decoded-cluster cache budget of `open_source` in
+// src-tauri/src/archive.rs (desktop values); keep the two in step. The app also
+// rejects inconsistent table extents (`validate_layout`) before it reads
+// anything else, so this target reaches a superset of the inputs the app admits.
+const MAX_STRING: usize = 1 << 20;
+const MAX_CLUSTERS: u32 = 8 * 1024 * 1024;
+const CLUSTER_CACHE_MAX_BYTES: usize = 32 << 20;
+
 fuzz_target!(|data: &[u8]| {
     let limits = ArchiveLimits {
-        max_metadata_record_bytes: 1 << 20,
-        max_entries: 10_000,
-        max_clusters: 1_000,
+        max_metadata_record_bytes: 2 * MAX_STRING + 512,
+        max_clusters: MAX_CLUSTERS,
         cluster: Some(ClusterReadLimits {
-            max_stored_bytes: 64 << 20,
             max_decoded_bytes: 64 << 20,
-            xz_memory_bytes: 64 << 20,
-            zstd_window_log: 27,
+            max_stored_bytes: 65 << 20,
+            xz_memory_bytes: 128 << 20,
+            zstd_window_log: 26,
         }),
+        ..Default::default()
     };
     let input = Arc::new(Bytes(data.to_vec()));
     let Ok(archive) = Archive::from_positioned(input, data.len() as u64, limits) else { return; };
-    let _ = archive.entry_count();
+    archive.set_cluster_cache_max_bytes(CLUSTER_CACHE_MAX_BYTES);
+    let entries = archive.entry_count();
     let _ = archive.title_count();
     let _ = archive.main_entry();
-    let _ = archive.entry_by_url_index(0);
     let _ = archive.entry_by_title_index(0);
+    // Directory entries alone never reach a cluster. Resolve the first entries to
+    // their blobs: that decodes zstd/xz clusters and walks the blob offset tables,
+    // as serving an article does.
+    let mut buffer = [0u8; 4096];
+    for index in 0..entries.min(64) {
+        let Ok(entry) = archive.entry_by_url_index(index) else { continue; };
+        let Ok(item) = entry.get_item(true) else { continue; };
+        let _ = item.size();
+        let _ = item.read_at(0, &mut buffer);
+    }
+    let _ = archive.title_prefix_range(b'C', "a");
+    for cluster in 0..archive.cluster_count().min(4) {
+        let _ = archive.validate_cluster_references(cluster, &[]);
+    }
     let _ = archive.check();
 });

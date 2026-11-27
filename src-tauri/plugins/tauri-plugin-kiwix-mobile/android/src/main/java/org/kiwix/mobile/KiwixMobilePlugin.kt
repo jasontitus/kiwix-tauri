@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.CancellationSignal
@@ -145,6 +146,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private var foregroundTimeout: Runnable? = null
     /** This view owns only the aggregate native transfer assertion, never another window flag. */
     private var transferScreen: View? = null
+    /** The shell's theme setting ("system", "light" or "dark"); null until it reports one. */
+    private var themeSetting: String? = null
     private var incomingFailure: String? = null
     /** User-visible notice for an intake batch that could not survive a cold start. */
     private var incomingNotice: String? = null
@@ -251,19 +254,32 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         private const val INTAKE_HANDLED_EXTRA = "org.kiwix.mobile.INTAKE_HANDLED"
         private const val MAX_TRANSIENT_INTAKE_BATCHES = 32
         private const val MAX_INCOMING_GRANT_FLAGS = 64
+        private const val ACTIVITY_RECREATED = "ACTIVITY_RECREATED"
+        private const val SYSTEM_TEXT_CATEGORY = "android"
         private var retained = WeakReference<KiwixMobilePlugin>(null)
         private var currentActivity = WeakReference<Activity>(null)
         private val generations = WeakHashMap<Activity, Long>()
         private val retiredWebViews = WeakHashMap<WebView, Boolean>()
         private var nextGeneration = 0L
+        /** Activities whose launch intent an earlier incarnation already acted on. */
+        private val consumedLaunches = WeakHashMap<Activity, Boolean>()
+        /** The newest Activity's launch intent is still consumable and no plugin was offered it. */
+        private var launchUnoffered = false
 
         private fun generationOf(activity: Activity): Long =
             generations.getOrPut(activity) { ++nextGeneration }
 
-        /** Called before native onCreate, including when no plugin exists yet. */
-        @JvmStatic fun activityCreated(activity: Activity) {
+        /**
+         * Called before native onCreate, including when no plugin exists yet.
+         * [restored] is true when Android supplied saved instance state.
+         */
+        @JvmStatic fun activityCreated(activity: Activity, restored: Boolean) {
             check(Looper.myLooper() == Looper.getMainLooper())
             val generation = generationOf(activity)
+            val flags = try { activity.intent?.flags ?: 0 } catch (_: Exception) { 0 }
+            val consumable = launchIntentConsumable(restored, flags, launchUnoffered)
+            if (!consumable) consumedLaunches[activity] = true
+            launchUnoffered = consumable
             retained.get()?.bindActivity(activity, generation)
             currentActivity = WeakReference(activity)
             AppShortcuts.install(activity)
@@ -288,7 +304,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         @JvmStatic fun activityDestroyed(activity: Activity, view: WebView?) {
             retained.get()?.let { plugin ->
                 if (plugin.activityReference.get() === activity) {
-                    plugin.retireWindowUi()
+                    plugin.retireWindowUi(replaced = !activity.isFinishing)
                     plugin.destroyed = true
                     plugin.windowState.stopped()
                     plugin.activityReference.clear()
@@ -333,6 +349,8 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         val externalReferences = mutableListOf<String>()
         val exportScratch = mutableListOf<ExportScratch>()
         var lastProgress = 0L
+        /** Retired because its Activity was replaced, not because the person cancelled. */
+        @Volatile var replaced = false
         val chooserToken = UUID.randomUUID().toString()
         var chooserReceipt: PendingIntent? = null
         /** Share copies go through the system share sheet, not a viewer. */
@@ -353,10 +371,24 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         nearbyRoutes.install()
         // Durable intent intake is enqueued before the best-effort export-cache
         // sweep so a cold-start file open is not delayed behind deletions.
-        receiveCompletionNotification(owner.intent)
-        receiveDocuments(owner.intent)
-        receiveEntries(owner.intent)
+        val launch = launchIntent(owner)
+        receiveCompletionNotification(launch)
+        receiveDocuments(launch)
+        receiveEntries(launch)
         sweepExportCache()
+    }
+
+    /**
+     * The intent that started [owner], or null when an earlier incarnation
+     * already acted on it. Android hands a restored Activity, and a task
+     * reopened from Recents, the original launch intent again; the in-process
+     * handled extras do not survive that, so it must not be offered twice.
+     * Intents delivered through onNewIntent never pass through here.
+     */
+    private fun launchIntent(owner: Activity): Intent? {
+        if (consumedLaunches[owner] == true) return null
+        launchUnoffered = false
+        return owner.intent
     }
 
     /** Bound the lifetime of export/share scratch copies: a receiving app may
@@ -377,7 +409,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     private fun bindActivity(activity: Activity, generation: Long) {
         if (activityReference.get() === activity) return
         // Close and cancel the old generation before publishing the replacement.
-        retireWindowUi()
+        retireWindowUi(replaced = true)
         webView.get()?.let { destroyWebView(it) }
         webView.clear()
         activityReference = WeakReference(activity)
@@ -394,9 +426,10 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         destroyed = false
         windowState.resumed()
         TransferEvents.attach(this)
-        receiveCompletionNotification(activity.intent)
-        receiveDocuments(activity.intent)
-        receiveEntries(activity.intent)
+        val launch = launchIntent(activity)
+        receiveCompletionNotification(launch)
+        receiveDocuments(launch)
+        receiveEntries(launch)
         webView.get()?.onResume()
         readerLocation.resumed()
         // The paused root may have missed transport events while the WebView
@@ -448,7 +481,9 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
     }
     override fun onDestroy(activity: AppCompatActivity) {
         if (activity !== activityReference.get()) return
-        retireWindowUi()
+        // An Activity that is not finishing is destroyed only to be replaced:
+        // a configuration change, or the system reclaiming it in the background.
+        retireWindowUi(replaced = !activity.isFinishing)
         destroyed = true
         windowState.stopped()
         activityReference.clear()
@@ -481,7 +516,12 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         webView.get()?.setOnKeyListener(hardwareKeys)
     }
 
-    internal fun retireWindowUi() {
+    /**
+     * [replaced] marks retirement caused by the Activity being replaced rather
+     * than closed. The person did not cancel a picker or copy that this ends,
+     * so it settles as the ACTIVITY_RECREATED failure, never as a cancellation.
+     */
+    internal fun retireWindowUi(replaced: Boolean = false) {
         uiAdmission = false
         releaseTransferScreen()
         retireNearby()
@@ -498,14 +538,18 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         if (hotspotOwner?.release() == true) trigger("hotspot-stopped", JSObject())
         readerLocation.retire()
         operation?.let { op ->
+            if (replaced) op.replaced = true
             op.cancellation.cancel()
             op.dialog?.dismiss()
             op.dialog = null
-            if (!op.copying) {
+            when (retirementOutcome(op.copying, op.kind == "open" && op.exportScratch.isNotEmpty(), op.replaced)) {
+                // The worker unwinds, removes what it staged and settles the operation itself.
+                RetirementOutcome.AWAIT_WORKER -> Unit
                 // Teardown is not proof of chooser cancellation: a viewer may already hold its grant.
                 // Retain/report the copy rather than deleting a possibly selected viewer's source.
-                if (op.kind == "open" && op.exportScratch.isNotEmpty()) fail(op, NativeDocumentError("ACTIVITY_DESTROYED"))
-                else complete(op, cancelledResult(op.kind))
+                RetirementOutcome.FAIL_DESTROYED -> fail(op, NativeDocumentError("ACTIVITY_DESTROYED"))
+                RetirementOutcome.FAIL_RECREATED -> fail(op, NativeDocumentError(ACTIVITY_RECREATED))
+                RetirementOutcome.CANCELLED -> complete(op, cancelledResult(op.kind))
             }
         }
         deviceScanInvoke?.reject("ACTIVITY_DESTROYED", "ACTIVITY_DESTROYED")
@@ -918,6 +962,42 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         catch (error: Exception) { reject(invoke, error) }
     }
 
+    /**
+     * The system font scale, in the shape the iOS command of the same name
+     * returns. The WebView already multiplies its text by this factor, so the
+     * shell uses it only to choose its large-text layout. A change recreates
+     * the Activity (fontScale is not a handled configuration change), so the
+     * shell reads it once per document and needs no change event.
+     */
+    @Command fun dynamicTypeState(invoke: Invoke) {
+        try {
+            invoke.resolve(JSObject().put("category", SYSTEM_TEXT_CATEGORY)
+                .put("scale", applicationContext.resources.configuration.fontScale.toDouble()))
+        } catch (error: Exception) { reject(invoke, error) }
+    }
+
+    /** Keep the strips behind the transparent system bars in the shell's theme. */
+    @Command fun applyTheme(invoke: Invoke) {
+        main.post {
+            try {
+                val setting = invoke.getArgs().getString("theme")
+                themeSetting = setting
+                activityReference.get()?.takeUnless { it.isDestroyed || destroyed }?.let { owner ->
+                    WindowTheme.apply(owner, setting, owner.resources.configuration)
+                }
+                invoke.resolve(JSObject())
+            } catch (error: Exception) { reject(invoke, error) }
+        }
+    }
+
+    /** uiMode is handled without recreation, so a "system" theme is re-resolved here. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        val setting = themeSetting ?: return
+        val owner = activityReference.get()?.takeUnless { it.isDestroyed || destroyed } ?: return
+        try { WindowTheme.apply(owner, setting, newConfig) }
+        catch (error: Exception) { android.util.Log.e("KiwixMobile", "Window theme update failed", error) }
+    }
+
 
     private fun requireVisible() {
         if (!uiAdmission || !windowState.interactive || destroyed || activity.isFinishing || activity.isDestroyed)
@@ -1228,7 +1308,15 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             } catch (error: Exception) {
                 if (op.cancellation.isCanceled && error !is NativeDocumentError) {
                     finishCancelledCleanup(op)
-                } else main.post { fail(op, error) }
+                } else {
+                    // A failed staging copy was never handed to Rust, so nothing
+                    // refers to its files. Remove them here, on the worker that
+                    // wrote them and before rejecting; only files and directories
+                    // this operation created are touched, and fail() still
+                    // reports any that could not be removed.
+                    if (stagingFailureRemovesCopies(op.kind)) op.staging?.cancelCleanup()
+                    main.post { fail(op, error) }
+                }
             }
         }
     }
@@ -1267,6 +1355,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             providerCleanupFailure?.let { fail(op, it); return@post }
             if (retained.isNotEmpty()) fail(op, NativeDocumentError("CANCELLATION_CLEANUP_FAILED"))
             else if (op.exportUri != null) fail(op, NativeDocumentError("EXPORT_CANCELLED_PARTIAL"))
+            else if (op.replaced) fail(op, NativeDocumentError(ACTIVITY_RECREATED))
             else complete(op, cancelledResult(op.kind))
         }
     }
@@ -1636,7 +1725,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
                 // Android permits an explicitly started foreground service even
                 // when notification permission is denied. Keep its required
                 // notification; completion-notification consent is separate.
-                startTransferService(invoke)
+                startTransferService(invoke, source, generation)
             } catch (error: Exception) {
                 if (activityScreenCallbackCurrent(source, generation, activityReference.get(),
                         activityGeneration, currentActivity.get()) &&
@@ -1668,7 +1757,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         transferScreen = null
     }
 
-    private fun startTransferService(invoke: Invoke) {
+    private fun startTransferService(invoke: Invoke, source: Activity?, generation: Long) {
         if (foregroundInvoke != null) throw NativeDocumentError("TRANSFER_START_PENDING")
         val args = invoke.getArgs()
         val intent = KiwixTransferService.prepareUpdate(
@@ -1702,12 +1791,36 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         }
         foregroundTimeout = timeout
         main.postDelayed(timeout, 4000)
-        try { ContextCompat.startForegroundService(applicationContext, intent) }
-        catch (error: Exception) {
-            foregroundInvoke = null
-            foregroundTimeout = null
-            main.removeCallbacks(timeout)
-            throw error
+        // The service refuses to run while a pause, timeout or error signal is
+        // still waiting for the shell. Refuse here instead: a service started
+        // with startForegroundService that stops at once is a start Android
+        // punishes. The signal store is disk-backed, so it is read off main.
+        worker.execute {
+            val pending: Any = try { TransferEvents.peek(applicationContext).length() != 0 }
+                catch (error: Exception) { error }
+            main.post {
+                // Cancelled, timed out or retired while the signals were read.
+                if (foregroundInvoke !== invoke) return@post
+                val refusal = when {
+                    pending is NativeDocumentError -> pending.code
+                    pending is Exception -> "TRANSFER_FOREGROUND_START_FAILED"
+                    pending == true -> "TRANSFER_CONTROL_PENDING"
+                    else -> null
+                }
+                if (refusal != null) { finishForegroundStart(invoke, refusal); return@post }
+                try {
+                    requireVisible()
+                    ContextCompat.startForegroundService(applicationContext, intent)
+                } catch (error: Exception) {
+                    foregroundInvoke = null
+                    foregroundTimeout = null
+                    main.removeCallbacks(timeout)
+                    if (activityScreenCallbackCurrent(source, generation, activityReference.get(),
+                            activityGeneration, currentActivity.get()) && !KiwixTransferService.running)
+                        releaseTransferScreen()
+                    reject(invoke, error)
+                }
+            }
         }
     }
 
@@ -2398,3 +2511,37 @@ internal fun intakeCanPersist(grants: List<Boolean>): Boolean =
  */
 internal fun intakeColdStartNotice(transientMarker: Boolean, inMemoryBatches: Int): Boolean =
     transientMarker && inMemoryBatches == 0
+
+/**
+ * Whether an Activity's launch intent may still be acted on. Android gives a
+ * restored Activity (saved state present, typically after the process was
+ * killed in the background) and a task reopened from Recents the original
+ * launch intent again, so an "Open with", link, selected-text search or
+ * shortcut would otherwise repeat on every return. A recreation inside one
+ * process keeps the intent only while no plugin has been offered it yet.
+ */
+internal fun launchIntentConsumable(
+    restored: Boolean, flags: Int, unofferedByPredecessor: Boolean = false,
+): Boolean = flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0 &&
+    (!restored || unofferedByPredecessor)
+
+internal enum class RetirementOutcome { AWAIT_WORKER, FAIL_DESTROYED, FAIL_RECREATED, CANCELLED }
+
+/**
+ * How a pending document operation settles when its window is retired. A
+ * running worker settles it after its own cleanup. A replaced Activity is not
+ * the person cancelling: that ends as a failure the shell can report.
+ */
+internal fun retirementOutcome(copying: Boolean, viewerScratch: Boolean, replaced: Boolean): RetirementOutcome = when {
+    copying -> RetirementOutcome.AWAIT_WORKER
+    viewerScratch -> RetirementOutcome.FAIL_DESTROYED
+    replaced -> RetirementOutcome.FAIL_RECREATED
+    else -> RetirementOutcome.CANCELLED
+}
+
+/**
+ * Copy imports stage whole archives in app-private storage. When one fails,
+ * its staged files are unreferenced and must not outlive the attempt. Exports
+ * and viewer copies keep their own recovery rules.
+ */
+internal fun stagingFailureRemovesCopies(kind: String): Boolean = kind == "archives" || kind == "directory"

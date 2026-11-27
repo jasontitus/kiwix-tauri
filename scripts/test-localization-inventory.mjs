@@ -34,7 +34,14 @@ test("the inventory reports uncollected, dynamic and untranslated copy, and noth
     "}",
     "",
   ].join("\n"));
+  // The catalog implementation forwards runtime sources; its literal copy is still collected.
+  await writeFile(path.join(directory, "i18n.tsx"), [
+    "export function tPlural(source, count) { return t(source, { count }); }",
+    'export function Failure() { return <strong title="Raw">{t("Provider failure copy")} raw</strong>; }',
+    "",
+  ].join("\n"));
   const found = await inventory(directory);
+  assert.ok(found.sources.includes("Provider failure copy"));
   assert.deepEqual(found.untranslated.map((entry) => entry.text), ["Plain words", "Type here"]);
   assert.equal(found.dynamic.length, 1);
   assert.match(found.dynamic[0], /Example\.tsx:6$/);

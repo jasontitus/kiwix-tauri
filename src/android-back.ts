@@ -76,9 +76,8 @@ export function createBackRegistration(
   const recover = async () => {
     const value = stored();
     if (value === null) return;
-    const channelId = Number(value);
-    if (Number.isSafeInteger(channelId) && channelId >= 0)
-      await bridge.forget(channelId);
+    const channelId = /^\d+$/.test(value) ? Number(value) : NaN;
+    if (Number.isSafeInteger(channelId)) await bridge.forget(channelId);
     try {
       if (stored() === value) bridge.storage?.removeItem(BACK_LISTENER_KEY);
     } catch {
@@ -91,7 +90,8 @@ export function createBackRegistration(
   const step = async () => {
     if (!recovered) {
       recovered = true;
-      await recover();
+      // Recovery is best effort; it must not cost this document its own listener.
+      await recover().catch(onError);
     }
     if (wanted && !current) {
       const listener = await bridge.listen(handler);
@@ -105,8 +105,15 @@ export function createBackRegistration(
       release(listener);
     }
   };
+  let scheduled = false;
   const sync = () => {
-    queue = queue.then(step).catch(onError);
+    // One waiting step is enough: it reads the wish when it starts.
+    if (scheduled) return;
+    scheduled = true;
+    queue = queue.then(() => {
+      scheduled = false;
+      return step();
+    }).catch(onError);
   };
   // A stale listener blocks Back even when this document never wants one.
   sync();
@@ -114,8 +121,9 @@ export function createBackRegistration(
   return {
     want(active) {
       wanted = active;
-      // Also retries a registration or removal that failed earlier.
-      if ((current !== null) !== active) sync();
+      // Always queue: a step in flight was decided by an older wish, and a
+      // registration or removal that failed earlier is retried here.
+      sync();
     },
     settled: () => queue,
   };
