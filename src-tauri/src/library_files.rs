@@ -1235,6 +1235,144 @@ fn check_part_proven(
     }
     check_part(directory, part, expected)
 }
+/// Free bytes on the volume holding `path`; `None` when the platform does not
+/// report capacity, which is never treated as zero.
+fn free_space(path: &Path) -> Option<u64> {
+    #[cfg(test)]
+    if let Some((thread, free)) = *FREE_SPACE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
+        if thread == std::thread::current().id() {
+            return Some(free);
+        }
+    }
+    crate::storage::volume_space(path).map(|(free, _)| free)
+}
+/// Refuse a copy that cannot fit before any byte is hashed or written.
+fn ensure_copy_space(free: Option<u64>, needed: u64, destination: &Path) -> Result<(), String> {
+    match free {
+        Some(free) if free < needed => Err(format!(
+            "Not enough free space in {}: {needed} bytes are needed but {free} bytes are free",
+            crate::storage::display_path(destination)
+        )),
+        _ => Ok(()),
+    }
+}
+/// Remove what an unfinished cross-volume copy left at its destination, and
+/// only that. `Ok(true)` means nothing of this move remains there: no part was
+/// published and the private staging directory is gone. `Ok(false)` means a
+/// destination part exists or the destination is no longer the journaled
+/// directory; nothing was touched. The source and the journal are never
+/// touched here.
+///
+/// Ownership: the staging directory must be this user's private (0700) child
+/// carrying the identity the journal recorded when it was created. A finished
+/// staged copy is removed only while it is still the recorded file (device,
+/// inode and size). An unfinished copy has no recorded identity of its own; as
+/// on a retry, it is owned only by sitting in that journal-bound directory.
+/// The directory itself is removed only when empty, so an unexpected entry
+/// keeps it, and the caller keeps the journal.
+fn clear_unpublished_copy(journal: &Journal) -> Result<bool, String> {
+    if journal.same_filesystem {
+        return Ok(false);
+    }
+    let destination = Directory::open(&journal.destination_directory)?;
+    if destination.identity != journal.destination_directory_identity {
+        return Ok(false);
+    }
+    for part in &journal.parts {
+        if !destination.absent(&part.name)? {
+            return Ok(false);
+        }
+    }
+    let staging_name = format!(".kiwix-move-{}", journal.id);
+    if destination.absent(&staging_name)? {
+        return Ok(true);
+    }
+    let staging = private_child(&destination, &staging_name, false)?;
+    match &journal.staging_identity {
+        Some(identity) if identity == &staging.identity => {
+            for part in &journal.parts {
+                if staging.absent(&part.name)? {
+                    continue;
+                }
+                let stamp = staging.stamp(&part.name)?;
+                if part.target.as_ref().is_some_and(|target| {
+                    target.identity != stamp.identity || target.size != stamp.size
+                }) {
+                    return Err(format!(
+                        "A staged copy changed and was preserved at {}",
+                        crate::storage::display_path(&staging.path)
+                    ));
+                }
+                staging.dir.remove_file(&part.name).map_err(err)?;
+            }
+            staging.sync()?;
+        }
+        Some(_) => {
+            return Err(format!(
+                "The staging folder was replaced and was preserved at {}",
+                crate::storage::display_path(&staging.path)
+            ))
+        }
+        // The identity was never recorded, so nothing inside is adopted. The
+        // empty-only removal below still clears a directory created just
+        // before the journal write that would have recorded it failed.
+        None => {}
+    }
+    #[cfg(windows)]
+    remove_owned_directory(&destination, &mut Some(staging), &staging_name)?;
+    #[cfg(not(windows))]
+    {
+        drop(staging);
+        destination.dir.remove_dir(&staging_name).map_err(|error| {
+            format!(
+                "Unexpected files were preserved at {}: {error}",
+                crate::storage::display_path(&destination.path.join(&staging_name))
+            )
+        })?;
+    }
+    destination.sync()?;
+    Ok(true)
+}
+/// Give up a cross-volume move that failed before it published anything, so it
+/// is not re-hashed and re-copied at every launch. The journal is removed only
+/// when the library still points at the intact source side, no destination
+/// part exists and the owned staging entries are gone; in every other case it
+/// stays for startup recovery. Returns whether the move was abandoned.
+fn abandon_unpublished_copy(store: &Store, journals: &Journals, journal: &Journal) -> Result<bool, String> {
+    if journal.same_filesystem {
+        return Ok(false);
+    }
+    validate_journal(journal, journals, store)?;
+    let source = journal.source_directory.join(&journal.primary);
+    let committed = !store.read()?.books.iter().any(|book| {
+        book.metadata.id == journal.book_id && book.managed && Path::new(&book.path) == source
+    });
+    if committed || !clear_unpublished_copy(journal)? {
+        return Ok(false);
+    }
+    journals.remove(&journal.id)?;
+    Ok(true)
+}
+/// The message for a failed move, after abandoning it where that is safe.
+fn failed_move(store: &Store, journals: &Journals, journal: &Journal, error: String) -> String {
+    match abandon_unpublished_copy(store, journals, journal) {
+        Ok(true) => format!(
+            "{error}. This archive was not moved and is still in {}",
+            crate::storage::display_path(&journal.source_directory)
+        ),
+        Ok(false) => error,
+        Err(cleanup) => format!("{error}. The unfinished move is kept and will be tried again at the next start: {cleanup}"),
+    }
+}
+/// A journal this profile wrote for a book that is no longer in the library
+/// can never be validated or finished.
+fn journal_orphaned(journal: &Journal, journals: &Journals, store: &Store) -> Result<bool, String> {
+    canonical_uuid(&journal.id)?;
+    if journal.version != 1 || journal.owner != journals.owner {
+        return Ok(false);
+    }
+    Ok(!store.read()?.books.iter().any(|book| book.metadata.id == journal.book_id))
+}
 fn finish_move(
     store: &Store,
     journals: &Journals,
@@ -1331,6 +1469,16 @@ fn finish_move_with_rename(
             cleanup_migration_sources(store, journals, journal, &source, &destination, proven)?;
             return journals.remove(&journal.id);
         }
+        // Every part without a recorded copy still has to be written. Check
+        // before the source is hashed again, so a copy that cannot fit fails
+        // at once instead of filling the volume first.
+        let remaining = journal
+            .parts
+            .iter()
+            .filter(|part| part.target.is_none())
+            .try_fold(0u64, |total, part| total.checked_add(part.source.size))
+            .ok_or("Archive part lengths overflow")?;
+        ensure_copy_space(free_space(&destination.path), remaining, &destination.path)?;
         let staging = private_child(
             &destination,
             &staging_name,
@@ -1711,6 +1859,28 @@ pub fn move_archives(
         }
         None
     };
+    // Archives on another volume are copied. Refuse the whole move up front
+    // when they cannot all fit, before hours of hashing and copying. Sizes
+    // come from the identity-only part listing; an archive that cannot be
+    // listed is not counted and reports its own error below.
+    let mut copied = 0u64;
+    for book in &state.books {
+        let path = Path::new(&book.path);
+        if !(book.managed && book.available) || source_root(path).is_none() {
+            continue;
+        }
+        let Some(Ok(source)) = path.parent().map(Directory::open) else { continue };
+        if source.identity.device == to.identity.device {
+            continue;
+        }
+        let Ok(primary) = archive_basename(path) else { continue };
+        let Ok(parts) = verified_parts(&source, &primary, &book.metadata.id) else { continue };
+        for (_, stamp) in parts {
+            copied = copied.checked_add(stamp.size).ok_or("Archive part lengths overflow")?;
+        }
+    }
+    ensure_copy_space(free_space(&to.path), copied, &to.path)
+        .map_err(|error| format!("{error}. Nothing was moved"))?;
     let mut moved = Vec::new();
     let mut errors = Vec::new();
     let mut skipped = 0;
@@ -1768,7 +1938,8 @@ pub fn move_archives(
                 parts,
             };
             journals.write(&journal)?;
-            finish_move(&store, &journals, &mut journal, &mut proven)?;
+            finish_move(&store, &journals, &mut journal, &mut proven)
+                .map_err(|error| failed_move(&store, &journals, &journal, error))?;
             Ok::<_, String>(target.path.join(&journal.primary))
         })();
         match result {
@@ -1815,7 +1986,7 @@ pub fn recover(store: &Store) -> Result<Value, String> {
     }
     entries.sort();
     for name in entries {
-        let result = (|| {
+        let parsed = (|| {
             canonical_uuid(
                 name.strip_suffix(".json")
                     .ok_or("Invalid journal filename")?,
@@ -1831,7 +2002,7 @@ pub fn recover(store: &Store) -> Result<Value, String> {
                 return Err("Oversized migration journal".into());
             }
             #[cfg(desktop)]
-            let mut journal: Journal = if store.portable_mode() {
+            let journal: Journal = if store.portable_mode() {
                 let mut value: Value = serde_json::from_slice(&bytes).map_err(err)?;
                 store.portable_rebase_saved_json(crate::profile_paths::RecordKind::Migration, &mut value)?;
                 serde_json::from_value(value).map_err(err)?
@@ -1839,19 +2010,44 @@ pub fn recover(store: &Store) -> Result<Value, String> {
                 serde_json::from_slice(&bytes).map_err(err)?
             };
             #[cfg(not(desktop))]
-            let mut journal: Journal = serde_json::from_slice(&bytes).map_err(err)?;
+            let journal: Journal = serde_json::from_slice(&bytes).map_err(err)?;
             if name != format!("{}.json", journal.id) {
                 return Err("Migration journal filename mismatch".into());
             }
-            // Replay has no in-process digest: every part is re-hashed.
-            finish_move(store, &journals, &mut journal, &mut Vec::new())?;
-            Ok::<_, String>(
-                json!({"id":journal.book_id,"title":journal.title,"from":journal.source_directory.join(&journal.primary),"to":journal.destination_directory.join(&journal.primary)}),
-            )
+            Ok::<_, String>(journal)
         })();
+        let mut journal = match parsed {
+            Ok(journal) => journal,
+            Err(error) => {
+                errors.push(json!({"id":name,"title":name,"error":error}));
+                continue;
+            }
+        };
+        let result = (|| {
+            if journal_orphaned(&journal, &journals, store)? {
+                // Nothing can finish this move. Clear what an unfinished copy
+                // left in its own staging folder where that is provably all
+                // there is; every archive file stays where it is.
+                let leftover = match clear_unpublished_copy(&journal) {
+                    Ok(_) => String::new(),
+                    Err(error) => format!(" {error}."),
+                };
+                journals.remove(&journal.id)?;
+                return Err(format!(
+                    "This archive is no longer in the library, so its unfinished move was dropped. Any of its files already in either folder were left in place.{leftover}"
+                ));
+            }
+            // Replay has no in-process digest: every part is re-hashed.
+            finish_move(store, &journals, &mut journal, &mut Vec::new())
+                .map_err(|error| failed_move(store, &journals, &journal, error))
+        })();
+        // The directories, not the archive file: a warning names the two
+        // folders the person chose.
+        let from = crate::storage::display_path(&journal.source_directory);
+        let to = crate::storage::display_path(&journal.destination_directory);
         match result {
-            Ok(result) => moved.push(result),
-            Err(error) => errors.push(json!({"id":name,"title":name,"error":error})),
+            Ok(()) => moved.push(json!({"id":journal.book_id,"title":journal.title,"from":journal.source_directory.join(&journal.primary),"to":journal.destination_directory.join(&journal.primary)})),
+            Err(error) => errors.push(json!({"id":name,"title":journal.title,"from":from,"to":to,"error":error})),
         }
     }
     Ok(json!({"moved":moved,"errors":errors,"skipped":0}))

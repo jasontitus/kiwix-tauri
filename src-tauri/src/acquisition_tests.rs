@@ -591,10 +591,10 @@ fn metalink_rejects_plaintext_and_external_filename_traversal() {
     let xml = |name: &str, url: &str| {
         format!("<metalink xmlns=\"urn:ietf:params:xml:ns:metalink\"><file name=\"{name}\"><size>9000000000</size><url>{url}</url></file></metalink>")
     };
-    assert!(parse_metalink(&xml("../a.zim", "https://example.org/a.zim"), &base).is_err());
-    assert!(parse_metalink(&xml("a.zim", "http://example.org/a.zim"), &base).is_err());
+    assert!(parse_metalink(&xml("../a.zim", "https://example.org/a.zim"), &base, None).is_err());
+    assert!(parse_metalink(&xml("a.zim", "http://example.org/a.zim"), &base, None).is_err());
     assert_eq!(
-        parse_metalink(&xml("a.zim", "/a.zim"), &base).unwrap().size,
+        parse_metalink(&xml("a.zim", "/a.zim"), &base, None).unwrap().size,
         9_000_000_000
     );
 }

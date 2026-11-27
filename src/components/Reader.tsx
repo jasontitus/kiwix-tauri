@@ -57,6 +57,7 @@ import {
   getReaderPreferences,
   isDesktop,
   isMobile,
+  isNative,
   isWindows,
   isAndroid,
   isIOS,
@@ -4819,16 +4820,20 @@ export default function Reader(props: ReaderProps) {
     }
   };
   // Desktop printing uses the admitted native export path and system dialog.
-  // Browser-only readers retain their own window.print() behavior.
+  // Android's PDF export is its system print dialog. A mobile webview does not
+  // implement window.print() for the archive frame, so only the browser-only
+  // preview keeps that behavior; iOS has no print path and says so.
   const printArticle = () => {
-    if (!canPrintArticlePdf) {
+    if (!isNative) {
       send({ command: "print" });
       return;
     }
     const source = activeFrame.current;
     if (!source || latest.current.settings.readOnly ||
         !isHtml(source.location.mime)) return;
-    void exportArticle("pdf", false, true);
+    if (canPrintArticlePdf) void exportArticle("pdf", false, true);
+    else if (isAndroid) void exportArticle("pdf");
+    else setNotice(t("Printing is not available on this device. Save or share the article as a PDF instead."));
   };
   const openAttachment = async () => {
     const target = attachment;
@@ -6205,6 +6210,9 @@ export default function Reader(props: ReaderProps) {
                 <details className="rw-secondary-controls">
                   <summary>{t("Print and export")}</summary>
                   <div className="rw-secondary-content">
+                    {/* Mobile has no separate print path: Android's print
+                        dialog is the PDF row below, and iOS has none. */}
+                    {!isMobile && (
                     <button
                       className="rw-action-row"
                       type="button"
@@ -6223,6 +6231,7 @@ export default function Reader(props: ReaderProps) {
                         </small>
                       </span>
                     </button>
+                    )}
                     <button
                       className="rw-action-row"
                       type="button"
@@ -7371,7 +7380,7 @@ export default function Reader(props: ReaderProps) {
               [t("Find in article"), t("⌘ / Ctrl F")],
               [t("Save article as PDF / original media"), t("⌘ / Ctrl S")],
               [t("Bookmark and notes"), t("⌘ / Ctrl D")],
-              [t("Print / save as PDF"), t("⌘ / Ctrl P")],
+              ...(isIOS ? [] : [[t("Print / save as PDF"), t("⌘ / Ctrl P")]]),
               [t("Zoom in / out"), t("⌘ / Ctrl + / −")],
               [t("Reset zoom"), t("⌘ / Ctrl 0")],
               [t("Read-aloud speed down / up"), isDesktop

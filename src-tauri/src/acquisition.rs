@@ -2413,7 +2413,7 @@ async fn execute_native_transfer(
             let original = checked_url(&stored.job.url, true)?;
             if stored.transfer_url.is_none() {
                 if original.path().ends_with(".meta4") || original.path().ends_with(".metalink") {
-                    let resolved = resolve_metalink(inner, &original, signal).await?;
+                    let resolved = resolve_metalink(inner, &original, signal, None).await?;
                     inner.update(id, |stored| {
                         stored.transfer_url = Some(resolved.url);
                         stored.expected_size = Some(resolved.size);

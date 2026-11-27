@@ -66,19 +66,51 @@ pub(super) async fn execute_transfer(
     let part_length = file.metadata().await.map_err(|e| e.to_string())?.len();
     let mut downloaded = resume_offset(&snapshot, part_length);
     let source = download_url(inner, id, &snapshot.job.url)?;
-    if snapshot.transfer_url.is_none() {
+    let metalink = source.scheme() != "kiwix-library"
+        && (source.path().ends_with(".meta4") || source.path().ends_with(".metalink"));
+    // A Metalink names several mirrors. While nothing durable is kept from the
+    // one chosen earlier, each start resolves it again and moves on to the next
+    // mirror, so a retry can get past a dead or blocked one. As soon as bytes
+    // are kept the mirror stays pinned: they are only ever continued under the
+    // validator that mirror issued for them.
+    let previous = snapshot.transfer_url.clone().filter(|_| metalink && downloaded == 0);
+    if snapshot.transfer_url.is_none() || previous.is_some() {
         let mut resolution_signal = signal.clone();
         let resolution = async {
-            if source.scheme() != "kiwix-library" && (source.path().ends_with(".meta4") || source.path().ends_with(".metalink")) {
-                let resolved = resolve_metalink(inner, &source, &mut resolution_signal).await?;
-                inner.update(id, |stored| {
-                    stored.transfer_url = Some(resolved.url);
-                    stored.expected_size = Some(resolved.size);
-                    stored.job.total = Some(resolved.size);
-                    stored.job.sha256 = resolved.sha256;
-                })
+            if metalink {
+                match resolve_metalink(inner, &source, &mut resolution_signal, previous.as_deref()).await {
+                    Ok(resolved) => inner.update(id, |stored| {
+                        if previous.is_some() {
+                            // Nothing was kept, so no validator or layout from
+                            // the earlier mirror may reach the new one.
+                            // `segmented` stays: a preallocated part must still
+                            // never be read as progress.
+                            stored.etag = None;
+                            stored.last_modified = None;
+                            stored.segments = None;
+                            stored.verification = None;
+                            stored.job.downloaded = 0;
+                        }
+                        stored.transfer_url = Some(resolved.url);
+                        stored.expected_size = Some(resolved.size);
+                        stored.job.total = Some(resolved.size);
+                        stored.job.sha256 = resolved.sha256;
+                    }),
+                    // The mirror chosen earlier is still usable when the
+                    // Metalink itself cannot be fetched again.
+                    Err(error) if previous.is_some() && error != "MOBILE_NETWORK_BLOCKED" => Ok(()),
+                    Err(error) => Err(error),
+                }
             } else {
-                inner.update(id, |stored| stored.transfer_url = Some(source.to_string()))
+                inner.update(id, |stored| {
+                    stored.transfer_url = Some(source.to_string());
+                    // Without an exact size the total recorded at admission is
+                    // a catalog's display size, which may be rounded. From here
+                    // on `total` holds only what a response established.
+                    if stored.expected_size.is_none() {
+                        stored.job.total = None;
+                    }
+                })
             }
         };
         tokio::select! {
@@ -122,8 +154,16 @@ pub(super) async fn execute_transfer(
         directory, known_remaining, outstanding, &http_space_identity(&snapshot.job),
         snapshot.space_acknowledgement.as_deref(),
     )?;
+    // Every byte of a single-stream part is already on disk: such a part only
+    // grows as responses are written to it, and its total was recorded from the
+    // response (or the Metalink) those bytes belong to. Asking the server again
+    // could add nothing, and real mirrors answer the empty remaining range with
+    // a 416 that carries no validator. Go straight to the local signature, size
+    // and checksum verification that every download must pass before it is
+    // published.
+    let complete_part = !snapshot.segmented && downloaded > 0 && known_total == Some(downloaded);
     // A byte count is not proof of object identity. Never append without If-Range.
-    if downloaded > 0 && validator(&snapshot).is_none() {
+    if !complete_part && downloaded > 0 && validator(&snapshot).is_none() {
         // Request a full response, but retain the old bytes until its declared
         // size passes preflight. The full-response path truncates before writing.
         downloaded = 0;
@@ -152,6 +192,9 @@ pub(super) async fn execute_transfer(
     let mut body_retries = 0;
     let mut retry_delay = None;
     'transfer: {
+    if complete_part {
+        break 'transfer;
+    }
     // A durable layout resumes each segment at its own synced offset without a
     // probe request. Every segment still sends If-Range, so a changed object
     // restarts the transfer instead of mixing representations.

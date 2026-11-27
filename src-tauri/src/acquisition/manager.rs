@@ -872,7 +872,12 @@ impl DownloadManager {
             StoredJob {
                 job: job.clone(),
                 transport: Some(transport),
-                expected_size,
+                // Only a size that is exact by construction is enforced: the
+                // shared-library grant's here, a Metalink's once the worker
+                // has resolved it. A catalog's display length may be rounded,
+                // so it admits the download above and is never compared with
+                // what the server sends.
+                expected_size: if shared.is_some() { expected_size } else { None },
                 transfer_url: None,
                 etag: None,
                 last_modified: None,

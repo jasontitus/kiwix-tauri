@@ -112,10 +112,13 @@ pub(super) struct Metalink {
     pub(super) sha256: Option<String>,
 }
 
+/// `after` is the mirror an earlier attempt used without keeping any bytes;
+/// see [`parse_metalink`].
 pub(super) async fn resolve_metalink(
     inner: &Inner,
     source: &Url,
     signal: &mut watch::Receiver<Signal>,
+    after: Option<&str>,
 ) -> Result<Metalink, String> {
     crate::transfer_policy::require_internet()?;
     let response = inner
@@ -165,10 +168,13 @@ pub(super) async fn resolve_metalink(
         bytes.extend_from_slice(&buffer[..count]);
     }
     let xml = std::str::from_utf8(&bytes).map_err(|e| format!("Metalink is not UTF-8: {e}"))?;
-    parse_metalink(xml, &base)
+    parse_metalink(xml, &base, after)
 }
 
-pub(super) fn parse_metalink(xml: &str, base: &Url) -> Result<Metalink, String> {
+/// Chooses the eligible mirror with the best priority. When `after` is one of
+/// the eligible mirrors, the one listed after it is chosen instead, wrapping
+/// around, so repeated attempts work through the whole list.
+pub(super) fn parse_metalink(xml: &str, base: &Url, after: Option<&str>) -> Result<Metalink, String> {
     const NS: &str = "urn:ietf:params:xml:ns:metalink";
     let doc =
         roxmltree::Document::parse(xml).map_err(|e| format!("Malformed Metalink XML: {e}"))?;
@@ -234,9 +240,12 @@ pub(super) fn parse_metalink(xml: &str, base: &Url) -> Result<Metalink, String> 
         mirrors.push((priority, url.to_string()));
     }
     mirrors.sort_by_key(|(priority, _)| *priority);
+    let choice = after
+        .and_then(|after| mirrors.iter().position(|(_, url)| url == after))
+        .map_or(0, |used| (used + 1) % mirrors.len());
     let url = mirrors
         .into_iter()
-        .next()
+        .nth(choice)
         .map(|(_, url)| url)
         .ok_or("Metalink has no eligible HTTPS mirror (loopback HTTP is fixture-only)")?;
     Ok(Metalink { url, size, sha256 })

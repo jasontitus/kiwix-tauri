@@ -622,6 +622,11 @@ final class ExternalDocuments {
     let device: UInt64?
     let inode: UInt64?
     let modified: Int64?
+    /// `resource` is only comparable within one boot and one mount of its
+    /// volume. The volume's own UUID, with `inode` and `modified`, names the
+    /// same file across a restart or a reconnected drive. Optional so earlier
+    /// records still decode; a record without it never uses that proof.
+    let volume: String?
   }
   private struct Record: Codable {
     let bookmark: Data
@@ -741,6 +746,9 @@ final class ExternalDocuments {
     let resource = identifier.flatMap {
       try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: false)
     }
+    // Best effort: a volume that reports no UUID simply never gets the
+    // restart-proof identity.
+    let volume = (try? source.resourceValues(forKeys: [.volumeUUIDStringKey]))?.volumeUUIDString
     let size = Int64(info.st_size)
     let device = UInt64(info.st_dev), inode = UInt64(info.st_ino)
     let modified = Int64(info.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(info.st_mtimespec.tv_nsec)
@@ -773,7 +781,7 @@ final class ExternalDocuments {
       digest = Data(hasher.finalize())
     }
     return (PartIdentity(size: size, resource: resource, digest: digest,
-                         device: device, inode: inode, modified: modified),
+                         device: device, inode: inode, modified: modified, volume: volume),
             expected?.digest == nil || sameFile || digest == expected?.digest)
   }
 
@@ -1001,6 +1009,7 @@ final class ExternalDocuments {
     var files: [ExternalDescriptor] = []
     var identities: [PartIdentity] = []
     var uuid: Data?
+    var rebound = false
     do {
       try coordinatedRead(url, cancellation: cancellation) { readable in
         var directoryFD: Int32 = -1
@@ -1041,13 +1050,37 @@ final class ExternalDocuments {
           let checked = try self.identity(fd, source: source, expected: expected, stale: stale,
             cancellation: cancellation)
           if let expected {
-            guard expected.size == checked.identity.size,
-                  expected.resource == nil || expected.resource == checked.identity.resource,
+            let observed = checked.identity
+            // The provider's resource identifier is not stable across a
+            // restart or a reconnected drive, so the same untouched file can
+            // return a different one. That alone is not a changed part when
+            // the file is still the one admitted: same volume UUID, and the
+            // same inode and modification time on the descriptor opened here.
+            // A different file at this location cannot carry all three, and a
+            // record made before they were kept has no such proof.
+            let sameResource = expected.resource == nil || expected.resource == observed.resource
+            let durable = expected.volume != nil && expected.inode != nil && expected.modified != nil
+            let sameNode = durable && expected.volume == observed.volume
+              && expected.inode == observed.inode && expected.modified == observed.modified
+            guard expected.size == observed.size, sameResource || sameNode,
                   !stale || checked.digestSatisfied else {
               throw MobileFailure("provider_archive_parts_changed")
             }
+            // Rebind a part that just proved itself to this boot's identifier,
+            // and complete an earlier record, only while the provider still
+            // exposes an identifier. The recorded digest and the modification
+            // time admitted earlier are never replaced.
+            var recorded = expected
+            if expected.resource != nil, observed.resource != nil, !sameResource || !durable {
+              recorded = PartIdentity(size: observed.size, resource: observed.resource,
+                digest: expected.digest, device: observed.device, inode: observed.inode,
+                modified: expected.modified ?? observed.modified, volume: observed.volume)
+            }
+            if recorded != expected { rebound = true }
+            identities.append(recorded)
+          } else {
+            identities.append(checked.identity)
           }
-          identities.append(expected ?? checked.identity)
           if index == 0 { uuid = try self.archiveUUID(fd) }
         }
       }
@@ -1062,7 +1095,7 @@ final class ExternalDocuments {
         includingResourceValuesForKeys: nil, relativeTo: nil) : record.bookmark
       let refreshed = Record(bookmark: bookmark, names: record.names, folder: record.folder,
                              directory: record.directory, identities: identities, archiveUUID: uuid)
-      let encoded = (stale || record.identities == nil || record.archiveUUID == nil)
+      let encoded = (stale || rebound || record.identities == nil || record.archiveUUID == nil)
         ? try JSONEncoder().encode(refreshed) : nil
       try locked {
         guard leases[lease] == nil else { throw MobileFailure("provider_lease_conflict") }
