@@ -3,7 +3,8 @@
 //! The single boundary between internal error text and what a person reads.
 //!
 //! Native plugins answer with machine codes (`SPEECH_SESSION_RETIRED`, iOS
-//! `{"code": ...}` envelopes) and background tasks can fail with a panic
+//! `{"code": ...}` envelopes, Android `[CODE] - {...}` rejections and Java
+//! exception text) and background tasks can fail with a panic
 //! description. Those are useful in a local log, never in the red band above
 //! the library. `plain` turns them into one sentence that says what happened
 //! and what to do next; anything already written for a person passes through.
@@ -90,6 +91,244 @@ fn native_message(code: &str) -> Option<&'static str> {
     })
 }
 
+/// A failure reported by the Android plugin, recognised by its transport shape.
+struct AndroidFailure {
+    /// The plugin's status code, when one could be read.
+    code: Option<String>,
+    /// The platform's own description, used only to recognise a full disk.
+    detail: String,
+    /// The plugin command rejected directly (`[CODE] - ...`) rather than
+    /// through the Java service endpoint.
+    bracketed: bool,
+}
+
+/// Android status codes are upper-case words joined by underscores. One
+/// upper-case word in a sentence ("ZIM", "HTTP") is not a code.
+fn is_android_code(text: &str) -> bool {
+    (3..=96).contains(&text.len())
+        && text.starts_with(|c: char| c.is_ascii_uppercase())
+        && text.contains('_')
+        && text
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// `java.lang.IllegalStateException`, `org.kiwix.mobile.NativeDocumentError`.
+fn is_java_throwable(name: &str) -> bool {
+    let mut segments = name.split('.');
+    let Some(last) = segments.next_back() else {
+        return false;
+    };
+    let identifier = |segment: &str| {
+        !segment.is_empty()
+            && segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    };
+    let mut packages = 0;
+    for segment in segments {
+        if !identifier(segment) || !segment.starts_with(|c: char| c.is_ascii_lowercase()) {
+            return false;
+        }
+        packages += 1;
+    }
+    packages > 0
+        && identifier(last)
+        && last.starts_with(|c: char| c.is_ascii_uppercase())
+        && (last.ends_with("Exception") || last.ends_with("Error"))
+}
+
+/// The code and platform detail inside one Android rejection payload: a bare
+/// code, `Throwable: payload`, the plugin's `{"code","data":{"detail"}}`
+/// message, or the `{"message","code","data"}` object the Java service
+/// endpoint relays. Nesting is bounded; anything else has no code.
+fn android_payload(text: &str, depth: u8) -> (Option<String>, String) {
+    let text = text.trim();
+    if is_android_code(text) {
+        return (Some(text.to_owned()), String::new());
+    }
+    if depth == 0 {
+        return (None, String::new());
+    }
+    if let Some((class, rest)) = text.split_once(": ") {
+        if is_java_throwable(class) {
+            return android_payload(rest, depth - 1);
+        }
+    }
+    if !text.starts_with('{') {
+        return (None, String::new());
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return (None, String::new());
+    };
+    let detail = value
+        .get("data")
+        .and_then(|data| data.get("detail"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let code = value
+        .get("code")
+        .and_then(serde_json::Value::as_str)
+        .filter(|code| is_android_code(code))
+        .map(str::to_owned);
+    let (inner_code, inner_detail) = value
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .map(|message| android_payload(message, depth - 1))
+        .unwrap_or_default();
+    (
+        code.or(inner_code),
+        if detail.is_empty() { inner_detail } else { detail },
+    )
+}
+
+/// Tauri prints an Android plugin rejection as `[CODE] - message`, where the
+/// message is the plugin's JSON envelope. Calls routed through the Java
+/// service endpoint arrive instead as `java.lang.IllegalStateException: {...}`.
+/// Only a whole message in one of those two shapes is an Android failure:
+/// lower-case iOS codes and Rust's own JSON envelopes are not touched here.
+fn android_failure(message: &str) -> Option<AndroidFailure> {
+    if let Some(rest) = message.strip_prefix('[') {
+        let (code, rest) = rest.split_once(']')?;
+        if !is_android_code(code) {
+            return None;
+        }
+        let payload = if rest.is_empty() {
+            ""
+        } else {
+            rest.strip_prefix(" - ")?
+        };
+        let (_, detail) = android_payload(payload, 3);
+        return Some(AndroidFailure {
+            code: Some(code.to_owned()),
+            detail,
+            bracketed: true,
+        });
+    }
+    let (class, rest) = message.split_once(": ")?;
+    if !is_java_throwable(class) {
+        return None;
+    }
+    let (code, detail) = android_payload(rest, 3);
+    Some(AndroidFailure {
+        code,
+        detail,
+        bracketed: false,
+    })
+}
+
+/// Nearby, Bluetooth and temporary Wi-Fi codes are localized by the shell,
+/// which matches them as bare codes.
+fn shell_owned_code(code: &str) -> bool {
+    ["NEARBY_", "BLE_", "JOIN_", "HOTSPOT_", "LOCAL_NETWORK_"]
+        .iter()
+        .any(|family| code.starts_with(family))
+}
+
+fn android_message(code: &str, detail: &str) -> Option<&'static str> {
+    // A full disk surfaces under several codes; the cause decides the advice.
+    if ["ENOSPC", "EDQUOT", "No space left"]
+        .iter()
+        .any(|cause| detail.contains(cause))
+    {
+        return Some("There is not enough free space on this device. Free some space, then try again.");
+    }
+    Some(match code {
+        "NOT_AN_ARCHIVE_DOCUMENT" => {
+            "That file is not a ZIM archive. Choose a file whose name ends in .zim."
+        }
+        "DUPLICATE_DOCUMENT_NAME" => {
+            "Two of the chosen files have the same name. Import them one at a time."
+        }
+        "NATIVE_OPERATION_BUSY" => {
+            "Another file action is still open. Finish or cancel it, then try again."
+        }
+        "DOCUMENT_PERMISSION_DENIED" | "PROVIDER_PERMISSION_DENIED" => {
+            "Android did not let Kiwix read that file. Choose it again."
+        }
+        "TEXT_DOCUMENT_TOO_LARGE" => "That file is too large to import. Choose a smaller file.",
+        "EXPORT_DESTINATION_NOT_EMPTY" => {
+            "Kiwix does not overwrite an existing file. Save it under a new name."
+        }
+        "EXPORT_CANCELLED_PARTIAL" => {
+            "Saving stopped before the file was complete. Delete the unfinished file, then save again."
+        }
+        "STAGING_COPY_BUDGET_EXCEEDED" => {
+            "That is too much to import at once. Import fewer files at a time."
+        }
+        "STAGING_DURABILITY_ERROR" | "EXPORT_DURABILITY_ERROR" => {
+            "The file could not be saved completely. Check the free space on this device, then try again."
+        }
+        "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT" => {
+            "That file is not available right now. Reconnect its storage and try again, or import a copy."
+        }
+        "PROVIDER_UNAVAILABLE_USE_COPY_IMPORT"
+        | "PROVIDER_NOT_SEEKABLE_USE_COPY_IMPORT"
+        | "SCANNED_ARCHIVE_UNAVAILABLE" => {
+            "That file cannot be read where it is. Import a copy into Kiwix instead."
+        }
+        "PROVIDER_CANNOT_REMEMBER_USE_COPY_IMPORT" => {
+            "Android will not let Kiwix keep access to that location. Import a copy into Kiwix instead."
+        }
+        "PROVIDER_INCOMING_CHOOSE_ORIGINAL_OR_COPY" => {
+            "This file cannot be opened from its current location. Add a copy to your library, or choose the original file in Files."
+        }
+        "DOCUMENT_PICKER_FAILED"
+        | "DOCUMENT_PICKER_EMPTY_RESULT"
+        | "DOCUMENT_URI_REQUIRED"
+        | "DOCUMENT_METADATA_UNAVAILABLE"
+        | "DOCUMENT_STREAM_UNAVAILABLE"
+        | "DOCUMENT_TREE_UNAVAILABLE" => "The file could not be opened. Choose it again.",
+        "DOCUMENT_PROVIDER_STILL_LOADING" => {
+            "That folder is still loading. Wait a moment, then try again."
+        }
+        "SCAN_RESULT_EXPIRED" => "That scan result is out of date. Scan again, then choose the file.",
+        "SCAN_ALREADY_RUNNING" => "A scan is already running. Wait for it to finish.",
+        "VISIBLE_ACTIVITY_REQUIRED" => "Bring Kiwix back to the screen, then try again.",
+        "ACTIVITY_RECREATED" => "Kiwix restarted its window before this finished. Start it again.",
+        "ACTIVITY_DESTROYED" | "STALE_ACTIVITY_GENERATION" => {
+            "Kiwix was closed before this finished. Open Kiwix and try again."
+        }
+        "TRANSFER_FOREGROUND_START_FAILED" | "TRANSFER_FOREGROUND_START_TIMEOUT" => {
+            "Android did not let the download keep running in the background. Keep Kiwix open, then try again."
+        }
+        "TRANSFER_START_PENDING" | "TRANSFER_START_CANCELLED" | "TRANSFER_CONTROL_PENDING" => {
+            "Downloads were just paused or are still starting. Wait a moment, then try again."
+        }
+        _ => return None,
+    })
+}
+
+/// One sentence for an Android failure. No code, JSON or Java class name
+/// survives, except a bare code of the families the shell localizes itself.
+fn android_plain(failure: &AndroidFailure, original: &str) -> String {
+    let Some(code) = failure.code.as_deref() else {
+        // Java exception text with no status code is never copy for a person.
+        eprintln!("KIWIX_NATIVE_ERROR uncoded");
+        return TRY_AGAIN.to_owned();
+    };
+    if let Some(text) = speech_message(code) {
+        return text.to_owned();
+    }
+    if let Some(text) = android_message(code, &failure.detail) {
+        return text.to_owned();
+    }
+    if shell_owned_code(code) {
+        // The shell reads every bracketed form itself, including a sentence the
+        // plugin wrote beside the code; only the Java wrapping is removed here.
+        return if failure.bracketed {
+            original.to_owned()
+        } else {
+            code.to_owned()
+        };
+    }
+    // The code names the failure for a local log; the payload may name a
+    // person's file and is not logged.
+    eprintln!("KIWIX_NATIVE_ERROR {code}");
+    TRY_AGAIN.to_owned()
+}
+
 /// JSON envelopes from the iOS plugin carry a code and recovery details.
 fn envelope_code(message: &str) -> Option<String> {
     let trimmed = message.trim();
@@ -152,6 +391,9 @@ pub fn plain(message: &str) -> String {
         if let Some(text) = native_message(&code) {
             return text.to_owned();
         }
+    }
+    if let Some(failure) = android_failure(trimmed) {
+        return android_plain(&failure, trimmed);
     }
     if let Some(text) = native_message(trimmed) {
         return text.to_owned();
