@@ -188,3 +188,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 - also stopped: adv-apple (a3939…), android (afedc…).
 - also stopped: shell (a5b1f…).
 - also stopped: net (a5a56…).
+- also stopped: transfers (a10ec…).
