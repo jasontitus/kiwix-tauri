@@ -389,13 +389,14 @@ function reader({ cssHighlights = true } = {}) {
   Object.defineProperty(context.WheelEvent.prototype, "deltaY", { get() { return 0; } });
   vm.runInContext(bridge, context, { filename: "reader-bridge.js" });
 
-  function receive(data) {
+  function receive(data, event = {}) {
     for (const callback of windowListeners.get("message") ?? [])
       callback({
         source: window.parent,
         origin: parentOrigin,
         isTrusted: true,
         data: { channel: "kiwix-reader", version: 1, sessionId, ...data },
+        ...event,
       });
   }
   function emit(name, event = {}) {
@@ -421,6 +422,8 @@ function reader({ cssHighlights = true } = {}) {
       receive({ type: "reader-init" });
     },
     command(message) { receive({ type: "reader-command", ...message }); },
+    receive,
+    speechSynthesis,
     setSelection(selection) { currentSelection = selection; },
     setRangeRect(rect) { rangeRect = rect; },
     emit,
@@ -732,6 +735,129 @@ test("background visibility clears paint but keeps the mapping for return", () =
     offset: frame.speechText().text.indexOf("Second"),
   });
   assert.deepEqual(frame.highlightRanges("kiwix-read-aloud"), ["Second sentence!"]);
+});
+
+test("a hidden window keeps desktop read-aloud going and only drops its paint", () => {
+  // Minimising or covering the window hides the document; reading must not end.
+  const frame = article();
+  frame.command({ command: "speak", rate: 1, voice: "", lang: "en" });
+  const utterance = frame.utterances.at(-1);
+  utterance.onstart();
+  assert.equal(frame.highlights.has("kiwix-read-aloud"), true);
+  let cancelled = 0;
+  const cancel = frame.speechSynthesis.cancel;
+  frame.speechSynthesis.cancel = () => { cancelled += 1; cancel(); };
+  const before = frame.messages.length;
+
+  frame.document.hidden = true;
+  frame.emit("visibilitychange");
+  assert.equal(cancelled, 0, "the utterance is not cancelled");
+  assert.equal(frame.speechSynthesis.speaking, true);
+  assert.deepEqual(frame.messages.slice(before).filter((message) => message.type === "speech-state"), [],
+    "the shell is not told that reading stopped");
+  assert.equal(frame.highlights.has("kiwix-read-aloud"), false, "the read-along paint is dropped while hidden");
+
+  // The same utterance is still the live one: its next boundary repaints.
+  frame.document.hidden = false;
+  frame.emit("visibilitychange");
+  utterance.onboundary({ charIndex: utterance.text.indexOf("Second") });
+  assert.deepEqual(frame.highlightRanges("kiwix-read-aloud"), ["Second sentence!"]);
+  // An explicit stop still ends it.
+  frame.command({ command: "stop-speech" });
+  assert.equal(cancelled, 1);
+  assert.deepEqual(frame.messages.at(-1).type, "speech-state");
+  assert.equal(frame.messages.at(-1).speaking, false);
+});
+
+function heading(tag, title, attributes = {}) {
+  return Object.assign(element(tag, { attributes }), { textContent: title, id: attributes.id ?? "" });
+}
+
+test("the contents list names every entry and skips blank or hidden headings", () => {
+  const frame = reader();
+  const headings = [
+    heading("h1", "Earth"),
+    heading("h2", ""),
+    heading("h2", " \n "),
+    heading("h2", "Hidden", { hidden: "" }),
+    heading("h2", "Screen-reader hidden", { "aria-hidden": "true" }),
+    heading("h2", "History", { id: "History" }),
+    heading("h3", "Formation"),
+  ];
+  frame.document.querySelectorAll = (selector) => selector === "h1,h2,h3,h4,h5,h6" ? headings : [];
+  frame.start();
+  // Values cross the vm realm; compare their plain data.
+  const toc = JSON.parse(JSON.stringify(frame.messages.find((message) => message.type === "ready").toc));
+  assert.deepEqual(toc, [
+    { id: "kiwix-heading-0", title: "Earth", level: 1 },
+    { id: "History", title: "History", level: 2 },
+    { id: "kiwix-heading-6", title: "Formation", level: 3 },
+  ]);
+  assert.ok(toc.every((entry) => entry.title.trim()), "no entry is an unnamed button");
+  // Generated ids are those of the full heading list, so a jump still finds its heading.
+  assert.equal(headings[6].id, "kiwix-heading-6");
+});
+
+test("the bridge proves an unchanged document only for the session it holds, with its private token", () => {
+  const nonce = randomUUID();
+  const fresh = reader();
+  fresh.receive({ type: "document-probe", nonce });
+  assert.deepEqual(fresh.messages.map((message) => message.type), ["reading-gesture-hello"],
+    "a document that was never handed a session proves nothing");
+
+  const frame = article();
+  const hello = frame.messages.find((message) => message.type === "reading-gesture-hello");
+  const bound = frame.messages.find((message) => message.type === "reading-pan-bind");
+  assert.equal(bound.token, hello.token, "the session is bound to the token announced at bootstrap");
+  const before = frame.messages.length;
+  frame.receive({ type: "document-probe", nonce, sessionId: "another-session" });
+  frame.receive({ type: "document-probe", nonce: "not-a-nonce" });
+  frame.receive({ type: "document-probe", nonce }, { source: {} });
+  frame.receive({ type: "document-probe", nonce }, { origin: archiveOrigin });
+  frame.receive({ type: "document-probe", nonce }, { isTrusted: false });
+  assert.equal(frame.messages.length, before, "foreign, malformed and forged probes are not answered");
+  frame.receive({ type: "document-probe", nonce });
+  assert.deepEqual(JSON.parse(JSON.stringify(frame.messages.slice(before))), [{
+    channel: "kiwix-reader", version: 1, type: "document-proof", sessionId, nonce, token: hello.token,
+  }]);
+  // A replacement session ends the old one's proofs.
+  frame.receive({ type: "reader-init", sessionId: "replacement-session" });
+  const after = frame.messages.length;
+  frame.receive({ type: "document-probe", nonce });
+  assert.equal(frame.messages.length, after);
+});
+
+function click(frame, href, { trusted = true, type = "click", button = 0 } = {}) {
+  const anchor = { namespaceURI: "http://www.w3.org/1999/xhtml", localName: "a", url: href, target: "" };
+  const event = {
+    type, button, isTrusted: trusted, defaultPrevented: false, target: { closest: () => anchor },
+    composedPath: () => [], preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() {},
+  };
+  const before = frame.messages.length;
+  frame.emit(type, event);
+  return { event, posted: frame.messages.slice(before) };
+}
+
+test("links the app cannot open stay blocked and are answered with a notice request, not an external-link", () => {
+  const frame = article();
+  for (const href of ["tel:+15550100", "sms:+15550100", "geo:48.85,2.35", "data:text/plain,hello"]) {
+    for (const [type, button] of [["click", 0], ["auxclick", 1]]) {
+      const { event, posted } = click(frame, href, { type, button });
+      assert.equal(event.defaultPrevented, true, `${href} never navigates the frame (${type})`);
+      assert.deepEqual(posted.map((message) => message.type), ["unsupported-link"], `${href} (${type})`);
+      assert.deepEqual(Object.keys(posted[0]).sort(), ["channel", "sessionId", "type", "version"],
+        "the notice request carries no address");
+    }
+  }
+  // Page controls and script-made clicks are blocked silently.
+  assert.deepEqual(click(frame, "javascript:void(0)").posted, []);
+  assert.deepEqual(click(frame, "tel:+15550100", { trusted: false }).posted, []);
+  // Supported external schemes still ask the shell to confirm.
+  for (const href of ["https://example.org/page", "mailto:reader@example.org"]) {
+    const { event, posted } = click(frame, href);
+    assert.equal(event.defaultPrevented, true);
+    assert.deepEqual(posted.map((message) => [message.type, message.url]), [["external-link", href]]);
+  }
 });
 
 test("navigation and pagehide clear the highlight", () => {

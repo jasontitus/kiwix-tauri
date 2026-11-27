@@ -4,8 +4,11 @@
  * Refresh inherited resources only explicitly: generate --qt-root=../kiwix-desktop/resources/i18n --apple-root=../kiwix-apple
  *        node scripts/localization.mjs translate [--locales=fr,de] [--concurrency=4]
  *        node scripts/localization.mjs audit [--dom-snapshot=/path/to/snapshot.json]
+ *        node scripts/localization.mjs inventory
  * Community translations retain priority. Machine output is unreviewed, never native-reviewed.
  * Missing inherited translations fall back to English; missing NEW copy fails the audit.
+ * `inventory` is the part of the audit that must always pass: every UI string in the
+ * sources is collected in manifest.json. It reads only and never reports the fallback gaps.
  * Generation publishes one messages/<BCP47>.json per locale. Runtime statically imports English
  * plus locale-index.json; Vite lazily loads other bundled locales without online translation.
  * whenLocaleReady() and document.documentElement.dataset.localeReady expose chunk readiness.
@@ -236,7 +239,9 @@ async function walk(dir) {
     )
   ).flat();
 }
-async function inventory() {
+/** Library names shown verbatim; a product name is not translatable copy. */
+const productNames = new Set(["Zimru", "zimfile-xapian"]);
+export async function inventory(directory = path.join(root, "src")) {
   const sources = new Set();
   for (const file of await fs.readdir(out).catch(() => []))
     if (/^extra-en-.*\.json$/.test(file))
@@ -254,7 +259,7 @@ async function inventory() {
   const dynamic = [];
   const untranslated = [];
   const invalidCounts = [];
-  for (const file of await walk(path.join(root, "src"))) {
+  for (const file of await walk(directory)) {
     if (!/\.(tsx?|jsx?)$/.test(file) || file.endsWith("i18n.tsx")) continue;
     const source = ts.createSourceFile(
       file,
@@ -323,6 +328,7 @@ async function inventory() {
       if (
         ts.isJsxText(node) &&
         /\p{L}/u.test(node.text.trim()) &&
+        !productNames.has(node.text.trim()) &&
         node.parent?.openingElement?.tagName?.getText(source) !== "kbd"
       )
         untranslated.push({ location, text: node.text.trim() });
@@ -341,6 +347,17 @@ async function inventory() {
     visit(source);
   }
   return { sources: [...sources].sort(), dynamic, untranslated, invalidCounts };
+}
+/** UI copy the generated manifest does not account for. A source that only lacks a
+ * translation is not reported here: it falls back to English by documented policy.
+ */
+export function inventoryFailures(manifest, { sources, dynamic, untranslated }) {
+  const collected = new Set(manifest.sources);
+  return [
+    ...sources.filter((key) => !collected.has(key)).map((key) => "Uncollected UI key: " + key),
+    ...dynamic.map((location) => "Dynamic t() source cannot be inventoried: " + location),
+    ...untranslated.map((entry) => "Untranslated JSX at " + entry.location + ": " + entry.text),
+  ];
 }
 async function generate() {
   const previous = await json(path.join(out, "manifest.json"));
@@ -939,15 +956,9 @@ async function translate() {
 async function audit() {
   const manifest = await json(path.join(out, "manifest.json"));
   const catalogs = await json(path.join(out, "catalogs.json"));
-  const { sources, dynamic, untranslated, invalidCounts } = await inventory();
-  const failures = [];
-  for (const key of sources)
-    if (!manifest.sources.includes(key))
-      failures.push("Uncollected UI key: " + key);
-  for (const location of dynamic)
-    failures.push("Dynamic t() source cannot be inventoried: " + location);
-  for (const entry of untranslated)
-    failures.push("Untranslated JSX at " + entry.location + ": " + entry.text);
+  const found = await inventory();
+  const { sources, invalidCounts } = found;
+  const failures = inventoryFailures(manifest, found);
   for (const location of invalidCounts)
     failures.push(
       "Plural messages require an unformatted numeric count: " + location,
@@ -1001,11 +1012,24 @@ async function audit() {
   );
   if (failures.length) process.exitCode = 1;
 }
+async function checkInventory() {
+  const failures = inventoryFailures(
+    await json(path.join(out, "manifest.json")), await inventory(),
+  );
+  console.log(JSON.stringify({ failures }, null, 2));
+  if (failures.length) {
+    console.error(
+      "The localization inventory is out of date or UI copy bypasses it. For uncollected keys run `node scripts/localization.mjs generate` and commit the result.",
+    );
+    process.exitCode = 1;
+  }
+}
 const command = process.argv[2];
 if (command === "generate") await generate();
 else if (command === "translate") await translate();
 else if (command === "audit") await audit();
+else if (command === "inventory") await checkInventory();
 else if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  console.error("Usage: localization.mjs generate|translate|audit");
+  console.error("Usage: localization.mjs generate|translate|audit|inventory");
   process.exitCode = 2;
 }

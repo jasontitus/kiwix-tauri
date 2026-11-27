@@ -230,12 +230,59 @@ test("root capacity backpressure retries an accepted write instead of losing it"
   assert.equal(failed(), false);
 });
 
-test("a resumed BFCache document regains its own credit with its queued batch charged", async () => {
+test("a navigation closes the outgoing document's stream through its successor, not by self-report", async () => {
   let releaseWrite;
   const writeGate = new Promise((resolve) => { releaseWrite = resolve; });
   const root = storage({ api: () => writeGate.then(() => ({ status: "committed" })) });
   const producer = frame();
-  assert.equal(typeof root.registerReaderStorage(producer.source, binding()), "function");
+  const frameNode = {
+    isConnected: true, contentWindow: producer.source,
+    addEventListener() {}, removeEventListener() {},
+  };
+  assert.equal(typeof root.registerReaderStorage(producer.source, binding(), frameNode), "function");
+  ready(root, producer, documentId(1));
+  const batch = {
+    id: batchId(1), documentId: documentId(1), sequence: 1,
+    operations: [{ kind: "local-set", key: "key", value: "value" }],
+  };
+  root.window.dispatchEvent({
+    type: "message", origin: archiveOrigin, source: producer.source,
+    data: { type: "kiwix-storage-batch", privacyGeneration: 0, batch },
+  });
+  // The stream closes the way a real navigation closes it: the outgoing
+  // document's pagehide notice, its same-origin successor's ready, and the
+  // root fence that follows. No producer ever announces its own closure.
+  root.window.dispatchEvent({
+    type: "message", origin: archiveOrigin, source: producer.source,
+    data: { type: "kiwix-storage-hiding", documentId: documentId(1), sequence: 1, privacyGeneration: 0 },
+  });
+  ready(root, producer, documentId(9));
+  await turn();
+  // A closed stream has no allowance left: a further batch from the hidden
+  // document is refused instead of being queued behind the first.
+  producer.messages.length = 0;
+  root.window.dispatchEvent({
+    type: "message", origin: archiveOrigin, source: producer.source,
+    data: { type: "kiwix-storage-batch", privacyGeneration: 0, batch: {
+      id: batchId(2), documentId: documentId(1), sequence: 2,
+      operations: [{ kind: "local-set", key: "late", value: "value" }],
+    } },
+  });
+  assert.ok(producer.messages.some((message) =>
+    message.type === "kiwix-storage-failed" && message.documentId === documentId(1)),
+    "the navigation closed the outgoing stream");
+});
+
+test("a BFCache restore reopens a stream that navigation closed, with its queued batch charged", async () => {
+  let releaseWrite;
+  const writeGate = new Promise((resolve) => { releaseWrite = resolve; });
+  const root = storage({ api: () => writeGate.then(() => ({ status: "committed" })) });
+  const producer = frame();
+  const frameNode = {
+    isConnected: true, contentWindow: producer.source,
+    addEventListener() {}, removeEventListener() {},
+  };
+  assert.equal(typeof root.registerReaderStorage(producer.source, binding(), frameNode), "function");
   ready(root, producer, documentId(1));
   const batch = {
     id: batchId(1), documentId: documentId(1), sequence: 1,
@@ -247,12 +294,15 @@ test("a resumed BFCache document regains its own credit with its queued batch ch
   });
   root.window.dispatchEvent({
     type: "message", origin: archiveOrigin, source: producer.source,
-    data: { type: "kiwix-storage-closed", documentId: documentId(1), sequence: 1 },
+    data: { type: "kiwix-storage-hiding", documentId: documentId(1), sequence: 1, privacyGeneration: 0 },
   });
+  ready(root, producer, documentId(9));
+  await turn();
   producer.messages.length = 0;
   // BFCache restore replays ready with the persisted document identity.
   ready(root, producer, documentId(1), 1);
-  const credit = producer.messages.find((message) => message.type === "kiwix-storage-credit");
+  const credit = producer.messages.find((message) =>
+    message.type === "kiwix-storage-credit" && message.documentId === documentId(1));
   assert.ok(credit, "the restored document receives a credit snapshot");
   assert.equal(credit.bytes, 2 * 1024 * 1024 - batchBytes(batch));
   assert.equal(credit.sequence, 0);

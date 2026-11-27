@@ -265,6 +265,37 @@ impl Service {
                 }
                 value(result?)
             }
+            "edition_discard_original" => {
+                let transaction_id = text(args,"transactionId")?.to_owned();
+                let original = self.store.read()?.edition_transactions.into_iter()
+                    .find(|transaction| transaction.id==transaction_id).ok_or("Unknown edition transaction")?.original;
+                let _sources = self.localswarm_source_mutation(Some(&original.metadata.id)).await?;
+                let sharing = self.sharing.lock().await;
+                if Self::selected_share_serves(&sharing,&original.metadata.id) || self.active_torrent_share(&original.metadata.id)?.is_some() {
+                    return Err("Stop sharing this archive before deleting its original edition".into());
+                }
+                // Held across the deletion and its record, as rollback holds it across its commit.
+                let readers = self.readers.lock().await;
+                self.ensure_window_active(label)?;
+                self.ensure_generation(args)?;
+                let trash = self.store.settings()?.trash_deleted_files;
+                let service = self.clone();
+                let result = blocking(move || service.editions.discard_original(&service.store,&transaction_id,trash)).await;
+                #[cfg(windows)]
+                let result = result.map_err(crate::storage::explain_in_use);
+                let (transaction, file) = result?;
+                drop(readers);
+                drop(sharing);
+                self.notify_library_changed();
+                // A provider original that nothing retains any more gives its grant back.
+                #[cfg(mobile)]
+                if let Some(reference) = transaction.original.source_reference.clone() {
+                    if !self.store.retains_provider_reference(&reference.reference)? {
+                        blocking(move || crate::provider_reference::forget_registered(&reference)).await?;
+                    }
+                }
+                Ok(json!({"transaction":transaction,"originalFile":file}))
+            }
             _ => Err("Unknown edition operation".into()),
         }
     }

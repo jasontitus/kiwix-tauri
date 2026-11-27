@@ -687,12 +687,6 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
     documentStream.hiding = true;
     const frame = activeFrames.get(source);
     if (frame) void settleLoadedDocuments(source, frame);
-  } else if (
-    message.type === "kiwix-storage-closed" &&
-    fields(message, ["type", "documentId", "sequence"])
-  ) {
-    if (documentStream && message.sequence === documentStream.sequence)
-      closeStream(documentStream);
   } else if (message.type === "kiwix-storage-batch") {
     if (binding.privacyGeneration < privacyGeneration) {
       if (!binding.retirementReported) {

@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { t } from "./i18n";
-import { isSuspendedError, parseProviderDocumentError, parseSuspendedError, SuspendedError } from "./error-visibility";
+import { isSuspendedError, parseProviderDocumentError, parseSuspendedError, SuspendedError, UserCancelledError } from "./error-visibility";
 import {
   ForegroundQueue,
   retrySuspended,
@@ -1100,7 +1100,13 @@ export function parseDiskSpaceWarning(error: unknown): DiskSpaceWarning | null {
   }
 }
 
-type DiskSpaceConfirmationHandler = (warning: DiskSpaceWarning) => Promise<boolean>;
+/**
+ * `declined` is only the user's own answer to the prompt. A prompt that could
+ * not be shown, or that the lifecycle withdrew, is `unavailable`: the caller
+ * must not treat that as a choice the user made.
+ */
+export type DiskSpaceDecision = "accepted" | "declined" | "unavailable";
+type DiskSpaceConfirmationHandler = (warning: DiskSpaceWarning) => Promise<DiskSpaceDecision>;
 let diskSpaceConfirmation: DiskSpaceConfirmationHandler | null = null;
 
 /** Only the trusted root mounts the app-owned confirmation surface. */
@@ -1110,11 +1116,16 @@ export function registerDiskSpaceConfirmation(handler: DiskSpaceConfirmationHand
   return () => { if (diskSpaceConfirmation === handler) diskSpaceConfirmation = null; };
 }
 
-export async function confirmDiskSpaceWarning(warning: DiskSpaceWarning): Promise<boolean> {
+async function decideDiskSpaceWarning(warning: DiskSpaceWarning): Promise<DiskSpaceDecision> {
   const context = capturePrivacyContext();
-  if (!diskSpaceConfirmation || !context || context.privateMode || context.readOnly) return false;
-  const accepted = await diskSpaceConfirmation(warning);
-  return accepted && isPrivacyContextCurrent(context);
+  if (!diskSpaceConfirmation || !context || context.privateMode || context.readOnly) return "unavailable";
+  const decision = await diskSpaceConfirmation(warning);
+  // Consent given under an earlier privacy generation authorizes nothing.
+  return decision === "accepted" && !isPrivacyContextCurrent(context) ? "unavailable" : decision;
+}
+
+export async function confirmDiskSpaceWarning(warning: DiskSpaceWarning): Promise<boolean> {
+  return (await decideDiskSpaceWarning(warning)) === "accepted";
 }
 
 async function request<T>(
@@ -1156,9 +1167,13 @@ async function request<T>(
       !isPrivacyContextCurrent(context)
     )
       throw error;
-    const accepted = await confirmDiskSpaceWarning(warning);
+    const decision = await decideDiskSpaceWarning(warning);
     checkAdmission();
-    if (!accepted || !isPrivacyContextCurrent(context))
+    // Declining the prompt is the user's own choice, not a failed download:
+    // callers neither paint nor record it. Every other refusal stays an error.
+    if (decision === "declined")
+      throw new UserCancelledError(t("Download cancelled."));
+    if (decision !== "accepted" || !isPrivacyContextCurrent(context))
       throw new Error(t("Download cancelled."));
     // Exactly one retry, only after explicit consent. Any second warning or
     // persistence/network/consent error propagates to the caller unchanged.

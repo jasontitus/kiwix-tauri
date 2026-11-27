@@ -17,6 +17,7 @@ import type { Book, CatalogEntry, Settings, TabLocation } from "../types";
 import {
   ERROR_SITES,
   isSuspendedError,
+  isUserCancelledError,
   type ErrorSeverity,
 } from "../error-visibility";
 import { diagnostics } from "../diagnostics";
@@ -41,43 +42,78 @@ const bareFilesystemPath = new RegExp(
 export function pathFileName(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").split("/").pop() || t("File");
 }
-export function errorText(error: unknown): string {
-  // A suspended command is a lifecycle gate that the API boundary retries on
-  // resume. It has no failure text, so no caller can paint a card for it.
-  if (isSuspendedError(error)) return "";
-  const message = error instanceof Error ? error.message : String(error);
-  // Never paint a bare serialization/internal token in the red band. These
-  // values carry no action for a reader and usually mean a caller passed the
-  // wrong shape across a boundary.
-  if (["data", "error", "undefined", "null", "object", "[object object]"].includes(message.trim().toLowerCase()))
-    return t("That action did not finish. Try again.");
-  const nearby = (() => {
-    switch (message.trim()) {
+// A native status code: upper-case words joined by underscores. One upper-case
+// word in a sentence ("HTTP", "ZIM") is not a code.
+const NATIVE_CODE = "[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+";
+const nativeCodeOnly = new RegExp(`^${NATIVE_CODE}$`);
+// The forms a code reaches the renderer in: bare (iOS and Rust); as Tauri
+// prints an Android plugin rejection, "[CODE] - CODE" or "[CODE] - sentence"
+// (and "[sentence] - CODE" where the plugin passed them the other way round);
+// and any of those after one Rust sentence ending in a colon.
+const nativeCodeForms = new RegExp(
+  String.raw`^(?:([^\r\n]*\S:)[ \t]+)?(?:\[(${NATIVE_CODE})\](?:[ \t]+-[ \t]+(\S[^\r\n]*))?|\[([^\]\r\n]+)\][ \t]+-[ \t]+(${NATIVE_CODE})|(${NATIVE_CODE}))$`,
+);
+// Families produced only by the Nearby/Bluetooth/temporary Wi-Fi bridges.
+const nearbyCodeFamily = /^(?:NEARBY|BLE|JOIN|HOTSPOT|LOCAL_NETWORK)_/;
+// Only failures of the bytes a Nearby sender offers: a received chunk that
+// does not match the sender's manifest, or the shared archive changing or
+// failing its own check. Every other verification, interruption and import
+// message keeps its own instruction (scripts/test-error-visibility.mjs ties
+// this list to the Rust producers).
+const senderVerificationFailure =
+  /LocalSwarm chunk checksum mismatch|LocalSwarm source changed or returned corrupt bytes|Verified LocalSwarm source changed|LocalSwarm source parts must exactly cover the ZIM checksum boundary/;
+
+function nearbyCodeText(code: string): string | null {
+  switch (code) {
     case "BLE_CONNECT_TIMEOUT":
     case "BLE_CONNECT_FAILED":
     case "BLE_DISCONNECTED":
+    case "BLE_PACKET_INVALID":
+    case "BLE_READ_FAILED":
+    case "BLE_WRITE_FAILED":
+    case "BLE_SEND_TIMEOUT":
+    case "BLE_SUBSCRIBE_FAILED":
     case "NEARBY_BLUETOOTH_CONNECT_TIMEOUT":
+    case "NEARBY_BLUETOOTH_CONNECT_FAILED":
     case "NEARBY_BLUETOOTH_DISCONNECTED":
     case "NEARBY_BLUETOOTH_MTU_CHANGED":
     case "NEARBY_BLUETOOTH_INVALID_PACKET":
     case "NEARBY_BLUETOOTH_INVALID_SUBSCRIPTION":
     case "NEARBY_BLUETOOTH_SUBSCRIBE_TIMEOUT":
+    case "NEARBY_BLUETOOTH_SUBSCRIBE_FAILED":
+    case "NEARBY_BLUETOOTH_UNSUBSCRIBED":
+    case "NEARBY_BLUETOOTH_SEND_FAILED":
+    case "NEARBY_BLUETOOTH_SEND_TIMEOUT":
       return t("The other device stopped responding. Keep Nearby open on both devices, move them closer, and try again.");
     case "BLE_PEER_UNAVAILABLE":
     case "NEARBY_BLUETOOTH_STALE_PEER":
       return t("That device is no longer nearby. Refresh the list and try again.");
     case "BLE_FOREGROUND_REQUIRED":
+    case "BLE_BACKGROUND":
     case "NEARBY_BLUETOOTH_FOREGROUND_REQUIRED":
       return t("Keep Kiwix open on this device while sharing.");
+    case "BLE_POWERED_OFF":
+    case "NEARBY_BLUETOOTH_UNAVAILABLE":
+      return t("Bluetooth is off. Turn on Bluetooth, then try again.");
+    case "BLE_PERMISSION_DENIED":
+      return t("Allow Bluetooth access for Kiwix in the device settings, then try again.");
+    case "BLE_PERMISSION_TIMEOUT":
+      return t("Bluetooth access is still waiting for approval. Try again.");
     case "BLE_ADVERTISE_FAILED":
     case "BLE_SERVICE_FAILED":
+    case "BLE_RESET":
+    case "BLE_UNAVAILABLE":
     case "NEARBY_BLUETOOTH_ADVERTISE_FAILED":
     case "NEARBY_BLUETOOTH_SERVICE_FAILED":
+    case "NEARBY_BLUETOOTH_START_TIMEOUT":
       return t("Bluetooth sharing could not start. Turn Bluetooth off and on, then try again.");
+    case "BLE_UNSUPPORTED":
+    case "NEARBY_BLUETOOTH_UNSUPPORTED":
     case "NEARBY_BLUETOOTH_PERIPHERAL_UNSUPPORTED":
       return t("This device cannot share over Bluetooth. Use the same local network instead.");
     case "NEARBY_BLUETOOTH_LOCATION_SERVICES_REQUIRED":
       return t("Turn on location services to find nearby devices over Bluetooth.");
+    case "BLE_CONNECTION_BUSY":
     case "NEARBY_BLUETOOTH_CONNECTION_LIMIT":
       return t("One nearby connection is already active. Finish or stop it before choosing another device.");
     case "JOIN_ASSOCIATION_UNAVAILABLE_OR_WIFI_INFO_DENIED":
@@ -94,29 +130,51 @@ export function errorText(error: unknown): string {
     case "LOCAL_NETWORK_PERMISSION_TIMEOUT":
     case "LOCAL_NETWORK_PERMISSION_BUSY":
       return t("Local network access is still waiting for approval. Try again.");
+    case "LOCAL_NETWORK_CHANGED":
+    case "LOCAL_NETWORK_REQUIRED":
+    case "MOBILE_LOCAL_NETWORK_BLOCKED":
+    case "NEARBY_ROUTE_LOST":
+    case "NEARBY_ROUTE_UNAVAILABLE":
+    case "NEARBY_ROUTE_UNAVAILABLE_OR_ENDPOINT_NOT_ON_LINK":
+    case "NEARBY_ENDPOINT_NOT_ON_LINK":
+      return t("The local network connection was lost or is not available. Connect both devices to the same Wi-Fi, then try again.");
     case "JOIN_ROUTE_LOST":
+    case "JOIN_ROUTE_CHANGED":
+    case "JOIN_ASSOCIATION_CHANGED":
     case "JOIN_BACKGROUND":
+    case "NEARBY_JOIN_LOST":
+    case "NEARBY_JOIN_ROUTE_CHANGED":
     case "NEARBY_JOIN_UNAVAILABLE":
     case "NEARBY_HOTSPOT_ROUTE_LOST":
     case "NEARBY_ENDPOINT_NOT_ON_HOTSPOT":
       return t("The temporary Wi-Fi connection ended or changed. Keep both apps open and try again.");
+    case "JOIN_ASSOCIATION_QUERY_TIMEOUT":
     case "NEARBY_JOIN_TIMEOUT":
+    case "NEARBY_JOIN_BUSY":
+    case "NEARBY_HOTSPOT_BUSY":
     case "HOTSPOT_START_PENDING":
     case "HOTSPOT_REQUEST_PENDING":
       return t("The temporary Wi-Fi is still starting. Wait a moment and try again.");
     case "HOTSPOT_INCOMPATIBLE_MODE":
     case "HOTSPOT_UNSUPPORTED":
+    case "HOTSPOT_TETHERING_DISALLOWED":
     case "NEARBY_HOTSPOT_UNSUPPORTED":
+    case "NEARBY_JOIN_UNSUPPORTED":
       return t("This device cannot create or join a temporary Wi-Fi network. Use the same Wi-Fi network.");
     case "HOTSPOT_UNAVAILABLE":
+    case "HOTSPOT_FAILED":
     case "HOTSPOT_CONFIGURATION_UNAVAILABLE":
     case "HOTSPOT_START_CANCELLED":
     case "HOTSPOT_RELEASE_FAILED":
+    case "JOIN_CANCELLED":
+    case "NEARBY_JOIN_CANCELLED":
       return t("The temporary Wi-Fi could not start or was cancelled. Try again.");
     case "NEARBY_HOTSPOT_EXACT_INTERFACE_UNAVAILABLE":
       return t("The temporary Wi-Fi is still starting. Wait a moment and try again.");
     case "NEARBY_HOTSPOT_NOT_OWNED":
       return t("The temporary Wi-Fi is not active. Start sharing with Use temporary Wi-Fi again.");
+    case "JOIN_FOREGROUND_REQUIRED":
+    case "NEARBY_ACTIVITY_RETIRED":
     case "NEARBY_VISIBLE_ACTIVITY_REQUIRED":
     case "VISIBLE_ACTIVITY_REQUIRED":
       return t("Keep Kiwix open on this device while connecting.");
@@ -125,16 +183,58 @@ export function errorText(error: unknown): string {
     case "MOBILE_NETWORK_BLOCKED":
       return t("This needs an Internet connection. Connect to Wi-Fi or allow mobile data, then try again.");
     case "NEARBY_BLUETOOTH_NOT_STARTED":
+    case "NEARBY_BLUETOOTH_RETIRED":
+    case "NEARBY_BLUETOOTH_STOPPED":
     case "BLE_OWNER_BUSY":
     case "BLE_OWNER_RETIRED":
+    case "BLE_CONNECTION_RETIRED":
     case "BLE_INVALID_REQUEST":
       return t("Nearby sharing is no longer active. Start it again.");
     default:
       return null;
-    }
-  })();
-  if (nearby) return nearby;
-  if (/checksum|corrupt|source changed|integrity|verification/i.test(message))
+  }
+}
+
+/**
+ * The sentence for a native status code, or null when the message is not one.
+ * A code never stands as the whole message: a mapped code becomes its
+ * instruction, and any other code a generic instruction that keeps the code
+ * for a support request. A sentence that merely contains an upper-case word,
+ * or that the native side already wrote next to an unmapped code, is left
+ * alone.
+ */
+function nativeCodeText(message: string): string | null {
+  const match = nativeCodeForms.exec(message);
+  if (!match) return null;
+  const [, prefix, bracketed, bracketedDetail, swappedDetail, trailing, bare] = match;
+  const code = bracketed ?? trailing ?? bare;
+  const detail = bracketed ? bracketedDetail : swappedDetail;
+  let text = nearbyCodeText(code);
+  if (text === null) {
+    if (detail && detail !== code && !nativeCodeOnly.test(detail)) return null;
+    if (nearbyCodeFamily.test(code))
+      text = t("Nearby could not connect. Try again. ({code})", { code });
+    // After a sentence, only the Nearby families are known to be codes.
+    else if (prefix) return null;
+    else text = t("That action did not finish. Try again. ({code})", { code });
+  }
+  return prefix ? `${prefix} ${text}` : text;
+}
+
+export function errorText(error: unknown): string {
+  // A suspended command is a lifecycle gate that the API boundary retries on
+  // resume, and a cancellation is the user's own choice. Neither has failure
+  // text, so no caller can paint a card for it.
+  if (isSuspendedError(error) || isUserCancelledError(error)) return "";
+  const message = error instanceof Error ? error.message : String(error);
+  // Never paint a bare serialization/internal token in the red band. These
+  // values carry no action for a reader and usually mean a caller passed the
+  // wrong shape across a boundary.
+  if (["data", "error", "undefined", "null", "object", "[object object]"].includes(message.trim().toLowerCase()))
+    return t("That action did not finish. Try again.");
+  const native = nativeCodeText(message.trim());
+  if (native !== null) return native;
+  if (senderVerificationFailure.test(message))
     return t("The sender's archive failed verification. Stop sharing and start again, or download it again from the catalog.");
   if (/Apple QUIC|QUIC connection|left the local link|LocalSwarm (?:route|socket|listener)|LocalSwarm connect timed out/i.test(message))
     return t("The sender stopped sharing or is no longer reachable on this Wi-Fi. Keep both apps open on the same network, then retry the download.");
@@ -208,10 +308,15 @@ export function ErrorNotice({
   onRetry?: () => void;
   onDismiss?: () => void;
 }) {
+  const text = errorText(message);
+  // A lifecycle gate or the user's own cancellation has no failure text; an
+  // alert with nothing in it would only announce an empty error. A notice
+  // that offers a retry stays: its button is the way back.
+  if (!text && !onRetry) return null;
   return (
     <div className="error-notice" role="alert">
       <AlertCircle size={18} />
-      <span>{errorText(message)}{onRetry ? " " : null}</span>
+      <span>{text}{onRetry ? " " : null}</span>
       {onRetry && <button type="button" onClick={onRetry}>{t("Try again")}</button>}
       {onDismiss && (
         <button type="button" className="icon-button" onClick={onDismiss} aria-label={t("Dismiss error")}>
@@ -267,12 +372,18 @@ export function Modal({
   initialFocus,
   describedBy,
   presentation = "panel",
+  role,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   initialFocus?: RefObject<HTMLElement | null>;
   describedBy?: string;
+  /**
+   * An alert dialog interrupts with a message the person must acknowledge;
+   * assistive technology announces its title and description when it opens.
+   */
+  role?: "alertdialog";
   /**
    * Phones present panels as bottom sheets (src/platform.css). A confirmation
    * is a question with two answers, so it keeps the centred dialog every
@@ -304,6 +415,7 @@ export function Modal({
     <dialog
       ref={ref}
       className={presentation === "confirmation" ? "modal modal-confirmation" : "modal"}
+      role={role}
       aria-labelledby={id}
       aria-describedby={describedBy}
       onCancel={(e) => {

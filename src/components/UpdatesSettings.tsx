@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { RefreshCw } from "lucide-react";
 import {
@@ -52,6 +52,9 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
   const [cancelling, setCancelling] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  // Whether the running download was stopped by this user's Cancel, as the
+  // updater itself confirmed. Only then is the rejected install not a failure.
+  const cancelRequest = useRef<Promise<boolean> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -71,6 +74,11 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
     if (!isDesktop) return;
     let disposed = false;
     const unlisteners: (() => void)[] = [];
+    // `listen` resolves after a round trip; cleanup may already have run.
+    const keep = (unlisten: () => void) => {
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
+    };
     void listen<UpdateProgress | null>("kiwix-update-progress", (event) => {
       if (!disposed) {
         setProgress(event.payload);
@@ -78,10 +86,10 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
           setCancelling(false);
         }
       }
-    }).then((unlisten) => unlisteners.push(unlisten));
+    }).then(keep);
     void listen("kiwix-update-available", () => {
       if (!disposed) void refresh();
-    }).then((unlisten) => unlisteners.push(unlisten));
+    }).then(keep);
     return () => {
       disposed = true;
       for (const unlisten of unlisteners) unlisten();
@@ -140,14 +148,19 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
     setInstalling(true);
     setCancelling(false);
     setConfirming(false);
+    cancelRequest.current = null;
     try {
       await api("update_install", {
         version: status.available.version,
         confirmed: true,
         privacyGeneration: context.generation,
       });
+      // Installed. Kiwix restarts through its ordinary Quit, which can be
+      // cancelled; the button must not stay disabled if the app keeps running.
+      setInstalling(false);
     } catch (error) {
-      onError(error);
+      // Stopping the download is the user's own choice, not a failed update.
+      if (!(await cancelRequest.current)) onError(error);
       setInstalling(false);
       setCancelling(false);
       void refresh();
@@ -157,8 +170,10 @@ export default function UpdatesSettings({ currentVersion, onError }: Props) {
   async function cancelDownload() {
     if (cancelling) return;
     setCancelling(true);
+    const request = api<boolean>("update_cancel");
+    cancelRequest.current = request.catch(() => false);
     try {
-      const cancelled = await api<boolean>("update_cancel");
+      const cancelled = await request;
       if (!cancelled) setCancelling(false);
     } catch (error) {
       onError(error);

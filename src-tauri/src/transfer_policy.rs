@@ -157,17 +157,37 @@ impl LocalBinding {
 }
 #[cfg(not(mobile))]
 fn physical_interface(interface: &if_addrs::Interface) -> bool {
-    // Tunnel and point-to-point adapters are never the LAN this receipt names:
-    // Linux reports IFF_POINTOPOINT for wg*/tun*/tap*, and Windows reports its
-    // TUN/TAP adapters as point-to-point too.
-    !interface.is_p2p() && !interface.is_loopback() && !virtual_interface(&interface.name)
+    lan_interface(&interface.name, interface.is_p2p(), interface.is_loopback())
+}
+
+/// The one answer to "is this adapter a real local network another device can
+/// be on?". The peer-locality fence above and the addresses this device
+/// advertises or binds for sharing (`localswarm::network::lan_addresses`) both
+/// ask it, so a tunnel or container bridge cannot be a LAN for one and not
+/// for the other.
+///
+/// Tunnel and point-to-point adapters are never such a LAN: Linux reports
+/// IFF_POINTOPOINT for wg*/tun*/tap*, and Windows reports its TUN/TAP adapters
+/// as point-to-point too.
+pub(crate) fn lan_interface(name: &str, point_to_point: bool, loopback: bool) -> bool {
+    !point_to_point && !loopback && !virtual_interface(name)
+}
+
+/// Carrier data links: Android and Linux modem interfaces and their 464XLAT
+/// siblings. A carrier may hand out a private IPv4 address, so the address
+/// alone cannot tell such a link from Wi-Fi. No nearby device is ever on it.
+/// Apple's `pdp_ip*` is already in the virtual list. This is not part of the
+/// peer-locality fence, which proves the peer's address on-link instead.
+pub(crate) fn cellular_interface(name: &str) -> bool {
+    const CELLULAR: [&str; 7] = ["rmnet", "ccmni", "seth", "ppp", "v4-", "clat", "wwan"];
+    let lower = name.to_ascii_lowercase();
+    CELLULAR.iter().any(|prefix| lower.starts_with(prefix))
 }
 
 /// Names of adapters that are virtual, tunnelled or otherwise not a physical
 /// LAN. macOS prefixes are the ones this fence has always excluded; the rest
 /// cover the common Linux, Windows and container runtimes. A name this list
 /// does not know is admitted only after the address is proven on-link.
-#[cfg(not(mobile))]
 fn virtual_interface(name: &str) -> bool {
     const VIRTUAL: [&str; 9] = ["utun", "bridge", "awdl", "llw", "lo", "gif", "stf", "anpi", "pdp_ip"];
     const VIRTUAL_LINUX: [&str; 20] = [

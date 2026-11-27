@@ -662,6 +662,14 @@ export interface EditionTransaction {
   revision: number;
   rolledBackInstallationId: string | null;
   rollbackBook: Book | null;
+  /** The retained original was deleted or released; it cannot be rolled back to or deleted again. */
+  originalDiscarded: boolean;
+}
+/** Reply of `edition_discard_original`. */
+export interface EditionOriginalDiscarded {
+  transaction: EditionTransaction;
+  /** What happened to the original's file. */
+  originalFile: "deleted" | "trashed" | "missing" | "external";
 }
 export interface EditionStatus {
   intents: EditionIntent[];

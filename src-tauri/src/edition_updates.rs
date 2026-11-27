@@ -87,6 +87,25 @@ pub struct EditionTransaction {
     pub rolled_back_installation_id: Option<String>,
     #[serde(default)]
     pub rollback_book: Option<Book>,
+    /// The person chose to stop keeping the superseded original: its file was
+    /// deleted (or was already gone, or belongs to another app) and it no
+    /// longer reserves its path, its provider grant or a rollback.
+    #[serde(default)]
+    pub original_discarded: bool,
+}
+/// What `edition_discard_original` did with the original's file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DiscardedFile {
+    /// Deleted permanently.
+    Deleted,
+    /// Moved to the system Trash.
+    Trashed,
+    /// Nothing was at the original's location any more; nothing was deleted.
+    Missing,
+    /// The original belongs to another app's document provider, which Kiwix
+    /// cannot delete from; only Kiwix's hold on it was released.
+    External,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +142,12 @@ pub(crate) struct RollbackPreparation {
     source: RetainedSource,
 }
 #[derive(Default)]
-pub(crate) struct EditionManager { decisions: Mutex<HashMap<String, Decision>> }
+pub(crate) struct EditionManager {
+    decisions: Mutex<HashMap<String, Decision>>,
+    /// Serializes a rollback's commit with deleting a retained original, so
+    /// neither can act on a transaction the other is changing.
+    originals: Mutex<()>,
+}
 
 fn writable(state: &State) -> Result<(), String> {
     if state.settings.private_mode || state.settings.read_only {
@@ -485,6 +509,7 @@ impl EditionManager {
         let transaction = state.edition_transactions.iter().find(|entry| entry.id == transaction_id)
             .ok_or("Unknown edition transaction")?.clone();
         if transaction.rolled_back_installation_id.is_some() { return Err("This edition was already rolled back".into()); }
+        if transaction.original_discarded { return Err(ORIGINAL_DISCARDED.into()); }
         let current = state.books.iter().find(|book| book.installation_id == expected_installation
             && book.installation_id == transaction.replacement.installation_id)
             .ok_or("The installed edition changed; rollback cannot overwrite it")?.clone();
@@ -507,6 +532,7 @@ impl EditionManager {
         if prepared.epoch != epoch || prepared.window != window {
             return Err("Edition rollback authorization expired; choose rollback again".into());
         }
+        let _originals = self.originals.lock().map_err(|_| "Edition authorization unavailable")?;
         prepared.source.unchanged()?;
         if prepared.source.identity()? != prepared.transaction.original_identity {
             return Err("Original archive changed after rollback verification".into());
@@ -519,6 +545,58 @@ impl EditionManager {
                 .cloned().ok_or_else(|| "Rollback transaction disappeared".into())
         })
     }
+
+    /// Delete the superseded original of a committed edition and close its
+    /// transaction. Run on a blocking worker: a Trash on another volume copies.
+    /// A rollback cannot commit between the checks here and the deletion.
+    ///
+    /// The file is removed first and the transaction is marked afterwards: an
+    /// interruption in between leaves an open transaction whose original is
+    /// missing, which the next call closes. The opposite order could release
+    /// the original's reservation while its file still exists.
+    pub(crate) fn discard_original(
+        &self, store: &Store, transaction_id: &str, trash: bool,
+    ) -> Result<(EditionTransaction, DiscardedFile), String> {
+        let _originals = self.originals.lock().map_err(|_| "Edition authorization unavailable")?;
+        let state = store.read()?;
+        writable(&state)?;
+        let transaction = state.discardable_original(transaction_id)?.clone();
+        drop(state);
+        let file = remove_original(&transaction, trash)?;
+        let transaction = store.update(|state| {
+            writable(state)?;
+            state.discard_edition_original(&transaction)
+        })?;
+        Ok((transaction, file))
+    }
+}
+const ORIGINAL_DISCARDED: &str = "The original of this edition was deleted, so it can no longer be rolled back";
+/// Re-retain and identity-check the original as rollback does, then delete it
+/// through the library's own deletion path: the exact part cohort the archive
+/// declares, staged by exclusive rename, never a path sweep. Unlike rollback
+/// this does not checksum the content; a damaged original stays deletable.
+fn remove_original(transaction: &EditionTransaction, trash: bool) -> Result<DiscardedFile, String> {
+    let original = &transaction.original;
+    if original.source_reference.is_some() {
+        return Ok(DiscardedFile::External);
+    }
+    // Only an absent name counts as gone. Any other failure is reported, so
+    // an unreadable folder is never mistaken for a deleted file.
+    match std::fs::symlink_metadata(&original.path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(DiscardedFile::Missing),
+        Err(error) => return Err(format!("The original archive could not be checked, so it was not deleted: {error}")),
+        Ok(_) => {}
+    }
+    let source = archive_source::retain(original)
+        .map_err(|error| format!("The original archive could not be checked, so it was not deleted: {error}"))?;
+    if source.identity()? != transaction.original_identity {
+        return Err("The retained original archive changed since this update, so Kiwix did not delete it. Delete the file yourself if you no longer need it, then choose this again".into());
+    }
+    source.unchanged()?;
+    // Windows cannot move a file out from under these handles.
+    drop(source);
+    crate::library_files::delete_book(original, trash)?;
+    Ok(if trash { DiscardedFile::Trashed } else { DiscardedFile::Deleted })
 }
 fn authorize(decision: &Decision, epoch: u64, window: &str) -> Result<(), String> {
     if decision.epoch != epoch || decision.window != window || decision.token.is_empty() {
@@ -653,6 +731,7 @@ impl State {
             id: id.clone(), intent_id: intent.id.clone(), original: intent.target.clone(),
             original_identity: intent.original_identity.clone(), replacement,
             revision, rolled_back_installation_id: None, rollback_book: None,
+            original_discarded: false,
         };
         self.consumed_acquisitions.insert(receipt.into());
         let durable = self.edition_intents.iter_mut().find(|entry| entry.id == intent.id)
@@ -663,9 +742,49 @@ impl State {
         Ok(transaction)
     }
 
+    /// A book that is the discarded original of an edition update. Its file
+    /// is gone or released, so it reserves nothing: not its path for a
+    /// download or an import, and not its provider grant.
+    pub(crate) fn original_discarded(&self, book: &Book) -> bool {
+        self.edition_transactions.iter().any(|transaction| transaction.original_discarded
+            && transaction.original.installation_id == book.installation_id)
+    }
+
+    /// The open transaction whose original may be deleted. A rolled-back
+    /// transaction's original is the installed archive again, and nothing the
+    /// library currently lists may be deleted through this path.
+    fn discardable_original(&self, transaction_id: &str) -> Result<&EditionTransaction, String> {
+        let transaction = self.edition_transactions.iter().find(|entry| entry.id == transaction_id)
+            .ok_or("Unknown edition transaction")?;
+        if transaction.rolled_back_installation_id.is_some() {
+            return Err("This edition was rolled back, so its original is the installed archive. Remove it from the library instead".into());
+        }
+        if transaction.original_discarded { return Err("The original of this edition was already deleted".into()); }
+        let original = &transaction.original;
+        if self.books.iter().any(|book| book.installation_id == original.installation_id
+            || book.path == original.path
+            || book.source_reference.as_ref().zip(original.source_reference.as_ref())
+                .is_some_and(|(installed, retained)| installed.reference == retained.reference)) {
+            return Err("The original of this edition is in the library. Remove it from the library instead".into());
+        }
+        Ok(transaction)
+    }
+
+    pub(crate) fn discard_edition_original(&mut self, expected: &EditionTransaction) -> Result<EditionTransaction, String> {
+        let current = self.discardable_original(&expected.id)?;
+        if current.original != expected.original || current.original_identity != expected.original_identity {
+            return Err("Edition transaction changed; its original was not released".into());
+        }
+        let transaction = self.edition_transactions.iter_mut().find(|entry| entry.id == expected.id)
+            .ok_or("Edition transaction is no longer available")?;
+        transaction.original_discarded = true;
+        Ok(transaction.clone())
+    }
+
     pub(crate) fn rollback_edition(&mut self, expected: &EditionTransaction) -> Result<Book, String> {
         let transaction = self.edition_transactions.iter().find(|entry| entry.id == expected.id)
             .ok_or("Edition transaction is no longer available")?;
+        if transaction.original_discarded { return Err(ORIGINAL_DISCARDED.into()); }
         if transaction.rolled_back_installation_id.is_some()
             || transaction.replacement != expected.replacement || transaction.original != expected.original {
             return Err("Edition transaction changed; rollback was not authorized".into());
@@ -1355,5 +1474,241 @@ mod authorization_tests {
         drop(manager);
         drop(store);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn a_discarded_original_closes_its_transaction_and_refuses_rollback() {
+        let (mut state, intent, verified) = setup(false);
+        let transaction = state.replace_edition(&intent, &verified, "download").unwrap();
+        assert!(!transaction.original_discarded);
+        assert!(!state.original_discarded(&intent.target));
+        // A profile written before this field existed loads as "not discarded".
+        let mut saved = serde_json::to_value(&transaction).unwrap();
+        assert_eq!(saved["originalDiscarded"], false);
+        saved.as_object_mut().unwrap().remove("originalDiscarded");
+        assert_eq!(serde_json::from_value::<EditionTransaction>(saved).unwrap(), transaction);
+
+        let discarded = state.discard_edition_original(&transaction).unwrap();
+        assert!(discarded.original_discarded);
+        assert!(state.original_discarded(&intent.target));
+        assert!(!state.original_discarded(&state.books[0]));
+        state.validate().unwrap();
+        // The current edition and every reference transition are untouched.
+        assert_eq!(state.books[0], transaction.replacement);
+        assert_eq!(state.reference_revision, transaction.revision);
+        let error = state.rollback_edition(&discarded).unwrap_err();
+        assert!(error.contains("was deleted") && error.contains("rolled back"), "{error}");
+        assert_eq!(state.books[0], transaction.replacement);
+        assert!(state.discard_edition_original(&transaction).unwrap_err().contains("already deleted"));
+    }
+
+    #[test]
+    fn an_original_the_library_lists_again_is_never_discarded() {
+        // After a rollback the original is the installed archive.
+        let (mut state, intent, verified) = setup(false);
+        let transaction = state.replace_edition(&intent, &verified, "download").unwrap();
+        state.rollback_edition(&transaction).unwrap();
+        let rolled_back = state.edition_transactions[0].clone();
+        let error = state.discard_edition_original(&rolled_back).unwrap_err();
+        assert!(error.contains("rolled back"), "{error}");
+        assert!(!state.edition_transactions[0].original_discarded);
+
+        // A library row at the original's location, however it got there.
+        let (mut state, intent, verified) = setup(false);
+        let transaction = state.replace_edition(&intent, &verified, "download").unwrap();
+        let mut listed = book("other", "2024-01");
+        listed.path.clone_from(&transaction.original.path);
+        state.books.push(listed);
+        let error = state.discard_edition_original(&transaction).unwrap_err();
+        assert!(error.contains("is in the library"), "{error}");
+        assert!(!state.edition_transactions[0].original_discarded);
+
+        // A transaction whose original was swapped is not the one confirmed.
+        let (mut state, intent, verified) = setup(false);
+        let transaction = state.replace_edition(&intent, &verified, "download").unwrap();
+        let mut forged = transaction.clone();
+        forged.original.path = "/archives/another.zim".into();
+        assert!(state.discard_edition_original(&forged).is_err());
+        assert!(!state.edition_transactions[0].original_discarded);
+    }
+
+    /// The whole command against real files: the superseded original is
+    /// deleted through the library's own deletion path, its name becomes
+    /// available again, and rollback says why it is gone.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn discarding_a_retained_original_deletes_it_and_frees_its_name() {
+        use serde_json::json;
+        use std::{fs, path::Path};
+        let root = std::env::temp_dir().join(format!("kiwix-edition-discard-{}", new_id()));
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let library = root.join("library");
+        fs::create_dir(&library).unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
+        let service = crate::service::Service::new(root.join("profile"), false, false).unwrap();
+        let generation = service.launch_generation();
+        let commit = |name: &str| {
+            let original_path = library.join(format!("{name}-original.zim"));
+            let replacement_path = library.join(format!("{name}-replacement.zim"));
+            fs::copy(&fixture, &original_path).unwrap();
+            fs::copy(&fixture, &replacement_path).unwrap();
+            let mut original = crate::imports::load_book(original_path.to_str().unwrap(), false, false).unwrap();
+            original.metadata.date = "2024-01".into();
+            let mut replacement = original.clone();
+            replacement.path = replacement_path.to_string_lossy().into_owned();
+            replacement.metadata.id = new_id();
+            replacement.metadata.date = "2025-01".into();
+            replacement.installation_id = new_installation_id();
+            let entry: CatalogEntry = serde_json::from_value(json!({
+                "id":format!("urn:uuid:{}", replacement.metadata.id),
+                "title":replacement.metadata.title,"description":replacement.metadata.description,
+                "language":replacement.metadata.language,"creator":replacement.metadata.creator,
+                "publisher":replacement.metadata.publisher,"date":replacement.metadata.date,
+                "name":replacement.metadata.name,"tags":replacement.metadata.tags,
+                "size":replacement.metadata.size,"articleCount":replacement.metadata.article_count,
+                "mediaCount":replacement.metadata.media_count,"url":format!("https://example.org/{name}.zim"),
+                "thumbnailUrl":null,"torrentUrl":null
+            })).unwrap();
+            let receipt = format!("{name}-job");
+            let intent = EditionIntent {
+                id: new_id(),
+                selection: EditionSelection {
+                    source_id: "a".repeat(64), source_url: "https://example.org/catalog".into(),
+                    entry_id: "b".repeat(64), catalog_generation: 1, entry,
+                },
+                lineage_associated: true,
+                target: original.clone(),
+                original_identity: archive_source::retain(&original).unwrap().identity().unwrap(),
+                destination: replacement.path.clone(), download_directory: library.to_string_lossy().into_owned(),
+                download_id: Some(receipt.clone()), receipt: Some(receipt.clone()),
+                status: "ready".into(), verified: Some(replacement.clone()),
+                verified_identity: None, transaction_id: None,
+            };
+            let transaction = service.store.update(|state| {
+                state.settings.trash_deleted_files = false;
+                state.books.retain(|book| book.metadata.id != original.metadata.id);
+                state.books.push(original.clone());
+                state.edition_intents.push(intent.clone());
+                state.replace_edition(&intent, &replacement, &receipt)
+            }).unwrap();
+            // Only the transaction under test may claim this archive's UUID.
+            service.store.update(|state| {
+                state.books.retain(|book| book.installation_id != transaction.replacement.installation_id);
+                Ok(())
+            }).unwrap();
+            (original_path, replacement_path, transaction)
+        };
+        let reserved = |path: &Path| service.store
+            .with_acquisition_destination(path, || -> Result<(), String> { Ok(()) }).is_err();
+        let import = |path: &Path| service.clone().dispatch("import_archives", json!({
+            "paths":[path.to_string_lossy()],"privacyGeneration":generation
+        }));
+        let discard = |id: &str| service.clone().dispatch("edition_discard_original", json!({
+            "transactionId":id,"privacyGeneration":generation
+        }));
+
+        let (original_path, replacement_path, transaction) = commit("first");
+        // While the original is retained its name is reserved and not importable.
+        assert!(reserved(&original_path));
+        let refused = import(&original_path).await.unwrap();
+        assert!(refused["errors"].to_string().contains("edition decision"), "{refused}");
+
+        // A deletion that fails changes nothing: here the Trash is refused under test.
+        service.store.update(|state| { state.settings.trash_deleted_files = true; Ok(()) }).unwrap();
+        let error = discard(&transaction.id).await.unwrap_err();
+        assert!(error.contains("Moving archive to Trash"), "{error}");
+        assert_eq!(fs::read(&original_path).unwrap(), fs::read(&fixture).unwrap());
+        assert!(!service.store.read().unwrap().edition_transactions[0].original_discarded);
+        assert!(reserved(&original_path));
+        service.store.update(|state| { state.settings.trash_deleted_files = false; Ok(()) }).unwrap();
+
+        // An original that changed since the update is not the one retained.
+        let saved = fs::read(&original_path).unwrap();
+        fs::rename(&original_path, library.join("aside.zim")).unwrap();
+        fs::write(&original_path, &saved).unwrap();
+        let error = discard(&transaction.id).await.unwrap_err();
+        assert!(error.contains("changed since this update"), "{error}");
+        assert_eq!(fs::read(&original_path).unwrap(), saved);
+        fs::remove_file(&original_path).unwrap();
+        fs::rename(library.join("aside.zim"), &original_path).unwrap();
+        // Renaming changed the inode's change time, so recorded and current
+        // identity now differ for good: the person deletes such a file, and
+        // the command then only closes the transaction.
+        assert!(discard(&transaction.id).await.unwrap_err().contains("changed since this update"));
+        assert!(original_path.exists());
+
+        // The ordinary case, on a second untouched transaction.
+        let (second_original, second_replacement, second) = commit("second");
+        let reply = discard(&second.id).await.unwrap();
+        assert_eq!(reply["originalFile"], "deleted", "{reply}");
+        assert_eq!(reply["transaction"]["id"], second.id.as_str());
+        assert_eq!(reply["transaction"]["originalDiscarded"], true);
+        assert!(!second_original.exists());
+        assert_eq!(fs::read(&second_replacement).unwrap(), fs::read(&fixture).unwrap());
+        let mut names: Vec<_> = fs::read_dir(&library).unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
+        names.sort();
+        assert_eq!(names, ["first-original.zim", "first-replacement.zim", "second-replacement.zim"],
+            "only the discarded original may be gone, and no staging folder may remain");
+        // Rollback and a second discard are refused, each saying why.
+        let error = service.clone().dispatch("edition_rollback", json!({
+            "transactionId":second.id,"expectedInstallationId":second.replacement.installation_id,
+            "privacyGeneration":generation
+        })).await.unwrap_err();
+        assert!(error.contains("was deleted"), "{error}");
+        assert!(discard(&second.id).await.unwrap_err().contains("already deleted"));
+        // Its name can be published to and imported from again.
+        assert!(!reserved(&second_original));
+        fs::copy(&fixture, &second_original).unwrap();
+        let readmitted = import(&second_original).await.unwrap();
+        assert_eq!(readmitted["errors"], json!([]), "{readmitted}");
+        assert_eq!(readmitted["books"][0]["path"], second_original.to_string_lossy().as_ref());
+        // The retained original of the other transaction is still protected.
+        assert!(reserved(&original_path));
+
+        // A file the person already deleted leaves only the record to close.
+        fs::remove_file(&original_path).unwrap();
+        let reply = discard(&transaction.id).await.unwrap();
+        assert_eq!(reply["originalFile"], "missing", "{reply}");
+        assert_eq!(reply["transaction"]["originalDiscarded"], true);
+        assert!(replacement_path.is_file());
+        assert!(!reserved(&original_path));
+
+        // The decision is durable.
+        service.shutdown().await.unwrap();
+        drop(service);
+        let store = Store::new(root.join("profile")).unwrap();
+        assert!(store.read().unwrap().edition_transactions.iter().all(|saved| saved.original_discarded));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_discarded_provider_original_gives_up_its_capability() {
+        let directory = std::env::temp_dir().join(format!("kiwix-edition-provider-{}", new_id()));
+        std::fs::create_dir(&directory).unwrap();
+        let store = Store::new(directory.clone()).unwrap();
+        let (_, mut intent, verified) = setup(false);
+        let provider = crate::provider_reference::ProviderReference {
+            reference: new_id(), display_name: "original.zim".into(), persistent: true,
+        };
+        intent.target.path = provider.path_marker();
+        intent.target.source_reference = Some(provider.clone());
+        let transaction = store.update(|state| {
+            state.books.push(intent.target.clone());
+            state.edition_intents.push(intent.clone());
+            state.replace_edition(&intent, &verified, "download")
+        }).unwrap();
+        // Both the transaction and its committed intent retain the grant.
+        assert!(store.retains_provider_reference(&provider.reference).unwrap());
+        // Kiwix cannot delete from another app's provider: nothing is deleted,
+        // and the reply says so instead of reporting a deletion.
+        let (discarded, file) = EditionManager::new().discard_original(&store, &transaction.id, false).unwrap();
+        assert_eq!(file, DiscardedFile::External);
+        assert!(discarded.original_discarded);
+        assert!(!store.retains_provider_reference(&provider.reference).unwrap());
+        drop(store);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

@@ -462,11 +462,17 @@ fn replace_urls(value: &str) -> String {
         {
             continue;
         }
-        let end = tail
-            .find(|character: char| {
+        let end = if scheme.eq_ignore_ascii_case("file") {
+            // A file URL is a path and may be written with unencoded spaces.
+            let chars: Vec<char> = value[start..].chars().collect();
+            let length = path_end(&chars, 0);
+            start + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
+        } else {
+            tail.find(|character: char| {
                 character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
             })
-            .map_or(value.len(), |end| colon + 1 + end);
+            .map_or(value.len(), |end| colon + 1 + end)
+        };
         output.push_str(&value[cursor..start]);
         output.push_str(&safe_url(&value[start..end], scheme));
         cursor = end;
@@ -545,14 +551,39 @@ fn path_at(chars: &[char], index: usize) -> Option<usize> {
     if !(windows_drive || unix || tilde || unc) {
         return None;
     }
-    let mut end = index;
-    while end < chars.len()
-        && !chars[end].is_whitespace()
-        && !matches!(chars[end], '"' | '<' | '>' | '`')
-    {
+    Some(path_end(chars, index))
+}
+
+/// Where the redaction of a path that starts at `start` stops.
+///
+/// Folder and file names contain spaces (`C:\Users\Jane Doe\…`,
+/// `/Volumes/Family Backup/…`), so whitespace cannot end a path: stopping there
+/// kept every later component. Only text that cannot continue the path ends
+/// it: a closing double quote, an angle bracket, a backtick, a line break, or
+/// the `: ` that introduces an error's cause. Prose between the path and that
+/// delimiter is dropped with it. Losing those words is the accepted price of
+/// never keeping part of a path. An apostrophe does not end a path, because
+/// names such as `Jane's Backup` contain one.
+fn path_end(chars: &[char], start: usize) -> usize {
+    let mut end = start;
+    while end < chars.len() {
+        let stop = match chars[end] {
+            '\n' | '\r' | '<' | '>' | '`' => true,
+            // Debug-formatted paths escape an embedded quote as `\"`.
+            '"' => chars[start..end].iter().rev().take_while(|c| **c == '\\').count() % 2 == 0,
+            ':' => chars.get(end + 1).is_some_and(|next| next.is_whitespace()),
+            _ => false,
+        };
+        if stop {
+            break;
+        }
         end += 1;
     }
-    Some(end)
+    // The separator before the delimiter is not part of the path.
+    while end > start && chars[end - 1].is_whitespace() {
+        end -= 1;
+    }
+    end
 }
 
 fn redact_secret_values(value: &str) -> String {

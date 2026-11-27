@@ -2573,11 +2573,16 @@ impl Store {
             let destination = destination.to_str().expect("validated Unicode destination");
             let matches = |path: &str| acquisition_paths_equal(destination, path, working_directory);
             inner.state.books.iter().any(|book| matches(&book.path))
+                // An original the person deleted no longer reserves its
+                // name, through its transaction or through the intents that
+                // targeted it.
                 || inner.state.edition_transactions.iter().any(|transaction|
-                    matches(&transaction.original.path) || matches(&transaction.replacement.path)
+                    (!transaction.original_discarded && matches(&transaction.original.path))
+                        || matches(&transaction.replacement.path)
                         || transaction.rollback_book.as_ref().is_some_and(|book| matches(&book.path)))
                 || inner.state.edition_intents.iter().any(|intent|
-                    matches(&intent.target.path) || (matches(&intent.destination)
+                    (!inner.state.original_discarded(&intent.target) && matches(&intent.target.path))
+                        || (matches(&intent.destination)
                         && (!matches!(intent.status.as_str(), "reserved" | "downloading" | "ready")
                             || http_url != Some(intent.selection.entry.url.as_str()))))
         }) {
@@ -2728,9 +2733,13 @@ impl Store {
         let inner = self.lock()?;
         let matches = |book: &Book| book.source_reference.as_ref()
             .is_some_and(|source| source.reference == reference);
-        Ok(inner.state.edition_intents.iter().any(|intent| matches(&intent.target))
+        // A discarded original has given its capability up, as has every
+        // intent that targeted it.
+        Ok(inner.state.edition_intents.iter().any(|intent|
+                !inner.state.original_discarded(&intent.target) && matches(&intent.target))
             || inner.state.edition_transactions.iter().any(|transaction|
-                matches(&transaction.original) || matches(&transaction.replacement)
+                (!transaction.original_discarded && matches(&transaction.original))
+                    || matches(&transaction.replacement)
                     || transaction.rollback_book.as_ref().is_some_and(matches)))
     }
 

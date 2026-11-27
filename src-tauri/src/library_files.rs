@@ -1342,7 +1342,9 @@ fn abandon_unpublished_copy(store: &Store, journals: &Journals, journal: &Journa
     if journal.same_filesystem {
         return Ok(false);
     }
-    validate_journal(journal, journals, store)?;
+    if validate_journal(journal, journals, store).is_err() {
+        return Ok(false);
+    }
     let source = journal.source_directory.join(&journal.primary);
     let committed = !store.read()?.books.iter().any(|book| {
         book.metadata.id == journal.book_id && book.managed && Path::new(&book.path) == source
@@ -1361,6 +1363,7 @@ fn failed_move(store: &Store, journals: &Journals, journal: &Journal, error: Str
             crate::storage::display_path(&journal.source_directory)
         ),
         Ok(false) => error,
+        Err(cleanup) if cleanup == error => error,
         Err(cleanup) => format!("{error}. The unfinished move is kept and will be tried again at the next start: {cleanup}"),
     }
 }
@@ -1469,16 +1472,6 @@ fn finish_move_with_rename(
             cleanup_migration_sources(store, journals, journal, &source, &destination, proven)?;
             return journals.remove(&journal.id);
         }
-        // Every part without a recorded copy still has to be written. Check
-        // before the source is hashed again, so a copy that cannot fit fails
-        // at once instead of filling the volume first.
-        let remaining = journal
-            .parts
-            .iter()
-            .filter(|part| part.target.is_none())
-            .try_fold(0u64, |total, part| total.checked_add(part.source.size))
-            .ok_or("Archive part lengths overflow")?;
-        ensure_copy_space(free_space(&destination.path), remaining, &destination.path)?;
         let staging = private_child(
             &destination,
             &staging_name,
@@ -1492,6 +1485,25 @@ fn finish_move_with_rename(
             journal.staging_identity = Some(staging.identity.clone());
             journals.write(journal)?;
         }
+        // Every part without a recorded copy still has to be written. Check
+        // before any source is hashed again, so a copy that cannot fit fails
+        // at once instead of filling the volume first. An uncommitted partial
+        // copy is removed before its part is copied again, so it counts as free.
+        let mut remaining = 0u64;
+        let mut reclaimed = 0u64;
+        for part in journal.parts.iter().filter(|part| part.target.is_none()) {
+            remaining = remaining
+                .checked_add(part.source.size)
+                .ok_or("Archive part lengths overflow")?;
+            if !staging.absent(&part.name)? {
+                reclaimed = reclaimed.saturating_add(staging.stamp(&part.name)?.size);
+            }
+        }
+        ensure_copy_space(
+            free_space(&destination.path).map(|free| free.saturating_add(reclaimed)),
+            remaining,
+            &destination.path,
+        )?;
         for index in 0..journal.parts.len() {
             let part = &journal.parts[index];
             if !destination.absent(&part.name)? {

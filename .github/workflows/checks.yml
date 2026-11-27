@@ -1,7 +1,8 @@
 name: Checks
 
-# Frontend and policy checks run here alongside cross-target Rust clippy.
-# Host Rust clippy and tests run in the native package workflow.
+# Frontend and policy checks run here alongside cross-target Rust clippy and
+# the Linux Rust unit tests. This is the only workflow that runs on pull
+# requests; macOS and Windows Rust tests run only in the native package workflow.
 on:
   push:
     branches: [main]
@@ -48,10 +49,31 @@ jobs:
       - run: npm ci
       - name: Type-check and build the frontend
         run: npm run build
+      - name: Find the runner's Chrome for the real-browser UI tests
+        # test-frontend-surfaces.mjs and test-startup-navigation.mjs skip
+        # without KIWIX_TEST_CHROME on a developer machine and fail without it
+        # under CI. The wrapper passes --no-sandbox: Ubuntu 24.04 restricts the
+        # unprivileged user namespaces Chromium's sandbox needs, and these
+        # pages are this checkout's own frontend served from loopback, which
+        # the same job already runs unsandboxed under Node.
+        run: |
+          chrome=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$chrome" ]; then
+            printf '%s\n' 'No Chrome or Chromium executable on this runner; the browser UI tests cannot run.' >&2
+            exit 1
+          fi
+          "$chrome" --version
+          wrapper="$RUNNER_TEMP/kiwix-test-chrome"
+          printf '#!/bin/sh\nexec "%s" --no-sandbox "$@"\n' "$chrome" > "$wrapper"
+          chmod +x "$wrapper"
+          echo "KIWIX_TEST_CHROME=$wrapper" >> "$GITHUB_ENV"
       - name: JavaScript tests
         run: node --test scripts/test-*.mjs
       - name: Python script tests
         run: python -m unittest discover -s scripts -p 'test_*.py'
+      - name: Linux package input handling test
+        # The hyphenated file name is outside the test_*.py discovery pattern.
+        run: python scripts/test-linux-appimage.py
       - name: Upload the embedded frontend assets
         uses: actions/upload-artifact@v4
         with:
@@ -185,7 +207,35 @@ jobs:
         run: |
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/kiwix-mcp-x86_64-unknown-linux-gnu
-          cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol -- -D warnings
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --tests --features custom-protocol -- -D warnings
+
+  linux-tests:
+    # The same test command as the Linux job in build.yml, which runs only
+    # after a push to main. As in the clippy job above, an empty sidecar
+    # placeholder satisfies Tauri's resource resolution.
+    name: Linux Rust unit tests (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: frontend
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GTK/WebKit development packages and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libasound2-dev xvfb
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+      - name: Rust unit tests
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/kiwix-mcp-x86_64-unknown-linux-gnu
+          xvfb-run --auto-servernum cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --features custom-protocol
 
   native-sanitizers:
     name: LocalSwarm ASan/UBSan (macOS)

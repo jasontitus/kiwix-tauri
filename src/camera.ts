@@ -105,7 +105,14 @@ async function capture() {
       args: { token, data: base64(new Uint8Array(await blob.arrayBuffer())) },
     });
   } catch (error) {
-    say(String(error));
+    // The app closes this window whenever it accepted the result, even a
+    // rejected one. A rejection that leaves the window open means the capture
+    // session is gone or the command was refused: say so and keep Cancel (and
+    // Escape) working, which closes the window if the app no longer answers.
+    console.warn("The photo could not be delivered", error);
+    finished = false;
+    say(t("The photo could not be sent. Cancel and choose a file instead."));
+    cancel.focus();
   }
 }
 
@@ -132,10 +139,23 @@ document.addEventListener("keydown", (event) => {
 });
 window.addEventListener("pagehide", stop);
 
-setLocale(params.get("locale") || "system");
-void whenLocaleReady().then(() => {
-  document.documentElement.lang = params.get("locale") || document.documentElement.lang;
-  document.documentElement.dir = localeDirection();
+// The camera must start even when its translation cannot: an unsupported
+// locale or a failed catalog chunk leaves the window in English.
+let localeSelected = true;
+try {
+  setLocale(params.get("locale") || "system");
+} catch (error) {
+  localeSelected = false;
+  console.warn("The camera window could not select its locale", error);
+}
+void whenLocaleReady().then(() => localeSelected, (error) => {
+  console.warn("The camera window could not load its locale", error);
+  return false;
+}).then((localized) => {
+  if (localized) {
+    document.documentElement.lang = params.get("locale") || document.documentElement.lang;
+    document.documentElement.dir = localeDirection();
+  }
   document.title = t("Kiwix — Camera");
   take.textContent = t("Take photo");
   cancel.textContent = t("Cancel");

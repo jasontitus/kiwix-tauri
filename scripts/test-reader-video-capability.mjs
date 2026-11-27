@@ -434,6 +434,9 @@ function checkpointHost() {
     observedPrivacy: ref({ mode: false, generation: 1 }), activeFrame: ref(null), frameRef: ref(null),
     latest: ref(null), restoredMediaDocument: ref(""), pendingExport: ref(null),
     panAuthority: ref(null),
+    // The receiver's document-identity bookkeeping; no frame is displayed here.
+    displayedFrame: ref(null), documentAnnounced: ref(false), documentProbe: ref(null),
+    clearDocumentProbe() {}, resessionUnproven() {},
     reestablishAuthority() {},
     isMobile: true, nativeSpeechStop: ref(null), props: { suspended: false },
     setTimeout: (operation) => { timers.push(operation); return timers.length; },

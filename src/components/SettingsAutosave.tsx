@@ -167,7 +167,11 @@ export function useSettingsAutosave(settings: Settings, handlers: Handlers) {
         try { edit.value = parseText(key, edit.raw!); }
         catch (error) { edit.phase = "invalid"; edit.error = error; }
         edits.set(key, edit);
-        if (edit.phase === "waiting")
+        // A change that asks for confirmation is committed only when the
+        // field is left or the form is submitted. A pause while typing is not
+        // a finished value: the prompt would open over half a path and take
+        // the next keystroke.
+        if (edit.phase === "waiting" && !needsConfirmation(key, edit))
           edit.timer = window.setTimeout(() => commit(key, edit), 600);
         publish();
       },

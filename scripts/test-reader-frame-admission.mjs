@@ -14,14 +14,16 @@ function visit(node) {
       node.attributes.getText(tree).includes("rw-archive-frame")) frameElement = node;
   if (ts.isVariableDeclaration(node) && node.name.getText(tree) === "receive") receive = node.initializer;
   if (ts.isVariableDeclaration(node) &&
-      ["clearHistoryTraversal", "historySourceCurrent", "reopenHistoryTraversal", "travel"].includes(node.name.getText(tree)))
+      ["clearHistoryTraversal", "historySourceCurrent", "reopenHistoryTraversal", "travel", "navigate",
+        "clearDocumentProbe", "initializeDocument", "resessionFrame", "resessionUnproven", "probeDocument",
+        "photoSecretFor"].includes(node.name.getText(tree)))
     callbacks.set(node.name.getText(tree), node.initializer.arguments[0]);
   ts.forEachChild(node, visit);
 }
 visit(tree);
 assert.ok(frameElement && receive, "exercise the production frame and message receiver");
-const helpers = new Set(["object", "text", "readerDocumentUrl", "articlePath", "canonicalLocation", "passageDocumentKey", "passageDocumentPath", "currentLocation", "lastLocationIndex", "sameHistoryStack", "sensorKey"]);
-const moduleVariables = new Set(["MISS_MARKER", "nextNativeRequest"]);
+const helpers = new Set(["object", "text", "readerDocumentUrl", "articlePath", "canonicalLocation", "passageDocumentKey", "passageDocumentPath", "currentLocation", "lastLocationIndex", "sameHistoryStack", "sensorKey", "boundedHistory", "validExternal"]);
+const moduleVariables = new Set(["MISS_MARKER", "nextNativeRequest", "MAX_TAB_HISTORY", "DOCUMENT_PROOF_TIMEOUT"]);
 const declarations = tree.statements.filter((node) =>
   ts.isFunctionDeclaration(node) && helpers.has(node.name?.text) ||
   ts.isVariableStatement(node) && node.declarationList.declarations.some((item) => moduleVariables.has(item.name.getText(tree))));
@@ -58,9 +60,22 @@ function reader() {
   let navigationAllowed = true;
   let pending = Promise.resolve();
   const noop = () => {};
+  // Owned timers: the proof window and the traversal fallback fire only when a
+  // test advances the clock.
+  let now = 0;
+  let nextTimer = 0;
+  const timers = new Map();
+  const notices = [];
+  const tocs = [];
   const context = vm.createContext({
-    URL, crypto, clearTimeout,
-    window: { setTimeout }, pendingHistoryTraversal: ref(null), freshOrigin: ref(false),
+    URL, crypto, clearTimeout: (id) => { timers.delete(id); },
+    window: { setTimeout(callback, delay) { timers.set(++nextTimer, { callback, at: now + delay }); return nextTimer; } },
+    pendingHistoryTraversal: ref(null), freshOrigin: ref(false),
+    documentAnnounced: ref(false), documentProbe: ref(null), panAuthority: ref(null),
+    awaitingGestureHello: ref(true), gestureHello: ref(null),
+    photoSecrets: ref(new Map()), heldPaint: "",
+    setHeldPaint(value) { context.heldPaint = typeof value === "function" ? value(context.heldPaint) : value; },
+    setNotice(value) { notices.push(value); }, setToc(value) { tocs.push(value); },
     React: { createElement(tag, attributes) { return { tag, ...attributes }; } },
     frameReady: false, displayedFrame: ref(session), activeFrame: ref(session), frameRef: ref(node),
     frameNavigation: ref({ node, frameId: session.frameId, session }), initializedFrame: ref(""),
@@ -72,7 +87,7 @@ function reader() {
     restoredMediaDocument: ref(""), watchdogFrame: ref(""), resolvedKey: ref(""), reload: 0,
     passageDocumentRef: ref(null), previewSequence: ref(0), scrollTimer: ref(undefined), bookmarkWrite: ref(false),
     settingsRef: ref({ zoom: 1, readerTheme: "original", fontFamily: "original", fontSize: 16 }),
-    isMobile: true, isDesktop: false, isWindows: false, isMacos: false, isIOS: false, photoSecretFor: () => "photo-secret",
+    isMobile: true, isDesktop: false, isWindows: false, isMacos: false, isIOS: false,
     pendingSensors: ref(new Map()), sensorReplies: [], sensorPrompts: [], sensorGrants: [],
     replySensor(request, data) { context.sensorReplies.push({ request, data }); },
     promptSensor(request) { context.sensorPrompts.push(request); },
@@ -109,7 +124,30 @@ function reader() {
       url: context.activeFrame.current?.location.url, title: "Article", ...overrides,
     }, ...eventOverrides });
   }
-  return { context, node, messages, calls, failures, ready,
+  // What a genuine bridge does: announce at bootstrap, bind its private token
+  // while answering reader-init, and answer a probe of the session it holds.
+  const post = (data, eventOverrides = {}) => context.receive({
+    source: sourceWindow, origin, isTrusted: true,
+    data: { channel: "kiwix-reader", version: 1, ...data }, ...eventOverrides });
+  const hello = (token = crypto.randomUUID(), eventOverrides = {}) =>
+    post({ type: "reading-gesture-hello", token }, eventOverrides);
+  const bind = (token) => post({ type: "reading-pan-bind", token,
+    sessionId: context.activeFrame.current?.sessionId });
+  const probes = () => messages.filter((item) => item.data.type === "document-probe");
+  const proof = (token, overrides = {}, eventOverrides = {}) => post({ type: "document-proof",
+    sessionId: context.activeFrame.current?.sessionId, nonce: probes().at(-1)?.data.nonce, token, ...overrides },
+    eventOverrides);
+  function advance(ms) {
+    const until = now + ms;
+    for (;;) {
+      const due = [...timers.entries()].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
+      if (!due) break;
+      now = due[1].at; timers.delete(due[0]); due[1].callback();
+    }
+    now = until;
+  }
+  return { context, node, messages, calls, failures, notices, tocs, ready, hello, bind, proof, probes, advance, post,
+    inits: () => messages.filter((item) => item.data.type === "reader-init"),
     load: () => context.renderFrame().onLoad({ currentTarget: node }),
     drain: () => pending,
     gateDeactivate() { deactivateGate = deferred(); return deactivateGate; },
@@ -138,7 +176,7 @@ test("child navigation withholds readiness until the replacement session authent
   r.load(); r.ready();
   const outgoing = r.context.activeFrame.current.sessionId;
   const gate = r.gateDeactivate();
-  r.load();
+  r.hello(); r.load();
   assertPending(r);
   r.ready({ sessionId: outgoing });
   assertPending(r);
@@ -156,7 +194,7 @@ test("child navigation withholds readiness until the replacement session authent
   assertPending(r);
   r.ready({ url: `${r.context.activeFrame.current.location.origin}/book/second` });
   assert.equal(r.context.frameReady, true);
-  assert.equal(r.messages.at(-1).data.sessionId, incoming);
+  assert.equal(r.inits().at(-1).data.sessionId, incoming);
   assert.equal(r.failures.length, 0);
   assert.equal(r.context.tabRef.current.path, "second");
 });
@@ -171,7 +209,7 @@ test("retired privacy or storage admission cannot reopen a pending document", as
     const r = reader();
     r.load(); r.ready();
     const gate = r.gateDeactivate();
-    r.load(); await turn(); retire(r); gate.resolve(); await r.drain();
+    r.hello(); r.load(); await turn(); retire(r); gate.resolve(); await r.drain();
     assertPending(r);
     assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate"]);
     assert.equal(r.context.activeFrame.current, null);
@@ -182,13 +220,295 @@ test("a stale activation is deactivated without publishing readiness or initiali
   const r = reader();
   r.load(); r.ready();
   const gate = r.gateActivate();
-  r.load(); await turn();
+  r.hello(); r.load(); await turn();
   r.context.latest.current.privacyGeneration++;
   gate.resolve(); await r.drain();
   assertPending(r);
   assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate", "sensor_deactivate"]);
   assert.equal(r.context.activeFrame.current, null);
   assert.equal(r.messages.length, 1, "stale activation cannot init the archive");
+});
+
+// A session that completed its handshake: the bridge announced itself, bound
+// its private token while answering reader-init, and reported ready.
+function settled() {
+  const r = reader();
+  const token = crypto.randomUUID();
+  r.hello(token); r.load(); r.bind(token); r.ready();
+  assert.equal(r.context.frameReady, true);
+  return { r, token, session: r.context.activeFrame.current.sessionId };
+}
+const pending = (r) => String(r.context.renderFrame().className).includes("is-pending");
+
+test("a frame load no document announced keeps the session once its own bridge proves it", async () => {
+  // WebKit fires the frame's load event for an in-page anchor, TOC or footnote jump.
+  const { r, token, session } = settled();
+  r.load();
+  assert.equal(r.probes().length, 1, "the unannounced load is put to the session's bridge");
+  assert.equal(r.probes()[0].data.sessionId, session);
+  assert.equal(r.probes()[0].target, r.context.activeFrame.current.location.origin);
+  assert.equal(r.context.frameReady, true, "the article stays on screen and usable while the proof is awaited");
+  assert.equal(pending(r), false);
+  r.proof(token);
+  r.advance(60_000); await turn(); await r.drain();
+  assert.equal(r.context.frameReady, true);
+  assert.equal(r.context.activeFrame.current.sessionId, session, "the session survives");
+  assert.deepEqual(r.calls, [], "no sensor session is torn down or rebuilt");
+  assert.equal(r.inits().length, 1, "the document is not initialised a second time");
+  // Every later jump is proved afresh.
+  r.load(); r.proof(token); r.load(); r.proof(token);
+  r.advance(60_000); await r.drain();
+  assert.equal(r.probes().length, 3);
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  assert.deepEqual(r.calls, []);
+});
+
+test("an unannounced load nobody proves is re-sessioned when the proof window closes", async () => {
+  // A document without a bridge, or one whose listeners document.open() erased, cannot answer.
+  const { r, session } = settled();
+  r.load();
+  r.advance(999);
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  r.advance(1);
+  assert.equal(r.context.activeFrame.current, null, "the old session loses admission");
+  assertPending(r);
+  await r.drain();
+  assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate"]);
+  assert.equal(r.calls[0].args.sessionId, session);
+  assert.notEqual(r.context.activeFrame.current.sessionId, session);
+  r.ready({ sessionId: session });
+  assertPending(r);
+});
+
+test("only the bridge that holds the session can prove an unannounced load", async () => {
+  const forgeries = [
+    ["another token", (r) => r.proof(crypto.randomUUID())],
+    ["no token", (r) => r.proof(undefined)],
+    ["a stale nonce", (r, token) => r.proof(token, { nonce: crypto.randomUUID() })],
+    ["another session", (r, token) => r.proof(token, { sessionId: "retired-session" })],
+    ["another window", (r, token) => r.proof(token, {}, { source: {} })],
+    ["another origin", (r, token) => r.proof(token, {}, { origin: "http://unrelated.localhost:8123" })],
+    ["a synthetic event", (r, token) => r.proof(token, {}, { isTrusted: false })],
+  ];
+  for (const [name, forge] of forgeries) {
+    const { r, token, session } = settled();
+    r.load(); forge(r, token);
+    assert.ok(r.context.documentProbe.current, `${name} leaves the load unproven`);
+    r.advance(1000); await r.drain();
+    assert.notEqual(r.context.activeFrame.current.sessionId, session, name);
+    assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate"], name);
+  }
+  // A session whose bridge never bound a token has nothing to be proved with.
+  const r = reader();
+  r.hello(); r.load(); r.ready();
+  const session = r.context.activeFrame.current.sessionId;
+  r.load(); r.proof(crypto.randomUUID());
+  r.advance(1000); await r.drain();
+  assert.notEqual(r.context.activeFrame.current.sessionId, session);
+});
+
+test("the proof of an earlier load cannot settle a later one", async () => {
+  const { r, token, session } = settled();
+  r.load();
+  const first = r.probes().at(-1).data.nonce;
+  r.load();
+  assert.notEqual(r.probes().at(-1).data.nonce, first);
+  r.proof(token, { nonce: first });
+  assert.ok(r.context.documentProbe.current);
+  r.advance(1000); await r.drain();
+  assert.notEqual(r.context.activeFrame.current.sessionId, session);
+});
+
+test("a document that announces itself after its load is re-sessioned at once, and no proof can undo it", async () => {
+  const { r, token, session } = settled();
+  r.load();
+  assert.equal(r.context.activeFrame.current.sessionId, session);
+  r.hello();
+  assert.equal(r.context.activeFrame.current, null, "the late announcement does not wait for the proof window");
+  assertPending(r);
+  r.proof(token, { sessionId: session });
+  await r.drain();
+  const incoming = r.context.activeFrame.current.sessionId;
+  assert.notEqual(incoming, session);
+  assert.equal(r.inits().at(-1).data.sessionId, incoming);
+  r.advance(60_000); await r.drain();
+  assert.equal(r.context.activeFrame.current.sessionId, incoming, "the closed proof window is inert");
+  assert.deepEqual(r.calls.map((item) => item.command), ["sensor_deactivate", "sensor_activate"]);
+});
+
+test("a forged announcement only costs the page a re-session", async () => {
+  const { r, token, session } = settled();
+  r.hello();
+  assert.equal(r.context.activeFrame.current.sessionId, session, "an announcement alone changes nothing");
+  assert.equal(r.context.frameReady, true);
+  r.load();
+  assert.equal(r.probes().length, 0, "an announced load is never offered the proof");
+  assert.equal(r.context.activeFrame.current, null);
+  r.proof(token, { sessionId: session });
+  await r.drain();
+  assert.notEqual(r.context.activeFrame.current.sessionId, session);
+  // Announcements are tied to the frame's own window and origin.
+  const other = settled();
+  other.r.hello(crypto.randomUUID(), { source: {} });
+  other.r.hello(crypto.randomUUID(), { origin: "http://unrelated.localhost:8123" });
+  other.r.hello(crypto.randomUUID(), { isTrusted: false });
+  assert.equal(other.r.context.documentAnnounced.current, false);
+});
+
+test("an announcement made while a re-session is in flight is answered by that re-session's initialisation", async () => {
+  const { r, token, session } = settled();
+  const gate = r.gateDeactivate();
+  r.hello(); r.load(); await turn();
+  // The frame navigated again before the new session was issued.
+  const next = crypto.randomUUID();
+  r.hello(next); r.load();
+  assert.equal(r.inits().length, 1, "a load without an admitted session initialises nothing");
+  gate.resolve(); await r.drain();
+  const incoming = r.context.activeFrame.current.sessionId;
+  assert.notEqual(incoming, session);
+  assert.equal(r.inits().length, 2);
+  r.bind(next); r.ready();
+  assert.equal(r.context.frameReady, true);
+  // That document now holds the session: its next anchor jump is proved, not re-sessioned.
+  r.load();
+  assert.equal(r.probes().length, 1);
+  r.proof(token);
+  assert.ok(r.context.documentProbe.current, "the replaced document's token proves nothing");
+  r.proof(next);
+  assert.equal(r.context.documentProbe.current, null);
+  assert.equal(r.context.activeFrame.current.sessionId, incoming);
+});
+
+test("a proof window does not outlive the session it was opened for", async () => {
+  for (const retire of [
+    (r) => { r.context.latest.current.privacyGeneration++; },
+    (r) => { r.context.frameRef.current = null; },
+    (r) => r.forbidNavigation(),
+    (r) => { r.context.activeFrame.current = { ...r.context.activeFrame.current, sessionId: "replacement", frameId: "frame-2" }; },
+  ]) {
+    const { r } = settled();
+    r.load(); retire(r);
+    const admitted = r.context.activeFrame.current;
+    r.advance(1000); await r.drain();
+    assert.deepEqual(r.calls, []);
+    assert.equal(r.context.activeFrame.current, admitted);
+  }
+});
+
+test("a child navigation keeps the page painted while it re-sessions, and hides it if that fails", async () => {
+  const first = reader();
+  first.hello(); first.load();
+  assert.equal(pending(first), true, "a shell-opened article stays hidden until its ready");
+  first.hello(); first.load(); await first.drain();
+  assert.equal(pending(first), true, "a document that was never ready is not revealed by navigating");
+
+  const { r } = settled();
+  const gate = r.gateDeactivate();
+  r.hello(); r.load();
+  assertPending(r);
+  assert.equal(r.context.activeFrame.current, null, "admission is still withheld");
+  assert.equal(pending(r), false, "the page already on screen is not blanked for the handshake");
+  gate.resolve(); await r.drain();
+  assert.equal(pending(r), false);
+  r.ready({ url: `${r.context.activeFrame.current.location.origin}/book/second` });
+  assert.equal(r.context.frameReady, true);
+  assert.equal(r.context.heldPaint, "", "readiness, not the hold, keeps the page visible afterwards");
+
+  const failed = settled().r;
+  failed.context.api = async () => { throw new Error("sensor backend unavailable"); };
+  failed.hello(); failed.load();
+  assert.equal(pending(failed), false);
+  await failed.drain().catch(() => undefined); await turn();
+  assert.equal(pending(failed), true, "a failed re-session falls back to the hidden, pending frame");
+  assert.equal(failed.failures.length, 1);
+
+  for (const retire of [
+    (r) => { r.context.latest.current.privacyGeneration++; },
+    (r) => { r.context.openSequence.current++; },
+  ]) {
+    const stale = settled().r;
+    const hold = stale.gateDeactivate();
+    stale.hello(); stale.load(); await turn(); retire(stale); hold.resolve(); await stale.drain();
+    assert.equal(pending(stale), true, "an abandoned re-session does not leave an unadmitted page on screen");
+  }
+});
+
+test("a tab's history keeps only its nearest entries", () => {
+  const { r } = settled();
+  const base = r.context.activeFrame.current.location.baseUrl;
+  for (let index = 0; index < 250; index++)
+    r.ready({ type: "navigation", navigationKind: "push", url: `${base}page${index}` });
+  const back = [...r.context.tabRef.current.back];
+  assert.equal(back.length, 200);
+  assert.equal(back.at(-1).path, "page248", "the most recent page is the first way back");
+  assert.equal(back[0].path, "page49");
+  // Shell navigation and traversal obey the same bound.
+  r.context.navigate({ bookId: "book", path: "elsewhere", title: "Elsewhere", scroll: 0 });
+  assert.equal(r.context.tabRef.current.back.length, 200);
+  assert.equal(r.context.tabRef.current.back.at(-1).path, "page249");
+  r.context.frameReady = false;
+  r.context.tabRef.current = { ...r.context.tabRef.current,
+    forward: Array.from({ length: 200 }, (_, index) => ({ bookId: "book", path: `ahead-${index}`, title: "", scroll: 0 })) };
+  r.context.travel("back", 3);
+  const forward = [...r.context.tabRef.current.forward];
+  assert.equal(forward.length, 200);
+  assert.equal(forward.at(-1).path, "page248", "the pages just left are the first way forward");
+});
+
+test("only the session being initialised keeps a photo secret", async () => {
+  const { r, session } = settled();
+  const secret = r.inits()[0].data.photoSecret;
+  assert.deepEqual([...r.context.photoSecrets.current.keys()], [session]);
+  for (let index = 0; index < 5; index++) {
+    r.hello(); r.load(); await r.drain(); r.ready();
+  }
+  const incoming = r.context.activeFrame.current.sessionId;
+  assert.deepEqual([...r.context.photoSecrets.current.keys()], [incoming]);
+  assert.notEqual(r.inits().at(-1).data.photoSecret, secret);
+});
+
+test("blank section titles never become contents entries", () => {
+  const { r } = settled();
+  r.ready({ toc: [
+    { id: "a", title: "History", level: 2 },
+    { id: "b", title: "", level: 2 },
+    { id: "c", title: " \n\t", level: 3 },
+    { id: "d", title: "Notes", level: 2 },
+  ] });
+  assert.deepEqual(r.tocs.at(-1).map((entry) => entry.id), ["a", "d"]);
+});
+
+test("a preview request for the page on screen is dropped, whatever its fragment", () => {
+  const { r } = settled();
+  const queued = [];
+  r.context.latest.current.settings.linkPreviews = true;
+  r.context.workspaceRef = ref({ getClientRects: () => [{}] });
+  r.context.document = { querySelector: () => null };
+  r.context.previewQueued = ref(null);
+  r.context.drainPreview = () => queued.push(r.context.previewQueued.current.path);
+  const base = r.context.activeFrame.current.location.baseUrl;
+  const sessionId = r.context.activeFrame.current.sessionId;
+  r.context.tabRef.current = { ...r.context.tabRef.current, path: "first#History" };
+  for (const target of ["first", "first#History", "first#cite_note1"])
+    r.post({ type: "article-preview", url: `${base}${target}`, sessionId });
+  assert.deepEqual(queued, [], "the article already on screen is never previewed");
+  r.post({ type: "article-preview", url: `${base}second#History`, sessionId });
+  assert.deepEqual(queued, ["second#History"]);
+});
+
+test("a link the app cannot open is answered with a quiet notice, never an error band", () => {
+  const { r } = settled();
+  r.post({ type: "external-link", url: "tel:+15550100", newTab: false, sessionId: r.context.activeFrame.current.sessionId });
+  r.post({ type: "unsupported-link", sessionId: r.context.activeFrame.current.sessionId });
+  assert.deepEqual(r.failures, [], "nothing failed and nothing needs reloading");
+  assert.deepEqual(r.notices, [
+    "This type of external link is not permitted.",
+    "This type of external link is not permitted.",
+  ]);
+  const externals = [];
+  r.context.setExternal = (value) => externals.push(value);
+  r.post({ type: "external-link", url: "mailto:reader@example.org", newTab: false, sessionId: r.context.activeFrame.current.sessionId });
+  assert.deepEqual(externals.map((value) => value.url), ["mailto:reader@example.org"], "supported links still reach the confirmation");
 });
 
 

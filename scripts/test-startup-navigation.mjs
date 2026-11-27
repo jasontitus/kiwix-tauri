@@ -5,10 +5,12 @@ import puppeteer from "puppeteer-core";
 import { preview } from "vite";
 
 // Run npm run build first, then set KIWIX_TEST_CHROME to a local Chromium executable.
+// Without one the test is skipped locally; under CI a missing browser is a failure.
 test("interactive shell navigation survives the first delayed snapshot", {
-  skip: !process.env.KIWIX_TEST_CHROME && "set KIWIX_TEST_CHROME to a Chromium executable",
+  skip: !process.env.KIWIX_TEST_CHROME && !process.env.CI && "set KIWIX_TEST_CHROME to a Chromium executable",
   timeout: 60000,
 }, async (t) => {
+  assert.ok(process.env.KIWIX_TEST_CHROME, "CI must set KIWIX_TEST_CHROME to a Chromium executable; this browser test may not be skipped");
   const server = await preview({
     configFile: false,
     build: { outDir: resolve(process.env.KIWIX_TEST_FRONTEND ?? "dist") },

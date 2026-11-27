@@ -474,4 +474,198 @@ final class ExternalDocumentsTests: XCTestCase {
       stale.release(recovered.lease)
     }
   }
+
+  private func storedIdentity(_ defaults: UserDefaults, _ reference: String) throws -> [String: Any] {
+    let stored = try XCTUnwrap((defaults.dictionary(forKey: key) as? [String: Data])?[reference])
+    let record = try XCTUnwrap(JSONSerialization.jsonObject(with: stored) as? [String: Any])
+    return try XCTUnwrap((record["identities"] as? [[String: Any]])?.first)
+  }
+
+  /// Rewrites the saved identity of the first part, as a later launch finds it.
+  private func rewriteStoredIdentity(_ defaults: UserDefaults, _ reference: String,
+                                     _ change: (inout [String: Any]) -> Void) throws {
+    var stored = try XCTUnwrap(defaults.dictionary(forKey: key) as? [String: Data])
+    let original = try XCTUnwrap(stored[reference])
+    var record = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
+    var identities = try XCTUnwrap(record["identities"] as? [[String: Any]])
+    change(&identities[0])
+    record["identities"] = identities
+    stored[reference] = try JSONSerialization.data(withJSONObject: record)
+    defaults.set(stored, forKey: key)
+  }
+
+  /// A provider resource identifier is not stable across a device restart or a
+  /// reconnected drive. Saving a different one stands in for that restart.
+  private let anotherBoot = Data("identifier from another boot".utf8).base64EncodedString()
+
+  func testLinkedOriginalReopensAfterItsResourceIdentifierChangesAcrossRestart() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      var before = stat()
+      XCTAssertEqual(stat(file.path, &before), 0)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      let admitted = try storedIdentity(defaults, selected.reference)
+      let resource = try XCTUnwrap(admitted["resource"] as? String, "This volume exposes no resource identifier")
+      XCTAssertNotNil(admitted["volume"], "This volume reports no UUID")
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      let acquired = try restarted.acquire(selected.reference, cancellation: WorkCancellation())
+      var opened = stat()
+      XCTAssertEqual(fstat(try XCTUnwrap(acquired.files.first).fd, &opened), 0)
+      XCTAssertEqual(opened.st_ino, before.st_ino)
+      restarted.release(acquired.lease)
+      // The record is rebound to the identifier this boot reports, so the
+      // ordinary same-boot check applies again.
+      XCTAssertEqual(try storedIdentity(defaults, selected.reference)["resource"] as? String, resource)
+      let again = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      again.release(try again.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+    }
+  }
+
+  func testChangedResourceIdentifierCannotAdmitReplacementWithSameSizeAndArchiveUUID() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      // Same name, size and archive UUID, but another file: the original is
+      // kept so its inode cannot be reused.
+      try FileManager.default.moveItem(at: file, to: root.appendingPathComponent("retained-original"))
+      try archive(file)
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+    }
+  }
+
+  func testChangedResourceIdentifierCannotAdmitSameSizeFileWithDifferentArchiveUUID() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      try archive(file, uuid: 2)
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+    }
+  }
+
+  func testChangedResourceIdentifierCannotAdmitFileRewrittenInPlace() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      // Same inode, size and archive UUID, but written again since admission.
+      try archive(file)
+      try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)],
+        ofItemAtPath: file.path)
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+    }
+  }
+
+  func testChangedResourceIdentifierCannotAdmitSameFileNumberOnAnotherVolume() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      // Everything still matches except the volume the part was admitted on.
+      try rewriteStoredIdentity(defaults, selected.reference) {
+        $0["resource"] = anotherBoot; $0["volume"] = "00000000-0000-4000-8000-000000000000"
+      }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+    }
+  }
+
+  func testRecordWithoutRestartProofIdentityRequiresReselectionUntilItIsCompleted() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      let resource = try XCTUnwrap(storedIdentity(defaults, selected.reference)["resource"] as? String)
+      // A record from an earlier build has only the resource identifier.
+      try rewriteStoredIdentity(defaults, selected.reference) {
+        $0.removeValue(forKey: "volume"); $0.removeValue(forKey: "inode"); $0.removeValue(forKey: "modified")
+        $0["resource"] = anotherBoot
+      }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      let documents = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      XCTAssertThrowsError(try documents.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+
+      // While its identifier still matches, one ordinary reopen completes the
+      // record, and only then does it survive a changed identifier.
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = resource }
+      documents.release(try documents.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+      let completed = try storedIdentity(defaults, selected.reference)
+      XCTAssertNotNil(completed["volume"])
+      XCTAssertNotNil(completed["inode"])
+      XCTAssertNotNil(completed["modified"])
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      restarted.release(try restarted.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+    }
+  }
+
+  func testUnreadFolderBookmarkCleanupRemovesOnlyItsOwnFiles() throws {
+    try fixture { root, _ in
+      let outside = root.appendingPathComponent("outside", isDirectory: true)
+      try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
+      let unrelated = outside.appendingPathComponent("other.bookmark")
+      try Data("keep".utf8).write(to: unrelated)
+
+      let directory = root.appendingPathComponent("kiwix-provider-bookmarks", isDirectory: true)
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+      try Data("bookmark".utf8).write(to: directory.appendingPathComponent("import.bookmark"))
+      try FileManager.default.createSymbolicLink(at: directory.appendingPathComponent("link.bookmark"),
+        withDestinationURL: unrelated)
+      let kept = directory.appendingPathComponent("notes.txt")
+      try Data("keep".utf8).write(to: kept)
+      let nested = directory.appendingPathComponent("folder.bookmark", isDirectory: true)
+      try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+
+      removeUnreadFolderBookmarks(in: root)
+      XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted(),
+        ["folder.bookmark", "notes.txt"])
+      XCTAssertEqual(try Data(contentsOf: unrelated), Data("keep".utf8))
+
+      try FileManager.default.removeItem(at: kept)
+      try FileManager.default.removeItem(at: nested)
+      removeUnreadFolderBookmarks(in: root)
+      XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+      removeUnreadFolderBookmarks(in: root)
+
+      // A link in place of the directory is never followed.
+      try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: outside)
+      removeUnreadFolderBookmarks(in: root)
+      XCTAssertEqual(try Data(contentsOf: unrelated), Data("keep".utf8))
+    }
+  }
 }

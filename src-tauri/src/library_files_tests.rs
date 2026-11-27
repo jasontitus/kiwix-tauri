@@ -1248,3 +1248,344 @@ fn permanent_split_delete_leaves_no_staging_directory() {
     delete_book(&book, false).unwrap();
     assert_eq!(std::fs::read_dir(&root.0).unwrap().count(), 0, "parts and staging are gone");
 }
+
+fn single_fixture(root: &Temp, name: &str) -> Book {
+    let path = root.0.join(name);
+    std::fs::copy(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim"),
+        &path,
+    )
+    .unwrap();
+    let mut book = imported_book(&path);
+    book.managed = true;
+    book
+}
+
+fn directory_names(path: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    names
+}
+
+fn journal_files(journals: &Journals) -> Vec<String> {
+    directory_names(&journals.directory.path)
+        .into_iter()
+        .filter(|name| name.ends_with(".json"))
+        .collect()
+}
+
+#[cfg(all(unix, desktop))]
+#[test]
+fn a_platform_valid_name_can_be_revealed_while_mutation_explains_its_refusal() {
+    let root = Temp::new();
+    // A slash typed in Finder is stored as a colon; reading accepts both.
+    let colon = single_fixture(&root, "a:b.zim");
+    assert_eq!(reveal_target(&colon).unwrap(), root.0);
+    let long = single_fixture(&root, &format!("{}.zim", "x".repeat(245)));
+    assert_eq!(reveal_target(&long).unwrap(), root.0);
+    for (book, cause) in [(&colon, "contains a colon"), (&long, "is longer than 240 bytes")] {
+        for error in [
+            archive_files(book).unwrap_err(),
+            delete_book(book, false).unwrap_err(),
+            retain_archive_files(book).err().unwrap(),
+        ] {
+            assert!(error.contains(cause), "{error}");
+            assert!(error.contains("Rename the file") && error.contains("Locate"), "{error}");
+        }
+        // The stricter rule still protects every operation that changes files.
+        assert!(Path::new(&book.path).exists());
+    }
+    let mut trailing = colon.clone();
+    trailing.path = root.0.join("book.zim ").to_string_lossy().into_owned();
+    assert!(archive_files(&trailing).unwrap_err().contains("ends with a dot or a space"));
+    // Reveal still proves that the file is the library's archive.
+    let mut other = colon.clone();
+    other.metadata.id = Uuid::new_v4().to_string();
+    assert!(reveal_target(&other).unwrap_err().contains("different archive"));
+    assert_eq!(directory_names(&root.0).len(), 2);
+}
+
+#[test]
+fn the_trashed_folder_is_visible_and_a_permanent_delete_stays_hidden() {
+    assert_eq!(deletion_staging_prefix(true), "kiwix-deleted");
+    assert!(!deletion_staging_prefix(true).starts_with('.'));
+    assert_eq!(deletion_staging_prefix(false), ".kiwix-delete");
+}
+
+#[cfg(desktop)]
+#[test]
+fn a_failed_trash_names_a_recovery_folder_only_while_one_exists() {
+    let root = Temp::new();
+    let book = split_fixture(&root);
+    // The Trash is refused under test after both parts were staged, so the
+    // delete restores them. Nothing is retained anywhere else.
+    let error = delete_book(&book, true).unwrap_err();
+    assert!(error.contains("Moving archive to Trash"), "{error}");
+    assert!(error.contains("The archive was left where it is"), "{error}");
+    assert!(!error.contains("recoverable at"), "{error}");
+    assert_eq!(directory_names(&root.0), ["download.zimaa", "download.zimab"]);
+    assert!(Archive::open(Path::new(&book.path)).unwrap().check_integrity().unwrap());
+    // When a part cannot be put back, the folder that still holds it is named.
+    *MOVE_FAILURE_AT.lock().unwrap() = Some((std::thread::current().id(), 3));
+    let error = delete_book(&book, true).unwrap_err();
+    assert!(error.contains("recoverable at"), "{error}");
+    let names = directory_names(&root.0);
+    let staging = names.iter().find(|name| name.starts_with("kiwix-deleted-")).expect("visible staging folder");
+    assert!(error.contains(staging.as_str()), "{error}");
+    assert_eq!(directory_names(&root.0.join(staging)), ["download.zimaa"]);
+    assert_eq!(names.len(), 2, "{names:?}");
+}
+
+#[test]
+fn a_copy_that_cannot_fit_is_refused_and_unknown_capacity_is_not_zero() {
+    let folder = Path::new("/library");
+    assert!(ensure_copy_space(Some(100), 100, folder).is_ok());
+    let error = ensure_copy_space(Some(99), 100, folder).unwrap_err();
+    assert!(error.contains("Not enough free space") && error.contains("100 bytes are needed but 99 bytes are free"), "{error}");
+    assert!(ensure_copy_space(None, u64::MAX, folder).is_ok());
+}
+
+/// A journaled cross-volume move whose first copy was interrupted: a private
+/// staging folder with a partial first part and nothing published.
+fn interrupted_copy(profile: &Temp, source: &Temp, target: &Temp) -> (Store, Journals, Journal, Book) {
+    let (store, journals, mut journal, book) = migration_fixture(profile, source, target, false);
+    journal.same_filesystem = false;
+    let staging = private_child(&target.dir(), &format!(".kiwix-move-{}", journal.id), true).unwrap();
+    journal.staging_identity = Some(staging.identity.clone());
+    std::fs::write(staging.path.join("download.zimaa"), b"partial copy").unwrap();
+    journals.write(&journal).unwrap();
+    (store, journals, journal, book)
+}
+
+#[test]
+fn an_unpublished_copy_is_abandoned_with_its_owned_staging_and_journal() {
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, book) = interrupted_copy(&profile, &source, &target);
+    let error = failed_move(&store, &journals, &journal, "No space left on device (os error 28)".into());
+    assert!(error.contains("No space left on device"), "{error}");
+    assert!(error.contains("was not moved and is still in"), "{error}");
+    assert!(journal_files(&journals).is_empty(), "the journal must not be replayed at every launch");
+    assert!(directory_names(&target.0).is_empty(), "no staging folder or partial copy may remain");
+    assert_eq!(directory_names(&source.0), ["download.zimaa", "download.zimab"]);
+    assert_eq!(store.read().unwrap().books[0].path, book.path);
+    assert!(Archive::open(Path::new(&book.path)).unwrap().check_integrity().unwrap());
+}
+
+#[test]
+fn a_journal_is_never_abandoned_once_anything_of_the_move_exists() {
+    // A published destination part.
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, _) = interrupted_copy(&profile, &source, &target);
+    std::fs::copy(source.0.join("download.zimab"), target.0.join("download.zimab")).unwrap();
+    assert_eq!(abandon_unpublished_copy(&store, &journals, &journal), Ok(false));
+    assert_eq!(journal_files(&journals).len(), 1);
+    let staging = target.0.join(format!(".kiwix-move-{}", journal.id));
+    assert_eq!(std::fs::read(staging.join("download.zimaa")).unwrap(), b"partial copy");
+    assert_eq!(failed_move(&store, &journals, &journal, "copy failed".into()), "copy failed");
+
+    // The library already points at the destination.
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, _) = interrupted_copy(&profile, &source, &target);
+    commit_path(&store, &journal, &target.0.join("download.zimaa")).unwrap();
+    assert_eq!(abandon_unpublished_copy(&store, &journals, &journal), Ok(false));
+    assert_eq!(journal_files(&journals).len(), 1);
+    assert!(target.0.join(format!(".kiwix-move-{}/download.zimaa", journal.id)).exists());
+
+    // A same-volume move keeps its journal for recovery, as before.
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, _) = migration_fixture(&profile, &source, &target, false);
+    assert_eq!(abandon_unpublished_copy(&store, &journals, &journal), Ok(false));
+    assert_eq!(journal_files(&journals).len(), 1);
+}
+
+#[test]
+fn abandoning_removes_only_staging_entries_that_are_still_the_recorded_ones() {
+    // A finished staged copy that is no longer the recorded file is kept.
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, mut journal, _) = interrupted_copy(&profile, &source, &target);
+    let staging = target.0.join(format!(".kiwix-move-{}", journal.id));
+    journal.parts[0].target = Some(source.dir().stamp("download.zimaa").unwrap());
+    let error = abandon_unpublished_copy(&store, &journals, &journal).unwrap_err();
+    assert!(error.contains("preserved"), "{error}");
+    assert_eq!(std::fs::read(staging.join("download.zimaa")).unwrap(), b"partial copy");
+    assert_eq!(journal_files(&journals).len(), 1);
+    let message = failed_move(&store, &journals, &journal, "copy failed".into());
+    assert!(message.contains("kept and will be tried again"), "{message}");
+
+    // The recorded copy itself is removed; a file the move never wrote keeps
+    // the folder, and with it the journal.
+    journal.parts[0].target = Some(Directory::open(&staging).unwrap().stamp("download.zimaa").unwrap());
+    std::fs::write(staging.join("notes.txt"), b"not written by the move").unwrap();
+    let error = abandon_unpublished_copy(&store, &journals, &journal).unwrap_err();
+    assert!(error.contains("Unexpected files were preserved"), "{error}");
+    assert_eq!(directory_names(&staging), ["notes.txt"]);
+    assert_eq!(journal_files(&journals).len(), 1);
+
+    // A staging folder that is not the journaled one is not entered at all.
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, mut journal, _) = interrupted_copy(&profile, &source, &target);
+    journal.staging_identity = Some(source.dir().identity);
+    let error = abandon_unpublished_copy(&store, &journals, &journal).unwrap_err();
+    assert!(error.contains("replaced"), "{error}");
+    assert!(target.0.join(format!(".kiwix-move-{}/download.zimaa", journal.id)).exists());
+    assert_eq!(journal_files(&journals).len(), 1);
+    assert_eq!(directory_names(&source.0), ["download.zimaa", "download.zimab"]);
+}
+
+#[test]
+fn recovery_drops_the_journal_of_a_book_that_left_the_library_and_names_it_once() {
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, book) = interrupted_copy(&profile, &source, &target);
+    store.update(|state| { state.books.clear(); Ok(()) }).unwrap();
+    drop(journals);
+    drop(store);
+    let reopened = Store::new(profile.0.clone()).unwrap();
+    let result = recover(&reopened).unwrap();
+    let errors = result["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{result}");
+    assert_eq!(errors[0]["title"], book.metadata.title);
+    assert_eq!(errors[0]["from"], source.0.to_string_lossy().as_ref());
+    assert_eq!(errors[0]["to"], target.0.to_string_lossy().as_ref());
+    assert!(errors[0]["error"].as_str().unwrap().contains("no longer in the library"), "{result}");
+    // Archive files are never removed for a book that is gone; only the
+    // move's own unfinished copy is.
+    assert_eq!(directory_names(&source.0), ["download.zimaa", "download.zimab"]);
+    assert!(directory_names(&target.0).is_empty());
+    let journals = Journals::open(&reopened, false).unwrap().unwrap();
+    assert!(journal_files(&journals).is_empty());
+    assert!(!journals.directory.path.join(format!("{}.json", journal.id)).exists());
+    let again = recover(&reopened).unwrap();
+    assert!(again["errors"].as_array().unwrap().is_empty(), "the warning must not repeat: {again}");
+}
+
+#[test]
+fn a_failed_recovery_names_the_archive_and_both_folders() {
+    let (profile, source, target) = (Temp::new(), Temp::new(), Temp::new());
+    let (store, journals, journal, book) = migration_fixture(&profile, &source, &target, false);
+    std::fs::write(target.0.join("download.zimaa"), b"unrelated collision").unwrap();
+    drop(journals);
+    drop(store);
+    let reopened = Store::new(profile.0.clone()).unwrap();
+    let result = recover(&reopened).unwrap();
+    let errors = result["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{result}");
+    assert_eq!(errors[0]["id"], format!("{}.json", journal.id));
+    assert_eq!(errors[0]["title"], book.metadata.title);
+    assert_eq!(errors[0]["from"], source.0.to_string_lossy().as_ref());
+    assert_eq!(errors[0]["to"], target.0.to_string_lossy().as_ref());
+    assert_eq!(std::fs::read(target.0.join("download.zimaa")).unwrap(), b"unrelated collision");
+}
+
+/// A second volume for real cross-volume moves. Only Linux offers one to an
+/// unprivileged test (`/dev/shm`); `None` when it is the temporary volume too.
+#[cfg(target_os = "linux")]
+fn second_volume(first: &Temp) -> Option<Temp> {
+    let shared = Path::new("/dev/shm").canonicalize().ok()?;
+    if Directory::open(&shared).ok()?.identity.device == first.dir().identity.device {
+        return None;
+    }
+    let root = shared.join(format!("kiwix-library-files-{}", Uuid::new_v4()));
+    std::fs::create_dir(&root).ok()?;
+    Some(Temp(root))
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_cross_volume_move_that_fails_before_publishing_leaves_nothing_to_replay() {
+    let (profile, source) = (Temp::new(), Temp::new());
+    let Some(target) = second_volume(&source) else {
+        eprintln!("skipped: no second volume is available");
+        return;
+    };
+    let book = single_fixture(&source, "download.zim");
+    let store = Arc::new(Store::new(profile.0.clone()).unwrap());
+    store
+        .update(|state| {
+            state.books.push(book.clone());
+            state.settings.download_directory = target.0.to_string_lossy().into_owned();
+            Ok(())
+        })
+        .unwrap();
+    // The copy is written, hashed and staged; publishing it then fails.
+    *MOVE_FAILURE_AT.lock().unwrap() = Some((std::thread::current().id(), 1));
+    let result = move_archives(store.clone(), source.0.clone(), target.0.clone()).unwrap();
+    let errors = result["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{result}");
+    let error = errors[0]["error"].as_str().unwrap();
+    assert!(error.contains("simulated cross-device move"), "{error}");
+    assert!(error.contains("was not moved and is still in"), "{error}");
+    assert!(directory_names(&target.0).is_empty(), "{:?}", directory_names(&target.0));
+    assert_eq!(directory_names(&source.0), ["download.zim"]);
+    assert_eq!(store.read().unwrap().books[0].path, book.path);
+    let journals = Journals::open(&store, false).unwrap().unwrap();
+    assert!(journal_files(&journals).is_empty());
+    drop(journals);
+    // Startup has nothing to re-hash, re-copy or warn about.
+    let recovered = recover(&store).unwrap();
+    assert!(recovered["errors"].as_array().unwrap().is_empty(), "{recovered}");
+    assert!(recovered["moved"].as_array().unwrap().is_empty(), "{recovered}");
+    // The same move can simply be asked for again.
+    let result = move_archives(store.clone(), source.0.clone(), target.0.clone()).unwrap();
+    assert_eq!(result["moved"].as_array().unwrap().len(), 1, "{result}");
+    assert_eq!(directory_names(&target.0), ["download.zim"]);
+    assert!(directory_names(&source.0).is_empty());
+    assert!(Archive::open(&target.0.join("download.zim")).unwrap().check_integrity().unwrap());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_cross_volume_move_is_refused_up_front_when_the_archives_cannot_fit() {
+    struct Restore;
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            *FREE_SPACE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    let (profile, source) = (Temp::new(), Temp::new());
+    let Some(target) = second_volume(&source) else {
+        eprintln!("skipped: no second volume is available");
+        return;
+    };
+    let book = single_fixture(&source, "download.zim");
+    let size = std::fs::metadata(&book.path).unwrap().len();
+    let store = Arc::new(Store::new(profile.0.clone()).unwrap());
+    store
+        .update(|state| {
+            state.books.push(book.clone());
+            state.settings.download_directory = target.0.to_string_lossy().into_owned();
+            Ok(())
+        })
+        .unwrap();
+    let _restore = Restore;
+    *FREE_SPACE_OVERRIDE.lock().unwrap() = Some((std::thread::current().id(), size - 1));
+    let error = move_archives(store.clone(), source.0.clone(), target.0.clone()).unwrap_err();
+    assert!(error.contains("Not enough free space"), "{error}");
+    assert!(error.contains("Nothing was moved"), "{error}");
+    assert!(directory_names(&target.0).is_empty());
+    assert!(Journals::open(&store, false).unwrap().is_none_or(|journals| journal_files(&journals).is_empty()));
+    assert_eq!(store.read().unwrap().books[0].path, book.path);
+    // A move within one volume is a rename and needs no room for a copy.
+    let sibling = Temp::new();
+    store
+        .update(|state| {
+            state.settings.download_directory = sibling.0.to_string_lossy().into_owned();
+            Ok(())
+        })
+        .unwrap();
+    let result = move_archives(store.clone(), source.0.clone(), sibling.0.clone()).unwrap();
+    assert_eq!(result["moved"].as_array().unwrap().len(), 1, "{result}");
+    // Exactly enough room is enough.
+    *FREE_SPACE_OVERRIDE.lock().unwrap() = Some((std::thread::current().id(), size));
+    store
+        .update(|state| {
+            state.settings.download_directory = target.0.to_string_lossy().into_owned();
+            Ok(())
+        })
+        .unwrap();
+    let result = move_archives(store.clone(), sibling.0.clone(), target.0.clone()).unwrap();
+    assert_eq!(result["moved"].as_array().unwrap().len(), 1, "{result}");
+    assert_eq!(directory_names(&target.0), ["download.zim"]);
+}

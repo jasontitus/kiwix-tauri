@@ -2106,7 +2106,9 @@ impl Service {
                     || state.edition_transactions.iter().any(|transaction|
                         // A completed rollback retains history, not import
                         // authority over the preserved original after removal.
+                        // Nor does an original the person chose to delete.
                         transaction.rolled_back_installation_id.is_none()
+                            && !transaction.original_discarded
                             && (transaction.original.path == book.path || transaction.replacement.path == book.path
                                 || transaction.rollback_book.as_ref().is_some_and(|saved| saved.path == book.path)))
                 {
@@ -2678,7 +2680,7 @@ impl Service {
             | "map_delete_download" | "map_remove_history" | "map_forget_recovery" | "map_clear_cache"
             | "mobile_library_root_set" | "library_files_relocate"
             | "edition_prepare" | "edition_download" | "edition_status" | "edition_commit"
-            | "edition_cancel" | "edition_rollback"
+            | "edition_cancel" | "edition_rollback" | "edition_discard_original"
         ) {
             Some(self.update_admission.admit().await)
         } else { None };
@@ -2688,7 +2690,7 @@ impl Service {
             || (command == "remove_book" && args.get("cleanupSource").is_some())
             || command == "prepare_download_cleanup"
             || matches!(command, "mobile_library_root_set" | "library_files_relocate")
-            || matches!(command, "edition_cancel" | "edition_commit" | "edition_rollback")
+            || matches!(command, "edition_cancel" | "edition_commit" | "edition_rollback" | "edition_discard_original")
         {
             Some(self.mobile.transfer_gate.lock().await)
         } else {
@@ -3728,6 +3730,7 @@ fn mutation_command(command: &str) -> bool {
             | "find_updates"
             | "edition_prepare" | "edition_download" | "edition_status"
             | "edition_commit" | "edition_cancel" | "edition_rollback"
+            | "edition_discard_original"
             | "map_prepare"
             | "map_start"
             | "map_status"

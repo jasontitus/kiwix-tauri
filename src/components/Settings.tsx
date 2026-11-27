@@ -14,6 +14,7 @@ import {
   chooseDirectory,
   flushPendingPreferences,
   isAndroid,
+  isDesktop,
   isIOS,
   isMobile,
   isPrivacyContextCurrent,
@@ -525,7 +526,10 @@ export default function Settings({
               <span>{t("Restore open tabs when the app starts")}</span>
             </label>
             <p className="muted">
-              {t("Windows, reader tabs and reading positions reopen at launch. File → Restore previous session reopens the last saved session on demand; private and read-only profiles are never restored.")}
+              {/* Only desktop has windows and a File menu to restore from. */}
+              {isDesktop
+                ? t("Windows, reader tabs and reading positions reopen at launch. File → Restore previous session reopens the last saved session on demand; private and read-only profiles are never restored.")
+                : t("Reader tabs and reading positions reopen at launch. Private and read-only profiles are never restored.")}
             </p>
             <label className="check-field">
               <input
@@ -1085,12 +1089,14 @@ export default function Settings({
                 <kbd>{t("Ctrl + Tab")}</kbd>
               </dd>
             </div>
-            <div>
-              <dt>{t("New window")}</dt>
-              <dd>
-                <kbd>{t("⌘ / Ctrl + Shift + N")}</kbd>
-              </dd>
-            </div>
+            {isDesktop && (
+              <div>
+                <dt>{t("New window")}</dt>
+                <dd>
+                  <kbd>{t("⌘ / Ctrl + Shift + N")}</kbd>
+                </dd>
+              </div>
+            )}
           </dl>
           <h3>{t("License")}</h3>
           <p>

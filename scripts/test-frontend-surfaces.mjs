@@ -6,7 +6,7 @@ import { createServer } from "vite";
 // Run against the development bundle to exercise React StrictMode's effect replay.
 // The browser owns a disposable profile and all service calls use this test fixture.
 test("archive dialogs and editors recover without losing the current interaction", {
-  skip: !process.env.KIWIX_TEST_CHROME && "set KIWIX_TEST_CHROME to a Chromium executable",
+  skip: !process.env.KIWIX_TEST_CHROME && !process.env.CI && "set KIWIX_TEST_CHROME to a Chromium executable",
   timeout: 60000,
 }, async (t) => {
   const server = await createServer({ server: { host: "127.0.0.1", port: 0, strictPort: true }, logLevel: "silent" });

@@ -803,6 +803,9 @@ fn run(
     let mut paused = false;
     let mut played = false;
     let mut skipped = false;
+    // The last transport command moved the playhead back and nothing has
+    // played since: an unpronounceable chunk is then skipped backwards too.
+    let mut rewinding = false;
     'playback: loop {
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
         let Some(chunk) = chunks.get(index) else {
@@ -830,7 +833,7 @@ fn run(
                 Command::Stop => return Ok(()),
                 Command::Pause => paused = true,
                 Command::Resume => paused = false,
-                command => (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command),
+                command => rewinding = reposition(&chunks, &mut index, &mut position, total_utf16 as usize, request.rate, command),
             }
             if paused && index < chunks.len() { let _ = events.send(activity(false, true, position)); }
             continue;
@@ -849,10 +852,12 @@ fn run(
         };
         let Some(file) = file else {
             // One unpronounceable chunk must not end the article: move the
-            // playhead to the next chunk exactly as if this one had played.
-            // No prefetch is outstanding here, so the loop synthesizes it.
+            // playhead past it exactly as if it had played (or, after a
+            // rewind, on to the chunk before it, so rewinding cannot get stuck
+            // behind it). No prefetch is outstanding here, so the loop
+            // synthesizes the destination.
             skipped = true;
-            (index, position) = after_chunk(&chunks, index, total_utf16 as usize);
+            (index, position, rewinding) = skip_chunk(&chunks, index, total_utf16 as usize, rewinding);
             continue;
         };
         if stopped.load(Ordering::SeqCst) { return Ok(()); }
@@ -868,7 +873,7 @@ fn run(
             }
             Ok(Command::Resume) | Err(mpsc::TryRecvError::Empty) => {}
             Ok(command) => {
-                (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command);
+                rewinding = reposition(&chunks, &mut index, &mut position, total_utf16 as usize, request.rate, command);
                 continue;
             }
         }
@@ -884,6 +889,7 @@ fn run(
             .map_err(|error| format!("Starting the audio output failed: {error}"))?;
         manager.with_playback(&stopped, || { player.append(source); Ok(()) })?;
         played = true;
+        rewinding = false;
         if index + 1 < chunks.len() {
             prefetched = Prefetch::start(index + 1, manager.clone(), engine.clone(), g2p.clone(),
                 chunks[index + 1].text.clone(), sid, request.rate, stopped.clone());
@@ -916,7 +922,7 @@ fn run(
                 Ok(Command::Pause | Command::Resume) => {}
                 Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
                 Ok(command) => {
-                    (index, position) = transport_position(&chunks, index, position, total_utf16 as usize, request.rate, command);
+                    rewinding = reposition(&chunks, &mut index, &mut position, total_utf16 as usize, request.rate, command);
                     if paused && index < chunks.len() { let _ = events.send(activity(false, true, position)); }
                     continue 'playback; // Drop only this sink, not the output stream.
                 }
@@ -934,9 +940,26 @@ fn run(
     }
 }
 
-/// The playhead once chunk `index` is finished, whether played or skipped.
+/// The playhead once chunk `index` has finished playing.
 fn after_chunk(chunks: &[Chunk], index: usize, total: usize) -> (usize, usize) {
     (index + 1, chunks.get(index + 1).map_or(total, |chunk| chunk.start_utf16))
+}
+
+/// The playhead after chunk `index` turned out to hold nothing to speak, and
+/// whether the search for something to play is still going backwards. It
+/// turns forward for good at the first chunk, so it always terminates.
+fn skip_chunk(chunks: &[Chunk], index: usize, total: usize, rewinding: bool) -> (usize, usize, bool) {
+    if rewinding && index > 0 { return (index - 1, chunks[index - 1].start_utf16, true); }
+    let (index, position) = after_chunk(chunks, index, total);
+    (index, position, false)
+}
+
+/// Apply a positioning command; true when it moved the playhead back.
+fn reposition(chunks: &[Chunk], index: &mut usize, position: &mut usize, total: usize, rate: f64, command: Command) -> bool {
+    let (next_index, next_position) = transport_position(chunks, *index, *position, total, rate, command);
+    let back = next_position < *position;
+    (*index, *position) = (next_index, next_position);
+    back
 }
 
 fn transport_position(chunks: &[Chunk], index: usize, position: usize, total: usize, rate: f64, command: Command) -> (usize, usize) {
@@ -1233,11 +1256,20 @@ mod tests {
         // What is spoken never carries the unknown-token marker to the engine.
         let spoken = speakable_phonemes(&g2p, "Kiwix 中华 reads offline.").unwrap().unwrap();
         assert!(!spoken.is_empty() && !spoken.contains(&('❓' as i32)));
-        // Skipping lands exactly where finishing the chunk would have.
+        // Skipping lands exactly where finishing the chunk (or Next) would have.
         let total = text.encode_utf16().count();
-        assert_eq!(after_chunk(&chunks, 1, total), (2, chunks[2].start_utf16));
-        assert_eq!(after_chunk(&chunks, 1, total), transport_position(&chunks, 1, chunks[1].start_utf16, total, 1.0, Command::Next));
-        assert_eq!(after_chunk(&chunks, 2, total), (3, total));
+        assert_eq!(skip_chunk(&chunks, 1, total, false), (2, chunks[2].start_utf16, false));
+        assert_eq!(transport_position(&chunks, 1, chunks[1].start_utf16, total, 1.0, Command::Next), (2, chunks[2].start_utf16));
+        assert_eq!(skip_chunk(&chunks, 2, total, false), (3, total, false));
+        // Rewinding from the closing sentence lands in the Chinese line; the
+        // skip keeps going back instead of returning to where it started.
+        let (mut index, mut position) = (2, chunks[2].start_utf16);
+        assert!(reposition(&chunks, &mut index, &mut position, total, 1.0, Command::Rewind(0.5)));
+        assert_eq!(index, 1);
+        assert_eq!(skip_chunk(&chunks, index, total, true), (0, 0, true));
+        // With nothing earlier to play it turns forward, once.
+        assert_eq!(skip_chunk(&chunks, 0, total, true), (1, chunks[1].start_utf16, false));
+        assert!(!reposition(&chunks, &mut index, &mut position, total, 1.0, Command::Next));
     }
 
     #[test]

@@ -153,12 +153,14 @@ fn hotspot_candidate(name: &str, address: IpAddr) -> Option<u8> {
         return None;
     }
     let name = name.to_ascii_lowercase();
-    if [
-        "lo", "rmnet", "ccmni", "seth", "p2p", "tun", "ppp", "dummy", "v4-", "ip6tnl", "sit",
-        "clat",
-    ]
-    .iter()
-    .any(|prefix| name.starts_with(prefix))
+    // Carrier links share one list with the addresses Nearby and Web sharing
+    // advertise. The rest are links that can never be this phone's own access
+    // point; Wi-Fi Direct (`p2p`) is excluded here only, because a peer in
+    // that group can still reach an ordinary share on it.
+    if crate::transfer_policy::cellular_interface(&name)
+        || ["lo", "p2p", "tun", "dummy", "ip6tnl", "sit"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
     {
         return None;
     }

@@ -147,6 +147,33 @@ fn rejects_unsafe_decoded_filenames() {
     );
 }
 
+#[test]
+fn a_download_started_without_a_name_keeps_the_flavour_and_edition_of_its_url() {
+    // Catalog entries for two flavours share one OPDS name; only the archive
+    // URL tells them apart, so it is what an unnamed start is named after.
+    let name = |url: &str| filename(&Url::parse(url).unwrap()).unwrap();
+    let nopic = name("https://download.kiwix.org/zim/wikipedia/wikipedia_ab_all_nopic_2026-10.zim.meta4");
+    let maxi = name("https://download.kiwix.org/zim/wikipedia/wikipedia_ab_all_maxi_2026-10.zim.meta4");
+    assert_eq!(nopic, "wikipedia_ab_all_nopic_2026-10.zim");
+    assert_eq!(maxi, "wikipedia_ab_all_maxi_2026-10.zim");
+}
+
+#[test]
+fn a_metalink_retry_continues_with_the_mirror_after_the_one_already_used() {
+    let base = Url::parse("https://example.org/a.zim.meta4").unwrap();
+    let xml = "<metalink xmlns=\"urn:ietf:params:xml:ns:metalink\"><file name=\"a.zim\"><size>9000</size>\
+        <url priority=\"3\">https://c.example.org/a.zim</url>\
+        <url priority=\"1\">https://a.example.org/a.zim</url>\
+        <url priority=\"2\">https://b.example.org/a.zim</url></file></metalink>";
+    let choose = |after: Option<&str>| parse_metalink(xml, &base, after).unwrap().url;
+    assert_eq!(choose(None), "https://a.example.org/a.zim");
+    assert_eq!(choose(Some("https://a.example.org/a.zim")), "https://b.example.org/a.zim");
+    assert_eq!(choose(Some("https://b.example.org/a.zim")), "https://c.example.org/a.zim");
+    // After the last mirror the list starts over; an unknown one changes nothing.
+    assert_eq!(choose(Some("https://c.example.org/a.zim")), "https://a.example.org/a.zim");
+    assert_eq!(choose(Some("https://gone.example.org/a.zim")), "https://a.example.org/a.zim");
+}
+
 #[tokio::test]
 async fn shared_history_retains_owned_parts_without_restoring_network_authority() {
     let root = test_directory();
@@ -1791,11 +1818,54 @@ async fn validated_416_publishes_already_complete_partial_file() {
     let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
     let bytes = zim_bytes(b'a', 128);
     let id = seed_partial(&manager, &root, url, &bytes, 128);
+    // No total was ever learned, so only the server can say the part is whole.
+    manager.inner.update(&id, |stored| {
+        stored.expected_size = None;
+        stored.job.total = None;
+    }).unwrap();
     manager.resume(&id, None).await.unwrap();
     let job = finished_job(&manager, &id).await;
     assert_eq!(job.status, "complete", "{:?}", job.error);
     assert_eq!(fs::read(&job.destination).unwrap(), bytes);
     server.await.unwrap();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn a_complete_single_stream_part_is_verified_and_published_without_a_request() {
+    // Real mirrors answer the empty remaining range of a complete file with a
+    // 416 that carries no validator, which proves nothing. A part that already
+    // holds every byte must not depend on that answer.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/fixture.zim", listener.local_addr().unwrap());
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let bytes = zim_bytes(b'a', 128);
+
+    // Local verification still decides: a complete part that fails its
+    // advertised checksum is not published.
+    let id = seed_partial(&manager, &root, url.clone(), &bytes, 128);
+    manager.inner.update(&id, |stored| stored.job.sha256 = Some("0".repeat(64))).unwrap();
+    manager.resume(&id, None).await.unwrap();
+    let job = finished_job(&manager, &id).await;
+    assert_eq!(job.status, "failed");
+    assert!(job.error.as_deref().unwrap().contains("SHA-256"), "{:?}", job.error);
+    assert!(!Path::new(&job.destination).exists());
+    manager.cancel(&id).await.unwrap();
+
+    let id = seed_partial(&manager, &root, url, &bytes, 128);
+    manager.inner.update(&id, |stored| stored.job.sha256 = Some(hex::encode(Sha256::digest(&bytes)))).unwrap();
+    manager.resume(&id, None).await.unwrap();
+    let job = finished_job(&manager, &id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(fs::read(&job.destination).unwrap(), bytes);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), listener.accept()).await.is_err(),
+        "a complete part was finished with a network request"
+    );
     drop(manager);
     drop(store);
     fs::remove_dir_all(root).unwrap();
@@ -2754,6 +2824,9 @@ struct TestRangeState {
     /// checkpoint until `TestRangeServer::release` (see `hold_mid_range`).
     hold: Option<watch::Sender<bool>>,
     truncate_once: Option<(u16, u64)>,
+    /// `(end, count)`: the next `count` range responses that end at byte `end`
+    /// stop after their first chunk, so each one fails after adding bytes.
+    truncate_range: Option<(u64, u32)>,
 }
 
 struct TestRangeServer {
@@ -2910,6 +2983,12 @@ async fn handle_test_connection(
             // the incomplete body as a stream error, not a normal EOF.
             payload = &payload[..16 * 1024];
         }
+        if let Some((range_end, count)) = state.truncate_range {
+            if status == 206 && end == range_end && count > 0 && payload.len() > 16 * 1024 {
+                state.truncate_range = Some((range_end, count - 1));
+                payload = &payload[..16 * 1024];
+            }
+        }
     }
     for (index, chunk) in payload.chunks(16 * 1024).enumerate() {
         if let Some(released) = hold.as_mut() {
@@ -2949,6 +3028,7 @@ async fn test_range_server(
         metalink: false,
         hold: None,
         truncate_once: None,
+        truncate_range: None,
     }));
     let server_state = Arc::clone(&state);
     let base = format!("http://{address}");
@@ -5042,3 +5122,162 @@ async fn single_stream_retries_transient_503_and_completes() {
     drop(store);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn a_segment_survives_more_drops_than_its_retry_limit_while_each_adds_bytes() {
+    let body = zim_bytes(b'p', 4 * 1024 * 1024);
+    let server = test_range_server(body.clone(), "\"v1\"", Duration::ZERO).await;
+    // One more mid-body drop than a range may fail in a row, all on the first
+    // of the four ranges. Every dropped response still delivered payload.
+    let first_range_end = body.len() as u64 / SEGMENT_COUNT as u64 - 1;
+    let drops = SEGMENT_RETRIES as u32 + 1;
+    server.state.lock().unwrap().truncate_range = Some((first_range_end, drops));
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let job = manager
+        .start(server.archive_url.clone(), root.clone(), Some("fixture.zim".into()), None, None)
+        .await
+        .unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(fs::read(&job.destination).unwrap(), body);
+    assert_eq!(server.state.lock().unwrap().truncate_range, Some((first_range_end, 0)));
+    let resumed = server.range_requests().iter()
+        .filter(|request| test_range_bounds(request).is_some_and(|(_, end)| end == first_range_end))
+        .count();
+    assert_eq!(resumed, drops as usize + 1, "each drop is followed by exactly one resumed request");
+    server.task.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+/// A loopback server that answers every request with `respond(request head in
+/// lower case)` and records the heads it received.
+async fn scripted_server(
+    respond: impl Fn(&str) -> Vec<u8> + Send + Sync + 'static,
+) -> (String, Arc<Mutex<Vec<String>>>, tokio::task::JoinHandle<()>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&requests);
+    let task = tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else { break };
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                match socket.read(&mut buffer).await {
+                    Ok(count) if count > 0 => request.extend_from_slice(&buffer[..count]),
+                    _ => break,
+                }
+            }
+            let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+            seen.lock().unwrap().push(request.clone());
+            let _ = socket.write_all(&respond(&request)).await;
+            let _ = socket.shutdown().await;
+        }
+    });
+    (base, requests, task)
+}
+
+#[tokio::test]
+async fn a_metalink_retry_moves_to_the_next_mirror_only_while_nothing_is_kept() {
+    const NOT_FOUND: &[u8] = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let body = zim_bytes(b'm', 96 * 1024);
+    let working = test_range_server(body.clone(), "\"stable\"", Duration::ZERO).await;
+    let (dead, dead_requests, dead_task) = scripted_server(|_| NOT_FOUND.to_vec()).await;
+    let dead_url = format!("{dead}/fixture.zim");
+    let xml = format!(
+        "<metalink xmlns=\"urn:ietf:params:xml:ns:metalink\"><file name=\"fixture.zim\"><size>{}</size><hash type=\"sha-256\">{}</hash><url priority=\"1\">{dead_url}</url><url priority=\"2\">{}</url></file></metalink>",
+        body.len(), hex::encode(Sha256::digest(&body)), working.archive_url,
+    );
+    let (metalink, metalink_requests, metalink_task) = scripted_server(move |_| {
+        let mut response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", xml.len()).into_bytes();
+        response.extend_from_slice(xml.as_bytes());
+        response
+    }).await;
+    let metalink_url = format!("{metalink}/fixture.zim.meta4");
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+
+    // The best-ranked mirror is dead. The first attempt fails on it...
+    let job = manager.start(metalink_url.clone(), root.clone(), None, None, None).await.unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "failed");
+    assert!(job.error.as_deref().unwrap().contains("404"), "{:?}", job.error);
+    assert_eq!(manager.inner.snapshot(&job.id).unwrap().transfer_url.as_deref(), Some(dead_url.as_str()));
+    // ...and Retry, which kept nothing from it, resolves again and moves on.
+    manager.resume(&job.id, None).await.unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(fs::read(&job.destination).unwrap(), body);
+    assert_eq!(manager.inner.snapshot(&job.id).unwrap().transfer_url.as_deref(), Some(working.archive_url.as_str()));
+    assert_eq!(metalink_requests.lock().unwrap().len(), 2);
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    // Kept bytes pin their mirror: they are continued only by a range request
+    // under the validator that mirror issued, never handed to another one.
+    let kept = &body[..32 * 1024];
+    let id = seed_partial(&manager, &root, metalink_url, kept, body.len() as u64);
+    manager.inner.update(&id, |stored| stored.transfer_url = Some(dead_url.clone())).unwrap();
+    let before = (dead_requests.lock().unwrap().len(), working.requests().len());
+    manager.resume(&id, None).await.unwrap();
+    let job = finished_job(&manager, &id).await;
+    assert_eq!(job.status, "failed");
+    assert_eq!(fs::read(paths(&job).unwrap().1).unwrap(), kept);
+    assert_eq!(metalink_requests.lock().unwrap().len(), 2, "a kept part must not be re-resolved");
+    assert_eq!(working.requests().len(), before.1, "a kept part must not move to another mirror");
+    let dead_seen = dead_requests.lock().unwrap().clone();
+    assert_eq!(dead_seen.len(), before.0 + 1);
+    let request = dead_seen.last().unwrap();
+    assert!(request.contains("\r\nrange: bytes=32768-\r\n"), "{request}");
+    assert!(request.contains("\r\nif-range: \"stable\"\r\n"), "{request}");
+    for task in [working.task, dead_task, metalink_task] {
+        task.abort();
+    }
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn a_rounded_catalog_size_admits_a_direct_download_without_rejecting_its_real_size() {
+    // An OPDS display length rounded up to a whole kibibyte, as catalogs do.
+    let body = zim_bytes(b'c', 96 * 1024 - 46);
+    let advertised = 96 * 1024;
+    for chunked in [false, true] {
+        let mut response = if chunked {
+            format!("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n", body.len()).into_bytes()
+        } else {
+            format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes()
+        };
+        response.extend_from_slice(&body);
+        if chunked {
+            response.extend_from_slice(b"\r\n0\r\n\r\n");
+        }
+        let (url, server) = single_response(response).await;
+        let root = test_directory();
+        let store = test_store(&root);
+        let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+        let job = manager.start(url, root.clone(), None, Some(advertised), None).await.unwrap();
+        // The estimate is shown and admitted against until a response arrives.
+        assert_eq!(job.total, Some(advertised));
+        let job = finished_job(&manager, &job.id).await;
+        assert_eq!(job.status, "complete", "chunked={chunked}: {:?}", job.error);
+        assert_eq!(job.total, Some(body.len() as u64));
+        assert_eq!(fs::read(&job.destination).unwrap(), body);
+        server.await.unwrap();
+        drop(manager);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+

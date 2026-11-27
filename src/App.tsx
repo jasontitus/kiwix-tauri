@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -41,6 +42,7 @@ import {
   requestFolderAccess,
   flushPendingPreferences,
   registerDiskSpaceConfirmation,
+  type DiskSpaceDecision,
   type DiskSpaceWarning,
   isNative,
   isDesktop,
@@ -67,7 +69,24 @@ import { translateBookmarkDrafts, translateLocation, translateTabs } from "./ref
 import { privateSyncRequest } from "./private-sync-api";
 import { diagnostics, reportError } from "./diagnostics";
 import { reportBootPhase, reportFrontendReady } from "./startup-ready";
-import { isProviderUnavailableFor, isSuspendedError, normalizeSeverity, type ErrorSeverity } from "./error-visibility";
+import {
+  errorSurface,
+  isProviderUnavailableFor,
+  isSuspendedError,
+  isUserCancelledError,
+  normalizeSeverity,
+  type ErrorSeverity,
+  type ErrorSurface,
+} from "./error-visibility";
+import {
+  SHELL_POPOVERS,
+  SURFACE_ATTRIBUTES,
+  backTarget,
+  escapeTarget,
+  openDialogs,
+  openPopover,
+} from "./shell-dismiss";
+import { createBackRegistration, tauriBackBridge, type BackRegistration } from "./android-back";
 import { shouldKeepReaderForBackgroundMedia } from "./media-policy";
 import {
   ReaderMediaCheckpoint,
@@ -148,6 +167,34 @@ function isShellShortcut(action: string): action is ShellShortcut {
     isApplicationShortcut(action) ||
     TAB_SELECTION_ACTIONS.some((allowed) => allowed === action)
   );
+}
+/**
+ * Ask the top-most modal dialog to close, exactly as its own Escape would:
+ * the dialog's cancel handler keeps its busy and consent policy.
+ */
+function cancelTopDialog(dialogs: HTMLDialogElement[]) {
+  // Focus lives in the top-most modal; its backdrop covers every point of the
+  // viewport when focus was lost. Document order is only the last resort.
+  const dialog = document.activeElement?.closest<HTMLDialogElement>("dialog[open]") ??
+    document.elementFromPoint(0, 0)?.closest<HTMLDialogElement>("dialog[open]") ??
+    dialogs[dialogs.length - 1];
+  if (dialog.dispatchEvent(new Event("cancel", { cancelable: true }))) dialog.close();
+}
+/**
+ * Hand an Escape that never reached the DOM (a native key command, or Android
+ * Back closing a popover) to a shell control. Returns whether one used it.
+ * The key is dispatched in the shell document only: an archive frame that has
+ * focus never receives a synthetic key.
+ */
+function offerEscape(target: Element | null = document.activeElement): boolean {
+  const receiver = target instanceof HTMLElement &&
+    !target.matches("iframe, frame, object, embed") ? target : document.body;
+  return !receiver.dispatchEvent(new KeyboardEvent("keydown", {
+    key: "Escape",
+    code: "Escape",
+    bubbles: true,
+    cancelable: true,
+  }));
 }
 type MobileIncoming = IncomingArchiveRequest;
 type MobileEntry = {
@@ -392,6 +439,9 @@ export default function App() {
     Array.from(document.querySelectorAll<HTMLElement>('[data-mobile-tabs-trigger="true"]'))
       .find((button) => button.getClientRects().length > 0)?.focus();
   };
+  // Read by listeners that outlive a render (native key commands, Android Back).
+  const shellSurfaces = useRef({ tabSheet: false, dismissTabSheet: dismissMobileTabs });
+  shellSurfaces.current = { tabSheet: mobileTabsOpen, dismissTabSheet: dismissMobileTabs };
   const [mapChoices, setMapChoices] = useState<Record<string, string>>({});
   const [readerGeneration, setReaderGeneration] = useState(0);
   const [readerWorkspaces, setReaderWorkspaces] = useState<{
@@ -409,7 +459,14 @@ export default function App() {
   const workspaceEpoch = workspaceContext.current.epoch;
   // The band's generic prefix frames only a blocking failure. A recoverable
   // diagnostic shown with technical details on stands as its own sentence.
-  const [error, setError] = useState<{ message: string; severity: ErrorSeverity } | null>(null);
+  // One owner per failure: the band, or an alert dialog when a modal covers it.
+  const [error, setError] = useState<{
+    message: string;
+    severity: ErrorSeverity;
+    surface: ErrorSurface;
+  } | null>(null);
+  const errorDismiss = useRef<HTMLButtonElement>(null);
+  const errorMessageId = useId();
   const [initialError, setInitialError] = useState("");
   const [startupNoticeDismissed, setStartupNoticeDismissed] = useState(false);
   const [pageVisible, setPageVisible] = useState(document.visibilityState === "visible");
@@ -439,7 +496,7 @@ export default function App() {
   const [diskSpaceWarning, setDiskSpaceWarning] = useState<DiskSpaceWarning | null>(null);
   const diskSpaceConfirmation = useRef<{
     privacy: PrivacyContext;
-    resolve: (accepted: boolean) => void;
+    resolve: (decision: DiskSpaceDecision) => void;
   } | null>(null);
   const dismissedIncoming = useRef(new Set<string>());
   const mobileRetirementRevision = useRef(0);
@@ -790,13 +847,27 @@ export default function App() {
   showTechnicalErrors.current = snapshot?.settings.showTechnicalErrors === true;
   const onError = useCallback(
     (value: unknown, severity: ErrorSeverity = "blocking", showGlobally = true) => {
+      // The user's own cancellation is not a failure: nothing to record or paint.
+      if (isUserCancelledError(value)) return;
       const render = reportError(
         diagnostics,
         value,
         severity,
         showTechnicalErrors.current,
       );
-      if (render && showGlobally) setError({ message: errorText(value), severity: normalizeSeverity(severity) });
+      if (!render || !showGlobally) return;
+      // The band is in the page. Under an open modal it is behind the
+      // backdrop, inert and cannot be dismissed, so a failure reported then
+      // is presented above the modal instead. The quit and recovery dialogs
+      // are the shell's own: the first hides the band's shell altogether and
+      // the second already shows this message.
+      const covered = openDialogs(document).some((dialog) =>
+        dialog !== quitDialog.current && dialog !== mobileRecoveryDialog.current);
+      setError({
+        message: errorText(value),
+        severity: normalizeSeverity(severity),
+        surface: errorSurface(severity, covered),
+      });
     },
     [],
   );
@@ -838,21 +909,24 @@ export default function App() {
     }).catch((value) => { if (!cancelled) onError(value, "recoverable"); });
     return () => { cancelled = true; };
   }, [snapshot?.settings.locale, mobileInteraction.revision, mobileSuspended, onError]);
-  const finishDiskSpaceConfirmation = useCallback((accepted: boolean) => {
+  // `declined` is only the user's own Cancel/close. Consent that arrives after
+  // the lifecycle or privacy context moved on authorizes nothing.
+  const finishDiskSpaceConfirmation = useCallback((decision: DiskSpaceDecision) => {
     const pending = diskSpaceConfirmation.current;
     if (!pending) return;
     diskSpaceConfirmation.current = null;
     setDiskSpaceWarning(null);
-    pending.resolve(accepted && mounted.current && downloadConsentAllowed.current &&
-      !privacyPending.current && !quitRequest.current && isPrivacyContextCurrent(pending.privacy));
+    pending.resolve(decision !== "accepted" || (mounted.current && downloadConsentAllowed.current &&
+      !privacyPending.current && !quitRequest.current && isPrivacyContextCurrent(pending.privacy))
+      ? decision : "unavailable");
   }, []);
   useEffect(() => {
     const unregister = registerDiskSpaceConfirmation((warning) => {
       const privacy = capturePrivacyContext();
       if (!mounted.current || !downloadConsentAllowed.current || diskSpaceConfirmation.current ||
           privacyPending.current || quitRequest.current || !privacy || privacy.privateMode || privacy.readOnly)
-        return Promise.resolve(false);
-      return new Promise<boolean>((resolve) => {
+        return Promise.resolve<DiskSpaceDecision>("unavailable");
+      return new Promise<DiskSpaceDecision>((resolve) => {
         diskSpaceConfirmation.current = { privacy, resolve };
         setDiskSpaceWarning(warning);
       });
@@ -861,13 +935,13 @@ export default function App() {
       unregister();
       const pending = diskSpaceConfirmation.current;
       diskSpaceConfirmation.current = null;
-      pending?.resolve(false);
+      pending?.resolve("unavailable");
     };
   }, []);
   useEffect(() => {
     const pending = diskSpaceConfirmation.current;
     if (pending && (!downloadConsentAllowed.current || !isPrivacyContextCurrent(pending.privacy)))
-      finishDiskSpaceConfirmation(false);
+      finishDiskSpaceConfirmation("unavailable");
   }, [diskSpaceWarning, quitting, mobileSuspended, mobileInteraction.interactive,
       snapshot?.privacyGeneration, snapshot?.settings.privateMode,
       snapshot?.settings.readOnly, finishDiskSpaceConfirmation]);
@@ -2843,19 +2917,25 @@ export default function App() {
             mobileReconcile.current?.();
             return;
           }
-          const dialogs = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
-          if (dialogs.length) {
-            if (action === "escape") {
-              // Native capture consumes Escape before DOM dispatch. Preserve
-              // the current dialog's cancel/busy policy, without also sending
-              // Escape to the reader underneath it.
-              const focused = document.activeElement?.closest<HTMLDialogElement>("dialog[open]");
-              const dialog = focused ?? dialogs[dialogs.length - 1];
-              if (dialog.dispatchEvent(new Event("cancel", { cancelable: true })))
-                dialog.close();
-            }
+          const dialogs = openDialogs(document);
+          if (action === "escape") {
+            // Native capture consumes Escape before DOM dispatch, so the key
+            // handlers of the shell's own popovers never run. Close the
+            // top-most surface: a dialog keeps its cancel/busy policy, the
+            // tab sheet closes wherever focus is, and a picker or suggestion
+            // list gets the key it would have received. Only an Escape that
+            // no shell control used reaches the reader underneath.
+            const target = escapeTarget({
+              dialog: dialogs.length > 0,
+              tabSheet: shellSurfaces.current.tabSheet,
+            });
+            if (target === "dialog") cancelTopDialog(dialogs);
+            else if (target === "tab-sheet") shellSurfaces.current.dismissTabSheet();
+            else if (!offerEscape() && pane === "reader")
+              mobileReaderShortcut.current?.("escape");
             return;
           }
+          if (dialogs.length) return;
           if (isShellShortcut(action) && action !== "new-window")
             applicationShortcut(action);
           else if (action === "search" && pane !== "reader")
@@ -2874,6 +2954,83 @@ export default function App() {
       dispose?.();
     };
   }, [applicationShortcut, pane, onError]);
+  // Android system Back. Tauri delivers the press to the page only while a
+  // listener is registered and offers no call that hands it back, so the
+  // listener is held exactly while the shell has something to dismiss (see
+  // src/android-back.ts). At the library with nothing open, Back stays the
+  // platform's: it backgrounds the task and transfers keep running.
+  const [androidSurfaceOpen, setAndroidSurfaceOpen] = useState(false);
+  const readAndroidSurfaces = useCallback(() => {
+    setAndroidSurfaceOpen(openDialogs(document).length > 0 ||
+      document.querySelector(SHELL_POPOVERS) !== null);
+  }, []);
+  useEffect(() => {
+    if (!isAndroid) return;
+    // Dialogs and pickers belong to many components; their open state is in
+    // the DOM, not in this component.
+    const observer = new MutationObserver(readAndroidSurfaces);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: SURFACE_ATTRIBUTES,
+    });
+    readAndroidSurfaces();
+    return () => observer.disconnect();
+  }, [readAndroidSurfaces]);
+  const focusMainAfterBack = useRef(false);
+  const androidBackPress = useRef(() => {});
+  androidBackPress.current = () => {
+    if (document.visibilityState !== "visible" || quitRequest.current ||
+        document.querySelector(".app-shell[hidden]")) return;
+    const dialogs = openDialogs(document);
+    const popover = dialogs.length ? null : openPopover(document,
+      (element) => getComputedStyle(element).position === "absolute");
+    const target = backTarget({
+      dialog: dialogs.length > 0,
+      tabSheet: mobileTabsOpen,
+      popover: popover !== null,
+      search: globalSearch,
+      pane,
+      readerHistory: pane === "reader" && !!mobileReaderShortcut.current &&
+        !!tabs.find((tab) => tab.id === activeTab)?.back.length,
+    });
+    if (target === "dialog") cancelTopDialog(dialogs);
+    else if (target === "tab-sheet") dismissMobileTabs();
+    else if (target === "popover" && popover) {
+      if (popover.kind === "reader") mobileReaderShortcut.current?.("escape");
+      else if (!offerEscape(popover.element) && popover.element instanceof HTMLDetailsElement)
+        popover.element.open = false;
+    } else if (target === "search") setGlobalSearch(false);
+    else if (target === "reader-history") mobileReaderShortcut.current?.("back");
+    else if (target === "library") {
+      // Focus was inside the pane that is about to unmount.
+      focusMainAfterBack.current = true;
+      navigate("library");
+    }
+    // `leave`: the surface closed between the registration and this press.
+    // Re-read so the listener is withdrawn and the next Back is the system's.
+    else readAndroidSurfaces();
+  };
+  useEffect(() => {
+    if (!focusMainAfterBack.current) return;
+    focusMainAfterBack.current = false;
+    document.getElementById("main-content")?.focus({ preventScroll: true });
+  }, [pane]);
+  const androidBackWanted = isAndroid && !quitting && !mobileSuspended &&
+    (androidSurfaceOpen || mobileTabsOpen || globalSearch || pane !== "library");
+  // The ref outlives an effect replay, so there is one registration per shell.
+  const androidBackRegistration = useRef<BackRegistration | null>(null);
+  useEffect(() => {
+    if (!isAndroid) return;
+    const registration = androidBackRegistration.current ??= createBackRegistration(
+      tauriBackBridge(),
+      () => androidBackPress.current(),
+      (value) => onError(value, "recoverable"),
+    );
+    registration.want(androidBackWanted);
+    return () => registration.want(false);
+  }, [androidBackWanted, onError]);
   // Native menu labels only change with the resolved locale; rebuilding ~50
   // catalog lookups on every poll/progress render is wasted work.
   const nativeMenuLabels = useMemo(() => ({
@@ -3486,7 +3643,7 @@ export default function App() {
               </button>
             )}
           </div>
-          {error && (
+          {error?.surface === "band" && (
             <div className="global-error">
               <ErrorNotice
                 message={
@@ -3908,7 +4065,7 @@ export default function App() {
       <SettingsDirectoryMigration available={!quitting && !mobileSuspended &&
         (!isMobile || mobileInteraction.interactive)} />
       {diskSpaceWarning && downloadConsentAllowed.current && (
-        <Modal title={t("Review low storage warning")} onClose={() => finishDiskSpaceConfirmation(false)}>
+        <Modal title={t("Review low storage warning")} onClose={() => finishDiskSpaceConfirmation("declined")}>
           <p className="disk-space-message">{t(
             "This download would leave less than 1 GB of free space in {directory}.\nAvailable: {available}. Remaining download: {remaining}.\nContinue anyway?",
             {
@@ -3918,10 +4075,29 @@ export default function App() {
             },
           )}</p>
           <div className="modal-actions">
-            <button autoFocus onClick={() => finishDiskSpaceConfirmation(false)}>{t("Cancel")}</button>
+            <button autoFocus onClick={() => finishDiskSpaceConfirmation("declined")}>{t("Cancel")}</button>
             <button className="primary" onClick={(event) => {
-              if (event.isTrusted) finishDiskSpaceConfirmation(true);
+              if (event.isTrusted) finishDiskSpaceConfirmation("accepted");
             }}>{t("Continue")}</button>
+          </div>
+        </Modal>
+      )}
+      {error?.surface === "dialog" && !quitting && !mobileSuspended && (
+        // A failure reported while a modal is open. It is the only place the
+        // message is painted, so dismissing it here dismisses the failure.
+        <Modal
+          role="alertdialog"
+          title={t("The operation could not be completed.")}
+          onClose={() => setError(null)}
+          initialFocus={errorDismiss}
+          describedBy={errorMessageId}
+          presentation="confirmation"
+        >
+          <p className="confirm-message" id={errorMessageId}>{error.message}</p>
+          <div className="modal-actions">
+            <button ref={errorDismiss} type="button" onClick={() => setError(null)}>
+              {t("Dismiss")}
+            </button>
           </div>
         </Modal>
       )}

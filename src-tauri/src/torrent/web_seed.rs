@@ -18,9 +18,12 @@ use url::Url;
 const MAX_BENCODE_DEPTH: usize = 32;
 const MAX_SEED_REDIRECTS: usize = 5;
 const SEED_TIMEOUT: Duration = Duration::from_secs(90);
-/// Consecutive passes that add nothing before the engine continues with peers.
-const SEED_STALLED_PASSES: u32 = 6;
-/// Delay before the next pass; it doubles per stalled pass, sixteenfold at most.
+/// Consecutive passes that add nothing before the engine continues with peers
+/// alone. With the delays below that rides out about fifteen seconds without a
+/// connection, yet does not hold back a healthy swarm for long when the
+/// mirrors are simply gone.
+const SEED_STALLED_PASSES: u32 = 5;
+/// Delay before the next pass; it doubles with every stalled pass.
 #[cfg(not(test))]
 const SEED_BACKOFF: Duration = Duration::from_secs(1);
 #[cfg(test)]
@@ -1303,7 +1306,9 @@ mod tests {
             path: temp.clone(),
             expected: Arc::new(HashMap::from([(PathBuf::from("map.zim"), BODY.len() as u64)])),
             sources: Arc::new(Mutex::new(HashMap::new())),
-            existing: staged.is_some(),
+            // As the manager sets it for this stage: a file may already exist,
+            // and a missing one is still created.
+            existing: true,
             stop: CancellationToken::new(),
             gate: Arc::new(std::sync::RwLock::new(())),
             dirs: Arc::new(Mutex::new(HashSet::new())),

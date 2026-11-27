@@ -1132,27 +1132,48 @@ impl Drop for SeedServer {
     }
 }
 
-pub fn reachable_addresses() -> Result<Vec<IpAddr>, String> {
-    let mut addresses: Vec<IpAddr> = if_addrs::get_if_addrs()
-        .map_err(|e| format!("Cannot enumerate local interfaces: {e}"))?
-        .into_iter()
-        .map(|interface| { let address = interface.ip(); (interface.name, address) })
-        // A VPN tunnel or a VM bridge is reachable from this machine but is the
-        // wrong path for a nearby peer, and advertising it makes a phone dial
-        // through the tunnel instead of the Wi-Fi link.
-        .filter(|(interface, _)| physical_interface(interface))
-        .map(|(_, address)| address).filter(|address| usable_address(*address)).collect();
-    addresses.sort(); addresses.dedup(); addresses.truncate(32);
-    Ok(addresses)
+/// One local interface address, with the adapter facts the LAN classifier needs.
+pub struct InterfaceCandidate<'a> {
+    pub name: &'a str,
+    pub address: IpAddr,
+    pub point_to_point: bool,
+    pub loopback: bool,
 }
 
-/// Names of interfaces that carry ordinary local-network traffic. Tunnels
-/// (`utun*`), bridges (`bridge*`), Apple Wireless Direct (`awdl*`, `llw*`),
-/// loopback and stale transition interfaces never qualify.
-fn physical_interface(name: &str) -> bool {
-    const VIRTUAL: [&str; 9] = ["utun", "bridge", "awdl", "llw", "lo", "gif", "stf", "anpi", "pdp_ip"];
-    !VIRTUAL.iter().any(|prefix| name.starts_with(prefix))
+/// The addresses another device on the same local network can dial, in a
+/// stable order. A VPN tunnel, a VM or container bridge and a carrier data
+/// link are reachable from this machine but are the wrong path for a nearby
+/// peer: advertising one makes a phone dial into the tunnel instead of the
+/// Wi-Fi link, and binding Web sharing to one produces a dead link.
+pub fn lan_addresses<'a>(candidates: impl IntoIterator<Item = InterfaceCandidate<'a>>) -> Vec<IpAddr> {
+    let mut addresses: Vec<IpAddr> = candidates.into_iter()
+        .filter(|candidate| transfer_policy::lan_interface(candidate.name, candidate.point_to_point, candidate.loopback)
+            && !transfer_policy::cellular_interface(candidate.name))
+        .map(|candidate| candidate.address).filter(|address| usable_address(*address)).collect();
+    addresses.sort(); addresses.dedup(); addresses.truncate(32);
+    addresses
 }
+
+pub fn reachable_addresses() -> Result<Vec<IpAddr>, String> {
+    let interfaces = if_addrs::get_if_addrs().map_err(|e| format!("Cannot enumerate local interfaces: {e}"))?;
+    Ok(lan_addresses(interfaces.iter().map(|interface| InterfaceCandidate {
+        name: &interface.name, address: interface.ip(),
+        point_to_point: interface.is_p2p(), loopback: interface.is_loopback(),
+    })))
+}
+
+/// The local IPv4 address the kernel currently routes ordinary traffic from:
+/// the interface this device is really using, when several have an address.
+/// UDP connect performs route selection without sending a packet (the same
+/// probe `connect_addresses` uses), and the documentation-range target is
+/// never contacted. `None` when there is no IPv4 route at all.
+pub fn routed_local_address() -> Option<IpAddr> {
+    let socket = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
+    socket.connect((Ipv4Addr::new(203, 0, 113, 1), 9)).ok()?;
+    let local = socket.local_addr().ok()?.ip();
+    (!local.is_unspecified()).then_some(local)
+}
+
 pub fn usable_address(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(ip) => !ip.is_unspecified() && !ip.is_loopback() && !ip.is_link_local() && !ip.is_multicast() && !ip.is_broadcast(),

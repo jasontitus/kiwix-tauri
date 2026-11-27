@@ -23,7 +23,8 @@ function bridge() {
   const events = [];
   const context = vm.createContext({
     URL, Node: class Node {},
-    location: { href: "http://archive.localhost:8123/index.html", origin: "http://archive.localhost:8123" },
+    location: { href: "http://archive.localhost:8123/index.html", origin: "http://archive.localhost:8123",
+      pathname: "/index.html", search: "" },
     performance: { now: () => now },
     setTimeout(callback, delay) { const id = ++next; timers.set(id, { callback, at: now + delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
@@ -69,6 +70,21 @@ test("departed, disconnected, untrusted and external links cannot emit preview r
   r.focus(r.anchor("untrusted.html"), false); r.advance(500);
   r.focus(r.anchor("https://example.org/external")); r.advance(500);
   assert.deepEqual(r.events, []);
+});
+
+test("footnote, section and back links of the page on screen never ask for a preview", () => {
+  const r = bridge();
+  r.context.setLinkPreviews(true);
+  for (const href of ["#cite_note-1", "index.html#History", "/index.html#top", "index.html"]) {
+    r.focus(r.anchor(href)); r.advance(500);
+  }
+  assert.deepEqual(r.events, []);
+  // The same article with another query, or another article's section, is a different page.
+  const query = r.anchor("index.html?oldid=2#History");
+  const other = r.anchor("other.html#History");
+  r.focus(query); r.advance(500);
+  r.focus(other); r.advance(500);
+  assert.deepEqual(r.events.map((event) => event.url), [query.href, other.href]);
 });
 
 test("disabling cancels an imminent preview and re-enabling permits the same anchor", () => {

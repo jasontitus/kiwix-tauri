@@ -53,6 +53,7 @@ impl Service {
                 | "localswarm_hotspot_start"
                 | "edition_prepare" | "edition_download" | "edition_status"
                 | "edition_commit" | "edition_cancel" | "edition_rollback"
+                | "edition_discard_original"
         ) {
             self.normal_writable()?;
         }
@@ -1804,11 +1805,20 @@ impl Service {
                         Ok(result) => {
                             if let Some(errors) = result.get("errors").and_then(Value::as_array) {
                                 warnings.extend(errors.iter().map(|error| {
-                                    error
+                                    let message = error
                                         .get("error")
                                         .and_then(Value::as_str)
                                         .map(str::to_owned)
-                                        .unwrap_or_else(|| error.to_string())
+                                        .unwrap_or_else(|| error.to_string());
+                                    // Name the archive and both folders, so the
+                                    // warning says what to look at and where.
+                                    let field = |name: &str| error.get(name).and_then(Value::as_str);
+                                    match (field("title"), field("from"), field("to")) {
+                                        (Some(title), Some(from), Some(to)) => format!(
+                                            "Moving “{title}” from {from} to {to} did not finish: {message}"
+                                        ),
+                                        _ => message,
+                                    }
                                 }));
                             }
                         }
@@ -2330,9 +2340,10 @@ impl Service {
                         let official = self.official_catalog.lock()
                             .map_err(|_| "Official catalog state unavailable")?.lookup(&url);
                         if let Some(entry) = official {
-                            let stem = entry.name.strip_suffix(".zim").unwrap_or(&entry.name);
-                            let name = if stem.is_empty() { None } else { Some(format!("{stem}.zim")) };
-                            manager.start_official_catalog(entry.url, directory, name,
+                            // No name: as on every other platform the file is
+                            // named after the archive URL, which carries the
+                            // flavour and edition that the catalog name lacks.
+                            manager.start_official_catalog(entry.url, directory, None,
                                 Some(entry.size).filter(|size| *size > 0), acknowledgement).await?
                         } else {
                             manager.start(url, directory, file_name, expected_size, acknowledgement).await?
@@ -3224,7 +3235,7 @@ impl Service {
             }
             "find_updates" => self.find_edition_updates(&args, &label).await,
             "edition_prepare" | "edition_download" | "edition_status" | "edition_commit"
-                | "edition_cancel" | "edition_rollback" => self.edition_command(command, &args, &label).await,
+                | "edition_cancel" | "edition_rollback" | "edition_discard_original" => self.edition_command(command, &args, &label).await,
             _ => Err(format!("Unknown application command: {command}")),
         }
     }

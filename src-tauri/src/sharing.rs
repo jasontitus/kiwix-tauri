@@ -193,15 +193,21 @@ pub fn interfaces() -> Result<Vec<SharingInterface>, String> {
 /// available as explicit choices.
 pub fn default_binding() -> Result<SharingBinding, String> {
     let available = crate::localswarm::reachable_addresses()?;
-    auto_lan_binding(&available)
+    auto_lan_binding(&available, crate::localswarm::routed_local_address())
 }
 
-fn auto_lan_binding(available: &[IpAddr]) -> Result<SharingBinding, String> {
-    available.iter().find_map(|address| {
-        let IpAddr::V4(address) = address else { return None; };
-        (address.is_private() && !address.is_loopback() && safe_interface((*address).into()))
-            .then(|| SharingBinding::Interface { address: address.to_string() })
-    }).ok_or_else(|| "Connect to a trusted local Wi-Fi or Ethernet network before sharing, or choose an advanced network binding".into())
+/// `available` holds only real LAN interfaces. Among them, the address the
+/// system is actually routing traffic from wins, so a second private adapter
+/// that merely sorts first is not handed to the other device as a dead link.
+/// `routed` grants nothing by itself: an address that is not a private LAN
+/// candidate (a VPN or carrier source address) is ignored.
+fn auto_lan_binding(available: &[IpAddr], routed: Option<IpAddr>) -> Result<SharingBinding, String> {
+    let eligible = |address: &IpAddr| matches!(address, IpAddr::V4(ip) if ip.is_private() && !ip.is_loopback())
+        && safe_interface(*address);
+    routed.filter(|address| eligible(address) && available.contains(address))
+        .or_else(|| available.iter().copied().find(eligible))
+        .map(|address| SharingBinding::Interface { address: address.to_string() })
+        .ok_or_else(|| "Connect to a trusted local Wi-Fi or Ethernet network before sharing, or choose an advanced network binding".into())
 }
 
 fn binding_addresses(
