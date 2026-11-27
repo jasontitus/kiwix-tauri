@@ -425,6 +425,35 @@ test("an announcement made while a re-session is in flight is answered by that r
   assert.equal(r.context.activeFrame.current.sessionId, incoming);
 });
 
+test("a document restored from the back-forward cache cannot reuse the session or the token it once held", async () => {
+  // First document: session one, token one.
+  const { r, token: first, session: one } = settled();
+  // The frame navigates to a second page, which is handed session two.
+  const second = crypto.randomUUID();
+  r.hello(second); r.load(); await r.drain();
+  r.bind(second); r.ready();
+  const two = r.context.activeFrame.current.sessionId;
+  assert.notEqual(two, one);
+  // Back: the first document returns without bootstrapping again, so it makes
+  // no announcement. Its bridge still believes it holds session one.
+  r.load();
+  assert.equal(r.probes().at(-1).data.sessionId, two, "only the admitted session is put to the frame");
+  r.ready({ sessionId: one });
+  r.proof(first, { sessionId: one });
+  r.proof(first);
+  assert.ok(r.context.documentProbe.current, "neither its old session nor its old token proves the new session");
+  assert.equal(r.context.activeFrame.current.sessionId, two);
+  r.advance(1000); await r.drain();
+  const three = r.context.activeFrame.current.sessionId;
+  assert.ok(three !== two && three !== one, "the restored document is given a session of its own");
+  // It binds its token to that session and is an ordinary document again.
+  r.bind(first); r.ready();
+  r.load(); r.proof(first);
+  assert.equal(r.context.documentProbe.current, null);
+  assert.equal(r.context.activeFrame.current.sessionId, three);
+  assert.equal(r.calls.filter((item) => item.command === "sensor_deactivate").length, 2);
+});
+
 test("a proof window does not outlive the session it was opened for", async () => {
   for (const retire of [
     (r) => { r.context.latest.current.privacyGeneration++; },
