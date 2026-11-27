@@ -34,7 +34,9 @@ class MainActivity : TauriActivity(), NativeActivityHost {
     }
   }
   override fun onCreate(savedInstanceState: Bundle?) {
-    KiwixMobilePlugin.activityCreated(this)
+    // Saved state means Android is restoring this Activity, so its launch
+    // intent was already delivered to an earlier incarnation.
+    KiwixMobilePlugin.activityCreated(this, savedInstanceState != null)
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     val content = findViewById<View>(android.R.id.content)

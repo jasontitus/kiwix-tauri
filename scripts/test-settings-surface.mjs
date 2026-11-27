@@ -48,7 +48,7 @@ async function autosave() {
     },
     clearTimeout: (id) => { state.timers.delete(id); },
     document: { addEventListener() {}, removeEventListener() {}, visibilityState: "visible" },
-    Error, Map, Set, Number, String, Promise, Object,
+    Error, Map, Set, Number, String, Promise, Object, URL,
   });
   vm.runInContext(code, context);
   const handlers = { onRefresh() {}, onError() {} };

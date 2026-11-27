@@ -244,13 +244,12 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
     // Closing while a Bluetooth sender is still being joined abandons that
     // connection. Without telling the device, the Wi-Fi join prompt can still
     // appear after the dialog is gone and the phone stays on the sender's
-    // network. A list that already loaded keeps its connection: accepted
-    // downloads depend on it, and the device refuses to end one that has any.
+    // network. A list that already loaded keeps its connection, and the
+    // device itself refuses to end one that is established (`pendingOnly`):
+    // accepted downloads depend on it.
     const peer = selectedPeerRef.current;
-    const consumer = status.nearby?.consumer;
     const abandoned = peer?.transport === "quic-library" && peer.discovery === "bluetooth" &&
-      pendingPeerRef.current === peer.id && !inventoryRef.current && consumer?.peerId === peer.id &&
-      (consumer.phase === "connecting" || consumer.phase === "joining") ? consumer.owner : null;
+      pendingPeerRef.current === peer.id && !inventoryRef.current ? status.nearby?.consumer?.owner : undefined;
     const finding = !!status.nearby?.discovery;
     revision.current++;
     operationToken.current++;
