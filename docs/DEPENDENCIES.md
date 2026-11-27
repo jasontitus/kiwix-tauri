@@ -109,6 +109,13 @@ Regenerate with `cargo metadata --format-version 1 --locked --all-features`, com
 
 ## To do
 
+- [ ] **Pin the CI Rust toolchain and the third-party actions (open; 2026-11-27 review, BUILD-11).** State today: every Rust job uses `dtolnay/rust-toolchain@stable` (five uses in `checks.yml`, three in `build.yml`), a moving branch that installs whichever stable release is current, and the repository has no `rust-toolchain.toml`; `dependencies.yml` uses `EmbarkStudios/cargo-deny-action@v2`, a moving tag. Consequences: a new stable release can turn `clippy -- -D warnings` red on an unrelated change; a release cannot be rebuilt with the compiler that produced it; and in `build.yml` the toolchain action runs earlier in the same `linux`, `macos` and `windows` jobs that later receive `TAURI_SIGNING_PRIVATE_KEY` and the Apple certificate, so a moved ref would run unreviewed code in a job that holds signing secrets. Nothing was pinned in that review because the commit behind a tag or branch has to be read from the action's own repository, which the session could not reach; a SHA must never be copied from memory or from a document. To close this:
+  1. Choose the exact Rust release to pin (at least the `rust-version` in `src-tauri/Cargo.toml`). The log of the "Run dtolnay/rust-toolchain@stable" step in a recent green run shows which release CI currently resolves.
+  2. Read the commit SHAs from the source repositories, for example `gh api repos/dtolnay/rust-toolchain/commits/master --jq .sha` and `gh api repos/EmbarkStudios/cargo-deny-action/git/ref/tags/v2` (follow `object.url` once more if the tag is annotated), and review what each commit contains.
+  3. Replace each `uses: dtolnay/rust-toolchain@stable` with the full 40-character SHA and name the release in a `toolchain:` input, keeping the existing `targets:` and `components:`. Confirm in the action's README that a SHA ref requires the `toolchain` input. Replace `cargo-deny-action@v2` with its SHA the same way. Keep the tag or version as a trailing comment.
+  4. Optionally add a root `rust-toolchain.toml` with the same release so local builds match; check first that `scripts/dev.sh` and the iOS/Android target installs still resolve.
+  5. Run "Checks", "Dependency policy" and a manual "Native desktop packages" run, then bump the pins deliberately, in their own change. The first-party `actions/*@v4` refs were left out of the finding.
+
 - [ ] **Track an upstream RustCrypto torrent hash backend.** The app uses a pinned local wrapper as of 2026-11-19. Recheck upstream's hashing interface and verify algorithm coverage before changing the app's TLS provider.
 
 ## Reduction candidates

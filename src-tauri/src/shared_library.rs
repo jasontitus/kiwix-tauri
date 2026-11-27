@@ -398,7 +398,7 @@ mod tests {
         let admitted = client.receipt_grant("open-list", "book").unwrap();
         admitted.check().await.unwrap();
         assert_eq!(admitted.book().unwrap().id, "book");
-        assert_eq!(client.receipt_grant("open-list", "other").unwrap_err(), "Book is not in this shared library");
+        assert_eq!(client.receipt_grant("open-list", "other").err().unwrap(), "Book is not in this shared library");
         assert_eq!(client.receipt_grant("unknown", "book").err().unwrap(), REVOKED);
 
         // Another browse making room does not drop it either, however old.

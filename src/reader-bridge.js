@@ -1438,9 +1438,9 @@
   let activeSpeech = null;
   function stopSpeech() {
     activeSpeech = null;
-    // Keep the extracted document: native speech can survive backgrounding and
-    // resume its offsets after this visibility stop. Navigation/session
-    // replacement explicitly resets it below.
+    // Only the paint and the utterance end here. The extracted document is
+    // reset by the callers that end the reading (stop, navigation, session
+    // replacement, pagehide) and replaced by the one that restarts it.
     try { clearReadAloudPaint(); } catch (_) { /* paint only */ }
     window.speechSynthesis?.cancel();
     post("speech-state", { speaking: false });
@@ -4137,12 +4137,10 @@
       } catch (_) {
         return;
       }
-      if (
-        url.href.length <= 16384 &&
-        ["http:", "https:", "mailto:"].includes(url.protocol)
-      )
+      if (!["http:", "https:", "mailto:"].includes(url.protocol))
+        reportUnsupportedLink(event, url);
+      else if (url.href.length <= 16384)
         post("external-link", { url: url.href, newTab: true });
-      else reportUnsupportedLink(event, url);
     },
     true,
   );

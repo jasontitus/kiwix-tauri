@@ -140,7 +140,11 @@
   /* Keep the document noninteractive until its authenticated ready message.
      Toggling inert on a child frame (or its ancestor) leaves WebView 109's
      native accessibility subtree stale after navigation. Visibility preserves
-     the browsing context, layout and real pagehide/storage handoff. */
+     the browsing context, layout and real pagehide/storage handoff.
+     The one exception is made in Reader.tsx (heldPaint): a page that was
+     ready when its frame navigated by itself was already on screen, so it
+     keeps its paint while the new document re-sessions and is hidden again
+     only if that fails. */
   visibility: hidden;
 }
 .rw-panel {
