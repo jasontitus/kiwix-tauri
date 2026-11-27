@@ -346,15 +346,11 @@ pub(crate) fn save_state_at(path: &Path, state: &StoredState) -> Result<(), Stri
     let bytes = serde_json::to_vec_pretty(state).map_err(|error| error.to_string())?;
     let temporary = path.with_extension("json.tmp");
     std::fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
-    match std::fs::rename(&temporary, path) {
-        Ok(()) => Ok(()),
-        // Windows refuses to replace an existing destination.
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            std::fs::remove_file(path).map_err(|error| error.to_string())?;
-            std::fs::rename(&temporary, path).map_err(|error| error.to_string())
-        }
-        Err(error) => Err(error.to_string()),
-    }
+    // The store's replacement never removes the destination first.
+    crate::store::replace_file(&temporary, path).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        error.to_string()
+    })
 }
 
 fn save_state(store: &crate::store::Store, state: &StoredState) {
@@ -372,14 +368,20 @@ pub(crate) fn check_due(last_checked: Option<&str>, now: time::OffsetDateTime) -
         return true;
     };
     match crate::timestamps::parse(last_checked) {
-        Ok(checked) => (now - checked).whole_seconds()
-            >= CHECK_INTERVAL_SECONDS,
+        // A check recorded in the future was made while the clock was wrong;
+        // waiting for that time would stop automatic checks until then.
+        Ok(checked) => checked > now
+            || (now - checked).whole_seconds() >= CHECK_INTERVAL_SECONDS,
         Err(_) => true,
     }
 }
 
-fn next_check_at(last_checked: Option<&str>) -> Option<String> {
+fn next_check_at(last_checked: Option<&str>, now: time::OffsetDateTime) -> Option<String> {
     let checked = crate::timestamps::parse(last_checked?).ok()?;
+    if checked > now {
+        // Due now, as `check_due` treats it.
+        return Some(crate::timestamps::format(now));
+    }
     checked.checked_add(time::Duration::seconds(CHECK_INTERVAL_SECONDS)).map(crate::timestamps::format)
 }
 
@@ -448,12 +450,22 @@ fn acceptance_override(name: &str) -> Option<String> {
     }
 }
 
+/// `service` is the profile the Windows installer hook flushes. `check` keeps
+/// the `Update` it returns in `PENDING`, and the hook travels with it.
 fn updater_for<R: tauri::Runtime>(
     app: &AppHandle<R>,
     config: &ChannelConfig,
     request_timeout: Duration,
+    service: Option<&Arc<Service>>,
 ) -> Result<tauri_plugin_updater::Updater, String> {
-    app.updater_builder()
+    let mut builder = app.updater_builder();
+    if let Some(service) = service {
+        // A weak reference: `PENDING` is static and must not keep the
+        // service alive. The plugin ignores the hook outside Windows.
+        let service = Arc::downgrade(service);
+        builder = builder.on_before_exit(move || run_before_installer_exit(&service));
+    }
+    builder
         .endpoints(vec![config.endpoint.clone()])
         .map_err(|error| plain_update_error(&error))?
         .pubkey(config.pubkey.clone())
@@ -634,7 +646,7 @@ pub(crate) async fn status(service: &Arc<Service>) -> Result<UpdateStatus, Strin
         configuration_note,
         blocked_reason: mode_blocker(&settings),
         automatic_checks: !crate::sandbox::is_sandboxed(),
-        next_check_at: next_check_at(stored.last_checked.as_deref()),
+        next_check_at: next_check_at(stored.last_checked.as_deref(), time::OffsetDateTime::now_utc()),
         last_checked: stored.last_checked,
         last_available_version: stored.last_available_version,
         last_error: stored.last_error,
@@ -674,7 +686,7 @@ pub(crate) async fn check(
         }
     }
     let _operation = OPERATION.try_begin().ok_or_else(|| BUSY.to_string())?;
-    let updater = updater_for(&app, &config, REQUEST_TIMEOUT)?;
+    let updater = updater_for(&app, &config, REQUEST_TIMEOUT, Some(service))?;
     let result = updater.check().await;
     let now = time::OffsetDateTime::now_utc();
     let path = service.store.data_dir().join(STATE_FILE);
@@ -971,6 +983,15 @@ pub(crate) async fn install(
     );
     update.install(&bytes).map_err(|error| {
         set_progress(&app, None);
+        // The Windows installer hook may already have cleared the recorded
+        // availability; the update is still pending, so record it again.
+        #[cfg(windows)]
+        {
+            let path = service.store.data_dir().join(STATE_FILE);
+            let mut stored = load_state_at(&path);
+            stored.last_available_version = Some(update.version.clone());
+            save_state(&service.store, &stored);
+        }
         plain_update_error(&error)
     })?;
     set_progress(&app, None);
@@ -983,8 +1004,9 @@ pub(crate) async fn install(
     stored.last_error = None;
     save_state(&service.store, &stored);
 
-    // Windows starts its installer and exits inside `install`. macOS and
-    // Linux replace the bundle in place, so relaunch explicitly.
+    // Windows starts its installer and exits inside `install`, after the
+    // plugin ran `run_before_installer_exit`, so nothing below runs there.
+    // macOS and Linux replace the bundle in place, so relaunch explicitly.
     //
     // Never `restart()`/`request_restart()` here: Tauri raises ExitRequested
     // with RESTART_EXIT_CODE, for which `prevent_exit` is ignored, so the
@@ -999,6 +1021,73 @@ pub(crate) async fn install(
         app.exit(0);
     }
     Ok(())
+}
+
+/// How long the Windows pre-installer flush may delay the installer. The
+/// plugin calls its hook synchronously and then exits the process, so a stuck
+/// window query or file write must never keep the update from installing.
+const INSTALLER_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The updater plugin's `on_before_exit` hook. On Windows it runs inside
+/// `Update::install`, on the task executing `install`, after the installer was
+/// extracted and right before the plugin starts it and calls
+/// `std::process::exit(0)`: the ordinary Quit path (shell flush, geometry,
+/// session snapshot, `Service::shutdown`) never runs. The flush runs on its own
+/// thread, bounded by `INSTALLER_FLUSH_TIMEOUT`; a timeout installs anyway.
+fn run_before_installer_exit(service: &std::sync::Weak<Service>) {
+    let Some(service) = service.upgrade() else {
+        return;
+    };
+    let (finished, done) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new()
+        .name("kiwix-update-exit".into())
+        .spawn(move || {
+            before_installer_exit(&service);
+            let _ = finished.send(());
+        });
+    match spawned {
+        Ok(_) => {
+            if done.recv_timeout(INSTALLER_FLUSH_TIMEOUT).is_err() {
+                eprintln!("KIWIX_UPDATE_EXIT the profile was not saved in time; installing anyway");
+            }
+        }
+        Err(error) => eprintln!("KIWIX_UPDATE_EXIT cannot save the profile before installing: {error}"),
+    }
+}
+
+/// What can be saved before the installer replaces this process, without
+/// any privacy lease: `install` still holds its privacy read lease and the
+/// install writer while the plugin calls the hook, so `Service::shutdown`
+/// (which waits for the privacy write lease) would wait for itself.
+///
+/// The shells' in-memory sessions are not asked to flush: `quit::prepare`
+/// leaves every shell frozen for Quit, and nothing could release them if the
+/// installer then failed to start. Shells autosave 600 ms after a change, and
+/// the update had to download and verify before this runs.
+fn before_installer_exit(service: &Arc<Service>) {
+    if let Ok(app) = app_handle(service) {
+        if let Err(error) = crate::windows::capture(&app, &service.store) {
+            eprintln!("KIWIX_UPDATE_EXIT saving window positions: {error}");
+        }
+        let open: std::collections::HashSet<String> = app
+            .webview_windows()
+            .into_keys()
+            .filter(|label| crate::quit::shell_label(label))
+            .collect();
+        if let Err(error) = service.store.save_session_snapshot(&open) {
+            eprintln!("KIWIX_UPDATE_EXIT saving the restorable session: {error}");
+        }
+    }
+    // The last reading-position refresh may still be coalesced in memory.
+    if let Err(error) = service.store.flush_browsing() {
+        eprintln!("KIWIX_UPDATE_EXIT saving reading positions: {error}");
+    }
+    // The relaunched version must not report this update as still available.
+    let path = service.store.data_dir().join(STATE_FILE);
+    let mut stored = load_state_at(&path);
+    stored.last_available_version = None;
+    stored.last_error = None;
+    save_state(&service.store, &stored);
 }
 
 /// Re-read everything the download phase observed, now that the install
@@ -1549,7 +1638,7 @@ mod tests {
                 endpoint: Url::parse(&endpoint).unwrap(),
                 pubkey: base64::engine::general_purpose::STANDARD.encode(TEST_PUBLIC_KEY),
             };
-            let updater = updater_for(app.handle(), &config, idle).unwrap();
+            let updater = updater_for(app.handle(), &config, idle, None).unwrap();
             let update = updater.check().await.unwrap().unwrap();
             let server = tokio::spawn(async move {
                 let (mut socket, _) = listener.accept().await.unwrap();

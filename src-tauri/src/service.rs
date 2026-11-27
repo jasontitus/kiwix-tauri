@@ -748,12 +748,15 @@ impl Service {
         // A quarantined state file is a user-visible notice: the profile is
         // empty until the original is restored. Other skipped records stay in
         // Troubleshooting only.
-        let startup_warnings: Vec<String> = load_warnings.iter()
+        let mut startup_warnings: Vec<String> = load_warnings.iter()
             .filter(|warning| *warning == crate::mobile_rebase::STATE_QUARANTINED)
             .cloned()
             .collect();
         #[cfg(not(mobile))]
-        let startup_warnings: Vec<String> = Vec::new();
+        let mut startup_warnings: Vec<String> = Vec::new();
+        // The individual skips stay content-free in Troubleshooting; this one
+        // notice says where the original was kept before anything saved over it.
+        startup_warnings.extend(store.load_notice().map(str::to_owned));
         if !load_warnings.is_empty() {
             // Recoverable record skips are recorded in Troubleshooting only.
             // They must not paint the blocking migration band on every launch.

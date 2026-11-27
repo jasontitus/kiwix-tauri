@@ -1230,6 +1230,171 @@ fn unreadable_book_records_are_skipped_and_reported() {
         >= 2);
 }
 
+/// Files beside `state.json` that hold a preserved original.
+fn preserved_copies(profile: &Profile) -> Vec<PathBuf> {
+    let mut copies: Vec<PathBuf> = fs::read_dir(&profile.0).unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with("state.skipped-"))
+        .collect();
+    copies.sort();
+    copies
+}
+
+/// A writable profile holding one valid book and two records that are skipped.
+fn profile_with_skipped_books(profile: &Profile) -> Vec<u8> {
+    let store = Store::new(profile.0.clone()).unwrap();
+    store.update(|state| { state.books.push(fixture_book()); Ok(()) }).unwrap();
+    drop(store);
+    let mut json: serde_json::Value =
+        serde_json::from_slice(&fs::read(profile.0.join("state.json")).unwrap()).unwrap();
+    let mut broken = json["books"][0].clone();
+    broken["id"] = serde_json::json!("broken-book");
+    broken["installationId"] = serde_json::json!(new_installation_id());
+    broken["path"] = serde_json::json!("");
+    json["books"].as_array_mut().unwrap().push(broken);
+    // As a newer build would write it: an optional field this build does not know.
+    let mut newer = json["books"][0].clone();
+    newer["id"] = serde_json::json!("newer-book");
+    newer["installationId"] = serde_json::json!(new_installation_id());
+    newer["integrity"] = serde_json::json!({"futureField": true});
+    json["books"].as_array_mut().unwrap().push(newer);
+    let bytes = serde_json::to_vec_pretty(&json).unwrap();
+    fs::write(profile.0.join("state.json"), &bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn skipped_records_survive_the_next_save_in_a_preserved_copy() {
+    let profile = Profile::new();
+    let original = profile_with_skipped_books(&profile);
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert_eq!(store.read().unwrap().books.len(), 1);
+    // Opening keeps the file as it was and the original bytes beside it.
+    assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), original);
+    let copies = preserved_copies(&profile);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(&copies[0]).unwrap(), original);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(fs::metadata(&copies[0]).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    let notice = store.load_notice().expect("the shell is told where the copy is");
+    assert!(notice.contains(&crate::storage::display_path(&copies[0])), "{notice}");
+    // An ordinary save (session autosave, window capture) drops the skipped
+    // records from state.json; the copy still has them.
+    store.update(|_| Ok(())).unwrap();
+    drop(store);
+    let saved = String::from_utf8(fs::read(profile.0.join("state.json")).unwrap()).unwrap();
+    assert!(!saved.contains("broken-book") && !saved.contains("newer-book"));
+    let kept = String::from_utf8(fs::read(&copies[0]).unwrap()).unwrap();
+    assert!(kept.contains("broken-book") && kept.contains("newer-book"));
+    // The next launch has nothing to skip: no notice, no further copy.
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert!(store.load_warnings().is_empty());
+    assert_eq!(store.load_notice(), None);
+    assert_eq!(preserved_copies(&profile), copies);
+}
+
+#[test]
+fn relaunching_before_a_save_reuses_the_preserved_copy() {
+    let profile = Profile::new();
+    let original = profile_with_skipped_books(&profile);
+    drop(Store::new(profile.0.clone()).unwrap());
+    let first = preserved_copies(&profile);
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert_eq!(preserved_copies(&profile), first, "one copy per original, not one per launch");
+    assert!(store.load_notice().unwrap().contains(&crate::storage::display_path(&first[0])));
+    drop(store);
+    // A partial copy under that name (an interrupted earlier launch) is never
+    // trusted or overwritten; a complete copy is written beside it.
+    fs::write(&first[0], &original[..10]).unwrap();
+    let store = Store::new(profile.0.clone()).unwrap();
+    let copies = preserved_copies(&profile);
+    assert_eq!(copies.len(), 2);
+    assert_eq!(fs::read(&first[0]).unwrap(), &original[..10]);
+    let complete: Vec<_> = copies.iter().filter(|copy| fs::read(copy).unwrap() == original).collect();
+    assert_eq!(complete.len(), 1);
+    assert!(store.load_notice().unwrap().contains(&crate::storage::display_path(complete[0])));
+}
+
+#[test]
+fn a_profile_without_skipped_records_opens_without_a_copy_or_notice() {
+    let profile = Profile::new();
+    let store = Store::new(profile.0.clone()).unwrap();
+    store.update(|state| { state.books.push(fixture_book()); Ok(()) }).unwrap();
+    drop(store);
+    let before = fs::read(profile.0.join("state.json")).unwrap();
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert!(store.load_warnings().is_empty());
+    assert_eq!(store.load_notice(), None);
+    assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), before);
+    assert!(preserved_copies(&profile).is_empty());
+}
+
+#[test]
+fn a_read_only_profile_with_skipped_records_is_not_written_and_says_so() {
+    let profile = Profile::new();
+    let original = profile_with_skipped_books(&profile);
+    let store = Store::new_with_mode(profile.0.clone(), true).unwrap();
+    assert_eq!(store.read().unwrap().books.len(), 1);
+    assert!(preserved_copies(&profile).is_empty());
+    assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), original);
+    assert!(store.load_notice().unwrap().contains("read-only"));
+}
+
+#[test]
+fn a_copy_that_cannot_be_kept_is_reported_and_never_blocks_opening() {
+    let profile = Profile::new();
+    // The directory is missing, as close as a test gets to a full disk.
+    let notice = skipped_records_notice(&profile.0.join("missing"), b"{}", true);
+    assert!(notice.contains("could not keep a copy"), "{notice}");
+    assert!(notice.contains("Back up"), "{notice}");
+}
+
+#[test]
+fn mobile_loader_keeps_a_copy_before_its_migration_write() {
+    let profile = Profile::new();
+    let (_, legacy) = legacy_profile(&profile, false);
+    // A version 1 profile is rewritten while it loads; a skipped record must
+    // be preserved before that write.
+    let mut json: serde_json::Value = serde_json::from_slice(&legacy).unwrap();
+    json["bookmarks"] = serde_json::json!([{"id": "unknown-shape", "future": true}]);
+    let bytes = serde_json::to_vec(&json).unwrap();
+    let path = profile.0.join("state.json");
+    fs::write(&path, &bytes).unwrap();
+    let (_, warnings, notice) = load_mobile_state(&profile.0, &path, false, None).unwrap();
+    assert!(!warnings.is_empty());
+    let copies = preserved_copies(&profile);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(&copies[0]).unwrap(), bytes);
+    assert!(notice.unwrap().contains(&crate::storage::display_path(&copies[0])));
+    assert_ne!(fs::read(&path).unwrap(), bytes, "the migration was still written");
+}
+
+#[test]
+fn mobile_loader_refuses_another_schema_version_without_quarantining_it() {
+    let profile = Profile::new();
+    fs::create_dir_all(&profile.0).unwrap();
+    let path = profile.0.join("state.json");
+    let mut value = serde_json::to_value(State::default()).unwrap();
+    value["version"] = serde_json::json!(STATE_VERSION + 1);
+    value["books"] = serde_json::json!([{"id": "from-a-newer-build"}]);
+    let bytes = serde_json::to_vec(&value).unwrap();
+    fs::write(&path, &bytes).unwrap();
+    let error = load_mobile_state(&profile.0, &path, false, None).err().expect("refused");
+    assert!(error.contains("different version of Kiwix"), "{error}");
+    assert!(error.contains("Install the latest version"), "{error}");
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert!(!fs::read_dir(&profile.0).unwrap()
+        .any(|entry| entry.unwrap().file_name().to_string_lossy().starts_with("state.unreadable-")));
+    // Damage is still quarantined so the app can start.
+    fs::write(&path, b"{not json").unwrap();
+    let (state, warnings, _) = load_mobile_state(&profile.0, &path, false, None).unwrap();
+    assert!(state.books.is_empty());
+    assert_eq!(warnings, vec![crate::mobile_rebase::STATE_QUARANTINED.to_owned()]);
+}
+
 #[test]
 fn unknown_saved_window_surface_falls_back_to_library() {
     let profile = Profile::new();

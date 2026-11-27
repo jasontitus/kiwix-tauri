@@ -1413,9 +1413,14 @@ pub struct Store {
     // Retain the descriptor, never unlink the lock file while this descriptor is held.
     _lock_file: File,
     inner: Mutex<Inner>,
-    /// Records skipped while decoding the saved profile. Reported through the
-    /// shell's startup warning channel; never persisted back over the original.
+    /// Records skipped while decoding the saved profile, content-free, for
+    /// Troubleshooting. The load itself does not rewrite the file, but the
+    /// next ordinary write saves the profile without them; a writable profile
+    /// therefore keeps a copy of the original bytes first (`load_notice`).
     load_warnings: Vec<String>,
+    /// The one startup notice for a load that skipped records: where the
+    /// original bytes were kept, or why they could not be.
+    load_notice: Option<String>,
     #[cfg(desktop)]
     portable_paths: Option<crate::portable::PortablePaths>,
     #[cfg(mobile)]
@@ -1763,7 +1768,7 @@ fn load_mobile_state(
     path: &Path,
     read_only: bool,
     relocation: Option<&crate::mobile_rebase::Relocation>,
-) -> Result<(State, Vec<String>), String> {
+) -> Result<(State, Vec<String>, Option<String>), String> {
     // If bytes cannot be inspected, absence of causal/ownership metadata
     // cannot be established. Never replace an unreadable owned profile.
     let bytes = state_bytes(path)?;
@@ -1773,15 +1778,27 @@ fn load_mobile_state(
         }
         let state = State::default();
         persist(data_dir, &state, false).map_err(|e| e.message)?;
-        return Ok((state, Vec::new()));
+        return Ok((state, Vec::new(), None));
     };
     // Establish protection before parsing/relocation, including malformed JSON
     // carrying sync keys. False positives fail closed rather than lose history.
     let mut has_owned_security = [b"\"readingSync\"".as_slice(), b"\"privateSync\"".as_slice()]
         .iter().any(|key| bytes.windows(key.len()).any(|window| window == *key));
+    // A profile another schema version saved is not damage: quarantining it
+    // would start this older (or newer) app empty and leave the user's
+    // library behind under another name. Refuse it unchanged instead.
+    let mut foreign_version = false;
     let decoded = (|| -> Result<(State, Vec<String>, bool), String> {
         let parse_error = |error| format!("Cannot parse {}: {error}", path.display());
         let mut value: serde_json::Value = serde_json::from_slice(&bytes).map_err(parse_error)?;
+        if let Some(version) = value.get("version").and_then(serde_json::Value::as_u64) {
+            if version != 1 && version != u64::from(STATE_VERSION) {
+                foreign_version = true;
+                return Err(format!(
+                    "Kiwix cannot open your saved library because a different version of Kiwix saved it (profile version {version}; this version reads version {STATE_VERSION}). Install the latest version of Kiwix to open it. Your saved library was not changed."
+                ));
+            }
+        }
         has_owned_security |= value.get("readingSync").is_some() || value.get("privateSync").is_some()
             || ["editionIntents", "editionTransactions", "editionBindings", "referenceTransitions"]
                 .iter().any(|key| value.get(*key).is_some_and(|records|
@@ -1797,19 +1814,21 @@ fn load_mobile_state(
     })();
     match decoded {
         Ok((state, warnings, write)) => {
+            let writable = !read_only && !state.settings.read_only;
+            let notice = (!warnings.is_empty()).then(|| skipped_records_notice(data_dir, &bytes, writable));
             if write && !read_only {
                 persist(data_dir, &state, false).map_err(|e| e.message)?;
             }
-            Ok((state, warnings))
+            Ok((state, warnings, notice))
         }
-        Err(error) if has_owned_security => Err(error),
+        Err(error) if has_owned_security || foreign_version => Err(error),
         Err(error) if !read_only => {
             eprintln!("Kiwix: {error}");
             let kept = quarantine_state(data_dir)?;
             eprintln!("Kiwix: kept the unreadable state as {}", kept.display());
             let state = State::default();
             persist(data_dir, &state, false).map_err(|e| e.message)?;
-            Ok((state, vec![crate::mobile_rebase::STATE_QUARANTINED.to_owned()]))
+            Ok((state, vec![crate::mobile_rebase::STATE_QUARANTINED.to_owned()], None))
         }
         Err(error) => Err(error),
     }
@@ -1824,6 +1843,83 @@ fn quarantine_state(data_dir: &Path) -> Result<PathBuf, String> {
     fs::rename(&source, &kept)
         .map_err(|error| format!("Cannot preserve unreadable {}: {error}", source.display()))?;
     Ok(kept)
+}
+
+/// The startup notice for a profile that loaded with skipped records. A
+/// writable profile keeps the original bytes first: the load does not rewrite
+/// `state.json`, but the next ordinary save would replace it without them.
+/// Failing to keep the copy never stops the profile from opening.
+fn skipped_records_notice(directory: &Path, bytes: &[u8], writable: bool) -> String {
+    const SKIPPED: &str = "Some saved items could not be read by this version of Kiwix and are not shown.";
+    let original = crate::storage::display_path(&directory.join("state.json"));
+    if !writable {
+        return format!("{SKIPPED} The profile is read-only, so they were left in {original} unchanged. Back up that file before you leave read-only mode: the next save does not include them.");
+    }
+    match preserve_skipped_original(directory, bytes) {
+        Ok(kept) => format!(
+            "{SKIPPED} A copy of the saved profile that still contains them was kept at {}. Putting that copy in place of state.json lets a version of Kiwix that can read them show them again.",
+            crate::storage::display_path(&kept)
+        ),
+        Err(error) => format!(
+            "{SKIPPED} Kiwix could not keep a copy of the saved profile ({error}). Back up {original} now: the next save does not include them."
+        ),
+    }
+}
+
+/// Keep `bytes` beside `state.json` under a name derived from their content,
+/// so relaunching before the next save reuses the copy instead of adding one.
+/// An existing file is never replaced or followed; one with other content
+/// (an interrupted earlier copy) makes this write a uniquely named copy.
+fn preserve_skipped_original(directory: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
+    use sha2::Digest;
+    let digest = hex::encode(sha2::Sha256::digest(bytes));
+    let named = directory.join(format!("state.skipped-{}.json", &digest[..16]));
+    match write_new_private_file(directory, &named, bytes) {
+        Ok(()) => return Ok(named),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let same = fs::symlink_metadata(&named)
+                .is_ok_and(|metadata| metadata.file_type().is_file() && metadata.len() == bytes.len() as u64)
+                && fs::read(&named).is_ok_and(|existing| existing == bytes);
+            if same {
+                return Ok(named);
+            }
+        }
+        Err(error) => return Err(error.to_string()),
+    }
+    let unique = directory.join(format!("state.skipped-{}.json", Uuid::new_v4()));
+    write_new_private_file(directory, &unique, bytes)
+        .map(|()| unique)
+        .map_err(|error| error.to_string())
+}
+
+/// Create `path` (never an existing file or link), owner-only, with `bytes`
+/// synchronized to disk, then synchronize its directory where the platform
+/// allows it. A partial file is removed. A directory synchronization failure
+/// keeps the complete copy and is not reported as a missing one.
+fn write_new_private_file(directory: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    #[cfg(not(windows))]
+    let parent = File::open(directory)?;
+    #[cfg(windows)]
+    let _ = directory;
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    let written = file.write_all(bytes).and_then(|()| file.sync_all());
+    drop(file);
+    if let Err(error) = written {
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
+    #[cfg(not(windows))]
+    if let Err(error) = parent.sync_all() {
+        eprintln!("Kiwix: the copy of the saved profile may not survive a power loss: {error}");
+    }
+    Ok(())
 }
 
 /// Reset only the saved window/tab layout, keeping the library, bookmarks,
@@ -2012,7 +2108,7 @@ impl Store {
         #[cfg(not(desktop))]
         let portable_mode = false;
         let path = data_dir.join("state.json");
-        let decode = |bytes: &[u8]| -> Result<(State, Vec<String>), String> {
+        let decode = |bytes: &[u8]| -> Result<(State, Vec<String>, Option<String>), String> {
             let decode_error = |error| format!("Cannot parse {}: {error}. The original is untouched; restore a known-good backup or select another profile, not an empty replacement.", path.display());
             let value: serde_json::Value = serde_json::from_slice(bytes).map_err(decode_error)?;
             #[cfg(desktop)]
@@ -2033,14 +2129,18 @@ impl Store {
                     .validate()
                     .map_err(|error| format!("Invalid {}: {error}", path.display()))?;
             }
-            if (migrated || normalized) && !initialization_read_only && !state.settings.read_only {
+            let writable = !initialization_read_only && !state.settings.read_only;
+            // Before anything can save over the skipped records, including the
+            // migration write just below.
+            let notice = (!warnings.is_empty()).then(|| skipped_records_notice(&data_dir, bytes, writable));
+            if (migrated || normalized) && writable {
                 persist(&data_dir, &state, portable_mode).map_err(|e| e.message)?;
             }
-            Ok((state, warnings))
+            Ok((state, warnings, notice))
         };
         // Desktop startup already inspected these bytes for the saved read-only
         // policy and the first-paint theme, so the profile is read once.
-        let (state, load_warnings) = match preloaded {
+        let (state, load_warnings, load_notice) = match preloaded {
             Some(bytes) => decode(&bytes)?,
             None => match File::open(&path) {
                 Ok(file) => {
@@ -2060,7 +2160,7 @@ impl Store {
                     #[cfg(desktop)]
                     if portable_paths.is_some() { apply_portable_settings(&data_dir, &mut state.settings)?; }
                     persist(&data_dir, &state, portable_mode).map_err(|e| e.message)?;
-                    (state, Vec::new())
+                    (state, Vec::new(), None)
                 }
                 Err(e) => return Err(format!("Cannot open {}: {e}", path.display())),
             },
@@ -2074,6 +2174,7 @@ impl Store {
             data_dir,
             _lock_file: lock_file,
             load_warnings,
+            load_notice,
             #[cfg(desktop)]
             portable_paths,
             #[cfg(mobile)]
@@ -2121,7 +2222,7 @@ impl Store {
         let mut initialized = crate::mobile_rebase::initialize(&data_dir, read_only)?;
         let relocation = initialized.relocation.take();
         let path = data_dir.join("state.json");
-        let (state, mut load_warnings) =
+        let (state, mut load_warnings, load_notice) =
             load_mobile_state(&data_dir, &path, read_only, relocation.as_ref())?;
         load_warnings.extend(initialized.notices);
         // Both views use the current root: private-mode rollback must never restore
@@ -2135,6 +2236,7 @@ impl Store {
             data_dir,
             _lock_file: lock_file,
             load_warnings,
+            load_notice,
             mobile_profile: true,
             inner: Mutex::new(Inner {
                 state: visible,
@@ -2304,6 +2406,12 @@ impl Store {
     /// Content-free notices for records dropped while opening the profile.
     pub fn load_warnings(&self) -> &[String] {
         &self.load_warnings
+    }
+
+    /// The startup notice for records skipped while opening the profile,
+    /// naming the preserved copy of the original. `None` when nothing was skipped.
+    pub(crate) fn load_notice(&self) -> Option<&str> {
+        self.load_notice.as_deref()
     }
 
     /// Scalar reading-sync consent, without cloning the sync document.
@@ -3562,7 +3670,11 @@ pub(crate) fn replace_file(source: &Path, destination: &Path) -> std::io::Result
 #[cfg(windows)]
 pub(crate) fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
     // REPLACE_EXISTING | WRITE_THROUGH: no remove-then-rename data-loss window.
-    crate::storage::move_file(source, destination, crate::storage::MoveKind::ReplaceWriteThrough)
+    // Antivirus, indexers and sync clients briefly open a just-written file
+    // without delete sharing; each retry is the same move of our own file.
+    crate::storage::retry_transient_sharing(|| {
+        crate::storage::move_file(source, destination, crate::storage::MoveKind::ReplaceWriteThrough)
+    })
 }
 
 #[cfg(test)]

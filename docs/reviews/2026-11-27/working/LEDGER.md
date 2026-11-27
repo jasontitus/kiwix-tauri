@@ -189,3 +189,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 - also stopped: shell (a5b1f…).
 - also stopped: net (a5a56…).
 - also stopped: transfers (a10ec…).
+- also stopped: adv-features (a43b0…). Only desktop (af117…, launched after model switch) still running.

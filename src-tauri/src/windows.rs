@@ -474,7 +474,15 @@ pub fn capture(app: &AppHandle, store: &Store) -> Result<(), String> {
         ) else {
             continue;
         };
-        geometry.push((label,json!({"x":position.x as f64/scale,"y":position.y as f64/scale,"width":size.width as f64/scale,"height":size.height as f64/scale,"maximized":window.is_maximized().unwrap_or(false),"fullscreen":window.is_fullscreen().unwrap_or(false)})));
+        geometry.push((label, Observed {
+            x: position.x as f64 / scale,
+            y: position.y as f64 / scale,
+            width: size.width as f64 / scale,
+            height: size.height as f64 / scale,
+            minimized: window.is_minimized().unwrap_or(false),
+            maximized: window.is_maximized().unwrap_or(false),
+            fullscreen: window.is_fullscreen().unwrap_or(false),
+        }));
     }
     persist_capture(
         store,
@@ -484,23 +492,62 @@ pub fn capture(app: &AppHandle, store: &Store) -> Result<(), String> {
     )
 }
 
+/// A window's frame as the platform reports it, in logical pixels.
+#[derive(Clone, Copy, Debug)]
+struct Observed {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    minimized: bool,
+    maximized: bool,
+    fullscreen: bool,
+}
+
+/// The geometry to save for `observed`, given what was saved before. A
+/// minimized window saves nothing: Windows parks it at (-32000, -32000) with
+/// an icon-sized or empty client area, which `restore` would clamp to the
+/// minimum size and centre. A maximized or fullscreen window fills its
+/// screen, so it keeps the earlier normal size (its position still names the
+/// screen it is on), and un-maximizing after a relaunch returns to that size.
+fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Value> {
+    let Observed { x, y, width, height, minimized, maximized, fullscreen } = observed;
+    if minimized || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let normal = previous.and_then(|previous| {
+        let number = |key: &str| previous.get(key).and_then(Value::as_f64).filter(|value| value.is_finite() && *value > 0.0);
+        Some((number("width")?, number("height")?))
+    });
+    let (width, height) = match normal {
+        Some(normal) if maximized || fullscreen => normal,
+        _ => (width, height),
+    };
+    Some(json!({"x":x,"y":y,"width":width,"height":height,"maximized":maximized,"fullscreen":fullscreen}))
+}
+
 fn persist_capture(
     store: &Store,
-    geometry: Vec<(String, Value)>,
+    geometry: Vec<(String, Observed)>,
     #[cfg(target_os = "macos")] native_tabs: Vec<native_tabs::Member>,
 ) -> Result<(), String> {
     store.update_window_capture(|retired, state| {
         if state.settings.private_mode || state.settings.read_only {
             return Ok(());
         }
-        for (label, geometry) in geometry {
+        for (label, observed) in geometry {
             if retired.contains(&label) {
                 continue;
             }
             if label == "main" {
-                state.windows.entry(label).or_default().geometry = Some(geometry);
+                let session = state.windows.entry(label).or_default();
+                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref()) {
+                    session.geometry = Some(geometry);
+                }
             } else if let Some(session) = state.windows.get_mut(&label) {
-                session.geometry = Some(geometry);
+                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref()) {
+                    session.geometry = Some(geometry);
+                }
             }
         }
         #[cfg(target_os = "macos")]
@@ -560,6 +607,41 @@ mod tests {
         assert!(!snapshot.windows.contains_key("window-closed"));
         assert!(snapshot.windows.contains_key("window-live"));
         service.shutdown().await.unwrap();
+    }
+
+    fn observed(x: f64, y: f64, width: f64, height: f64) -> Observed {
+        Observed { x, y, width, height, minimized: false, maximized: false, fullscreen: false }
+    }
+
+    #[test]
+    fn a_minimized_window_keeps_its_last_saved_frame() {
+        let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
+        // What Windows reports for a minimized window.
+        let parked = Observed { minimized: true, ..observed(-32000.0, -32000.0, 0.0, 0.0) };
+        assert_eq!(captured_geometry(parked, Some(&saved)), None);
+        assert_eq!(captured_geometry(parked, None), None);
+        // Some platforms leave the flag unset but still report an empty client area.
+        assert_eq!(captured_geometry(observed(-32000.0, -32000.0, 0.0, 0.0), Some(&saved)), None);
+        assert_eq!(captured_geometry(observed(10.0, 10.0, f64::NAN, 500.0), Some(&saved)), None);
+        // An ordinary frame is saved as observed.
+        assert_eq!(
+            captured_geometry(observed(200.0, 100.0, 900.0, 700.0), Some(&saved)),
+            Some(json!({"x":200.0,"y":100.0,"width":900.0,"height":700.0,"maximized":false,"fullscreen":false}))
+        );
+    }
+
+    #[test]
+    fn a_maximized_window_keeps_its_normal_size_on_its_current_screen() {
+        let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
+        let maximized = Observed { maximized: true, ..observed(1912.0, -8.0, 1920.0, 1040.0) };
+        assert_eq!(
+            captured_geometry(maximized, Some(&saved)),
+            Some(json!({"x":1912.0,"y":-8.0,"width":1180.0,"height":820.0,"maximized":true,"fullscreen":false}))
+        );
+        let fullscreen = Observed { fullscreen: true, ..observed(0.0, 0.0, 1920.0, 1080.0) };
+        assert_eq!(captured_geometry(fullscreen, Some(&saved)).unwrap()["width"], 1180.0);
+        // With no earlier frame the screen-sized one is all there is.
+        assert_eq!(captured_geometry(maximized, None).unwrap()["width"], 1920.0);
     }
 
     #[test]
