@@ -1615,12 +1615,12 @@ impl Service {
         // Publish the pending slot before opening, not the native handle after
         // opening. Same-key callers then share one initialization without
         // holding the global LRU lock during provider/native work.
-        let slot = {
+        let admit = || -> Result<Arc<OnceLock<Result<Archive, String>>>, String> {
             let mut cache = self
                 .archives
                 .lock()
                 .map_err(|_| "Archive cache unavailable")?;
-            if let Some(index) = cache.iter().position(|item| {
+            let slot = if let Some(index) = cache.iter().position(|item| {
                 item.id == id
                     && item.installation_id == book.installation_id
                     && item.path == book.path
@@ -1645,8 +1645,25 @@ impl Service {
                     archive: slot.clone(),
                 });
                 slot
-            }
+            };
+            Ok(slot)
         };
+        let mut slot = admit()?;
+        // A cached handle outlives its file: a volume that was unplugged and
+        // remounted, or a file touched or rewritten in place, fails every later
+        // read with "Reopen the archive". Probe the retained metadata (no
+        // decoder lock, no cache lock) and replace only this slot; the open
+        // below re-runs source retention and the identity check, so a
+        // different file at the same path is still refused.
+        if slot.get().is_some_and(|opened| {
+            opened.as_ref().is_ok_and(|archive| archive.retained_unchanged().is_err())
+        }) {
+            self.archives
+                .lock()
+                .map_err(|_| "Archive cache unavailable")?
+                .retain(|item| !Arc::ptr_eq(&item.archive, &slot));
+            slot = admit()?;
+        }
         #[cfg(test)]
         {
             // A per-Service rendezvous lets regressions hold every caller after
@@ -2313,7 +2330,19 @@ impl Service {
         .await?;
         let key = format!("{label}:{book_id}");
         let mut readers = self.readers.lock().await;
-        if fresh {
+        // A listener whose archive files changed in place or became unreadable
+        // fails every request; reopening the book must not hand it back.
+        let stale = match readers.get(&key) {
+            Some(reader) if !fresh => {
+                let served = reader.archive_handle();
+                blocking(move || Ok(served
+                    .upgrade()
+                    .is_none_or(|archive| archive.retained_unchanged().is_err())))
+                .await?
+            }
+            _ => false,
+        };
+        if fresh || stale {
             if let Some(reader) = readers.remove(&key) { reader.shutdown().await?; }
         }
         self.ensure_window_active(label)?;

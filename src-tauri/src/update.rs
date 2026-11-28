@@ -645,6 +645,7 @@ pub(crate) async fn status(service: &Arc<Service>) -> Result<UpdateStatus, Strin
     } else {
         None
     };
+    let last_available_version = still_available(stored.last_available_version, &current_version);
     Ok(UpdateStatus {
         platform: capability.platform,
         supported: capability.self_update,
@@ -659,7 +660,7 @@ pub(crate) async fn status(service: &Arc<Service>) -> Result<UpdateStatus, Strin
         automatic_checks: !crate::sandbox::is_sandboxed(),
         next_check_at: next_check_at(stored.last_checked.as_deref(), time::OffsetDateTime::now_utc()),
         last_checked: stored.last_checked,
-        last_available_version: still_available(stored.last_available_version, &current_version),
+        last_available_version,
         last_error: stored.last_error,
         busy: OPERATION.is_busy(),
         available,

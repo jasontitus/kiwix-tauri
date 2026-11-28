@@ -158,6 +158,9 @@ pub struct ReaderServer {
     workers: Arc<ArchiveWorkers>,
     cancellation: CancellationToken,
     server: Option<JoinHandle<Result<(), String>>>,
+    /// The archive this listener serves. Weak like the router's reference: the
+    /// supervisor owns its lifetime.
+    archive: Weak<Archive>,
 }
 
 impl Drop for ReaderServer {
@@ -573,6 +576,7 @@ impl ReaderServer {
         // Router and response bodies hold only weak references. Axum may signal
         // connection completion just before its task-local service is destroyed.
         let archive = Arc::new(archive);
+        let served = Arc::downgrade(&archive);
         let state = ArchiveState {
             archive: Arc::downgrade(&archive),
             id,
@@ -644,7 +648,14 @@ impl ReaderServer {
             workers,
             cancellation,
             server: Some(server),
+            archive: served,
         })
+    }
+
+    /// The archive this listener serves, for a liveness probe that must run
+    /// off the async runtime. It no longer upgrades once the listener stopped.
+    pub(crate) fn archive_handle(&self) -> Weak<Archive> {
+        self.archive.clone()
     }
 
     fn stop(&self) {

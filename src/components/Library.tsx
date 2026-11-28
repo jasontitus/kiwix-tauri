@@ -144,6 +144,8 @@ export default function Library({
   const [pinBusy, setPinBusy] = useState(false);
   const pinPending = useRef(false);
   const [detail, setDetail] = useState<Book | null>(null);
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const integrity = useIntegritySnapshot(settings.privateMode, settings.readOnly, onError);
   const [removal, setRemoval] = useState<{
     book: Book; deleteFile: boolean; message: string; privacy: PrivacyContext;
@@ -307,7 +309,12 @@ export default function Library({
   const [suggestions, setSuggestions] = useState<TitleSuggestion[]>([]);
   const [suggestionToken, setSuggestionToken] = useState<string | null>(null);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchInputFocused, setSearchFocused] = useState(false);
+  // Suggestions follow the focused search field but never supersede an
+  // explicit search: search and suggest share one request, so a suggestion
+  // would cancel the running search, and a list opened over fresh results
+  // hides them. Typing (which clears the results) brings suggestions back.
+  const searchFocused = searchInputFocused && !busy && !results;
   const [suggestionActive, setSuggestionActive] = useState(-1);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const suggestionId = useRef(0);
@@ -404,8 +411,11 @@ export default function Library({
       return;
     }
     closeSuggestions();
+    // A search submitted before the debounce elapses retires this timer
+    // through closeSuggestions, before React re-runs this effect.
+    const scheduled = suggestionId.current;
     const timer = window.setTimeout(() => {
-      void loadSuggestions(prefix, [...selected]);
+      if (scheduled === suggestionId.current) void loadSuggestions(prefix, [...selected]);
     }, SUGGESTION_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [search, selected, searchOpen, searchFocused]);
@@ -491,6 +501,16 @@ export default function Library({
       setPinBusy(false);
     }
   }
+  /** The removal and detail dialogs paint `removalError` themselves; without
+   * either open (a swipe from the list) the shell's surface is the one owner. */
+  function removalFailed(error: unknown, shownInline: boolean) {
+    if (!shownInline) {
+      onError(error);
+      return;
+    }
+    setRemovalError(errorText(error));
+    onError(error, "blocking", false);
+  }
   async function remove(book: Book, deleteFile: boolean) {
     const privacy = capturePrivacyContext();
     if (!privacy || removalPending.current ||
@@ -526,10 +546,8 @@ export default function Library({
       if (alive.current && isPrivacyContextCurrent(privacy))
         setRemoval({ book, deleteFile, message, privacy });
     } catch (e) {
-      if (alive.current && isPrivacyContextCurrent(privacy)) {
-        setRemovalError(errorText(e));
-        onError(e);
-      }
+      if (alive.current && isPrivacyContextCurrent(privacy))
+        removalFailed(e, detailRef.current?.installationId === book.installationId);
     } finally {
       removalPending.current = false;
       if (alive.current) setRemovalBusy(false);
@@ -539,9 +557,8 @@ export default function Library({
     if (!removal || removalPending.current) return;
     if (!isPrivacyContextCurrent(removal.privacy)) {
       setRemoval(null);
-      const message = t("Browsing session expired after a privacy transition");
-      setRemovalError(message);
-      onError(new Error(message));
+      removalFailed(new Error(t("Browsing session expired after a privacy transition")),
+        detailRef.current?.installationId === removal.book.installationId);
       return;
     }
     removalPending.current = true;
@@ -558,7 +575,8 @@ export default function Library({
       setDetail(null);
       onRefresh();
     } catch (e) {
-      if (alive.current) { setRemovalError(errorText(e)); onError(e); }
+      // The removal dialog stays open and shows the failure.
+      if (alive.current) removalFailed(e, true);
     } finally {
       removalPending.current = false;
       if (alive.current) setRemovalBusy(false);
@@ -588,16 +606,21 @@ export default function Library({
     setShareError("");
     setShareCopied(false);
     setSharing(null);
+    // Once the share dialog is open it shows the failure itself.
+    let shown = false;
     try {
       let job = await api<DownloadJob>("share_torrent", { bookId: book.id });
       if (!alive.current || request !== shareRequest.current || !isPrivacyContextCurrent(privacy)) return;
       setSharing(job);
+      shown = true;
       setDetail(null);
       onRefresh();
-      // Leaving the library retires the poll; the accepted torrent job keeps
-      // running server-side, but no invoke or state update outlives this tree.
-      for (let attempt = 0; attempt < 240 && alive.current && !job.magnet &&
-        !["error", "completed", "paused", "cancelled"].includes(job.status); attempt++) {
+      // Hashing a large archive can take far longer than any fixed wait, and
+      // the worker keeps going: follow it until it settles. Closing the dialog,
+      // a privacy change or leaving the library retires the poll; the accepted
+      // torrent job keeps running server-side, but no invoke or state update
+      // outlives this tree.
+      while (!shareSettled(job)) {
         // Promise.withResolvers is unavailable in this project's TS lib target.
         await new Promise<void>((resolve) => window.setTimeout(resolve, 750));
         if (!alive.current || request !== shareRequest.current || !isPrivacyContextCurrent(privacy)) return;
@@ -605,7 +628,6 @@ export default function Library({
         if (!alive.current || request !== shareRequest.current || !isPrivacyContextCurrent(privacy)) return;
         setSharing(job);
       }
-      if (!alive.current || request !== shareRequest.current) return;
       if (!job.magnet) {
         setShareError(job.error
           ? errorText(job.error)
@@ -613,12 +635,18 @@ export default function Library({
       }
     } catch (e) {
       if (request === shareRequest.current && alive.current) {
-        setShareError(errorText(e));
-        onError(e);
+        if (shown) {
+          setShareError(errorText(e));
+          onError(e, "blocking", false);
+        } else onError(e);
       }
     } finally {
       if (request === shareRequest.current && alive.current) setShareBusy(false);
     }
+  }
+  /** A share has its magnet link or has stopped without one. */
+  function shareSettled(job: DownloadJob) {
+    return !!job.magnet || ["error", "completed", "paused", "cancelled"].includes(job.status);
   }
   async function toggleShare(job: DownloadJob) {
     const enabled = !job.seeding;
@@ -1481,6 +1509,19 @@ export default function Library({
               {!results.hits.length && (
                 <p>{t("No matching articles found.")}</p>
               )}
+              {!results.hits.length && !!results.corrections?.length && (
+                <div className="toolbar compact-toolbar" role="group" aria-label={t("Spelling suggestions")}>
+                  {results.corrections.map((correction) => (
+                    <button type="button" key={correction.correctedQuery} disabled={busy || snippetSaving}
+                      onClick={() => {
+                        setSearch(correction.correctedQuery);
+                        void performSearch(correction.correctedQuery);
+                      }}>
+                      {t("Search instead for “{query}”", { query: correction.correctedQuery })}
+                    </button>
+                  ))}
+                </div>
+              )}
               {results.hasMore && (
                 <button disabled={busy} onClick={moreResults}>
                   {busy ? t("Loading…") : t("Show more results")}
@@ -1721,9 +1762,11 @@ export default function Library({
         }}>
           {shareError && <ErrorNotice message={shareError} />}
           {!sharing.magnet ? (
-            <Loading label={sharing.status === "creating"
-              ? t("Creating torrent metadata… Large archives can take several minutes.")
-              : t("Checking the shared item…")} />
+            !shareError && !shareSettled(sharing) && (
+              <Loading label={sharing.status === "creating"
+                ? t("Creating torrent metadata… Large archives can take several minutes.")
+                : t("Checking the shared item…")} />
+            )
           ) : (
             <>
               <p className="muted">

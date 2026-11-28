@@ -1055,6 +1055,13 @@ impl Archive {
         Ok(result)
     }
 
+    /// Whether the retained files still have the length and modification time
+    /// they were opened with (filesystem metadata only, no decoder lock). A
+    /// descriptor on a removed volume fails here as well.
+    pub(crate) fn retained_unchanged(&self) -> Result<(), String> {
+        self.parts.unchanged()
+    }
+
     /// Identify the actual retained files, including each part of a split archive.
     /// Reading filesystem metadata here never waits for the archive decoder.
     pub(crate) fn content_identity(&self) -> Result<crate::integrity::ContentIdentity, String> {

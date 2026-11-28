@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 import { api, canShareSystem, capturePrivacyContext, confirmDiskSpaceWarning, editionDownload, isIOS, isPrivacyContextCurrent, parseDiskSpaceWarning, saveBytes, shareArchive, type PrivacyContext } from "../api";
 import { t, formatBytes, formatNumber, languageName } from "../i18n";
-import type { Book, DownloadAdmission, DownloadJob, DownloadNotificationAction, DownloadTarget, EditionIntent, EditionPreparation, EditionStatus, EditionTransaction, MapJob, Settings, TabLocation } from "../types";
+import type { Book, DownloadAdmission, DownloadJob, DownloadNotificationAction, DownloadTarget, EditionIntent, EditionOriginalDiscarded, EditionPreparation, EditionStatus, EditionTransaction, MapJob, Settings, TabLocation } from "../types";
+import { isUserCancelledError, type ErrorSeverity } from "../error-visibility";
 import { cleanupDownloadBooks, downloadLiveSummary, downloadNotificationPhase, downloadStatusDecision, mapDownloadConfiguration, rankJobs, readyDownloadBooks, remainingTime } from "../download-state";
 import { displayPath } from "../display-path";
 import { SwipeRow } from "./SwipeRow";
-import { MapBlockProgress } from "./MapBlockProgress";
+import { MapBlockProgress, MapRecoveryPaths, MapTransferRate } from "./MapBlockProgress";
 import { DownloadCleanupDialog } from "./DownloadCleanupDialog";
 import {
   ErrorNotice,
@@ -33,7 +34,8 @@ import {
 interface Props {
   settings: Settings;
   books: Book[];
-  onError: (error: unknown) => void;
+  /** `showGlobally: false` records a failure this pane already shows inline. */
+  onError: (error: unknown, severity?: ErrorSeverity, showGlobally?: boolean) => void;
   onRefresh: () => void;
   focusTarget?: DownloadTarget | null;
   notificationAction?: DownloadNotificationAction | null;
@@ -122,6 +124,8 @@ export default function Downloads({
   const [editionError, setEditionError] = useState("");
   const [editionActionError, setEditionActionError] = useState("");
   const [editionWorking, setEditionWorking] = useState<string | null>(null);
+  const [originalOutcome, setOriginalOutcome] = useState<{ id: string; message: string; failed: boolean } | null>(null);
+  const originalOutcomeFocus = useRef(false);
   const [editionAuthorizations, setEditionAuthorizations] = useState<Record<string, { token: string; privacy: PrivacyContext }>>({});
   const editionPending = useRef(false);
   const previousEditionRevision = useRef("");
@@ -377,6 +381,7 @@ export default function Downloads({
     setEditionAuthorizations({});
     setEditionError("");
     setEditionActionError("");
+    setOriginalOutcome(null);
   }, [settings.privateMode, settings.readOnly]);
   const focusedJob = focusTarget?.kind === "map"
     ? mapJob?.id === focusTarget.id ? mapJob : null
@@ -625,8 +630,10 @@ export default function Downloads({
       await load();
     } catch (e) {
       if (current()) {
-        setStartError(errorText(e));
-        onError(e);
+        // Shown beside the form; recorded, not painted a second time. Declining
+        // the low-storage prompt is the user's own choice, not a failure.
+        onError(e, "blocking", false);
+        if (!isUserCancelledError(e)) setStartError(errorText(e));
       }
     } finally {
       startPending.current = false;
@@ -804,8 +811,9 @@ export default function Downloads({
       if (retainedFilesOpen.current) await loadRetainedFiles();
     } catch (value) {
       if (alive.current && isPrivacyContextCurrent(retained.privacy)) {
+        // The dialog shows the failure; it is recorded, not painted twice.
         setCleanupError(errorText(value));
-        onError(value);
+        onError(value, "blocking", false);
         onRefresh();
         await load();
         if (retainedFilesOpen.current) await loadRetainedFiles();
@@ -832,6 +840,28 @@ export default function Downloads({
       await load();
     } catch (value) {
       if (alive.current && isPrivacyContextCurrent(privacy)) onError(value);
+    } finally {
+      mapPending.current = false;
+      if (alive.current) setMapWorking(false);
+    }
+  }
+  async function forgetMapRecovery(path: string) {
+    const job = mapJobRef.current;
+    const privacy = capturePrivacyContext();
+    if (!alive.current || !job || !privacy || privacy.privateMode || privacy.readOnly || localBlockedRef.current ||
+      mapPending.current || cleanupPending.current || !isPrivacyContextCurrent(privacy) ||
+      !job.recoveryPaths?.includes(path)) return;
+    mapPending.current = true;
+    setMapWorking(true);
+    try {
+      // Only the warning is dismissed; the file stays where it is.
+      await api("map_forget_recovery", { path, privacyGeneration: privacy.generation });
+      if (alive.current && isPrivacyContextCurrent(privacy)) await load();
+    } catch (value) {
+      if (alive.current && isPrivacyContextCurrent(privacy)) {
+        onError(value);
+        await load();
+      }
     } finally {
       mapPending.current = false;
       if (alive.current) setMapWorking(false);
@@ -877,10 +907,10 @@ export default function Downloads({
       setMapJob(next);
       await load();
     } catch (value) {
-      if (alive.current && targetRef.current === target && isPrivacyContextCurrent(retained.privacy)) {
-        setMapError(errorText(value));
+      // One owner: the page-level map notice is cleared by the next status
+      // poll and sits above a card that may be scrolled away.
+      if (alive.current && targetRef.current === target && isPrivacyContextCurrent(retained.privacy))
         onError(value);
-      }
     } finally {
       mapPending.current = false;
       if (alive.current) setMapWorking(false);
@@ -978,6 +1008,68 @@ export default function Downloads({
       if (alive.current) setEditionWorking(null);
     }
   }
+  async function discardOriginal(transaction: EditionTransaction) {
+    const privacy = capturePrivacyContext();
+    if (editionPending.current || localBlockedRef.current || !privacy || privacy.privateMode || privacy.readOnly ||
+      transaction.originalDiscarded || transaction.rolledBackInstallationId !== null) return;
+    const original = transaction.original;
+    const file = pathFileName(original.sourceReference?.displayName ?? original.path);
+    // A provider-backed original is not Kiwix's to delete: only its hold is released.
+    const external = original.sourceReference != null;
+    editionPending.current = true;
+    setEditionWorking(transaction.id);
+    setOriginalOutcome(null);
+    originalOutcomeFocus.current = false;
+    try {
+      const confirmed = await confirmAction(external
+        ? t("Stop keeping the retained original “{title}” ({file})? Kiwix cannot delete it: the file stays where it is, in the app or storage that provides it. This edition can then no longer be rolled back.", { title: original.title, file })
+        : settingsRef.current.trashDeletedFiles
+          ? t("Move the retained original “{title}” ({file}) to the system trash? This edition can then no longer be rolled back.", { title: original.title, file })
+          : t("Permanently delete the retained original “{title}” ({file})? This cannot be undone, and this edition can then no longer be rolled back.", { title: original.title, file }), {
+        confirmLabel: external ? t("Stop keeping original") : t("Delete retained original"),
+        danger: !external,
+      });
+      if (!confirmed || !alive.current || !isPrivacyContextCurrent(privacy) || localBlockedRef.current) return;
+      const result = await api<EditionOriginalDiscarded>("edition_discard_original", {
+        transactionId: transaction.id,
+        privacyGeneration: privacy.generation,
+      });
+      if (alive.current && isPrivacyContextCurrent(privacy)) {
+        originalOutcomeFocus.current = true;
+        setOriginalOutcome({
+          id: transaction.id,
+          failed: false,
+          message: result.originalFile === "deleted"
+            ? t("The retained original was deleted. This edition can no longer be rolled back.")
+            : result.originalFile === "trashed"
+              ? t("The retained original was moved to the system trash. This edition can no longer be rolled back.")
+              : result.originalFile === "missing"
+                ? t("The retained original was already gone, so nothing was deleted. This edition can no longer be rolled back.")
+                : t("Kiwix no longer keeps the retained original. Its file was not deleted; remove it in the app or storage that provides it if you no longer need it."),
+        });
+        onRefresh();
+        await load();
+      }
+    } catch (value) {
+      if (alive.current && isPrivacyContextCurrent(privacy)) {
+        onRefresh();
+        await load();
+        setOriginalOutcome({ id: transaction.id, failed: true, message: errorText(value) });
+      }
+    } finally {
+      editionPending.current = false;
+      if (alive.current) setEditionWorking(null);
+    }
+  }
+  useEffect(() => {
+    // The action button leaves once the original is gone; keep keyboard and
+    // screen-reader focus on the outcome instead of dropping it to the page.
+    if (!originalOutcome || !originalOutcomeFocus.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    originalOutcomeFocus.current = false;
+    document.getElementById(`edition-original-${originalOutcome.id}`)?.focus();
+  }, [originalOutcome, editions]);
   function eta(seconds: number) {
     const remaining = remainingTime(seconds);
     return remaining.unit === "seconds"
@@ -1048,6 +1140,7 @@ export default function Downloads({
             </div>
           )}
           {!mapBooks.length && !terminalStatus(mapJob.status) && <MapBlockProgress job={mapJob} />}
+          {!mapBooks.length && <MapTransferRate job={mapJob} />}
           <details className="download-details">
             <summary>{t("Details for {title}", { title: mapTitle })}</summary>
           <p className="muted">{languageName(mapJob.language)}</p>
@@ -1089,6 +1182,8 @@ export default function Downloads({
               )}
             </div>
           )}
+          <MapRecoveryPaths job={mapJob} disabled={mapWorking || localBlocked}
+            onDismiss={(path) => void forgetMapRecovery(path)} />
           {["failed", "paused", "cancelled"].includes(mapJob.status) && !mapJob.resumable && !parseDiskSpaceWarning(mapJob.error) && (
             <div>
               <p className="muted">{t("This download has no resumable checkpoint. Start it again from Maps.")}</p>
@@ -1187,6 +1282,10 @@ export default function Downloads({
             const live = !finished && !ready && !job.error && !job.importError
               ? downloadLiveSummary(job)
               : null;
+            // A paused or failed transfer keeps the bytes it saved: show how
+            // much Resume or Retry continues from, without a rate or ETA.
+            const kept = !live && !ready && !job.importError && !checkingImport &&
+              ["paused", "failed", "error"].includes(job.status) && job.downloaded > 0;
             const retryImports = edition?.status === "cancelled" ? [] : job.imports?.filter((entry) =>
               entry.state === "failed" || entry.state === "cancelled",
             ) || [];
@@ -1296,6 +1395,35 @@ export default function Downloads({
                         <span className="download-live-note">{t("Verifying…")}</span>
                       )}
                     </div>
+                  )}
+                  {kept && (
+                    <>
+                      {progress !== null && (
+                        <div className="download-progress">
+                          <span>{t("Progress")}</span>
+                          <progress
+                            value={job.downloaded}
+                            max={job.total || 1}
+                            aria-label={t("Download progress for {name}", {
+                              name: job.fileName,
+                            })}
+                          />
+                          <strong>
+                            {t("{percent}%", { percent: formatNumber(Math.floor(progress)) })}
+                          </strong>
+                        </div>
+                      )}
+                      <div className="download-live">
+                        <span className="download-live-bytes">
+                          {job.total
+                            ? t("{downloaded} of {total}", {
+                                downloaded: formatBytes(job.downloaded),
+                                total: formatBytes(job.total),
+                              })
+                            : formatBytes(job.downloaded)}
+                        </span>
+                      </div>
+                    </>
                   )}
                   {job.transport === "torrent" && (
                     <div className="download-live download-torrent-summary">
@@ -1497,13 +1625,31 @@ export default function Downloads({
               <p>{t("Replacement: {date}", { date: transaction.replacement.date || t("Date unknown") })}</p>
               {transaction.rolledBackInstallationId
                 ? <p role="status">{t("Rolled back. Both archive files were kept.")}</p>
-                : (
-                  <button disabled={localBlocked || editionWorking !== null ||
-                    !libraryIndex.installations.has(transaction.replacement.installationId)}
-                    onClick={() => void rollbackEdition(transaction)}>
-                    {t("Roll back to original edition")}
-                  </button>
-                )}
+                : transaction.originalDiscarded
+                  ? <p className="muted">{t("The retained original is no longer kept, so this edition cannot be rolled back.")}</p>
+                  : (
+                    <div className="download-actions">
+                      <button disabled={localBlocked || editionWorking !== null ||
+                        !libraryIndex.installations.has(transaction.replacement.installationId)}
+                        onClick={() => void rollbackEdition(transaction)}>
+                        {t("Roll back to original edition")}
+                      </button>
+                      <button className={transaction.original.sourceReference != null ? undefined : "danger"}
+                        disabled={localBlocked || editionWorking !== null}
+                        onClick={() => void discardOriginal(transaction)}>
+                        {transaction.original.sourceReference != null
+                          ? t("Stop keeping original")
+                          : t("Delete retained original")}
+                      </button>
+                    </div>
+                  )}
+              {originalOutcome?.id === transaction.id && (
+                <p className={originalOutcome.failed ? "inline-error" : "success-text"}
+                  id={`edition-original-${transaction.id}`} tabIndex={-1}
+                  role={originalOutcome.failed ? "alert" : "status"}>
+                  {originalOutcome.message}
+                </p>
+              )}
             </article>
           ))}
         </section>
