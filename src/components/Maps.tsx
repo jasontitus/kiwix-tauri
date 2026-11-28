@@ -29,7 +29,7 @@ import {
 import type { Book, DownloadAdmission, DownloadTarget, MapCatalog, MapJob, MapPreparation, MapRecipeMetadata, MapRegion, MapStartRequest, MapVersion } from "../types";
 import { cleanupDownloadBooks, mapDownloadConfiguration, readyDownloadBooks } from "../download-state";
 import { displayPath } from "../display-path";
-import { MapBlockProgress } from "./MapBlockProgress";
+import { MapBlockProgress, MapRecoveryPaths, MapTransferRate } from "./MapBlockProgress";
 import { DownloadCleanupDialog } from "./DownloadCleanupDialog";
 import { SwipeRow } from "./SwipeRow";
 import areaGroups from "../map-data/area-groups.json";
@@ -208,6 +208,8 @@ export default function Maps({
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("all");
   const [openedRegion, setDetail] = useState<MapRegion | null>(null);
+  const openedRef = useRef(openedRegion);
+  openedRef.current = openedRegion;
   const detail = openedRegion && catalog?.regions.find((region) => region.id === openedRegion.id);
   const [recipeMetadata, setRecipeMetadata] = useState<{ key: string; value?: MapRecipeMetadata; error?: string; stale?: boolean } | null>(null);
   const [metadataRetry, setMetadataRetry] = useState(0);
@@ -389,6 +391,16 @@ export default function Maps({
       isPrivacyContextCurrent(request.privacy) &&
       !request.privacy.privateMode && !request.privacy.readOnly;
   }
+  /** The open area dialog shows its failure beside Get map. A card or the job
+   * panel can be scrolled anywhere in the page, so their failures go to the
+   * shell's always-visible surface instead of the top of the scrolled page. */
+  function reportStartError(e: unknown) {
+    if (!openedRef.current) {
+      onError(e);
+      return;
+    }
+    if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
+  }
   function dismissDecision() {
     selectionRequest.current = null;
     decisionRef.current = null;
@@ -495,9 +507,7 @@ export default function Maps({
         setDetail(null);
       }
     } catch (e) {
-      if (alive.current && isPrivacyContextCurrent(request.privacy)) {
-        if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
-      }
+      if (alive.current && isPrivacyContextCurrent(request.privacy)) reportStartError(e);
     } finally {
       startPending.current = false;
       dismissDecision();
@@ -542,9 +552,7 @@ export default function Maps({
       }
     } catch (e) {
       if (selectionRequest.current === request) {
-        if (requestCurrent(request)) {
-          if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
-        }
+        if (requestCurrent(request)) reportStartError(e);
         dismissDecision();
       }
     } finally {
@@ -627,9 +635,7 @@ export default function Maps({
         setJob(next);
       }
     } catch (e) {
-      if (alive.current && isPrivacyContextCurrent(privacy)) {
-        if (reportError(diagnostics, e, "blocking", true)) setStartError(errorText(e));
-      }
+      if (alive.current && isPrivacyContextCurrent(privacy)) reportStartError(e);
     } finally {
       mapActionPending.current = false;
       if (alive.current) setWorking(false);
@@ -734,17 +740,50 @@ export default function Maps({
         onDismissTarget({ kind: "map", id: retained.job.id });
         if (mapRequest.current?.jobId === retained.job.id) mapRequest.current = null;
         if (alive.current) {
+          // Delete keeps files it cannot prove are its own; the download then
+          // stays listed with them, so read what remains instead of assuming
+          // it is gone. A failed read is reported by the restarted poll.
           noteJobUpdate();
-          setJob((current) => current?.id === retained.job.id ? null : current);
+          const revision = jobRevision.current;
+          const next = await api<MapJob | null>("map_status").catch(() => undefined);
+          if (next !== undefined && alive.current && revision === jobRevision.current &&
+            isPrivacyContextCurrent(retained.privacy)) {
+            statusPayload.current = JSON.stringify(next);
+            setJob(next);
+          }
         }
       }
       if (alive.current) setCleanup(null);
       onRefresh();
     } catch (e) {
       if (alive.current && isPrivacyContextCurrent(retained.privacy)) {
+        // The dialog shows the failure; it is recorded, not painted twice.
         setCleanupError(errorText(e));
-        onError(e);
+        onError(e, "blocking", false);
+        // A Delete that had to keep a file leaves the download listed with it.
+        noteJobUpdate();
         onRefresh();
+      }
+    } finally {
+      mapActionPending.current = false;
+      if (alive.current) setWorking(false);
+    }
+  }
+  async function forgetRecovery(path: string) {
+    const privacy = capturePrivacyContext();
+    const latest = jobRef.current;
+    if (!alive.current || !latest || mapActionPending.current || blockedRef.current ||
+      !privacy || !isPrivacyContextCurrent(privacy) || !latest.recoveryPaths?.includes(path)) return;
+    mapActionPending.current = true;
+    setWorking(true);
+    try {
+      // Only the warning is dismissed; the file stays where it is.
+      await api("map_forget_recovery", { path, privacyGeneration: privacy.generation });
+      if (alive.current && isPrivacyContextCurrent(privacy)) noteJobUpdate();
+    } catch (e) {
+      if (alive.current && isPrivacyContextCurrent(privacy)) {
+        onError(e);
+        noteJobUpdate();
       }
     } finally {
       mapActionPending.current = false;
@@ -793,7 +832,6 @@ export default function Maps({
   }, [metadataKey, detail, detailVersion, detailLanguage, settings.mapCatalogUrl, settings.privateMode, settings.readOnly, privacyGeneration, loading, metadataRetry]);
   return (
     <section className="page maps-page">
-      {!openedRegion && startError && <ErrorNotice message={startError} onDismiss={() => setStartError("")} />}
       <PageHeader title={t("Maps")} />
       {statusError && <ErrorNotice message={statusError} onDismiss={() => setStatusError("")} />}
       {!!installed.length && (
@@ -891,6 +929,7 @@ export default function Maps({
           </label>
           )}
           <MapBlockProgress job={job} />
+          <MapTransferRate job={job} />
           <details className="download-details">
             <summary>{t("Details for {title}", { title: t("Map: {region}", { region: job.regionId }) })}</summary>
             <p className="muted">
@@ -949,6 +988,9 @@ export default function Maps({
               {errorText(job.error)}
             </p>
           ) : null}
+          <MapRecoveryPaths job={job}
+            disabled={working || !!cleanup || settings.privateMode || settings.readOnly}
+            onDismiss={(path) => void forgetRecovery(path)} />
           {job.importError && (
             <p className="inline-error" role="alert">
               {t("Map import failed: {error}", { error: errorText(job.importError) })}
@@ -969,7 +1011,7 @@ export default function Maps({
                 </button>
               </div>
               {job.resumable !== true && (
-                <p className="muted">{t("This download cannot be resumed. Get the map again to start a new download.")}</p>
+                <p className="muted">{t("This download cannot be resumed. Delete this download, then get the map again.")}</p>
               )}
             </>
           )}

@@ -75,23 +75,65 @@ function requiresLegacyServiceWorker(entry: CatalogEntry): boolean {
 function archiveName(value: string): string {
   return value.trim().replace(/\.zim$/i, "").toLowerCase();
 }
-/// The catalog entry a library book already satisfies, if any. An exact
-/// name+date match is the installed edition; another date of the same name is
-/// an older or newer edition, never a duplicate of this one.
+/// Flavour as Kiwix states it: the `_flavour:` tag, else the token Kiwix
+/// archive and file names carry. Unknown when neither says, as many archives'
+/// own metadata does not.
+const FLAVOUR_IN_NAME = /(?:^|_)(maxi|mini|nopic)(?=[_.]|$)/i;
+function archiveFlavour(tags: string[], names: string[]): string | null {
+  const tagged = tags.find((tag) => tag.startsWith("_flavour:"))?.slice(9).trim().toLowerCase();
+  if (tagged) return tagged;
+  for (const name of names) {
+    const found = FLAVOUR_IN_NAME.exec(name)?.[1];
+    if (found) return found.toLowerCase();
+  }
+  return null;
+}
+function lastSegment(value: string): string {
+  return value.split(/[?#]/)[0].replace(/\\/g, "/").split("/").pop() || "";
+}
+/// The calendar day of an edition date. A ZIM `Date` is `YYYY-MM-DD`; an OPDS
+/// `issued` is an RFC 3339 timestamp, taken in UTC as the Rust catalog index does.
+function editionDay(value: string): string | null {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return null;
+  const time = Date.parse(trimmed);
+  return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : null;
+}
+interface InstalledArchive {
+  book: Book;
+  flavour: string | null;
+  day: string | null;
+}
+function installedArchive(book: Book): InstalledArchive {
+  return {
+    book,
+    flavour: archiveFlavour(book.tags, [book.name, lastSegment(book.sourceReference?.displayName ?? book.path)]),
+    day: editionDay(book.date),
+  };
+}
+/// The catalog entry a library book already satisfies, if any. The same name,
+/// flavour and edition day is the installed edition; another day of the same
+/// name and flavour is an older or newer edition, never a duplicate of this
+/// one. Another flavour is a different archive. A flavour neither side states
+/// does not separate them (as in the Rust series match).
 /// `installed` is built once per library, so resolving a card is a map lookup
 /// instead of a full library scan with a regex per book.
 function installedEdition(
   entry: CatalogEntry,
-  installed: Map<string, Book[]>,
+  installed: Map<string, InstalledArchive[]>,
 ): { book: Book; exact: boolean } | null {
   const name = archiveName(entry.name);
   if (!name) return null;
-  const matching = installed.get(name);
+  const flavour = archiveFlavour(entry.tags, [entry.name, lastSegment(entry.url)]);
+  const matching = installed.get(name)?.filter((archive) =>
+    !flavour || !archive.flavour || archive.flavour === flavour);
   if (!matching || !matching.length) return null;
-  const exact = matching.find((book) => book.date === entry.date);
-  if (exact) return { book: exact, exact: true };
+  const day = editionDay(entry.date);
+  const exact = day ? matching.find((archive) => archive.day === day) : undefined;
+  if (exact) return { book: exact.book, exact: true };
   return {
-    book: [...matching].sort((a, b) => b.date.localeCompare(a.date))[0],
+    book: [...matching].sort((a, b) => b.book.date.localeCompare(a.book.date))[0].book,
     exact: false,
   };
 }
@@ -202,6 +244,8 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [detail, setDetail] = useState<CatalogEntry | null>(null);
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const [starting, setStarting] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{ entryId: string; message: string } | null>(null);
   const alive = useRef(true);
@@ -341,6 +385,13 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     setDetail(entry);
   }
   function reportActionError(entry: CatalogEntry, error: unknown) {
+    // The open detail dialog shows its entry's failure beside the action. A
+    // card can be scrolled anywhere in the page, so its failure goes to the
+    // shell's always-visible surface instead of the top of the scrolled page.
+    if (detailRef.current?.id !== entry.id) {
+      onError(error);
+      return;
+    }
     if (reportError(diagnostics, error, "blocking", true)) {
       setActionError({ entryId: entry.id, message: errorText(error) });
     }
@@ -434,14 +485,14 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
   // Normalizing every installed archive name once per library keeps the regex
   // and lowercase work out of the per-card render path.
   const installedArchives = useMemo(() => {
-    const index = new globalThis.Map<string, Book[]>();
+    const index = new globalThis.Map<string, InstalledArchive[]>();
     for (const book of books) {
       if (!book.available) continue;
       const name = archiveName(book.name);
       if (!name) continue;
       const matching = index.get(name);
-      if (matching) matching.push(book);
-      else index.set(name, [book]);
+      if (matching) matching.push(installedArchive(book));
+      else index.set(name, [installedArchive(book)]);
     }
     return index;
   }, [books]);
@@ -468,7 +519,6 @@ function CatalogSession({ settings, privacyGeneration, onError, onDownload, book
     <ErrorNotice message={actionError.message} onDismiss={() => setActionError(null)} />;
   return (
     <section className="page catalog-page">
-      {!detail && actionNotice}
       <PageHeader title={t("Discover")} />
       <form className="catalog-filters" onSubmit={filter}>
         <div className="toolbar compact-toolbar">
