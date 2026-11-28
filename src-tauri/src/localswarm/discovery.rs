@@ -220,6 +220,11 @@ impl Discovery {
         self.browse = Some((cancel, task));
         Ok(())
     }
+    /// A resolved record, as the browse task would have stored it.
+    #[cfg(test)]
+    pub(super) fn discovered_for_test(&self, peer: Peer) {
+        self.peers.lock().unwrap_or_else(|e| e.into_inner()).insert(peer.id.clone(), peer);
+    }
     /// Leave the browse exactly as a session that ended by itself leaves it:
     /// a finished task still in the slot, and its error.
     #[cfg(test)]

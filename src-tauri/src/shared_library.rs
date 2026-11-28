@@ -161,8 +161,7 @@ impl SharedLibraryClient {
     pub async fn download(&self, downloads: &DownloadManager, destination_dir: PathBuf, receipt_id: &str,
         book_id: &str, space_acknowledgement: Option<String>, replace_earlier: bool) -> Result<DownloadSnapshot, String>
     {
-        let grant = self.receipt_grant(receipt_id, book_id)?;
-        grant.check().await?;
+        let grant = self.admit(receipt_id, book_id, Instant::now()).await?;
         if let Some(id) = grant.book.as_ref().and_then(|book| book.archive_id.as_deref()) {
             let id = uuid::Uuid::parse_str(id).map_err(|_| "Invalid shared library book")?.to_string();
             if let Some(existing) = self.store.book(&id)? {
@@ -178,14 +177,32 @@ impl SharedLibraryClient {
 }
 
 impl SharedLibraryClient {
-    /// The grant an open list holds for one of its books. How long the list
-    /// has been open decides nothing here: the caller's `check()` does.
-    fn receipt_grant(&self, receipt_id: &str, book_id: &str) -> Result<ScopedDownloadGrant, String> {
+    /// The grant an open list holds for one of its books, and when the list
+    /// was opened. How long ago that was decides nothing here.
+    fn receipt_grant(&self, receipt_id: &str, book_id: &str) -> Result<(ScopedDownloadGrant, Instant), String> {
         let state = self.state.lock().map_err(|_| REVOKED)?;
         let receipt = state.1.get(receipt_id).ok_or(REVOKED)?;
         let book = receipt.books.iter().find(|book| book.id == book_id).ok_or("Book is not in this shared library")?;
         let mut grant = receipt.grant.clone();
         grant.book = Some(book.clone());
+        Ok((grant, receipt.created))
+    }
+
+    /// Admission of one download from an open list. Authority is `check()`.
+    ///
+    /// `check()` lets a missing discovery record pass, because a running
+    /// download must survive a gap in the scan and Stop finding is not Stop
+    /// all. For a list past its retention age that is not good enough: a
+    /// sender that stopped sharing leaves exactly this state, and admitting
+    /// the download would only fail later as a job in Downloads instead of
+    /// saying "browse it again" here. A list whose sender is still listed is
+    /// never refused for its age.
+    async fn admit(&self, receipt_id: &str, book_id: &str, now: Instant) -> Result<ScopedDownloadGrant, String> {
+        let (grant, opened) = self.receipt_grant(receipt_id, book_id)?;
+        grant.check().await?;
+        if now.saturating_duration_since(opened) >= RECEIPT_TTL && grant.sender_unlisted().await? {
+            return Err(REVOKED.into());
+        }
         Ok(grant)
     }
 }
@@ -240,6 +257,15 @@ impl ScopedDownloadGrant {
                 tokio::time::sleep(IDLE_REVOCATION_POLL).await;
             }
         });
+    }
+
+    /// The sender was chosen from discovery and is no longer listed there.
+    /// A route chosen another way (Bluetooth) has no record to lose.
+    async fn sender_unlisted(&self) -> Result<bool, String> {
+        match &self.inner.discovery {
+            Some((discovery, id)) => Ok(discovery.selected_library_peer(id).await?.is_none()),
+            None => Ok(false),
+        }
     }
 
     /// Authority this grant has permanently lost. Cheap flags only: the full
@@ -395,16 +421,16 @@ mod tests {
         let old = now.checked_sub(RECEIPT_TTL * 2).unwrap_or(now);
         client.state.lock().unwrap().1.insert("open-list".into(), receipt(&grant, old));
 
-        let admitted = client.receipt_grant("open-list", "book").unwrap();
-        admitted.check().await.unwrap();
+        // Judged at an instant long after it was opened, on any machine.
+        let later = now + RECEIPT_TTL * 4;
+        let admitted = client.admit("open-list", "book", later).await.unwrap();
         assert_eq!(admitted.book().unwrap().id, "book");
-        assert_eq!(client.receipt_grant("open-list", "other").err().unwrap(), "Book is not in this shared library");
-        assert_eq!(client.receipt_grant("unknown", "book").err().unwrap(), REVOKED);
+        assert_eq!(client.admit("open-list", "other", later).await.err().unwrap(), "Book is not in this shared library");
+        assert_eq!(client.admit("unknown", "book", later).await.err().unwrap(), REVOKED);
 
         // Another browse making room does not drop it either, however old.
-        let later = now + RECEIPT_TTL * 4;
         make_room(&mut client.state.lock().unwrap().1, later);
-        assert!(client.receipt_grant("open-list", "book").is_ok());
+        assert!(client.admit("open-list", "book", later).await.is_ok());
         // Under pressure the oldest lists past the retention age make way,
         // and a full table of recent lists is refused as before.
         {
@@ -422,12 +448,57 @@ mod tests {
         // Authority is the grant: once its owner is gone the receipt admits
         // nothing, whatever its age, and stops occupying the table.
         grant.inner.descriptor.cancel.cancel();
-        let revoked = client.receipt_grant("recent-1", "book").unwrap();
-        assert_eq!(revoked.check().await.unwrap_err(), REVOKED);
+        assert_eq!(client.admit("recent-1", "book", now).await.err().unwrap(), REVOKED);
         make_room(&mut client.state.lock().unwrap().1, later);
         assert!(client.state.lock().unwrap().1.is_empty());
-        assert_eq!(client.receipt_grant("recent-1", "book").err().unwrap(), REVOKED);
-        drop(revoked); drop(admitted); drop(grant); drop(client); drop(discovery); drop(store);
+        assert_eq!(client.admit("recent-1", "book", now).await.err().unwrap(), REVOKED);
+        drop(admitted); drop(grant); drop(client); drop(discovery); drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A sender chosen from discovery that stopped sharing leaves a list whose
+    /// record is gone. While the list is recent that is a gap in the scan;
+    /// once it is old, Download must say "browse it again" instead of queueing
+    /// a download that can only fail. A sender that is still listed is never
+    /// refused for the age of the list.
+    #[tokio::test]
+    #[cfg(not(any(mobile, target_os = "macos")))]
+    async fn an_old_list_is_refused_only_when_its_sender_is_no_longer_listed() {
+        let root = std::env::temp_dir().join(format!("kiwix-public-unlisted-{}", uuid::Uuid::new_v4()));
+        let store = Arc::new(Store::new(root.clone()).unwrap());
+        let discovery = LocalSwarmManager::new(store.clone(), CancellationToken::new()).unwrap();
+        let client = SharedLibraryClient::new(store.clone(), discovery.clone());
+        let (mut grant, probe) = test_download_grant(store.clone(), 128);
+        drop(probe);
+        Arc::get_mut(&mut grant.inner).unwrap().discovery = Some((discovery.clone(), "selected.local".into()));
+        let now = Instant::now();
+        let old = now + RECEIPT_TTL * 2;
+        client.state.lock().unwrap().1.insert("list".into(), receipt(&grant, now));
+
+        // Not listed: admitted while recent (Stop finding is not Stop all),
+        // refused with the actionable message once old.
+        assert!(discovery.selected_library_peer("selected.local").await.unwrap().is_none());
+        assert!(client.admit("list", "book", now).await.is_ok());
+        assert!(client.admit("list", "book", now + RECEIPT_TTL - Duration::from_secs(1)).await.is_ok());
+        assert_eq!(client.admit("list", "book", old).await.err().unwrap(), REVOKED);
+        // The refusal is about this request only: the grant keeps its
+        // authority, so a download already running from it is not cut.
+        assert!(!grant.inner.revoked.is_cancelled());
+        grant.check().await.unwrap();
+
+        // Listed again with the same identity: admitted however old.
+        let descriptor = &grant.inner.descriptor;
+        discovery.discovered_for_test(crate::localswarm::discovery::Peer {
+            id: "selected.local".into(), peer_id: descriptor.peer_id.clone(), swarm_id: String::new(),
+            name: "Shared library".into(), publisher_name: None, total_bytes: 0, chunk_count: 0,
+            host: descriptor.addresses[0].clone(), port: descriptor.port, locked: false, transport: "quic-library".into(),
+            addresses: descriptor.addresses.clone(), library_session_id: Some(descriptor.session_id.clone()),
+            library_generation: Some(1), library_count: Some(1),
+        }).await;
+        assert!(discovery.selected_library_peer("selected.local").await.unwrap().is_some());
+        assert!(client.admit("list", "book", old).await.is_ok());
+        assert!(client.admit("list", "book", now + RECEIPT_TTL * 100).await.is_ok());
+        drop(grant); drop(client); drop(discovery); drop(store);
         std::fs::remove_dir_all(root).unwrap();
     }
 

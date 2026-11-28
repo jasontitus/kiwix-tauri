@@ -913,6 +913,10 @@ impl LocalSwarmManager {
         let discovery = self.inner.discovery.lock().await;
         discovery.library_peer(id)
     }
+    #[cfg(all(test, not(any(target_os = "ios", target_os = "macos"))))]
+    pub(crate) async fn discovered_for_test(&self, peer: discovery::Peer) {
+        self.inner.discovery.lock().await.discovered_for_test(peer);
+    }
     pub async fn selected_library_peer(&self, id: &str) -> Result<Option<discovery::Peer>, String> {
         self.allowed()?;
         check_cancel(&self.cancel_token())?;
