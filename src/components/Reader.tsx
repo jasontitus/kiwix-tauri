@@ -568,6 +568,12 @@ const DOCUMENT_PROOF_TIMEOUT = 1000;
 // How long a page stays painted while its replacement re-sessions. A real
 // bridge answers within the handshake; anything slower is hidden again.
 const HELD_PAINT_LIMIT = 3000;
+// Desktop Windows, and not restricted mode: the only place an archive's photo
+// input is answered by the app's own chooser, and so the only place a photo
+// secret is issued or a photo request honoured.
+function photoChooserOffered(location: ReaderLocation): boolean {
+  return isWindows && location.restricted !== true;
+}
 function validExternal(value: string): boolean {
   try {
     return ["http:", "https:", "mailto:"].includes(new URL(value).protocol);
@@ -1974,6 +1980,11 @@ export default function Reader(props: ReaderProps) {
   const initializeDocument = useCallback((session: FrameSession) => {
     bridgeVouched.current = false;
     pendingInit.current = "";
+    // The photo secret exists only where the app's photo chooser does. A page
+    // that erased its own bridge listener can still read reader-init, so the
+    // secret is not handed out where nothing honest could use it.
+    const photoChooser = photoChooserOffered(session.location);
+    if (!photoChooser) photoSecrets.current.clear();
     // A proof that would only have vouched for this initialisation is spent.
     if (documentProbe.current && !documentProbe.current.kept) clearDocumentProbe();
     frameRef.current?.contentWindow?.postMessage(
@@ -1984,8 +1995,8 @@ export default function Reader(props: ReaderProps) {
         sessionId: session.sessionId,
         sensorStatus: session.status,
         linkPreviews: latest.current.settings.linkPreviews,
-        photoChooser: isWindows && session.location.restricted !== true,
-        photoSecret: photoSecretFor(session.sessionId),
+        photoChooser,
+        ...(photoChooser ? { photoSecret: photoSecretFor(session.sessionId) } : {}),
         mediaNotice: {
           text: t(
             "This video uses a format this device cannot play smoothly. It may stutter. The same video plays smoothly in the desktop app.",
@@ -3678,6 +3689,7 @@ export default function Reader(props: ReaderProps) {
         // is answered, so the bridge never leaves the input dead.
         if (
           !event.isTrusted ||
+          !photoChooserOffered(session.location) ||
           !photoSecrets.current.get(session.sessionId) ||
           data.secret !== photoSecrets.current.get(session.sessionId) ||
           photoRequestRef.current
@@ -4970,7 +4982,7 @@ export default function Reader(props: ReaderProps) {
       if (source) quarantineReaderStorage(source);
       // The band this message appears in carries "Reload article", which
       // discards the quarantine this just created and reopens the page.
-      const message = t("Kiwix could not confirm that this page finished saving, so it was closed. Choose Reload article to open it again. Anything the page had not finished saving is lost.");
+      const message = t("Kiwix could not confirm that this page finished saving, so it was closed. Choose Reload article to open it again. Anything the page had not finished saving may be lost.");
       // Still the frame this started with (or still none): never show the
       // unretired document as reloaded, and never leave a spinner behind.
       if (alive.current && frameRef.current?.contentWindow === source) {

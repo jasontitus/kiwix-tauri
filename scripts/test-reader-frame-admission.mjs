@@ -23,7 +23,7 @@ function visit(node) {
 }
 visit(tree);
 assert.ok(frameElement && receive, "exercise the production frame and message receiver");
-const helpers = new Set(["object", "text", "readerDocumentUrl", "articlePath", "canonicalLocation", "passageDocumentKey", "passageDocumentPath", "currentLocation", "lastLocationIndex", "sameHistoryStack", "sensorKey", "boundedHistory", "validExternal"]);
+const helpers = new Set(["object", "text", "readerDocumentUrl", "articlePath", "canonicalLocation", "passageDocumentKey", "passageDocumentPath", "currentLocation", "lastLocationIndex", "sameHistoryStack", "sensorKey", "boundedHistory", "validExternal", "photoChooserOffered"]);
 const moduleVariables = new Set(["MISS_MARKER", "nextNativeRequest", "MAX_TAB_HISTORY", "DOCUMENT_PROOF_TIMEOUT", "HELD_PAINT_LIMIT"]);
 const declarations = tree.statements.filter((node) =>
   ts.isFunctionDeclaration(node) && helpers.has(node.name?.text) ||
@@ -193,7 +193,7 @@ test("reader-init is never posted to a document no bridge has vouched for", asyn
   const token = crypto.randomUUID();
   r.hello(token);
   assert.equal(r.inits().length, 1);
-  assert.equal(typeof r.inits()[0].data.photoSecret, "string");
+  assert.equal(r.inits()[0].data.sessionId, r.context.activeFrame.current.sessionId);
   // One announcement vouches for one initialisation.
   r.bind(token); r.ready();
   assert.equal(r.context.bridgeVouched.current, false);
@@ -732,9 +732,20 @@ test("a tab's history keeps only its nearest entries", () => {
   assert.equal(forward.at(-1).path, "page248", "the pages just left are the first way forward");
 });
 
+// Where the app's photo chooser exists: desktop Windows, outside restricted mode.
+function windowsReader() {
+  const r = reader();
+  r.context.isWindows = true;
+  const token = crypto.randomUUID();
+  r.hello(token); r.load(); r.bind(token); r.ready();
+  return { r, session: r.context.activeFrame.current.sessionId };
+}
+
 test("only the session being initialised keeps a photo secret", async () => {
-  const { r, session } = settled();
+  const { r, session } = windowsReader();
   const secret = r.inits()[0].data.photoSecret;
+  assert.equal(r.inits()[0].data.photoChooser, true);
+  assert.match(secret, /^[0-9a-f-]{36}$/);
   assert.deepEqual([...r.context.photoSecrets.current.keys()], [session]);
   for (let index = 0; index < 5; index++) {
     const next = crypto.randomUUID();
@@ -744,6 +755,65 @@ test("only the session being initialised keeps a photo secret", async () => {
   const incoming = r.context.activeFrame.current.sessionId;
   assert.deepEqual([...r.context.photoSecrets.current.keys()], [incoming]);
   assert.notEqual(r.inits().at(-1).data.photoSecret, secret);
+});
+
+test("no photo secret is issued where the photo chooser is not offered", async () => {
+  // A page that erased its own bridge listener can read reader-init. Outside
+  // Windows, and in restricted mode, nothing honest could use the secret.
+  const elsewhere = settled().r;
+  const init = elsewhere.inits()[0].data;
+  assert.equal(init.photoChooser, false);
+  assert.equal(Object.hasOwn(init, "photoSecret"), false, "not sent off Windows");
+  assert.equal(elsewhere.context.photoSecrets.current.size, 0);
+
+  const restricted = reader();
+  restricted.context.isWindows = true;
+  restricted.context.activeFrame.current.location.restricted = true;
+  restricted.hello(); restricted.load();
+  assert.equal(restricted.inits()[0].data.photoChooser, false);
+  assert.equal(Object.hasOwn(restricted.inits()[0].data, "photoSecret"), false, "not sent in restricted mode");
+  assert.equal(restricted.context.photoSecrets.current.size, 0);
+
+  // Entering restricted mode (a new document, a new session) drops the secret the frame had.
+  const { r } = windowsReader();
+  assert.equal(r.context.photoSecrets.current.size, 1);
+  r.context.activeFrame.current = { ...r.context.activeFrame.current,
+    location: { ...r.context.activeFrame.current.location, restricted: true } };
+  r.hello(); r.load(); await r.drain();
+  assert.equal(Object.hasOwn(r.inits().at(-1).data, "photoSecret"), false);
+  assert.equal(r.context.photoSecrets.current.size, 0);
+});
+
+test("a photo request is honoured only where the photo chooser is offered", () => {
+  function ask(r, secret) {
+    const session = r.context.activeFrame.current.sessionId;
+    const requests = [];
+    Object.assign(r.context, { photoRequestRef: ref(null), setPhotoError() {}, setPhotoStage() {},
+      setPhotoRequest(value) { requests.push(value); } });
+    const requestId = crypto.randomUUID();
+    r.post({ type: "photo-request", sessionId: session, requestId, secret, accept: "image/*" });
+    const reply = r.messages.filter((item) => item.data.requestId === requestId).at(-1).data.type;
+    return { reply, requests };
+  }
+  const windows = windowsReader();
+  const secret = windows.r.inits()[0].data.photoSecret;
+  assert.equal(ask(windows.r, crypto.randomUUID()).reply, "photo-cancel", "the wrong secret is refused");
+  const accepted = ask(windows.r, secret);
+  assert.equal(accepted.reply, "photo-accepted");
+  assert.equal(accepted.requests.length, 1);
+
+  // Even a matching secret opens nothing off Windows or in restricted mode.
+  for (const change of [
+    (r) => { r.context.isWindows = false; },
+    (r) => { r.context.activeFrame.current.location.restricted = true; },
+  ]) {
+    const { r } = windowsReader();
+    const held = r.inits()[0].data.photoSecret;
+    change(r);
+    const refused = ask(r, held);
+    assert.equal(refused.reply, "photo-cancel");
+    assert.deepEqual(refused.requests, [], "no chooser dialog is opened");
+  }
 });
 
 test("blank section titles never become contents entries", () => {

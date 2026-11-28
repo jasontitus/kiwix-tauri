@@ -202,20 +202,14 @@ impl Service {
             return Ok(());
         }
         #[cfg(target_os = "android")]
-        if matches!(command, "localswarm_status" | "localswarm_hotspot_stop")
+        if command == "localswarm_status"
             && self.hotspot.lock().is_ok_and(|hotspot| matches!(
                 hotspot.phase(), crate::hotspot::HotspotPhase::Starting | crate::hotspot::HotspotPhase::Active))
         {
             // A user-initiated hotspot start is crossing the Android permission
             // dialog (or Samsung's own hotspot warning Activity). The native
-            // start owns the continuation, so the UI may observe or stop that
-            // hotspot; no other command is reopened by this exception.
-            return Ok(());
-        }
-        #[cfg(target_os = "android")]
-        if command == "localswarm_hotspot_start"
-            && self.hotspot.lock().is_ok_and(|hotspot| hotspot.phase() == crate::hotspot::HotspotPhase::Starting)
-        {
+            // start owns the continuation, so the UI may observe that hotspot;
+            // no other command is reopened by this exception.
             return Ok(());
         }
         if matches!(command, "sensor_location" | "sensor_consent") {

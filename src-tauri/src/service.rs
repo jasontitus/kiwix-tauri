@@ -2492,6 +2492,73 @@ impl Service {
         }
         Ok(replacement)
     }
+    /// Garbage-collect spelling dictionaries no library entry can use (removed
+    /// or relinked books, changed files, interrupted builds), at most hourly.
+    /// Skipped entirely while any entry is unavailable, so a dictionary on a
+    /// temporarily missing volume survives; the manager itself skips while a
+    /// build or load runs. Called off the async runtime.
+    fn sweep_spelling_cache(&self, state: &store::State) {
+        const INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+        if !self.spelling.cache_present() || state.books.iter().any(|book| !book.available) {
+            return;
+        }
+        {
+            let Ok(mut swept) = self.spelling_swept_at.lock() else { return };
+            if swept.is_some_and(|at| at.elapsed() < INTERVAL) {
+                return;
+            }
+            *swept = Some(std::time::Instant::now());
+        }
+        // Each key needs the retained files' identity, exactly as a dictionary
+        // lookup computes it. If any entry cannot be identified, sweep nothing.
+        let live = state
+            .books
+            .iter()
+            .map(|book| {
+                crate::library_files::archive_content_identity(book).and_then(|content| {
+                    crate::spelling::Identity::from_content(&content, &book.metadata, &book.installation_id)
+                })
+            })
+            .collect::<Result<Vec<_>, String>>();
+        let Ok(live) = live else { return };
+        if let Err(error) = self.spelling.sweep(&live) {
+            eprintln!("Spelling cache cleanup: {error}");
+        }
+    }
+    /// Article-PDF scratch of an earlier process that was killed mid-export
+    /// holds a captured article (with any text typed into it). Remove what is
+    /// stale once per run, detached; exports also sweep before they start.
+    fn start_pdf_scratch_sweep(self: &Arc<Self>) {
+        let Some(app) = self.app.lock().ok().and_then(|app| app.clone()) else { return };
+        if self.pdf_scratch_swept.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let weak = Arc::downgrade(self);
+        tauri::async_runtime::spawn(async move {
+            #[cfg(target_os = "android")]
+            let cache = {
+                use tauri_plugin_kiwix_mobile::MobileExt;
+                // The same native root the export uses (see pdf_export.rs).
+                let Ok(metadata) = app.kiwix_mobile().call("storageRoot", json!({})).await else { return };
+                let Some(path) = metadata.get("cachePath").and_then(Value::as_str).map(PathBuf::from) else { return };
+                path
+            };
+            #[cfg(not(target_os = "android"))]
+            let Ok(cache) = tauri::Manager::path(&app).app_cache_dir() else { return };
+            if !cache.is_absolute() {
+                return;
+            }
+            let report: crate::native_pdf::Report = Arc::new(move |message| {
+                eprintln!("Kiwix PDF cleanup: {message}");
+                if let Some(service) = weak.upgrade() {
+                    service.note_startup_warning(message.chars().take(1024).collect());
+                    service.notify_library_changed();
+                }
+            });
+            let root = cache.join("article-pdf");
+            let _ = tokio::task::spawn_blocking(move || crate::native_pdf::sweep_stale(&root, &report)).await;
+        });
+    }
     fn forget_installation(&self, installation_id: &str) {
         if let Err(error) = self.spelling.retire_installation(installation_id) {
             eprintln!("Stopping the removed installation's spelling index: {error}");
@@ -2957,7 +3024,7 @@ impl Service {
             | "prepare_download_cleanup" | "retry_import" | "remove_book" | "relink_book"
             | "start_download" | "resume_download" | "pause_download" | "cancel_download"
             | "delete_download_files" | "remove_download_history" | "forget_download_record"
-            | "torrent_seeding" | "share_torrent" | "torrent_job" | "torrent_metadata" | "torrent_limits"
+            | "torrent_seeding" | "share_torrent" | "torrent_job" | "torrent_metadata"
             | "localswarm_discovery" | "localswarm_download" | "localswarm_seed" | "localswarm_status"
             | "localswarm_share_all" | "localswarm_stop_library"
             | "shared_library_browse" | "shared_library_download" | "sharing_start" | "sharing_stop"
@@ -4020,7 +4087,6 @@ fn mutation_command(command: &str) -> bool {
             | "localswarm_stop"
             | "torrent_seeding"
             | "share_torrent"
-            | "torrent_limits"
             | "find_updates"
             | "edition_prepare" | "edition_download" | "edition_status"
             | "edition_commit" | "edition_cancel" | "edition_rollback"

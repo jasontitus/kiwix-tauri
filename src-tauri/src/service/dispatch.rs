@@ -36,7 +36,6 @@ impl Service {
                 | "share_torrent"
                 | "torrent_job"
                 | "torrent_metadata"
-                | "torrent_limits"
                 | "map_start"
                 | "map_cancel"
                 | "map_clear_cache"
@@ -50,7 +49,6 @@ impl Service {
                 | "localswarm_download"
                 | "localswarm_seed"
                 | "localswarm_share_all"
-                | "localswarm_hotspot_start"
                 | "edition_prepare" | "edition_download" | "edition_status"
                 | "edition_commit" | "edition_cancel" | "edition_rollback"
                 | "edition_discard_original"
@@ -1807,6 +1805,9 @@ impl Service {
                 value(prepared)
             }
             "library_maintenance" => {
+                // Not tied to library writes: private-mode exports leave scratch
+                // too. Runs once per process, detached.
+                self.start_pdf_scratch_sweep();
                 if self.store.read_only()? || self.store.private_mode()? {
                     return Ok(Value::Null);
                 }
@@ -2072,24 +2073,6 @@ impl Service {
                     object.insert("hotspot".into(), self.mobile_hotspot_status());
                 }
                 Ok(status)
-            }
-            "localswarm_hotspot_start" => {
-                #[cfg(target_os = "android")]
-                {
-                    self.mobile_root(&label)?;
-                    self.mobile_hotspot_start().await
-                }
-                #[cfg(not(target_os = "android"))]
-                Err("Creating a Wi-Fi hotspot is only available on Android".into())
-            }
-            "localswarm_hotspot_stop" => {
-                #[cfg(target_os = "android")]
-                {
-                    self.mobile_root(&label)?;
-                    self.mobile_hotspot_stop().await.map(|_| Value::Null)
-                }
-                #[cfg(not(target_os = "android"))]
-                Ok(Value::Null)
             }
             "localswarm_discovery" => {
                 let enabled = args.get("enabled").and_then(Value::as_bool).ok_or("Missing discovery enabled flag")?;
@@ -2497,27 +2480,6 @@ impl Service {
                 Ok(json!(STANDARD.encode(
                     manager.torrent_metadata(text(&args, "id")?).await?
                 )))
-            }
-            "torrent_limits" => {
-                self.writable()?;
-                let download = args
-                    .get("download")
-                    .and_then(Value::as_u64)
-                    .ok_or("Missing download limit")?;
-                let upload = args
-                    .get("upload")
-                    .and_then(Value::as_u64)
-                    .ok_or("Missing upload limit")?;
-                self.torrent_manager()?.limits(download, upload).await?;
-                if let Some(manager) = self.localswarm.get() {
-                    manager.limits(download, upload);
-                }
-                self.store.update(|s| {
-                    s.settings.download_limit = download;
-                    s.settings.upload_limit = upload;
-                    Ok(())
-                })?;
-                Ok(Value::Null)
             }
             "map_catalog" => {
                 self.ensure_window_active(&label)?;

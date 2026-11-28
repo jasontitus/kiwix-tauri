@@ -139,6 +139,7 @@ test("an unconfirmed retirement removes the frame instead of presenting the old 
     assert.match(shown, /could not confirm that this page finished saving/);
     assert.match(shown, /Choose Reload article to open it again/, "the advice matches the button beside it");
     assert.doesNotMatch(shown, /Close and reopen this window/);
+    assert.match(shown, /may be lost\.$/, "the writes may in fact have been saved");
     assert.equal(r.errors.length, 1);
     assert.match(r.errors[0].cause.message, /could not finish closing/);
   }

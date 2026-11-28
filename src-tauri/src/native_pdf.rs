@@ -17,6 +17,7 @@ pub use presentation::Presentation;
 pub use cleanup::retry_cleanup;
 pub use cleanup::Report;
 pub(crate) use cleanup::Files;
+pub(crate) use cleanup::sweep_stale;
 #[cfg(test)]
 #[path = "native_pdf/origin_tests.rs"]
 mod origin_tests;
