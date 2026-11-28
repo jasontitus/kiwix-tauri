@@ -857,7 +857,8 @@ fn replace_urls(scalars: &[char]) -> Vec<char> {
             colon += 1;
             continue;
         }
-        // The scheme is the whole run before the colon; it cannot reach back
+        // The scheme is the run of scheme characters before the colon, from
+        // its first letter (`+https:` is still `https:`). It cannot reach back
         // into text that an earlier URL already replaced.
         let mut start = colon;
         while start > cursor
@@ -865,14 +866,14 @@ fn replace_urls(scalars: &[char]) -> Vec<char> {
         {
             start -= 1;
         }
+        while start < colon && !scalars[start].is_ascii_alphabetic() {
+            start += 1;
+        }
         let tail = colon + 1;
         let slashes = scalars.get(tail) == Some(&'/') && scalars.get(tail + 1) == Some(&'/');
         let scheme: String = scalars[start..colon].iter().map(char::to_ascii_lowercase).collect();
         let opaque = OPAQUE_SCHEMES.contains(&scheme.as_str());
-        if !scalars.get(start).is_some_and(|first| first.is_ascii_alphabetic())
-            || start == colon
-            || (!slashes && (scalars.get(tail) == Some(&':') || !opaque))
-        {
+        if start == colon || (!slashes && (scalars.get(tail) == Some(&':') || !opaque)) {
             colon += 1;
             continue;
         }

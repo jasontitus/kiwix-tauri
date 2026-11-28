@@ -732,6 +732,14 @@
     "expected": "see [url]"
   },
   {
+    "input": "+https://example.org/wiki/Private Page",
+    "expected": "+https://example.org"
+  },
+  {
+    "input": "1.http://127.0.0.1:9/A/Private Page",
+    "expected": "1.[reader-url]"
+  },
+  {
     "input": "file: /home/jane doe/x.zim",
     "expected": "[url] [path]"
   },
