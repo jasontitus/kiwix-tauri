@@ -33,6 +33,18 @@ const SEED_STALLED_PASSES: u32 = 5;
 const SEED_STALL_LIMIT: Duration = Duration::from_secs(120);
 /// Passes one run of the stage may make in total, whatever they add.
 const SEED_MAX_PASSES: u32 = 32;
+/// The least a connected mirror must keep delivering: this many bytes (one
+/// piece, or all that is left, when that is less) in every `SEED_PACE_WINDOW`.
+/// The silence allowance above restarts with every byte, so without this a
+/// mirror sending a byte now and then would hold the stage, and the peers
+/// behind it, for as long as it liked. The amount is fixed rather than a
+/// whole piece because pieces are large (4 MiB in Kiwix's own torrents, up to
+/// 64 MiB accepted): about 2 KiB/s is kept on any link worth waiting for,
+/// while a piece a minute would cut off an honest mirror on a slow one.
+const SEED_PACE_BYTES: u64 = 128 * 1024;
+/// Long enough to sit out a stalled connection that then recovers, and short
+/// enough that two of them reach `SEED_STALL_LIMIT`.
+const SEED_PACE_WINDOW: Duration = Duration::from_secs(60);
 /// Delay before the next pass; it doubles with every stalled pass.
 #[cfg(not(test))]
 const SEED_BACKOFF: Duration = Duration::from_secs(1);
@@ -439,6 +451,55 @@ impl SeedError {
     }
 }
 
+/// Holds one response to the minimum pace: `owed` bytes are due by `deadline`.
+struct Pace {
+    quota: u64,
+    window: Duration,
+    owed: u64,
+    deadline: tokio::time::Instant,
+}
+
+impl Pace {
+    /// Nothing is owed until a response body starts.
+    fn new(piece_length: u64, window: Duration) -> Self {
+        Self {
+            quota: SEED_PACE_BYTES.min(piece_length),
+            window,
+            owed: 0,
+            deadline: tokio::time::Instant::now(),
+        }
+    }
+
+    /// A response body with `remaining` bytes to deliver starts now.
+    fn start(&mut self, remaining: u64) {
+        self.owed = self.quota.min(remaining);
+        self.deadline = tokio::time::Instant::now() + self.window;
+    }
+
+    /// Record `bytes` received with `remaining` still to come. Meeting what was
+    /// owed starts the next window.
+    fn received(&mut self, bytes: u64, remaining: u64) {
+        if bytes >= self.owed {
+            self.start(remaining);
+        } else {
+            self.owed -= bytes;
+        }
+    }
+
+    /// Completes when the window has passed with bytes still owed. Never
+    /// completes once nothing more is expected.
+    async fn missed(&self) {
+        if self.owed == 0 {
+            std::future::pending::<()>().await;
+        }
+        tokio::time::sleep_until(self.deadline).await;
+    }
+
+    fn error() -> SeedError {
+        SeedError::Transport("Web seed is sending too slowly".into())
+    }
+}
+
 /// What one `download` call has established about the staged files. It is
 /// carried across passes so a retry neither hashes nor fetches again what an
 /// earlier pass already settled.
@@ -473,15 +534,16 @@ pub(super) async fn download(
     seed: &WebSeedTorrent,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
 ) -> Result<(), String> {
-    download_with_backoff(token, factory, seed, progress, SEED_BACKOFF).await
+    download_with(token, factory, seed, progress, SEED_BACKOFF, SEED_PACE_WINDOW).await
 }
 
-async fn download_with_backoff(
+async fn download_with(
     token: &CancellationToken,
     factory: &ConfinedFactory,
     seed: &WebSeedTorrent,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
     backoff: Duration,
+    window: Duration,
 ) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .connect_timeout(SEED_CONNECT_TIMEOUT)
@@ -511,7 +573,7 @@ async fn download_with_backoff(
     loop {
         state.gained = 0;
         state.repaired = false;
-        let error = match download_once(&client, token, factory, seed, progress, &mut state).await {
+        let error = match download_once(&client, token, factory, seed, progress, &mut state, window).await {
             Ok(()) => return Ok(()),
             Err(_) if token.is_cancelled() => return Ok(()),
             Err(SeedError::Transport(error)) => error,
@@ -553,6 +615,7 @@ async fn download_once(
     seed: &WebSeedTorrent,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
     state: &mut SeedProgress,
+    window: Duration,
 ) -> Result<(), SeedError> {
     state.waiting_since = Instant::now();
     let mut files: Vec<Option<Arc<File>>> = Vec::with_capacity(seed.files.len());
@@ -602,6 +665,7 @@ async fn download_once(
                     completed,
                     seed.total,
                     progress,
+                    Pace::new(seed.piece_length, window),
                 )
                 .await;
                 // Whatever this mirror did, the next request continues from
@@ -648,7 +712,7 @@ async fn download_once(
             Err(error) => return Err(SeedError::Fatal(error)),
         },
     };
-    let result = repair(client, token, seed, &files, &mut missing, &mut state.repaired, progress).await;
+    let result = repair(client, token, seed, &files, &mut missing, &mut state.repaired, progress, window).await;
     state.missing = Some(missing);
     result?;
     if token.is_cancelled() {
@@ -661,6 +725,7 @@ async fn download_once(
 /// Fetch the byte ranges of `missing` pieces in place until every piece
 /// verifies. Bytes outside those ranges are never written, so a piece that
 /// already verified cannot be damaged by a mirror serving something else.
+#[allow(clippy::too_many_arguments)]
 async fn repair(
     client: &reqwest::Client,
     token: &CancellationToken,
@@ -669,6 +734,7 @@ async fn repair(
     missing: &mut Vec<usize>,
     repaired: &mut bool,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
+    window: Duration,
 ) -> Result<(), SeedError> {
     if missing.is_empty() {
         return Ok(());
@@ -706,6 +772,7 @@ async fn repair(
                         seed.total,
                         progress,
                         &mut written,
+                        Pace::new(seed.piece_length, window),
                     )
                     .await
                 }
@@ -832,6 +899,7 @@ async fn download_file(
     completed: u64,
     total: u64,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
+    mut pace: Pace,
 ) -> Result<(), SeedError> {
     let mut request = client
         .get(url.clone())
@@ -873,9 +941,11 @@ async fn download_file(
     let mut sample_offset = offset;
     let mut last_progress = Instant::now();
     progress(completed.saturating_add(offset), total, 0.0);
+    pace.start(length.saturating_sub(offset));
     loop {
         let chunk = tokio::select! {
             _ = token.cancelled() => return Ok(()),
+            _ = pace.missed() => return Err(Pace::error()),
             chunk = stream.next() => chunk,
         };
         let Some(chunk) = chunk else {
@@ -887,6 +957,7 @@ async fn download_file(
         }
         writer.write_all(&chunk).map_err(display)?;
         offset = offset.saturating_add(chunk.len() as u64);
+        pace.received(chunk.len() as u64, length - offset);
         let now = Instant::now();
         let elapsed = now.duration_since(last_progress);
         if elapsed >= Duration::from_millis(250) {
@@ -927,6 +998,7 @@ async fn fetch_ranges(
     total: u64,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
     written: &mut u64,
+    mut pace: Pace,
 ) -> Result<usize, SeedError> {
     let Some(&(_, first, first_end)) = ranges.first() else {
         return Ok(0);
@@ -955,6 +1027,9 @@ async fn fetch_ranges(
         return Err(SeedError::status(status));
     };
     let mut stream = response.bytes_stream();
+    // Everything up to the end of the last range must arrive, wanted or not.
+    let end = ranges.last().map_or(at, |range| range.2);
+    pace.start(end.saturating_sub(at));
     // The response bytes in hand; `at` is the file offset of the first one.
     let mut chunk = bytes::Bytes::new();
     let mut sample = *written;
@@ -971,12 +1046,14 @@ async fn fetch_ranges(
                 at = chunk_end;
                 let received = tokio::select! {
                     _ = token.cancelled() => return Ok(0),
+                    _ = pace.missed() => return Err(Pace::error()),
                     received = stream.next() => received,
                 };
                 chunk = match received {
                     Some(received) => received.map_err(|error| SeedError::Transport(display(error)))?,
                     None => return Err(SeedError::Transport("Web seed returned a short file".into())),
                 };
+                pace.received(chunk.len() as u64, end.saturating_sub(at.saturating_add(chunk.len() as u64)));
                 continue;
             }
             let skip = (next - at) as usize;
@@ -1237,7 +1314,7 @@ mod tests {
             download_file(&client, &CancellationToken::new(), &url, &file, 4, 10, 5, 15, &|done, total, rate| {
                 samples.lock().unwrap().push((done, total, rate));
                 if let Some(release) = release.lock().unwrap().take() { release.send(()).unwrap(); }
-            }).await.unwrap();
+            }, Pace::new(5, SEED_PACE_WINDOW)).await.unwrap();
             server.await.unwrap();
             let samples = samples.into_inner().unwrap();
             assert_eq!(samples[0], (if honors_range { 9 } else { 5 }, 15, 0.0));
@@ -1596,9 +1673,105 @@ mod tests {
             stop.cancel();
         });
         let started = Instant::now();
-        let result = download_with_backoff(&token, &factory, &seed, &|_, _, _| {}, wait).await;
+        let result = download_with(&token, &factory, &seed, &|_, _, _| {}, wait, SEED_PACE_WINDOW).await;
         assert_eq!(result, Ok(()));
         assert!(started.elapsed() < wait / 3, "stopping took {:?}", started.elapsed());
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    /// A loopback mirror for `BODY` that answers every connection at once and
+    /// then feeds its body `step` bytes at a time, `pause` apart, keeping the
+    /// connection open throughout. Returns its port and the request count.
+    async fn paced_mirror(step: usize, pause: Duration) -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = requests.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else { return };
+                let seen = seen.clone();
+                tokio::spawn(async move {
+                    let mut request = Vec::new();
+                    while !request.ends_with(b"\r\n\r\n") {
+                        let Ok(byte) = stream.read_u8().await else { return };
+                        request.push(byte);
+                    }
+                    seen.fetch_add(1, Ordering::SeqCst);
+                    let response = answer(BODY, &String::from_utf8_lossy(&request).to_ascii_lowercase(), None);
+                    let head = response.windows(4).position(|window| window == b"\r\n\r\n").unwrap() + 4;
+                    if stream.write_all(&response[..head]).await.is_err() { return; }
+                    for bytes in response[head..].chunks(step) {
+                        if stream.write_all(bytes).await.is_err() { return; }
+                        tokio::time::sleep(pause).await;
+                    }
+                });
+            }
+        });
+        (port, requests)
+    }
+
+    #[tokio::test]
+    async fn a_mirror_that_only_trickles_is_dropped_and_ends_the_stage() {
+        // One byte, then nothing for far longer than the test allows. Each byte
+        // restarts the silence allowance, so only the pace can end this.
+        let hold = Duration::from_secs(20);
+        let window = Duration::from_millis(400);
+        let (port, requests) = paced_mirror(1, hold).await;
+        let seed = body_seed(&[port]);
+        let (temp, factory) = body_staging(None);
+
+        // Without a pace to keep, a response lasts as long as the mirror likes:
+        // this request is still waiting when the test gives up on it.
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(temp.join("control")).unwrap();
+        let url = Url::parse(&format!("http://127.0.0.1:{port}/map.zim")).unwrap();
+        let client = reqwest::Client::new();
+        let unpaced = download_file(
+            &client, &CancellationToken::new(), &url, &file, 0, BODY.len() as u64, 0, BODY.len() as u64,
+            &|_, _, _| {}, Pace::new(5, hold * 10),
+        );
+        assert!(tokio::time::timeout(window * 4, unpaced).await.is_err(), "the trickling response ended by itself");
+
+        // With one, every pass is cut off after a window and counts as stalled,
+        // so the stage ends and the peers can start.
+        requests.store(0, Ordering::SeqCst);
+        let started = Instant::now();
+        let result = download_with(&CancellationToken::new(), &factory, &seed, &|_, _, _| {}, SEED_BACKOFF, window).await;
+        assert_eq!(result, Err("Web seed is sending too slowly".into()));
+        assert!(started.elapsed() < hold / 2, "ending the stage took {:?}", started.elapsed());
+        assert_eq!(requests.load(Ordering::SeqCst), SEED_STALLED_PASSES as usize);
+        // The byte each pass did deliver is kept.
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), &BODY[..SEED_STALLED_PASSES as usize]);
+
+        // A stop does not wait for the window either.
+        let token = CancellationToken::new();
+        let stop = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            stop.cancel();
+        });
+        let started = Instant::now();
+        let result = download_with(&token, &factory, &seed, &|_, _, _| {}, SEED_BACKOFF, hold).await;
+        assert_eq!(result, Ok(()));
+        assert!(started.elapsed() < hold / 2, "stopping took {:?}", started.elapsed());
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn a_slow_mirror_that_keeps_the_pace_is_not_interrupted() {
+        // A piece every 100 ms against a 400 ms window: slow, but steady. The
+        // whole transfer takes longer than one window and needs one request.
+        let window = Duration::from_millis(400);
+        let (port, requests) = paced_mirror(5, Duration::from_millis(100)).await;
+        let (temp, factory) = body_staging(None);
+        let started = Instant::now();
+        let result = download_with(&CancellationToken::new(), &factory, &body_seed(&[port]), &|_, _, _| {}, SEED_BACKOFF, window).await;
+        assert_eq!(result, Ok(()));
+        assert!(started.elapsed() >= Duration::from_millis(300));
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
         let _ = std::fs::remove_dir_all(temp);
     }
 

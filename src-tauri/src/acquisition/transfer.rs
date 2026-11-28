@@ -748,7 +748,10 @@ pub(super) async fn execute_transfer(
     let snapshot = inner.snapshot(id)?;
     match zim_length(&header, downloaded) {
         ZimLength::Whole => {}
-        ZimLength::EndsEarly if !snapshot.segmented => {
+        // With an exact size (a Metalink's or a shared library's) every byte
+        // of the object did arrive: it is the wrong object, and no retry can
+        // complete it.
+        ZimLength::EndsEarly if !snapshot.segmented && snapshot.expected_size != Some(downloaded) => {
             // The response ended without an error, so its byte count was taken
             // for the object's size. The archive says otherwise. Forget that
             // size, so Retry can continue the part (or fetch it again) instead

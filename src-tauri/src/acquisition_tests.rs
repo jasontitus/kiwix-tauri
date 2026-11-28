@@ -5402,6 +5402,32 @@ async fn a_whole_archive_delimited_only_by_the_connection_closing_is_published()
     fs::remove_dir_all(root).unwrap();
 }
 
+#[tokio::test]
+async fn an_object_of_the_exact_advertised_size_with_a_longer_header_is_not_offered_a_retry() {
+    // Every byte the Metalink promised arrived, and its digest matches, but the
+    // archive's own header says the file should be longer. The mirror holds
+    // the wrong object, so fetching "the rest" is not an action that can help.
+    let mut body = zim_bytes(b'x', 96 * 1024);
+    let beyond = body.len() as u64;
+    body[72..80].copy_from_slice(&beyond.to_le_bytes());
+    let server = test_range_server(body.clone(), "\"v1\"", Duration::ZERO).await;
+    server.state.lock().unwrap().metalink = true;
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let job = manager.start(server.metalink_url.clone(), root.clone(), None, None, None).await.unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "failed");
+    assert_eq!(job.error.as_deref(), Some(ZIM_LENGTH_MISMATCH));
+    assert!(!Path::new(&job.destination).exists());
+    // The exact size is still the row's total: nothing was "learned" wrongly.
+    assert_eq!(job.total, Some(body.len() as u64));
+    server.task.abort();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn a_zim_header_measures_the_file_it_begins() {
     let whole = zim_bytes(b'h', 4096);

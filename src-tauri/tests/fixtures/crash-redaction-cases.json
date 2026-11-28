@@ -232,6 +232,22 @@
     "expected": "std::io::Error and a::b::c are not URLs"
   },
   {
+    "input": "frame data:text/html,<h1>Private note</h1> and more\nnext line",
+    "expected": "frame [url] next line"
+  },
+  {
+    "input": "blob:http://tauri.localhost/1234-5678 expired",
+    "expected": "[url] expired"
+  },
+  {
+    "input": "tauri://localhost/assets/index.js:1:200",
+    "expected": "[url]"
+  },
+  {
+    "input": "see https://example.org//double/slash kept",
+    "expected": "see https://example.org//double/slash kept"
+  },
+  {
     "input": "password=/storage/emulated/0/My Books/a.zim",
     "expected": "password=[redacted]"
   },
@@ -304,8 +320,56 @@
     "expected": "PASSWORD=[redacted] Token=[redacted]"
   },
   {
-    "input": "the password is wrong, tokens are fine, a pinned tab and my_token=1 stay",
-    "expected": "the password is wrong, tokens are fine, a pinned tab and my_token=1 stay"
+    "input": "the password is wrong, tokens are fine, a pinned tab and spin=1 stay",
+    "expected": "the password is wrong, tokens are fine, a pinned tab and spin=1 stay"
+  },
+  {
+    "input": "client_secret=abc id_token=def db_password=ghi",
+    "expected": "client_secret=[redacted] id_token=[redacted] db_password=[redacted]"
+  },
+  {
+    "input": "X-API-Key: abc123 sent",
+    "expected": "X-API-Key: [redacted] sent"
+  },
+  {
+    "input": "Set-Cookie: sid=abc; Path=/; HttpOnly",
+    "expected": "Set-Cookie: [redacted]"
+  },
+  {
+    "input": "Proxy-Authorization: Basic dXNlcjpwYXNz",
+    "expected": "Proxy-Authorization: [redacted]"
+  },
+  {
+    "input": "authorization failed for user bob",
+    "expected": "authorization [redacted] user bob"
+  },
+  {
+    "input": "12: kiwix_app::auth::token::rotate::{{closure}}",
+    "expected": "12: kiwix_app::auth::token::rotate::{{closure}}"
+  },
+  {
+    "input": "Secret_Page and password_hint=x stay",
+    "expected": "Secret_Page and password_hint=x stay"
+  },
+  {
+    "input": "token= and password: are empty",
+    "expected": "token= [redacted] password: [redacted] empty"
+  },
+  {
+    "input": "(token=) and password:",
+    "expected": "(token=) and password:"
+  },
+  {
+    "input": "\"token\" : \"abc def\" next",
+    "expected": "\"token\" : \"[redacted]\" next"
+  },
+  {
+    "input": "password=~/My Secrets/a.kdbx",
+    "expected": "password=[redacted]"
+  },
+  {
+    "input": "password=//nas/My Share/a.kdbx",
+    "expected": "password=[redacted]"
   },
   {
     "input": "open /Users/alice/Private/notes.txt?token=abc failed: https://example.org/read?token=secret&q=book#frag",

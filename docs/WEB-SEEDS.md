@@ -40,13 +40,18 @@ torrent has no peers to make progress.
    only those pieces are hashed again. Bytes of a piece that verified are never
    rewritten. A mirror without Range support is read once from the start and
    only the missing ranges are kept from its answer.
-   Connection loss, timeouts, HTTP 408/429/5xx and short bodies are retried
-   after 1, 2, 4 and 8 seconds; any other answer ends the stage at once. The
-   stage ends after five consecutive passes that add less than one piece, after
-   two minutes of such passes waiting on mirrors, or after 32 passes in all,
-   whichever comes first. Connecting to a mirror may take 15 seconds and a
-   connected mirror may stay silent for 90. A pause or cancel ends any wait
-   immediately. On every failure the staged files are left as they are.
+   Each pass tries every mirror. Connection loss, timeouts, HTTP 408/429/5xx,
+   short bodies and a mirror that sends too slowly are transient: the pass is
+   repeated after 1, 2, 4 and 8 seconds. The stage ends at once when no
+   mirror's failure in a pass was transient. It also ends after five
+   consecutive passes that add less than one piece, after two minutes of such
+   passes waiting on mirrors, or after 32 passes in all, whichever comes
+   first. Connecting to a mirror may take 15 seconds and a connected mirror
+   may stay silent for 90. Once a response body has started it must also keep
+   a minimum pace: 128 KiB (one piece, or all that is left, when that is
+   less) in every 60 seconds, about 2 KiB/s. A response that falls behind is
+   dropped. A pause or cancel ends any wait immediately. On every failure the
+   staged files are left as they are.
 6. The normal librqbit engine then opens/hashes the same files and publishes
    through the existing no-replace publication path. The adapter is an
    acquisition shortcut, not a replacement verifier.
@@ -59,7 +64,8 @@ torrent has no peers to make progress.
   publication path. They also cover, for a single-file torrent: repairing only
   the missing pieces of a full-length file, a failing mirror leaving that file
   untouched, a mirror without Range support, the hand-over between mirrors,
-  the stall and pass limits, and a stop during the wait between passes.
+  the stall and pass limits, a trickling mirror, a slow mirror that keeps the
+  pace, and a stop during a wait between passes or inside a response.
 - The real StreetZim Bahrain map torrent (`50,781,499` bytes) was downloaded
   from its real HTTPS `url-list` and SHA-1 verified in 6.7 s in a host test.
 - The network test was temporary; the committed tests are deterministic and
@@ -77,8 +83,13 @@ torrent has no peers to make progress.
   never answer cost about 3 minutes for one and 4.5 minutes for three. These
   figures follow from the timeouts above and were not measured against real
   hosts.
-- A mirror that keeps sending data slowly without ever closing the connection
-  is not limited by the pass and stall bounds: they apply between passes.
+- A mirror that only trickles data is dropped after 60 seconds each time and
+  costs about 2 minutes for one mirror and about 3 minutes for three. A
+  mirror that sends at or above the minimum pace is never cut off, however
+  slow: peers then wait for as long as the web seed takes. The pace is a fixed
+  byte count, not a whole piece, because Kiwix's torrents use 4 MiB pieces
+  (three public `.torrent` files were checked), and a piece a minute would
+  demand about 68 KiB/s.
 - A full-length staging file is never trusted by length alone. It is hashed in
   full on every start before any missing range is requested, and again by the
   engine. No progress is shown during that pass.

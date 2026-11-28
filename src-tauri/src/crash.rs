@@ -498,12 +498,16 @@ fn replace_urls(value: &str) -> String {
             let length = path_end(&chars, 0);
             colon + 1 + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
         };
-        let (end, replacement) = if scheme.eq_ignore_ascii_case("file")
-            && tail.chars().next().is_some_and(|first| !first.is_whitespace())
-        {
+        let has_body = tail.chars().next().is_some_and(|first| !first.is_whitespace());
+        let (end, replacement) = if scheme.eq_ignore_ascii_case("file") && has_body {
             // Any form (`file:///x`, `file:C:/x`). `file: ` followed by a
             // space is prose; a path after it is found by `redact_paths`.
             (path_like_end(), "[url]".to_owned())
+        } else if scheme.eq_ignore_ascii_case("data") && has_body {
+            // A data URL carries content itself, spaces and markup included:
+            // the rest of the line goes.
+            let line_end = tail.find(['\n', '\r']).map_or(value.len(), |end| colon + 1 + end);
+            (line_end, "[url]".to_owned())
         } else {
             let replacement = safe_url(&value[start..token_end], scheme);
             // Every `scheme://` URL that is not kept (reader pages, content
@@ -648,12 +652,14 @@ fn path_end(chars: &[char], start: usize) -> usize {
 
 /// Replace the value that follows a secret keyword with `[redacted]`.
 ///
-/// A keyword is one of `SECRET_KEYS`, in any letter case, with no ASCII word
-/// character (`A-Z a-z 0-9 _`) directly before or after it. After the keyword
+/// A keyword is one of `SECRET_KEYS`, in any letter case. No ASCII letter or
+/// digit may come directly before it (an underscore may: `client_secret`), and
+/// no ASCII letter, digit or underscore directly after it. After the keyword
 /// come, in order: an optional closing quote of a quoted key (`"password":`),
 /// optional spaces, tabs or line breaks, and `=` or `:` followed by optional
-/// spaces or tabs. `authorization` and `bearer` also accept plain whitespace
-/// instead of `=` or `:`. What follows is the value (`secret_value`).
+/// spaces or tabs. A `::` is a Rust path separator, not a `:`.
+/// `authorization` and `bearer` also accept plain whitespace instead of `=` or
+/// `:`. What follows is the value (`secret_value`).
 fn redact_secret_values(value: &str) -> String {
     let chars: Vec<char> = value.chars().collect();
     let mut output = String::with_capacity(value.len());
@@ -671,11 +677,12 @@ fn redact_secret_values(value: &str) -> String {
     output
 }
 
-const SECRET_KEYS: [&str; 12] = [
+const SECRET_KEYS: [&str; 13] = [
     "authorization",
     "access_token",
     "refresh_token",
     "api_key",
+    "api-key",
     "apikey",
     "password",
     "passwd",
@@ -692,7 +699,7 @@ fn is_word_char(character: char) -> bool {
 
 /// The value range of a secret whose keyword starts at `at`, if any.
 fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
-    if at > 0 && is_word_char(chars[at - 1]) {
+    if at > 0 && chars[at - 1].is_ascii_alphanumeric() {
         return None;
     }
     for key in SECRET_KEYS {
@@ -715,7 +722,12 @@ fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
         while matches!(chars.get(next), Some(' ' | '\t' | '\r' | '\n')) {
             next += 1;
         }
-        if matches!(chars.get(next), Some('=' | ':')) {
+        let separator = match chars.get(next) {
+            Some('=') => true,
+            Some(':') => chars.get(next + 1) != Some(&':'),
+            _ => false,
+        };
+        if separator {
             next += 1;
             while matches!(chars.get(next), Some(' ' | '\t')) {
                 next += 1;
