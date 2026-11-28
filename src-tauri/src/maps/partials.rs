@@ -283,6 +283,11 @@ pub(super) enum PartialRecovery {
     Reclaimed,
     Published(PathBuf),
     Preserved,
+    /// Declined on ownership grounds that no retry changes: the journal and
+    /// the journaled directory disagree, so nothing was touched (or what was
+    /// captured has been put back). Carries the detail for callers that report
+    /// it and for the log; like `Preserved`, it means "keep the record".
+    Refused(String),
 }
 
 /// Capture a public entry before inspecting it for deletion. The checkpoint
@@ -315,7 +320,7 @@ pub(super) fn reclaim_owned_file(
         && final_name.file_name() == Some(final_name.as_os_str())
         && matches!(final_name.components().next(), Some(std::path::Component::Normal(_)));
     if !partial_name(&record.name) && !allowed_final {
-        return Err("This partial map download has an unexpected name, so Kiwix left it alone. Delete the map download, then start it again".into());
+        return Ok(PartialRecovery::Refused("This partial map download has an unexpected name, so Kiwix left it alone. Delete the map download, then start it again".into()));
     }
     let directory = MapDirectory::open(&record.destination).map_err(|e| e.to_string())?;
     if directory.identity != record.directory_identity {
@@ -346,7 +351,7 @@ pub(super) fn reclaim_owned_file(
                 Some(std::path::Component::Normal(_))
             )
         {
-            return Err("Invalid saved map publication filename; nothing was removed".into());
+            return Ok(PartialRecovery::Refused("Invalid saved map publication filename; nothing was removed".into()));
         }
         let matches_owned = |name: &str| -> Result<bool, String> {
             match directory.directory.symlink_metadata(name) {
@@ -384,13 +389,13 @@ pub(super) fn reclaim_owned_file(
             ));
         }
         if !matches_owned(&record.name)? {
-            return Err(format!(
+            return Ok(PartialRecovery::Refused(format!(
                 "Map publication remains unresolved at {} (directory {:?}, file {:?}, size {}); all entries were preserved",
                 directory.path.join(&publication.name).display(),
                 record.directory_identity,
                 record.identity,
                 publication.size
-            ));
+            )));
         }
         // The verified inode still has its partial name: the exclusive rename
         // never committed. Persist that conclusion before ordinary owned cleanup.
@@ -405,7 +410,9 @@ pub(super) fn reclaim_owned_file(
             }
             Err(error) => return Err(error.to_string()),
         };
-        if !metadata.is_file() || metadata.is_symlink() || &FileIdentity::of(&metadata) != identity
+        // A second link means the bytes would outlive our name: not ours alone.
+        if !metadata.is_file() || metadata.is_symlink() || metadata.nlink() != 1
+            || &FileIdentity::of(&metadata) != identity
         {
             return Ok(PartialRecovery::Preserved);
         }
@@ -445,7 +452,7 @@ pub(super) fn reclaim_owned_file(
             Uuid::parse_str(id).is_ok_and(|id| saved.name == format!(".streetzim-cleanup-{id}"))
         })
     {
-        return Err("Invalid map cleanup capability name".into());
+        return Ok(PartialRecovery::Refused("Invalid map cleanup capability name".into()));
     }
     let staging = match directory.directory.open_dir_nofollow(&saved.name) {
         Ok(staging) => staging,
@@ -454,42 +461,62 @@ pub(super) fn reclaim_owned_file(
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {
                     Ok(PartialRecovery::Reclaimed)
                 }
-                _ => Err(
+                _ => Ok(PartialRecovery::Refused(
                     "Map cleanup capability disappeared; remaining entries were preserved".into(),
-                ),
+                )),
             };
         }
         Err(error) => return Err(error.to_string()),
     };
     if FileIdentity::of(&staging.dir_metadata().map_err(|e| e.to_string())?) != saved.identity {
-        return Err("Map cleanup capability was replaced; nothing was removed".into());
+        return Ok(PartialRecovery::Refused("Map cleanup capability was replaced; nothing was removed".into()));
     }
     // Both successful paths end by removing the (now empty) private capability;
     // that removal runs below, after this closure, so Windows can release it.
+    let mut refused = false;
     let result: Result<(), String> = (|| {
+        // The exclusive move between the public directory and the capability,
+        // in either direction, under the library guard when one is supplied.
+        let mut exclusive_move = |from: &Dir, to: &Dir| -> Result<(), String> {
+            if let Some(store) = store {
+                let paths = [directory.path.join(&record.name), directory.path.join(&saved.name).join(&record.name)];
+                store.with_acquisition_destinations(&paths, || capture(from, &record.name, to, &record.name))
+            } else {
+                capture(from, &record.name, to, &record.name)
+            }
+        };
+        // On a filesystem without an exclusive rename the move links the new
+        // name before it retires the old one. Interrupted in between, the
+        // captured entry is one of two names for the file: the public name, or
+        // a private name the move left beside it. Put it back through the same
+        // primitive, which finishes such a move, and capture it afresh below.
+        // That leaves one name, so the unlink further down frees the bytes
+        // instead of leaving them under the other name.
+        if captured_under_two_names(&staging, &directory.directory, &record.name)? {
+            directory.unchanged().map_err(|e| e.to_string())?;
+            exclusive_move(&staging, &directory.directory)?;
+        }
         if !map_entry_exists(&staging, &record.name)? {
             if !map_entry_exists(&directory.directory, &record.name)? {
                 return Ok(());
             }
             directory.unchanged().map_err(|e| e.to_string())?;
-            if let Some(store) = store {
-                let paths = [directory.path.join(&record.name), directory.path.join(&saved.name).join(&record.name)];
-                store.with_acquisition_destinations(&paths, || capture(&directory.directory, &record.name, &staging, &record.name))?;
-            } else {
-                capture(&directory.directory, &record.name, &staging, &record.name)?;
-            }
+            exclusive_move(&directory.directory, &staging)?;
         }
         sync_map_directory(&staging)?;
         sync_map_directory(&directory.directory)?;
         let metadata = staging
             .symlink_metadata(&record.name)
             .map_err(|e| e.to_string())?;
+        // Exactly one name, published or not: unlinking one of two would
+        // report the bytes reclaimed while they stay reachable elsewhere.
         if !metadata.is_file()
             || metadata.is_symlink()
-            || (published && metadata.nlink() != 1)
+            || metadata.nlink() != 1
             || Some(&FileIdentity::of(&metadata)) != record.identity.as_ref()
             || metadata.len() != saved.size
         {
+            refused = true;
             return Err(
                 "Captured map partial changed identity or size; entry was preserved".into(),
             );
@@ -536,6 +563,11 @@ pub(super) fn reclaim_owned_file(
             let _ = sync_map_directory(staging);
         }
         let _ = sync_map_directory(&directory.directory);
+        // What was captured is not provably ours alone and is back at its
+        // name: an ownership refusal, which trying again does not change.
+        if refused && restoration.is_empty() {
+            return Ok(PartialRecovery::Refused(error));
+        }
         return Err(format!(
             "{error}. Retained entries are recoverable at {} (directory {:?}). {restoration}",
             directory.path.join(&saved.name).display(),
@@ -543,6 +575,25 @@ pub(super) fn reclaim_owned_file(
         ));
     }
     result
+}
+
+/// True when the captured entry has a second link and the public name is
+/// either free or already that same file: the two states an interrupted
+/// link-then-unlink move can leave, and the only ones a put-back can settle.
+fn captured_under_two_names(staging: &Dir, public: &Dir, name: &str) -> Result<bool, String> {
+    let captured = match staging.symlink_metadata(name) {
+        Ok(captured) => captured,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.to_string()),
+    };
+    if !captured.is_file() || captured.nlink() < 2 {
+        return Ok(false);
+    }
+    match public.symlink_metadata(name) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(true),
+        Ok(public) => Ok(FileIdentity::of(&public) == FileIdentity::of(&captured)),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 /// Reuse the exact owned-publication capture journal for current and retained
@@ -573,13 +624,13 @@ pub(super) fn reclaim_published_map(
     if published.sha256.is_none() {
         return Err("This older map cannot be checked for damage. Remove the map from your library, then download it again".into());
     }
-    let recovery = reclaim_owned_file(
+    match reclaim_owned_file(
         &mut published.record, checkpoint, capture_partial, true, published.sha256, Some(store),
-    )?;
-    if !matches!(recovery, PartialRecovery::Reclaimed) {
-        return Err("Published map ownership changed; no bytes were deleted".into());
+    )? {
+        PartialRecovery::Reclaimed => Ok(()),
+        PartialRecovery::Refused(reason) => Err(reason),
+        _ => Err("Published map ownership changed; no bytes were deleted".into()),
     }
-    Ok(())
 }
 
 /// True when the journaled destination directory itself holds none of the
@@ -609,9 +660,10 @@ pub(super) enum Kept {
     Unavailable,
     /// The path now leads to a different directory than the journaled one.
     FolderReplaced,
-    /// The journaled directory holds an entry that is not provably ours.
+    /// The journaled directory is there, but what it holds is not provably
+    /// ours alone, or the journal no longer describes it.
     Unconfirmed,
-    /// The entry is ours, but removing it did not complete this time.
+    /// Removing it did not complete this time, for a reason a retry can change.
     Busy,
 }
 
@@ -636,16 +688,17 @@ impl Kept {
 
     /// `again` is true when the message answers a Delete the person pressed.
     pub(super) fn sentence(self, again: bool) -> String {
-        let retry = if again { "press Delete again" } else { "delete this download" };
         match self {
             Self::Unavailable => format!(
-                "Its folder is not available right now. Reconnect the drive that holds it, then {retry}"),
+                "Its folder cannot be opened right now. If it is on a drive that is not connected, reconnect it and {}. If the folder is gone, dismiss this warning",
+                if again { "press Delete again" } else { "delete this download" }),
             Self::FolderReplaced =>
                 "Its folder was moved or replaced, so Kiwix left the file alone".into(),
             Self::Unconfirmed =>
                 "It could not be confirmed as the file this download wrote, so Kiwix left it alone".into(),
             Self::Busy => format!(
-                "It could not be removed just now; another program may be using it. Close anything that has it open, then {retry}"),
+                "It could not be removed just now. {}; if it keeps failing, free some space or close programs using that folder",
+                if again { "Press Delete again" } else { "Delete this download to try again" }),
         }
     }
 }

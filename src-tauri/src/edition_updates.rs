@@ -572,6 +572,21 @@ impl EditionManager {
 }
 const ORIGINAL_UNAVAILABLE: &str = "The drive or folder holding the original is not available. Reconnect it and try again";
 const ORIGINAL_DISCARDED: &str = "The original of this edition was deleted, so it can no longer be rolled back";
+/// Whether `parent` is the folder the original was in, rather than what is
+/// left at its path while its volume is away. A mount point stays behind as
+/// an empty directory on the parent filesystem when its drive is unmounted,
+/// so an existing directory is not enough: it must be on the device recorded
+/// for the original (a file's folder is always on the file's own filesystem),
+/// or, because device numbers can change between mounts, at least hold
+/// something.
+fn folder_held_original(parent: &std::path::Path, recorded_device: Option<u64>) -> bool {
+    use cap_fs_ext::MetadataExt;
+    let Ok(directory) = cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority()) else {
+        return false;
+    };
+    directory.dir_metadata().is_ok_and(|metadata| Some(metadata.dev()) == recorded_device)
+        || directory.entries().is_ok_and(|mut entries| entries.next().is_some())
+}
 /// Re-retain and identity-check the original as rollback does, then delete it
 /// through the library's own deletion path: the exact part cohort the archive
 /// declares, staged by exclusive rename, never a path sweep. Unlike rollback
@@ -581,15 +596,18 @@ fn remove_original(transaction: &EditionTransaction, trash: bool) -> Result<Disc
     if original.source_reference.is_some() {
         return Ok(DiscardedFile::External);
     }
-    // Only a name that is absent from a folder that is there counts as gone.
+    // Only a name that is absent from the folder that held it counts as gone.
     // A folder that cannot be reached (an unplugged or unmounted drive) says
     // nothing about the file, and closing the record then would give up the
     // rollback without freeing anything. Any other failure is reported too,
     // so an unreadable folder is never mistaken for a deleted file.
     match std::fs::symlink_metadata(&original.path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // The device recorded for the original's first part.
+            let recorded = serde_json::to_value(&transaction.original_identity).ok()
+                .and_then(|identity| identity.get(0)?.get("device")?.as_u64());
             let folder = std::path::Path::new(&original.path).parent()
-                .is_some_and(|parent| std::fs::metadata(parent).is_ok_and(|metadata| metadata.is_dir()));
+                .is_some_and(|parent| folder_held_original(parent, recorded));
             return if folder { Ok(DiscardedFile::Missing) } else { Err(ORIGINAL_UNAVAILABLE.into()) };
         }
         Err(error) => return Err(format!("The original archive could not be checked, so it was not deleted: {error}")),
@@ -1379,8 +1397,8 @@ mod tests {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/small.zim");
         let service = crate::service::Service::new(root.join("profile"), false, false).unwrap();
         let generation = service.launch_generation();
-        let commit = |name: &str| {
-            let original_path = library.join(format!("{name}-original.zim"));
+        let commit = |name: &str, folder: &Path| {
+            let original_path = folder.join(format!("{name}-original.zim"));
             let replacement_path = library.join(format!("{name}-replacement.zim"));
             fs::copy(&fixture, &original_path).unwrap();
             fs::copy(&fixture, &replacement_path).unwrap();
@@ -1439,7 +1457,7 @@ mod tests {
             "transactionId":id,"privacyGeneration":generation
         }));
 
-        let (original_path, replacement_path, transaction) = commit("first");
+        let (original_path, replacement_path, transaction) = commit("first", &library);
         // While the original is retained its name is reserved and not importable.
         assert!(reserved(&original_path));
         let refused = import(&original_path).await.unwrap();
@@ -1473,7 +1491,7 @@ mod tests {
         }
 
         // The ordinary case, on a second untouched transaction.
-        let (second_original, second_replacement, second) = commit("second");
+        let (second_original, second_replacement, second) = commit("second", &library);
         let reply = discard(&second.id).await.unwrap();
         assert_eq!(reply["originalFile"], "deleted", "{reply}");
         assert_eq!(reply["transaction"]["id"], second.id.as_str());
@@ -1511,6 +1529,36 @@ mod tests {
         fs::rename(&away, &library).unwrap();
         assert!(reserved(&original_path));
 
+        // An original at the root of a mount point whose drive is unmounted:
+        // the path's folder exists, but it is the empty directory left on
+        // another filesystem. Modelled by an original alone in its folder
+        // whose recorded device is changed to one the folder is not on (a
+        // real unmounted mount point cannot be made here), then removed.
+        let lonely = root.join("mount-point");
+        fs::create_dir(&lonely).unwrap();
+        let (third_original, _, third) = commit("third", &lonely);
+        let recorded = third.original_identity.clone();
+        let elsewhere: ContentIdentity = {
+            let mut identity = serde_json::to_value(&recorded).unwrap();
+            identity[0]["device"] = json!(identity[0]["device"].as_u64().unwrap() + 1);
+            serde_json::from_value(identity).unwrap()
+        };
+        let record = |identity: &ContentIdentity| service.store.update(|state| {
+            state.edition_transactions.iter_mut().find(|saved| saved.id == third.id).unwrap()
+                .original_identity = identity.clone();
+            Ok(())
+        }).unwrap();
+        record(&elsewhere);
+        fs::remove_file(&third_original).unwrap();
+        let error = discard(&third.id).await.unwrap_err();
+        assert!(error.contains("is not available. Reconnect it"), "{error}");
+        assert!(reserved(&third_original));
+        // The same empty folder on the recorded device did hold the file.
+        record(&recorded);
+        let reply = discard(&third.id).await.unwrap();
+        assert_eq!(reply["originalFile"], "missing", "{reply}");
+        assert!(!reserved(&third_original));
+
         // A file the person already deleted leaves only the record to close.
         fs::remove_file(&original_path).unwrap();
         let reply = discard(&transaction.id).await.unwrap();
@@ -1526,6 +1574,27 @@ mod tests {
         assert!(store.read().unwrap().edition_transactions.iter().all(|saved| saved.original_discarded));
         drop(store);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn only_the_folder_that_held_the_original_makes_it_missing() {
+        use cap_fs_ext::MetadataExt;
+        let folder = std::env::temp_dir().join(format!("kiwix-edition-folder-{}", new_id()));
+        std::fs::create_dir(&folder).unwrap();
+        let device = cap_std::fs::Dir::open_ambient_dir(&folder, cap_std::ambient_authority())
+            .unwrap().dir_metadata().unwrap().dev();
+        // Empty: only the recorded device says this is the original's folder.
+        assert!(folder_held_original(&folder, Some(device)));
+        assert!(!folder_held_original(&folder, Some(device + 1)));
+        assert!(!folder_held_original(&folder, None));
+        // Device numbers can change between mounts; a folder that holds
+        // something is not an unmounted mount point.
+        std::fs::write(folder.join("other.zim"), b"neighbour").unwrap();
+        assert!(folder_held_original(&folder, Some(device + 1)));
+        assert!(folder_held_original(&folder, None));
+        // No folder at all.
+        std::fs::remove_dir_all(&folder).unwrap();
+        assert!(!folder_held_original(&folder, Some(device)));
     }
 
     #[test]

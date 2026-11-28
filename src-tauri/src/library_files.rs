@@ -82,7 +82,7 @@ impl FileStamp {
             // An exclusive move on a filesystem without RENAME_NOREPLACE that
             // was interrupted leaves the file a second, hidden name.
             if cfg!(any(target_os = "linux", target_os = "android")) && metadata.is_file() {
-                return Err(format!("{HARD_LINKED}. If an earlier move or delete of this archive was interrupted, a hidden second name for the file (.kiwix-renamed-…) may be left in the archive's folder; delete that hidden entry and try again"));
+                return Err(format!("{HARD_LINKED}. If an earlier move or delete of this archive was interrupted, a hidden second name for the file (.kiwix-renamed-…) may be left in the archive's folder, or in the folder it was last moved from; delete that hidden entry and try again"));
             }
             return Err(HARD_LINKED.into());
         }

@@ -370,8 +370,7 @@ internal object CrashRedaction {
             var index = 0
             while (index < path.length) {
                 val character = path[index]
-                val high = if (character == '%' && index + 2 < path.length + 0 && index + 2 <= path.length - 1 + 0)
-                    Character.digit(path[index + 1], 16) else -1
+                val high = if (character == '%' && index + 2 < path.length) Character.digit(path[index + 1], 16) else -1
                 val low = if (high >= 0) Character.digit(path[index + 2], 16) else -1
                 if (high >= 0 && low >= 0) {
                     bytes.write(high * 16 + low)
@@ -443,7 +442,7 @@ internal object CrashRedaction {
                 for (index in from until to) {
                     val point = points[index]
                     // Forbidden in a domain, or in need of decoding this parser does not do.
-                    if (point <= 0x20 || point >= 0x7F || isOneOf(point, "\"#%/:<>?@[\\]^`|")) return null
+                    if (point <= 0x20 || point >= 0x7F || isOneOf(point, "#%/:<>?@[\\]^|")) return null
                     text.append(asciiLower(point).toChar())
                 }
                 val name = text.toString()
@@ -624,7 +623,6 @@ internal object CrashRedaction {
                 // The first separator only introduces the path.
                 if (index < to && (points[index] == '/'.code || points[index] == '\\'.code)) index++
                 var segment = StringBuilder()
-                var trailingSeparator = true
                 fun close(last: Boolean) {
                     val name = segment.toString()
                     val lower = name.lowercase(java.util.Locale.ROOT)
@@ -642,9 +640,7 @@ internal object CrashRedaction {
                     val point = points[index]
                     if (point == '/'.code || point == '\\'.code) {
                         close(last = false)
-                        trailingSeparator = true
                     } else {
-                        trailingSeparator = false
                         if (point <= 0x20 || point >= 0x7F || isOneOf(point, "\"#<>?^`{}")) {
                             for (byte in String(Character.toChars(point)).toByteArray(Charsets.UTF_8)) {
                                 segment.append('%')
