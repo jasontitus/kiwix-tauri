@@ -1,5 +1,6 @@
 import {
   isSuspendedError,
+  isUserCancelledError,
   normalizeSeverity,
   shouldRenderError,
   type ErrorSeverity,
@@ -85,6 +86,8 @@ export const diagnostics = new DiagnosticLog();
  * A suspended command is a lifecycle gate, not a failure: it is neither
  * recorded in the diagnostics log nor rendered, even with technical details
  * on. The API boundary has already retried it once on the next foreground.
+ *
+ * A cancellation the user chose is not a failure either: the same holds for it.
  */
 export function reportError(
   log: DiagnosticLog,
@@ -92,7 +95,7 @@ export function reportError(
   severity: ErrorSeverity | undefined,
   showTechnicalErrors: boolean,
 ): boolean {
-  if (isSuspendedError(error)) return false;
+  if (isSuspendedError(error) || isUserCancelledError(error)) return false;
   log.record(error, severity);
   return shouldRenderError(severity, showTechnicalErrors);
 }

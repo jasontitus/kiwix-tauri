@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import {
   api,
   getConfirmedSettings,
@@ -99,9 +99,17 @@ function commit(key: Key, edit: Edit, retryRetained = false) {
     },
   );
 }
+// Whether the App-level prompt can be shown. While it cannot (Quit, window
+// close, suspension) a typed change that needs review is neither applied nor
+// thrown away: it stays in its field, marked as not saved.
+let confirmationAvailable = false;
+function awaitsReview(key: Key, edit: Edit): boolean {
+  return edit.phase === "waiting" && needsConfirmation(key, edit);
+}
 function flushDrafts() {
   for (const [key, edit] of edits)
-    if (edit.phase === "waiting") commit(key, edit);
+    if (edit.phase === "waiting" && (confirmationAvailable || !needsConfirmation(key, edit)))
+      commit(key, edit);
 }
 // Explicit recovery retries the retained writes before lifecycle reconciliation
 // drains the same settings queue; the failed-network-policy fence stays intact.
@@ -179,6 +187,15 @@ export function useSettingsAutosave(settings: Settings, handlers: Handlers) {
         const edit = edits.get(key);
         if (edit?.phase === "waiting") commit(key, edit);
       },
+      // Enter reviews a change that is waiting for confirmation. The form has
+      // no submit control, so the key would otherwise do nothing here.
+      onKeyDown: (event: { key: string; isComposing?: boolean; nativeEvent?: { isComposing?: boolean }; preventDefault: () => void }) => {
+        const edit = edits.get(key);
+        if (event.key !== "Enter" || event.isComposing || event.nativeEvent?.isComposing ||
+            !edit || !awaitsReview(key, edit)) return;
+        event.preventDefault();
+        commit(key, edit);
+      },
     };
   }
   return { draft, change, input, flush: flushDrafts };
@@ -229,13 +246,17 @@ export function SettingsSaveStatus() {
   for (const [key, edit] of edits)
     if (edit.phase === "invalid" || edit.phase === "error") failuresByKey.set(key, edit);
   const failures = [...failuresByKey];
-  const pending = [...edits.values(), ...failedEdits.values()]
-    .some((edit) => edit.phase === "waiting" || edit.phase === "saving");
+  // A typed change that needs review is not being saved: nothing is sent
+  // until the person leaves the field (or presses Enter) and confirms.
+  const pending = [...edits, ...failedEdits]
+    .some(([key, edit]) => edit.phase === "saving" || (edit.phase === "waiting" && !needsConfirmation(key, edit)));
   const confirming = [...edits.values()].some((edit) => edit.phase === "confirming");
-  const state = pending ? "saving" : failures.length ? "error" : confirming ? "confirm" : hasSaved ? "saved" : "auto";
+  const unreviewed = [...edits].some(([key, edit]) => awaitsReview(key, edit));
+  const state = pending ? "saving" : failures.length ? "error" : confirming || unreviewed ? "confirm" : hasSaved ? "saved" : "auto";
   return <div className="settings-save">
     <span role="status" data-state={state}>{pending ? t("Saving…") : failures.length ? t("Some preferences have not been saved.") :
       confirming ? t("Review the preference change to save it.") :
+      unreviewed ? t("This change is not saved yet. Leave the field or press Enter to review it.") :
       hasSaved ? t("Preferences saved") : t("Changes are saved automatically.")}</span>
     {failures.length > 0 && <div role="alert">
       {failures.map(([key, edit]) => <p key={key}>{preferenceLabel(key)}: {errorText(edit.error)}</p>)}
@@ -249,6 +270,12 @@ export function SettingsSaveStatus() {
 export function SettingsPolicyConfirmation({ available }: { available: boolean }) {
   const revision = useSyncExternalStore(subscribe, snapshot);
   const pending = [...edits.entries()].find(([, edit]) => edit.phase === "confirming");
+  // Synchronous with the commit that hides the shell, so a flush issued by
+  // the same Quit or close already sees the prompt as unavailable.
+  useLayoutEffect(() => {
+    confirmationAvailable = available;
+    return () => { confirmationAvailable = false; };
+  }, [available]);
   useEffect(() => {
     if (available) return;
     let changed = false;

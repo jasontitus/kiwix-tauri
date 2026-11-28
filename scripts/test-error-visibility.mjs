@@ -100,6 +100,17 @@ test("clearing the log notifies subscribers and empties the copy text", () => {
   assert.equal(log.text(), "[]");
 });
 
+test("a cancellation the user chose is neither recorded nor rendered", () => {
+  for (const technical of [false, true]) {
+    const log = new DiagnosticLog();
+    assert.equal(reportError(log, new UserCancelledError("Download cancelled."), "blocking", technical), false);
+    assert.deepEqual(log.snapshot(), []);
+    // The sentence alone is an ordinary failure: only the type is exempt.
+    assert.equal(reportError(log, new Error("Download cancelled."), "blocking", technical), true);
+    assert.equal(log.snapshot().length, 1);
+  }
+});
+
 test("the Rust lifecycle gate becomes a typed error, never a text match", () => {
   const signal = JSON.stringify({
     code: SUSPENDED_CODE,
@@ -308,6 +319,8 @@ test("no native status code produced by Kotlin, Swift or Rust is ever shown as t
   for (const code of native) {
     sentence(code, code, "bare");
     sentence(code, `[${code}] - ${code}`, "wrapped");
+    sentence(code, `Creating the Wi-Fi hotspot failed: [${code}] - ${code}`, "prefixed and wrapped");
+    sentence(code, `[${code}] - {"code":"${code}","data":{}}`, "wrapped with an envelope");
   }
 });
 
@@ -347,6 +360,14 @@ test("native code families map to their instruction in every form they arrive in
     // A code of any other family is still never the whole message.
     ["DOCUMENT_PERMISSION_DENIED", "That action did not finish. Try again. (DOCUMENT_PERMISSION_DENIED)"],
     ["[EXPORT_DURABILITY_ERROR] - EXPORT_DURABILITY_ERROR", "That action did not finish. Try again. (EXPORT_DURABILITY_ERROR)"],
+    // Tauri's own "[CODE] - CODE" is a code whatever its family, also after a Rust sentence.
+    ["Creating the Wi-Fi hotspot failed: [ACTIVITY_DESTROYED] - ACTIVITY_DESTROYED",
+      "Creating the Wi-Fi hotspot failed: That action did not finish. Try again. (ACTIVITY_DESTROYED)"],
+    // A JSON envelope beside the code is not a sentence written for a person.
+    ['[NEARBY_FUTURE_STATE] - {"code":"NEARBY_FUTURE_STATE","message":"internal"}', "Nearby could not connect. Try again. (NEARBY_FUTURE_STATE)"],
+    ['[EXPORT_DURABILITY_ERROR] - {"code":"EXPORT_DURABILITY_ERROR"}', "That action did not finish. Try again. (EXPORT_DURABILITY_ERROR)"],
+    ['Creating the Wi-Fi hotspot failed: [HOTSPOT_FUTURE_STATE] - {"retry":false}',
+      "Creating the Wi-Fi hotspot failed: Nearby could not connect. Try again. (HOTSPOT_FUTURE_STATE)"],
   ]) assert.equal(errorText(raw), expected, raw);
 });
 
@@ -365,6 +386,13 @@ test("a sentence is never mistaken for a native code", async () => {
     "[NEARBY_FUTURE_STATE] - Wi-Fi is busy with another mode",
     "[Wi-Fi is busy with another mode] - NEARBY_FUTURE_STATE",
     "[DOCUMENT_PROVIDER_ERROR] - The storage provider did not answer",
+    "Saving failed: [DOCUMENT_PROVIDER_ERROR] - The storage provider did not answer",
+    // After a sentence, an unknown family is a code only in Tauri's own form.
+    "Saving failed: DOCUMENT_PROVIDER_ERROR",
+    "Saving failed: [DOCUMENT_PROVIDER_ERROR]",
+    "Saving failed: [DOCUMENT_PROVIDER_ERROR] - EXPORT_DURABILITY_ERROR",
+    // Braces in a sentence are not a JSON envelope.
+    "[NEARBY_FUTURE_STATE] - Could not read {name} from the peer",
     "First line: NEARBY_JOIN_TIMEOUT\nSecond line",
     "/storage/emulated/0/wiki.zim: NEARBY_JOIN_TIMEOUT\n/storage/emulated/0/other.zim: unreadable",
   ]) assert.equal(errorText(message), message, message);
@@ -461,23 +489,25 @@ test("the App reporter owns one surface per failure and paints no cancellation",
     closest() { return this.alert ? this : null; }
   }
   const body = new HTMLElement();
-  const run = (failure, { dialogs = [], severity, technical = false, active = body, last = null, origin = null } = {}) => {
+  const run = (failure, { dialogs = [], severity, technical = false, active = body, last = null, origin = null, showing = null } = {}) => {
     const log = new DiagnosticLog();
     const shown = [];
-    const errorOrigin = { current: origin };
+    const errorOrigin = { current: origin && { control: origin } };
     const context = vm.createContext({
       Error, reportError, diagnostics: log, normalizeSeverity, isSuspendedError, isUserCancelledError,
       errorSurface, openDialogs, HTMLElement, errorOrigin, lastFocus: { current: last },
       document: { body, activeElement: active, querySelectorAll: (selector) => selector === "dialog[open]" ? dialogs : [] },
       quitDialog: { current: quit }, mobileRecoveryDialog: { current: recovery },
-      showTechnicalErrors: { current: technical }, setError: (value) => shown.push({ ...value }),
+      showTechnicalErrors: { current: technical },
+      // React hands the updater the failure that is currently shown.
+      setError: (update) => shown.push({ ...(typeof update === "function" ? update(showing) : update) }),
       isIOS: false, t: interpolate, failure, severity,
     });
     vm.runInContext(ts.transpileModule(`${errorTextSource(ui)}
       (${reporter.getText(app)})(failure, severity);`, {
       compilerOptions: { target: ts.ScriptTarget.ES2022 },
     }).outputText, context);
-    return { shown, log, origin: errorOrigin.current };
+    return { shown, log, origin: errorOrigin.current?.control ?? null };
   };
   const failure = new Error("The write was refused");
   // Focus returns to where the action started: the focused control, or the
@@ -503,9 +533,25 @@ test("the App reporter owns one surface per failure and paints no cancellation",
   // A recoverable diagnostic never interrupts a dialog.
   assert.equal(run(failure, { dialogs: [{ open: true }], severity: "recoverable", technical: true }).shown[0].surface, "band");
   assert.deepEqual(run(failure, { dialogs: [{ open: true }], severity: "recoverable" }).shown, []);
-  // The user's own cancellation paints nothing on either surface.
-  for (const dialogs of [[], [{ open: true }]])
-    assert.deepEqual(run(new UserCancelledError("Download cancelled."), { dialogs }).shown, []);
+  // Nor does it take the place of a blocking failure waiting in the alert:
+  // under the modal it could be neither read nor dismissed.
+  const waiting = { message: "The write was refused", severity: "blocking", surface: "dialog" };
+  const diagnostic = run(new Error("A suggestion refresh failed"), {
+    dialogs: [{ open: true }, { open: true }], severity: "recoverable", technical: true, showing: waiting,
+  });
+  assert.deepEqual(diagnostic.shown, [waiting], "the alert keeps its blocking message");
+  assert.equal(diagnostic.log.snapshot().length, 1, "the diagnostic is still recorded");
+  assert.deepEqual(run(new Error("A newer failure"), { dialogs: [{ open: true }, { open: true }], showing: waiting }).shown,
+    [{ message: "A newer failure", severity: "blocking", surface: "dialog" }], "a newer blocking failure does replace it");
+  assert.deepEqual(run(new Error("A diagnostic"), { severity: "recoverable", technical: true,
+    showing: { message: "Older", severity: "blocking", surface: "band" } }).shown,
+  [{ message: "A diagnostic", severity: "recoverable", surface: "band" }], "the band keeps showing the newest entry, as before");
+  // The user's own cancellation paints nothing on either surface and is not recorded.
+  for (const dialogs of [[], [{ open: true }]]) {
+    const cancelled = run(new UserCancelledError("Download cancelled."), { dialogs, technical: true });
+    assert.deepEqual(cancelled.shown, []);
+    assert.deepEqual(cancelled.log.snapshot(), []);
+  }
   const lifecycle = run(new SuspendedError("The application is not interactive"), { dialogs: [{ open: true }] });
   assert.deepEqual(lifecycle.shown, []);
   assert.deepEqual(lifecycle.log.snapshot(), []);
@@ -568,7 +614,8 @@ test("selected-storage operations preserve terminal SuspendedError through Libra
         Error, reportError, diagnostics: log, normalizeSeverity, isSuspendedError, isUserCancelledError,
         errorSurface, openDialogs, document: { querySelectorAll: () => [] },
         quitDialog: { current: null }, mobileRecoveryDialog: { current: null },
-        showTechnicalErrors: { current: true }, setError: (value) => bands.push(value),
+        showTechnicalErrors: { current: true },
+        setError: (update) => bands.push(typeof update === "function" ? update(null) : update),
         isIOS: false, t: (value) => value,
         capturePrivacyContext: () => ({ generation: 7, privateMode: false, readOnly: false }),
         isPrivacyContextCurrent: () => true,

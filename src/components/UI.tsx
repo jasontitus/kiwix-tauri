@@ -28,7 +28,11 @@ export interface SurfaceProps {
   settings: Settings;
   onRefresh: () => void;
   onOpen: (location: TabLocation) => void;
-  onError: (error: unknown, severity?: ErrorSeverity) => void;
+  /**
+   * `showGlobally: false` records the failure without painting it: for a
+   * surface that already shows the same failure inline, so it has one owner.
+   */
+  onError: (error: unknown, severity?: ErrorSeverity, showGlobally?: boolean) => void;
 }
 // Presentation only: recognize native filesystem roots, not archive-relative
 // article locations or arbitrary secrets. Keep original errors/export bytes intact.
@@ -210,11 +214,14 @@ function nativeCodeText(message: string): string | null {
   const detail = bracketed ? bracketedDetail : swappedDetail;
   let text = nearbyCodeText(code);
   if (text === null) {
-    if (detail && detail !== code && !nativeCodeOnly.test(detail)) return null;
+    // A sentence the native side wrote next to the code says more than a
+    // generic line. A JSON envelope is not a sentence.
+    if (detail && detail !== code && !nativeCodeOnly.test(detail) && !/^\{.*\}$/.test(detail)) return null;
     if (nearbyCodeFamily.test(code))
       text = t("Nearby could not connect. Try again. ({code})", { code });
-    // After a sentence, only the Nearby families are known to be codes.
-    else if (prefix) return null;
+    // After a sentence, a bare upper-case tail could be a name; only the
+    // Nearby families, or Tauri's own "[CODE] - CODE", are known to be codes.
+    else if (prefix && !(bracketed && detail === code)) return null;
     else text = t("That action did not finish. Try again. ({code})", { code });
   }
   return prefix ? `${prefix} ${text}` : text;

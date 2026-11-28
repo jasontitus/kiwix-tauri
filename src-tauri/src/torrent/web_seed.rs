@@ -524,7 +524,7 @@ async fn download_with_backoff(
         // altogether by `SEED_MAX_PASSES`, so the stage always ends.
         let before = state.sequential - state.gained;
         let piece = seed.piece_length.min(seed.total.saturating_sub(before)).max(1);
-        if state.repaired || (state.gained > 0 && piece > 0) {
+        if state.repaired || state.gained >= piece {
             stalled = 0;
             stalled_for = Duration::ZERO;
         } else {
@@ -534,12 +534,15 @@ async fn download_with_backoff(
         passes += 1;
         if stalled >= SEED_STALLED_PASSES
             || stalled_for >= SEED_STALL_LIMIT
-            || (passes >= SEED_MAX_PASSES && false)
+            || passes >= SEED_MAX_PASSES
         {
             return Err(error);
         }
         let delay = backoff * (1 << stalled.saturating_sub(1).min(4));
-        tokio::time::sleep(delay).await;
+        tokio::select! {
+            _ = token.cancelled() => return Ok(()),
+            _ = tokio::time::sleep(delay) => {}
+        }
     }
 }
 

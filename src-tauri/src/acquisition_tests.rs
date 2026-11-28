@@ -4385,6 +4385,29 @@ fn a_persisted_verifying_row_finishes_on_load() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn a_durable_row_whose_bytes_disagree_with_their_zim_header_is_not_published_on_load() {
+    let root = test_directory();
+    let store = test_store(&root);
+    let data_dir = root.join("state");
+    // Every journaled byte is on disk, but the archive's header says the file
+    // should be longer: the object the server sent was itself cut short.
+    let mut bytes = zim_bytes(b'v', 256 * 1024);
+    bytes[72..80].copy_from_slice(&(bytes.len() as u64).to_le_bytes());
+    let id = Uuid::new_v4().to_string();
+    let stored = durable_stored(&root, &id, &bytes, "verifying");
+    write_state(&data_dir, stored);
+    let manager = DownloadManager::new(data_dir, store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let loaded = manager.inner.snapshot(&id).unwrap();
+    assert_eq!(loaded.job.status, "failed");
+    assert_eq!(loaded.job.error.as_deref(), Some(ZIM_LENGTH_MISMATCH));
+    assert!(!Path::new(&loaded.job.destination).exists());
+    assert_eq!(manager.inner.hash_passes.load(Ordering::SeqCst), 0);
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn manually_paused_durable_downloads_stay_paused_until_explicit_resume() {
     for with_receipt in [false, true] {

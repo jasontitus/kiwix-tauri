@@ -73,7 +73,6 @@ import {
   errorSurface,
   isProviderUnavailableFor,
   isSuspendedError,
-  isUserCancelledError,
   normalizeSeverity,
   type ErrorSeverity,
   type ErrorSurface,
@@ -471,7 +470,7 @@ export default function App() {
   // that disables itself while its action runs has already lost focus by the
   // time the action fails, so the last focused control is tracked as well.
   const lastFocus = useRef<HTMLElement | null>(null);
-  const errorOrigin = useRef<HTMLElement | null>(null);
+  const errorOrigin = useRef<{ control: HTMLElement | null } | null>(null);
   useEffect(() => {
     const remember = (event: FocusEvent) => {
       if (event.target instanceof HTMLElement && !event.target.closest('dialog[role="alertdialog"]'))
@@ -486,10 +485,19 @@ export default function App() {
     errorOrigin.current = null;
     // The dialog restores focus itself when its opener can take it. Step in
     // only when focus was left on nothing, and never across another modal.
-    if (!origin?.isConnected || origin.matches(":disabled") || document.activeElement !== document.body) return;
+    if (!origin || document.activeElement !== document.body) return;
     const dialogs = openDialogs(document);
-    if (dialogs.length && document.elementFromPoint(0, 0)?.closest("dialog[open]") !== origin.closest("dialog[open]")) return;
-    origin.focus({ preventScroll: true });
+    const top = dialogs.length
+      ? document.elementFromPoint(0, 0)?.closest<HTMLDialogElement>("dialog[open]") ?? dialogs[dialogs.length - 1]
+      : null;
+    const control = origin.control;
+    if (control?.isConnected && !control.matches(":disabled") && (!top || top.contains(control)))
+      control.focus({ preventScroll: true });
+    // The control is gone or still disabled. Under a modal the page is inert,
+    // so focus on nothing would strand the keyboard: enter the dialog instead.
+    else top?.querySelector<HTMLElement>(
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )?.focus({ preventScroll: true });
   }, [error]);
   const [initialError, setInitialError] = useState("");
   const [startupNoticeDismissed, setStartupNoticeDismissed] = useState(false);
@@ -877,8 +885,7 @@ export default function App() {
         severity,
         showTechnicalErrors.current,
       );
-      // The user's own cancellation is not a failure: there is nothing to paint.
-      if (!render || !showGlobally || isUserCancelledError(value)) return;
+      if (!render || !showGlobally) return;
       // The band is in the page. Under an open modal it is behind the
       // backdrop, inert and cannot be dismissed, so a failure reported then
       // is presented above the modal instead. The quit and recovery dialogs
@@ -891,10 +898,16 @@ export default function App() {
         const active = document.activeElement;
         // Keep the first origin while a newer failure replaces the message.
         if (!(active instanceof HTMLElement && active.closest('dialog[role="alertdialog"]')))
-          errorOrigin.current = active instanceof HTMLElement && active !== document.body
-            ? active : lastFocus.current;
+          errorOrigin.current = {
+            control: active instanceof HTMLElement && active !== document.body ? active : lastFocus.current,
+          };
       }
-      setError({ message: errorText(value), severity: normalizeSeverity(severity), surface });
+      const next = { message: errorText(value), severity: normalizeSeverity(severity), surface };
+      // A diagnostic never takes the place of a blocking failure that is
+      // waiting in the alert: it would move to the band under the modal, where
+      // it cannot be read or dismissed. It is still in the diagnostics log.
+      setError((current) =>
+        current?.surface === "dialog" && next.severity !== "blocking" ? current : next);
     },
     [],
   );
