@@ -87,8 +87,30 @@ impl Identity {
         })
     }
 
+    /// The same identity computed from the retained source's file identity,
+    /// without opening the archive. Used only to decide which cache files
+    /// still belong to a library entry.
+    pub(crate) fn from_content(
+        content: &crate::integrity::ContentIdentity,
+        metadata: &ArchiveMetadata,
+        installation_id: &str,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            generation: Self::content_generation(content)?,
+            version: VERSION,
+            uuid: metadata.id.clone(),
+            installation_id: installation_id.to_owned(),
+            archive_bytes: metadata.size,
+            articles: metadata.article_count,
+        })
+    }
+
     fn generation(archive: &Archive) -> Result<[u8; 32], String> {
-        let bytes = serde_json::to_vec(&archive.content_identity()?).map_err(err)?;
+        Self::content_generation(&archive.content_identity()?)
+    }
+
+    fn content_generation(content: &crate::integrity::ContentIdentity) -> Result<[u8; 32], String> {
+        let bytes = serde_json::to_vec(content).map_err(err)?;
         Ok(sha256::hash(&bytes).into())
     }
 
@@ -558,6 +580,81 @@ impl SpellingManager {
         Ok(status)
     }
 
+    /// Whether a spelling cache directory exists at all (most profiles never
+    /// build a dictionary). Metadata only.
+    pub(crate) fn cache_present(&self) -> bool {
+        fs::symlink_metadata(&self.directory).is_ok_and(|metadata| metadata.is_dir())
+    }
+
+    /// Remove cache files no library entry can use: dictionaries (`.words`)
+    /// and rollback backups (`.previous`) of keys outside `live`, and every
+    /// staging (`.tmp`) or scratch (`.run`) file a killed build left behind.
+    /// `live` must describe every library entry; the caller skips the sweep
+    /// while any entry is unavailable. Nothing runs while a build or cache
+    /// load is active, or while caches are not writable. Only exact cache
+    /// names are removed, through the retained no-follow directory, and only
+    /// regular files. Returns how many files were removed.
+    pub(crate) fn sweep(&self, live: &[Identity]) -> Result<usize, String> {
+        // Holding lifecycle keeps a build from starting until the sweep ends.
+        let _lifecycle = self.lifecycle.lock().map_err(err)?;
+        let mut keep: std::collections::HashSet<String> = live.iter().map(Identity::key).collect();
+        {
+            let inner = self.inner.lock().map_err(err)?;
+            if !inner.writable
+                || inner.job.as_ref().is_some_and(|job| !job.handle.is_finished())
+                || inner.loads.values().any(|handle| !handle.is_finished())
+            {
+                return Ok(0);
+            }
+            // Whatever this process already resolved stays, even if the
+            // caller derived a different key for it.
+            keep.extend(inner.dictionaries.keys().cloned());
+            keep.extend(inner.statuses.keys().cloned());
+            keep.extend(inner.failures.keys().cloned());
+        }
+        let dir = match open_directory(&self.directory, false) {
+            Ok(dir) => dir,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(err(error)),
+        };
+        let mut names = Vec::new();
+        for entry in dir.entries().map_err(err)? {
+            let entry = entry.map_err(err)?;
+            if !entry.file_type().map_err(err)?.is_file() {
+                continue;
+            }
+            if let Some(name) = entry.file_name().to_str() {
+                names.push(name.to_owned());
+            }
+        }
+        // A legacy dictionary still explains "rebuild" for its live entry
+        // until a current dictionary exists.
+        for identity in live {
+            if !names.iter().any(|name| *name == format!("{}.words", identity.key())) {
+                keep.insert(identity.unbound_key(2));
+            }
+        }
+        let mut removed = 0;
+        for name in names {
+            let remove = match sweep_name(&name) {
+                Some(SweepName::Dictionary(key) | SweepName::Backup(key)) => !keep.contains(key),
+                Some(SweepName::Staging) => true,
+                None => false,
+            };
+            if !remove {
+                continue;
+            }
+            check_cache_directory(&dir).map_err(err)?;
+            match dir.remove_file(&name) {
+                Ok(()) => removed += 1,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                // An open file on Windows, for example: the next sweep retries.
+                Err(error) => eprintln!("Spelling cache cleanup: {error}"),
+            }
+        }
+        Ok(removed)
+    }
+
     /// Cancel and join whichever build is running, if any. Windows library
     /// moves use this because the build holds its archive open.
     #[cfg_attr(not(windows), allow(dead_code))]
@@ -665,6 +762,42 @@ fn eligible_query(query: &str, ordinary_total: u64, enabled: bool) -> bool {
 
 fn err(error: impl std::fmt::Display) -> String {
     error.to_string()
+}
+
+enum SweepName<'a> {
+    Dictionary(&'a str),
+    Backup(&'a str),
+    Staging,
+}
+
+fn cache_key(key: &str) -> bool {
+    key.len() == 64 && key.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn cache_uuid(text: &str) -> bool {
+    uuid::Uuid::try_parse(text).is_ok_and(|uuid| uuid.hyphenated().to_string() == text)
+}
+
+/// The exact names this module creates: `{key}.words`,
+/// `.{key}.{uuid}.previous`, `.{key}.{uuid}.tmp` and `.spelling-{uuid}.run`.
+fn sweep_name(name: &str) -> Option<SweepName<'_>> {
+    if let Some(key) = name.strip_suffix(".words") {
+        return cache_key(key).then_some(SweepName::Dictionary(key));
+    }
+    if let Some(uuid) = name.strip_prefix(".spelling-").and_then(|rest| rest.strip_suffix(".run")) {
+        return cache_uuid(uuid).then_some(SweepName::Staging);
+    }
+    let rest = name.strip_prefix('.')?;
+    let (key, rest) = rest.split_once('.')?;
+    let (uuid, suffix) = rest.split_once('.')?;
+    if !cache_key(key) || !cache_uuid(uuid) {
+        return None;
+    }
+    match suffix {
+        "previous" => Some(SweepName::Backup(key)),
+        "tmp" => Some(SweepName::Staging),
+        _ => None,
+    }
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
@@ -1076,7 +1209,17 @@ fn publish_index(
     let was_published = published.is_ok();
     let error = match published {
         Ok(()) => match confirm_and_flush() {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                // The replacement is durable: the rollback copy is no longer
+                // needed. Remove only the file this publish moved aside; a
+                // leftover is collected by the next cache sweep.
+                if let Some(old) = previous {
+                    if check_cache_directory(dir).is_ok() && old.matches_in(dir, backup).unwrap_or(false) {
+                        let _ = dir.remove_file(backup);
+                    }
+                }
+                return Ok(());
+            }
             Err(error) => error,
         },
         Err(error) => err(error),

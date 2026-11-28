@@ -2331,6 +2331,167 @@ impl Service {
         self.register_books(&pending, receipt)?;
         Ok((resolved, duplicates))
     }
+    /// Verify and admit one native intake batch (`mobile_copy_incoming`). The
+    /// copies are checked like any other manual import, then a copy whose
+    /// library entry can no longer be opened replaces that entry, as Locate
+    /// would, before the batch resolves against the library. Only then is a
+    /// copy of a still-usable entry a duplicate that may be removed. Any
+    /// failure returns the batch's errors, admits nothing new and removes
+    /// nothing, so the native request stays pending and the copies stay.
+    #[cfg(any(mobile, test))]
+    pub(super) async fn admit_intake_batch(
+        self: &Arc<Self>,
+        paths: Vec<String>,
+        receipt: Option<String>,
+        label: &str,
+    ) -> Result<Value, String> {
+        let service = self.clone();
+        let verified = blocking(move || {
+            let cancel = service.import_cancellation()?;
+            let mut books = Vec::with_capacity(paths.len());
+            let mut errors = Vec::new();
+            for path in paths {
+                match crate::imports::load_book_cancellable(&path, true, true, &cancel) {
+                    Ok(book) => books.push(book),
+                    Err(error) => errors.push(json!({"path":path,"error":error})),
+                }
+            }
+            if errors.is_empty() && cancel.is_cancelled() {
+                errors.extend(books.iter().map(|book| json!({"path":book.path,"error":crate::imports::IMPORT_CANCELLED})));
+            }
+            if !errors.is_empty() {
+                return Ok(Err(errors));
+            }
+            let replacements = service.intake_replacements(&books)?;
+            Ok(Ok((books, replacements)))
+        }).await?;
+        let (books, replacements) = match verified {
+            Ok(verified) => verified,
+            Err(errors) => return Ok(json!({"books":[],"errors":errors})),
+        };
+        let mut errors = Vec::new();
+        for (book, installation) in replacements {
+            let path = book.path.clone();
+            let id = book.metadata.id.clone();
+            let relinked = async {
+                if self.active_torrent_share(&id)?.is_some() {
+                    return Err("Stop sharing this archive before relinking it".to_string());
+                }
+                self.relink_installation(&id, book, label, Some(&installation)).await
+            }.await;
+            if let Err(error) = relinked {
+                errors.push(json!({"path":path,"error":error}));
+            }
+        }
+        if !errors.is_empty() {
+            return Ok(json!({"books":[],"errors":errors}));
+        }
+        let service = self.clone();
+        blocking(move || {
+            let identities = books.iter().map(|book| (book.path.clone(), book.metadata.id.clone())).collect::<HashMap<_, _>>();
+            let paths = books.iter().map(|book| book.path.clone()).collect::<Vec<_>>();
+            let (books, duplicates) = match service.admit_incoming_books(books, receipt.as_deref()) {
+                Ok(result) => result,
+                Err(error) => return Ok(json!({"books":[],"errors":paths.into_iter().map(|path| json!({"path":path,"error":&error})).collect::<Vec<_>>()})),
+            };
+            for path in duplicates {
+                let Some(uuid) = identities.get(&path) else { continue };
+                if let Err(error) = crate::library_files::remove_duplicate_intake_copy(&path, uuid) {
+                    eprintln!("Kiwix mobile intake: removing a duplicate copy failed: {error}");
+                }
+            }
+            Ok(json!({"books":books.iter().map(Book::shell_value).collect::<Vec<_>>(),"errors":[]}))
+        }).await
+    }
+    /// Intake copies whose existing entry for the same archive cannot be
+    /// opened any more (a removed card, a revoked provider grant, a file gone
+    /// from app storage), with the installation each one replaces. Runs off
+    /// the async runtime: a provider probe can block.
+    #[cfg(any(mobile, test))]
+    fn intake_replacements(&self, books: &[Book]) -> Result<Vec<(Book, String)>, String> {
+        let state = self.store.read()?;
+        let mut replacements = Vec::new();
+        for book in books {
+            let Some(existing) = state.books.iter().find(|existing| existing.metadata.id == book.metadata.id) else {
+                continue;
+            };
+            if Path::new(&existing.path) == Path::new(&book.path) {
+                continue;
+            }
+            let unusable = if existing.source_reference.is_some() {
+                !existing.available || crate::archive_source::retain(existing).is_err()
+            } else {
+                #[cfg(mobile)]
+                { self.mobile_archive_unusable(existing) }
+                #[cfg(not(mobile))]
+                { !Path::new(&existing.path).is_file() }
+            };
+            if unusable {
+                replacements.push((book.clone(), existing.installation_id.clone()));
+            }
+        }
+        Ok(replacements)
+    }
+    /// Point a library entry at a verified file of the same archive: a new
+    /// installation (reader storage of the old one is dropped, as for any
+    /// relink), the old installation's readers, cache and per-installation
+    /// work retired. `expected` refuses if the entry changed since the caller
+    /// decided. The caller has refused an active torrent share.
+    async fn relink_installation(
+        self: &Arc<Self>,
+        id: &str,
+        mut replacement: Book,
+        label: &str,
+        expected: Option<&str>,
+    ) -> Result<Book, String> {
+        let _source_guards = self.localswarm_source_mutation(Some(id)).await?;
+        // A selected share pins its archive handles. Hold the slot for
+        // the whole mutation (after the source guard, matching the
+        // removal path's order) so a start cannot slip between this
+        // check and the store update and then serve the old archive.
+        let sharing = self.sharing.lock().await;
+        if Self::selected_share_serves(&sharing, id) {
+            return Err("Stop sharing this archive before relinking it".into());
+        }
+        // Reader acquisition, authenticated writes, and principal
+        // retirement share this lock: no stale listener can commit later.
+        let mut readers = self.readers.lock().await;
+        self.ensure_window_active(label)?;
+        let old = self.store.book(id)?.ok_or("Unknown archive")?;
+        if expected.is_some_and(|expected| expected != old.installation_id) {
+            return Err("Archive installation changed while relinking".into());
+        }
+        replacement.installation_id = store::new_installation_id();
+        replacement.added_at.clone_from(&old.added_at);
+        self.store.update(|state| {
+            let existing = state
+                .books
+                .iter_mut()
+                .find(|existing| {
+                    existing.metadata.id == id
+                        && existing.installation_id == old.installation_id
+                })
+                .ok_or("Archive installation changed while relinking")?;
+            *existing = replacement.clone();
+            state.reader_storage.remove(&old.installation_id);
+            Ok(())
+        })?;
+        retire_readers(&mut readers, Some(&old.installation_id)).await?;
+        self.forget_installation(&old.installation_id);
+        self.invalidate(id);
+        self.notify_library_changed();
+        #[cfg(mobile)]
+        {
+            drop(readers);
+            if let Some(reference) = old.source_reference {
+                if !self.store.retains_provider_reference(&reference.reference)? {
+                    blocking(move || crate::provider_reference::forget_registered(&reference)).await?;
+                }
+            }
+            self.mobile_apply_archive_backup_async().await?;
+        }
+        Ok(replacement)
+    }
     fn forget_installation(&self, installation_id: &str) {
         if let Err(error) = self.spelling.retire_installation(installation_id) {
             eprintln!("Stopping the removed installation's spelling index: {error}");

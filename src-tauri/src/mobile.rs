@@ -187,7 +187,9 @@ pub(crate) fn emit(service: &Service, event: &str, payload: Value) {
 pub(crate) fn error(service: &Service, operation: &str, message: String) {
     #[cfg(target_os = "android")]
     eprintln!("Kiwix mobile {operation}: {message}");
-    emit(service, "kiwix-mobile-error", json!({"operation": operation, "error": message}));
+    // The shell shows this text as an error band, so it gets the same plain
+    // sentence as a command error; raw native detail is only logged above.
+    emit(service, "kiwix-mobile-error", json!({"operation": operation, "error": crate::user_error::plain(&message)}));
 }
 
 fn lifecycle_generation(service: &Service, active: bool, checkpoint_transition: Option<u64>) -> Option<u64> {

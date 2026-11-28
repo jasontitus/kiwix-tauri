@@ -1091,33 +1091,16 @@ impl Service {
         }
         Ok(true)
     }
-    fn mobile_import_batch(&self,paths:Vec<String>,receipt:Option<&str>)->Result<Value,String> {
+    async fn mobile_import_batch(self: &Arc<Self>,paths:Vec<String>,receipt:Option<String>,label:&str)->Result<Value,String> {
         self.normal_writable()?;
         let paths=crate::library_files::mobile_primary_archives(paths)?;
         if paths.is_empty() {return Err("Incoming batch contains no complete archive".into());}
-        let mut books=Vec::with_capacity(paths.len());
-        let mut errors=Vec::new();
-        for path in paths {
-            match load_book(&path,true,false) {
-                Ok(book)=>books.push(book),
-                Err(error)=>errors.push(json!({"path":path,"error":error})),
-            }
+        let result=self.admit_intake_batch(paths,receipt,label).await?;
+        if result.get("errors").and_then(Value::as_array).is_some_and(|errors|errors.is_empty()) {
+            let service=self.clone();
+            blocking(move || service.mobile_apply_archive_backup()).await?;
         }
-        if !errors.is_empty() {return Ok(json!({"books":[],"errors":errors}));}
-        let identities=books.iter().map(|book|(book.path.clone(),book.metadata.id.clone())).collect::<HashMap<_,_>>();
-        let paths=books.iter().map(|book|book.path.clone()).collect::<Vec<_>>();
-        let (books,duplicates)=match self.admit_incoming_books(books,receipt) {
-            Ok(result)=>result,
-            Err(error)=>return Ok(json!({"books":[],"errors":paths.into_iter().map(|path|json!({"path":path,"error":&error})).collect::<Vec<_>>()})),
-        };
-        for path in duplicates {
-            let Some(uuid)=identities.get(&path) else { continue };
-            if let Err(error)=crate::library_files::remove_duplicate_intake_copy(&path,uuid) {
-                eprintln!("Kiwix mobile intake: removing duplicate copy {path} failed: {error}");
-            }
-        }
-        self.mobile_apply_archive_backup()?;
-        Ok(json!({"books":books.iter().map(Book::shell_value).collect::<Vec<_>>(),"errors":[]}))
+        Ok(result)
     }
     pub(super) async fn mobile_command(self: Arc<Self>, command: &str, args: Value, label: &str) -> Result<Value, String> {
         self.mobile_root(label)?;
@@ -1245,6 +1228,11 @@ impl Service {
                         // remove_dir only ever removes an empty directory, so
                         // anything native could not delete stays in place.
                         let _ = std::fs::remove_dir(&root);
+                        // A recreated Activity also destroyed the WebView that
+                        // asked, so the reloaded shell is told instead.
+                        if error.contains("ACTIVITY_RECREATED") {
+                            self.note_startup_warning(crate::user_error::plain(&error));
+                        }
                         return Err(error);
                     }
                 };
@@ -1323,14 +1311,16 @@ impl Service {
                     Err(error) => {
                         // As above: only this attempt's empty directory is removed.
                         let _ = std::fs::remove_dir(&root);
+                        if error.contains("ACTIVITY_RECREATED") {
+                            self.note_startup_warning(crate::user_error::plain(&error));
+                        }
                         return Err(error);
                     }
                 };
                 if response.get("cancelled").and_then(Value::as_bool).ok_or("Native import did not return cancellation state")? { return Ok(json!({"books":[],"errors":[]})); }
                 let paths = strings(&response,"paths")?;
                 crate::library_files::mobile_import_paths(&root,paths.iter().map(String::as_str))?;
-                let service = self.clone();
-                let result = blocking(move || service.mobile_import_batch(paths,receipt.as_deref())).await?;
+                let result = self.mobile_import_batch(paths,receipt,label).await?;
                 if result.get("errors").and_then(Value::as_array).is_none_or(|errors|!errors.is_empty()) {
                     return Ok(result);
                 }

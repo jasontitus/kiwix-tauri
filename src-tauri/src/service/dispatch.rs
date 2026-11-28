@@ -558,50 +558,7 @@ impl Service {
                 if book.metadata.id != id {
                     return Err("Selected file is a different archive; import it separately".into());
                 }
-                let _source_guards = self.localswarm_source_mutation(Some(&id)).await?;
-                // A selected share pins its archive handles. Hold the slot for
-                // the whole mutation (after the source guard, matching the
-                // removal path's order) so a start cannot slip between this
-                // check and the store update and then serve the old archive.
-                let sharing = self.sharing.lock().await;
-                if Self::selected_share_serves(&sharing, &id) {
-                    return Err("Stop sharing this archive before relinking it".into());
-                }
-                // Reader acquisition, authenticated writes, and principal
-                // retirement share this lock: no stale listener can commit later.
-                let mut readers = self.readers.lock().await;
-                self.ensure_window_active(&label)?;
-                let old = self.store.book(&id)?.ok_or("Unknown archive")?;
-                let mut replacement = book;
-                replacement.installation_id = store::new_installation_id();
-                replacement.added_at = old.added_at;
-                self.store.update(|state| {
-                    let existing = state
-                        .books
-                        .iter_mut()
-                        .find(|existing| {
-                            existing.metadata.id == id
-                                && existing.installation_id == old.installation_id
-                        })
-                        .ok_or("Archive installation changed while relinking")?;
-                    *existing = replacement.clone();
-                    state.reader_storage.remove(&old.installation_id);
-                    Ok(())
-                })?;
-                retire_readers(&mut readers, Some(&old.installation_id)).await?;
-                self.forget_installation(&old.installation_id);
-                self.invalidate(&id);
-                self.notify_library_changed();
-                #[cfg(mobile)]
-                {
-                    drop(readers);
-                    if let Some(reference) = old.source_reference {
-                        if !self.store.retains_provider_reference(&reference.reference)? {
-                            blocking(move || crate::provider_reference::forget_registered(&reference)).await?;
-                        }
-                    }
-                    self.mobile_apply_archive_backup_async().await?;
-                }
+                let replacement = self.relink_installation(&id, book, &label, None).await?;
                 value(replacement)
             }
             "remove_book" => {
