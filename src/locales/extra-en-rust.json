@@ -1,0 +1,18 @@
+{
+  "A verified archive was added to your library.": "A verified archive was added to your library.",
+  "Archive ready": "Archive ready",
+  "Checking": "Checking",
+  "Completion notifications": "Completion notifications",
+  "Completion notifications are unavailable": "Completion notifications are unavailable",
+  "Connecting": "Connecting",
+  "Fetching metadata": "Fetching metadata",
+  "Kiwix could not finish saving its work, so it did not quit.": "Kiwix could not finish saving its work, so it did not quit.",
+  "Kiwix could not save your open tabs and reading positions, so it did not quit.": "Kiwix could not save your open tabs and reading positions, so it did not quit.",
+  "Local Kiwix library": "Local Kiwix library",
+  "Open Kiwix to see progress": "Open Kiwix to see progress",
+  "Quit Without Saving": "Quit Without Saving",
+  "Reading aloud": "Reading aloud",
+  "Resolving": "Resolving",
+  "Retry after fixing the problem, for example by freeing disk space or reconnecting the drive that holds your Kiwix data. If you quit without saving, changes to open tabs and reading positions since the last successful save are lost, and unfinished transfers may have to repeat their most recent progress.": "Retry after fixing the problem, for example by freeing disk space or reconnecting the drive that holds your Kiwix data. If you quit without saving, changes to open tabs and reading positions since the last successful save are lost, and unfinished transfers may have to repeat their most recent progress.",
+  "Stop": "Stop"
+}
