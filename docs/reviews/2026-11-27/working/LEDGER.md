@@ -351,3 +351,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
   NOT RUN: Apple compilers, iOS/macOS Rust, devices, simulator, Windows runtime, GitHub Actions, cargo deny/npm audit (network).
 - RECORD drafted (a454b…), owner filled §5.4, updated §1/§2/§7/§8 (no history rewrite: evidence commit + removal commit). -> final record reviewer
 - RECORD review r1 (adv/record.md): no blocking; R1-R7 + nits. Owner applied all (R6 real fix: 2 plural sources collected + test requires shipped catalog; reran cargo test 1493/0, node 544/0/1, python, build, checks). Logs -> working/verification. -> record review r2
+- RECORD review r2 (adv/record-round2.md): R1-R7 closed; R8 (1671 sources) + nits applied by owner. RECORD lane closes with this. Next: evidence commit, fill EVIDENCE_COMMIT, removal commit, final check, push.
