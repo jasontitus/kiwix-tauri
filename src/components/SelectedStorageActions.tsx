@@ -33,6 +33,10 @@ export default function SelectedStorageActions({ books, disabled = false, onChan
   const [notice, setNotice] = useState("");
   if (!isAndroid || books.length === 0) return null;
   const unavailable = disabled || busy || books.some((book) => !book.available || (!book.managed && !book.sourceReference));
+  // Kiwix holds only read access to an archive opened from another app or
+  // storage provider, so it can never remove that original: offer Copy only.
+  const providerBacked = books.some((book) => !!book.sourceReference);
+  const move = removeOld && !providerBacked;
 
   async function chooseLocation() {
     const privacy = capturePrivacyContext();
@@ -61,14 +65,14 @@ export default function SelectedStorageActions({ books, disabled = false, onChan
     setBusy(true);
     try {
       const result = await api<Result>("library_files_relocate", {
-        bookIds: books.map((book) => book.id), target, removeOld, confirm: true,
+        bookIds: books.map((book) => book.id), target, removeOld: move, confirm: true,
         privacyGeneration: privacy.generation,
       });
       setOpen(false);
       if (isPrivacyContextCurrent(privacy)) {
         setNotice(result.cleanupPending
           ? t("The managed copies are ready. Some originals were kept; restart Kiwix to finish cleanup.")
-          : removeOld ? t("Selected archives moved.") : t("Selected archives copied. Originals were kept."));
+          : move ? t("Selected archives moved.") : t("Selected archives copied. Originals were kept."));
         await onChanged();
         if (result.cleanupPending) {
           // Selection refresh can unmount this control, so retain the cleanup
@@ -102,16 +106,20 @@ export default function SelectedStorageActions({ books, disabled = false, onChan
       </label>
       {locations === null && <p className="muted" role="status">{t("Reading storage locations…")}</p>}
       <label className="check-field">
-        <input type="checkbox" checked={removeOld} disabled={busy || disabled} onChange={(event) => setRemoveOld(event.target.checked)} />
+        <input type="checkbox" checked={move} disabled={busy || disabled || providerBacked}
+          aria-describedby={`${fieldId}-move`}
+          onChange={(event) => setRemoveOld(event.target.checked)} />
         <span>{t("Move: remove originals after verifying the managed copies")}</span>
       </label>
-      <p className="muted">{removeOld
-        ? t("Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.")
-        : t("Copy keeps the originals and opens the selected archives from their new managed copies.")}</p>
+      <p className="muted" id={`${fieldId}-move`}>{providerBacked
+        ? t("Archives opened from another app or storage provider can only be copied: Kiwix has no permission to remove the original there. After copying, delete the original in that app if you no longer need it.")
+        : move
+          ? t("The originals are removed only after the managed copies are verified.")
+          : t("Copy keeps the originals and opens the selected archives from their new managed copies.")}</p>
       <div className="dialog-actions">
         <button disabled={busy} onClick={() => setOpen(false)}>{t("Cancel")}</button>
         <button className="primary" disabled={unavailable || !target} onClick={() => void relocate()}>
-          {busy ? t("Copying and verifying…") : removeOld ? t("Move selected archives") : t("Copy selected archives")}
+          {busy ? t("Copying and verifying…") : move ? t("Move selected archives") : t("Copy selected archives")}
         </button>
       </div>
     </Modal>}

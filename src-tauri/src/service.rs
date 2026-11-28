@@ -184,7 +184,17 @@ pub struct Service {
     sensors: Mutex<HashMap<String, SensorManager>>,
     shell_origins: Mutex<HashSet<String>>,
     imports: Mutex<Arc<ImportManager>>,
+    /// Cancels manual and monitored-folder verification. Quit cancels it for
+    /// good; a policy change cancels it, then replaces it once the privacy
+    /// writer holds (no import is running then).
+    import_cancel: Mutex<tokio_util::sync::CancellationToken>,
+    #[cfg(test)]
+    import_hook: Mutex<Option<Arc<dyn Fn(&tokio_util::sync::CancellationToken) + Send + Sync>>>,
     spelling: Arc<SpellingManager>,
+    /// When the spelling cache was last garbage-collected.
+    spelling_swept_at: Mutex<Option<std::time::Instant>>,
+    /// Article-PDF scratch left by an earlier process is swept once per run.
+    pdf_scratch_swept: AtomicBool,
     stopping: AtomicBool,
     startup_warnings: Mutex<Vec<String>>,
     #[cfg(test)]
@@ -839,7 +849,12 @@ impl Service {
                 "http://127.0.0.1:1420".into(),
             ])),
             imports: Mutex::new(Arc::new(ImportManager::new()?)),
+            import_cancel: Mutex::new(tokio_util::sync::CancellationToken::new()),
+            #[cfg(test)]
+            import_hook: Mutex::new(None),
             spelling,
+            spelling_swept_at: Mutex::new(None),
+            pdf_scratch_swept: AtomicBool::new(false),
             stopping: AtomicBool::new(false),
             startup_warnings: Mutex::new(startup_warnings),
             #[cfg(test)]

@@ -48,6 +48,24 @@ pub(crate) fn load_book(path: &str, managed: bool, verify: bool) -> Result<Book,
     load_book_inner(path, managed, verify, None)
 }
 
+/// `load_book` whose verification stops at the next bounded read once `cancel`
+/// fires. The caller decides what a cancelled error means: this returns the
+/// reader's own error text, never a claim that the file is damaged.
+pub(crate) fn load_book_cancellable(
+    path: &str,
+    managed: bool,
+    verify: bool,
+    cancel: &CancellationToken,
+) -> Result<Book, String> {
+    load_book_inner(path, managed, verify, Some(cancel)).map_err(|error| {
+        if cancel.is_cancelled() { IMPORT_CANCELLED.to_owned() } else { error }
+    })
+}
+
+/// A manual or monitored import stopped by Quit or a privacy-mode change.
+pub(crate) const IMPORT_CANCELLED: &str =
+    "Import cancelled because Kiwix is closing or its privacy settings changed. Add the archive again to import it.";
+
 fn load_book_inner(path: &str, managed: bool, verify: bool, cancel: Option<&CancellationToken>) -> Result<Book, String> {
     let canonical = std::fs::canonicalize(path).map_err(|failure| {
         crate::archive::archive_open_error(
