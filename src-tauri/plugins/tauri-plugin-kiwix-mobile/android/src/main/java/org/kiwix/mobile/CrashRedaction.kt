@@ -272,7 +272,12 @@ internal object CrashRedaction {
             var next = afterKey
             val quote = if (following == '\\'.code) afterKey + 1 else afterKey
             val quotedKey = points.at(quote) == '"'.code || points.at(quote) == '\''.code
-            if (quotedKey) next = quote + 1
+            if (quotedKey) {
+                // The key may sit inside wrappers that close after it, as Swift
+                // prints dictionary keys: `AnyHashable("token"): …`.
+                next = quote + 1
+                while (points.at(next) == ')'.code) next++
+            }
             // 4.2 Whitespace, then 4.3 the separator, then 4.4 whitespace.
             val gap = next
             next = skipWhitespace(points, next)
@@ -305,12 +310,15 @@ internal object CrashRedaction {
     /** The value that begins at [start]: the first form that applies. */
     private fun secretValue(points: IntArray, lines: Lines, start: Int, key: String): Span {
         // 1. Quoted, possibly inside wrappers such as `Some(`.
-        quotedValue(points, lines, skipWrappers(points, start))?.let { return it }
+        val inner = skipWrappers(points, start)
+        quotedValue(points, lines, inner)?.let { return it }
         // 2. One cookie header carries several `name=value` pairs.
         if (key == "cookie") return Span(start, lines.end[start])
-        // 3. One token; two after `authorization` (`Basic dXNlcjpwYXNz`).
-        var end = secretTokenEnd(points, start)
-        if (key == "authorization" && end > start) {
+        // 3. One token, measured from inside any wrappers, which go with it
+        // (`Some(1234)`, or pretty-printed with the value on the next line);
+        // two tokens after `authorization` (`Basic dXNlcjpwYXNz`).
+        var end = secretTokenEnd(points, inner)
+        if (key == "authorization" && end > inner) {
             val second = skipWhitespace(points, end)
             if (second > end) {
                 val secondEnd = secretTokenEnd(points, second)
@@ -318,11 +326,15 @@ internal object CrashRedaction {
             }
         }
         // A value with `/` or `\` is a path or a URL and may contain spaces.
-        if (hasPathSeparator(points, start, end)) end = maxOf(end, pathEnd(points, start))
+        if (hasPathSeparator(points, inner, end)) end = maxOf(end, pathEnd(points, inner))
         return Span(start, end)
     }
 
-    /** The index after any `Name(` wrappers that begin at [start]. */
+    /**
+     * The index after any `Name(` wrappers that begin at [start]. Whitespace,
+     * line breaks included, may follow each `(`: pretty-printed debug output
+     * puts the value on the next line.
+     */
     private fun skipWrappers(points: IntArray, start: Int): Int {
         var position = start
         while (true) {
@@ -330,7 +342,7 @@ internal object CrashRedaction {
             var nameEnd = position
             while (nameEnd < points.size && (isAsciiAlphanumeric(points[nameEnd]) || points[nameEnd] == '_'.code)) nameEnd++
             if (points.at(nameEnd) != '('.code) return position
-            position = nameEnd + 1
+            position = skipWhitespace(points, nameEnd + 1)
         }
     }
 

@@ -89,10 +89,17 @@ final class CrashCapturePolicyTests: XCTestCase {
     for _ in 0..<5 { fixture.deleteLastPathComponent() }
     fixture.appendPathComponent("tests/fixtures/crash-redaction-cases.json")
     guard let data = try? Data(contentsOf: fixture) else {
-      throw XCTSkip("The shared fixture is not readable from here: \(fixture.path)")
+      // The simulator and macOS see the checkout, so there a missing fixture
+      // is a failure. Only a physical device cannot read it.
+      #if targetEnvironment(simulator) || os(macOS)
+      XCTFail("The shared fixture is not readable: \(fixture.path)")
+      return
+      #else
+      throw XCTSkip("The shared fixture is not readable on a device: \(fixture.path)")
+      #endif
     }
     let cases = try JSONDecoder().decode([Case].self, from: data)
-    XCTAssertGreaterThanOrEqual(cases.count, 80, "The shared fixture lost cases")
+    XCTAssertGreaterThanOrEqual(cases.count, 238, "The shared fixture lost cases")
     for item in cases {
       let actual = CrashIntake.redact(item.input)
       // Compared as scalars: `String ==` treats canonically equivalent text
@@ -183,6 +190,7 @@ final class CrashCapturePolicyTests: XCTestCase {
       "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
       "token='x ", "C:\\a\" ", "!\\a", "\\a\"", "pin=Some(", "auth=\\\"x", "https://a.b:1 ", "http://e.org/../",
       "a@", "@a.", "x@y.zz ", "@.-", "~a", "tokenAb ", "passwordHash", "1://a ",
+      "pin=Some( ", "pin=a(\n", "\"pin\")", "'pin'))))",
     ]
     for unit in units {
       // Whole units only, so the bound does not drop a partial one.

@@ -197,6 +197,7 @@ These are known and accepted. They are not in the vectors as expected output.
 - The host of an external `http` or `https` URL. It is kept on purpose, and it can itself be personal: `https://jane-doe.github.io/a` becomes `https://jane-doe.github.io`, and `https://jane-private-medical.s3.amazonaws.com/x` becomes `https://jane-private-medical.s3.amazonaws.com`.
 - What follows the `:` of an address-shaped remote: `git@github.com:janedoe/private-notes.git` becomes `[email]:janedoe/private-notes.git`, which still names the account and the repository.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
+- A value that is a struct, array or map (`Some(Token { … })`, `Ok([…])`, `Some(["a b"])`): only its first token goes.
 - A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator, or a `_` suffix after a camelCase hump such as `accessToken_value=…` or `refreshToken_v2=…`).
 - An empty quoted value (`password=""`, `Some("")`) is no match for that keyword; the value forms after it are not tried, so `cookie="" a=b` is left unchanged.
 - An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`), or whose local part is quoted (`"jane doe"@example.org`).

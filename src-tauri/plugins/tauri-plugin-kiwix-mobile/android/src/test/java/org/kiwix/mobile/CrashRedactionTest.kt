@@ -29,7 +29,7 @@ class CrashRedactionTest {
     @Test
     fun redactionMatchesTheCanonicalCasesSharedWithRustAndSwift() {
         val cases = ObjectMapper().readTree(fixture())
-        assertTrue("the shared fixture lost cases: ${cases.size()}", cases.isArray && cases.size() >= 80)
+        assertTrue("the shared fixture lost cases: ${cases.size()}", cases.isArray && cases.size() >= 238)
         val differing = ArrayList<String>()
         for (case in cases) {
             val names = case.fieldNames().asSequence().toList().sorted()
@@ -123,8 +123,23 @@ class CrashRedactionTest {
     }
 
     @Test
+    fun wrappedValuesAndWrappedKeysAreRedacted() {
+        // Whitespace, line breaks included, may follow a wrapper's `(`.
+        assertEquals("token=Some( \"[redacted]\") z", CrashRedaction.redact("token=Some( \"x y\") z"))
+        assertEquals("token: Some( \"[redacted]\", )", CrashRedaction.redact("token: Some(\n        \"abc def\",\n    )"))
+        assertEquals("token: Some(\n    \"[redacted]\",\n)", CrashRedaction.redactLine("token: Some(\n    \"abc def\",\n)"))
+        // An unquoted value goes with its wrappers and is measured from inside them.
+        assertEquals("pin: [redacted], ) end", CrashRedaction.redact("pin: Some(\n    1234,\n) end"))
+        assertEquals("pin=[redacted]) end", CrashRedaction.redact("pin=Some(1234) end"))
+        assertEquals("token: [redacted] )", CrashRedaction.redact("token: Some(\n    /storage/emulated/0/My Keys/id\n)"))
+        // `)` may follow the closing quote of a quoted key, and only of a quoted key.
+        assertEquals("[AnyHashable(\"password\"): [redacted]]", CrashRedaction.redact("[AnyHashable(\"password\"): hunter2]"))
+        assertEquals("(\"pin\")) = [redacted]", CrashRedaction.redact("(\"pin\")) = 12"))
+        assertEquals("(pin) = 12", CrashRedaction.redact("(pin) = 12"))
+    }
+
+    @Test
     fun theResidualsTheSpecNamesStayAsWritten() {
-        assertEquals("token=[redacted] \"x y\") z", CrashRedaction.redact("token=Some( \"x y\") z"))
         assertEquals("password=\"\"", CrashRedaction.redact("password=\"\""))
         assertEquals("token=Some(\"\")", CrashRedaction.redact("token=Some(\"\")"))
         assertEquals("cookie=\"\" a=b", CrashRedaction.redact("cookie=\"\" a=b"))
@@ -141,6 +156,7 @@ class CrashRedactionTest {
             "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
             "token='x ", "C:\\a\" ", "pin='' ", "token=\\\"\\\" ", "\\a<", "Some(Some(", "https://example.org/a ",
             "a@b.c ", "a.b@", "@a.b-", "x@y.zz@", "TokenA", "passwordHash ", "~jane ", "~a~",
+            "pin=a( ", "'pin')", "\"pin\"))", "pin: Some(\n", "pin=a(a( b ",
         )
         fun repeated(unit: String, length: Int) = unit.repeat(length / unit.length)
         fun fastest(text: String): Long {

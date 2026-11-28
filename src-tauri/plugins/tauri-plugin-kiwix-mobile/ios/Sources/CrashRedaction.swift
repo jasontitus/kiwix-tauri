@@ -270,7 +270,12 @@ enum CrashRedaction {
       var next = afterKey
       let quote = scalar(chars, afterKey) == "\\" ? afterKey + 1 : afterKey
       let quotedKey = scalar(chars, quote) == "\"" || scalar(chars, quote) == "'"
-      if quotedKey { next = quote + 1 }
+      if quotedKey {
+        // The key may sit inside wrappers that close after it, as Swift
+        // prints dictionary keys: `AnyHashable("token"): …`.
+        next = quote + 1
+        while next < chars.count, chars[next] == ")" { next += 1 }
+      }
       let gap = next
       next = skipWhitespace(chars, from: next)
       var separator = 0
@@ -301,7 +306,10 @@ enum CrashRedaction {
   /// inside wrappers such as `Some(`), the rest of the line after `cookie`,
   /// or one token.
   private static func secretValue(_ chars: Text, _ lines: Lines, _ start: Int, key: String) -> Range<Int> {
-    if let quoted = quotedValue(chars, lines, open: skipWrappers(chars, start)) { return quoted }
+    // An unquoted value inside wrappers (`Some(1234)`, or pretty-printed on
+    // the next line) is measured from inside them and goes with them.
+    let inner = skipWrappers(chars, start)
+    if let quoted = quotedValue(chars, lines, open: inner) { return quoted }
     if key == "cookie" {
       // One header carries several `name=value` pairs.
       return start..<lines.end[start]
@@ -316,8 +324,8 @@ enum CrashRedaction {
       }
       return index
     }
-    var end = tokenEnd(start)
-    if key == "authorization", end > start {
+    var end = tokenEnd(inner)
+    if key == "authorization", end > inner {
       // `Basic dXNlcjpwYXNz`, `Bearer …`: the scheme and the credential.
       let second = skipWhitespace(chars, from: end)
       if second > end {
@@ -326,18 +334,20 @@ enum CrashRedaction {
       }
     }
     // A value with a separator is a path or a URL and may contain spaces.
-    if hasPathSeparator(chars, start..<end) { end = max(end, pathEnd(chars, start)) }
+    if hasPathSeparator(chars, inner..<end) { end = max(end, pathEnd(chars, inner)) }
     return start..<end
   }
 
-  /// The index after any `Name(` wrappers that begin at `start`.
+  /// The index after any `Name(` wrappers that begin at `start`. Whitespace
+  /// may follow each `(`: pretty-printed debug output puts the value on the
+  /// next line.
   private static func skipWrappers(_ chars: Text, _ start: Int) -> Int {
     var position = start
     while position < chars.count, isASCIILetter(chars[position]) {
       var nameEnd = position
       while nameEnd < chars.count, isASCIIAlphanumeric(chars[nameEnd]) || chars[nameEnd] == "_" { nameEnd += 1 }
       guard scalar(chars, nameEnd) == "(" else { break }
-      position = nameEnd + 1
+      position = skipWhitespace(chars, from: nameEnd + 1)
     }
     return position
   }
