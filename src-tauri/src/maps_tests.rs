@@ -578,7 +578,7 @@ async fn a_write_the_file_rejects_is_reported_before_any_counter_or_checkpoint_a
     let control = Control::new();
     let blocks = BlockProgress::new(&recipe, &control).unwrap();
     let failure = manager.checkpoint_output("offline-fixture", &mut output, "fingerprint", 8,
-        &Sha256::new(), &blocks).await.err().unwrap();
+        &Sha256::new(), &blocks).await.unwrap_err();
     assert!(failure.message.starts_with("Map write failed"), "{}", failure.message);
     assert!(failure.retain && !failure.checkpoint_current, "the failure path must not journal these bytes either");
     let job = manager.status().unwrap().unwrap();
