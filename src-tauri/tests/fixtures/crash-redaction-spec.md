@@ -6,7 +6,7 @@ This is the one rule for the text that the crash intakes write to disk. Three im
 - Swift: `plugins/tauri-plugin-kiwix-mobile/ios/Sources/CrashIntake.swift`,
 - Kotlin: `plugins/tauri-plugin-kiwix-mobile/android/.../CrashIntake.kt`.
 
-`crash-redaction-cases.json`, next to this file, holds the test vectors. Each entry is `{"input", "expected"}`, and `expected` is the exact result of steps 1 to 7 below for `input`. Every implementation must reproduce every vector. When this text and a vector disagree, that is a defect in this text: report it, do not pick one.
+`crash-redaction-cases.json`, next to this file, holds the test vectors. Each entry is `{"input", "expected"}`, and `expected` is the exact result of steps 1 to 8 below for `input`. Every implementation must reproduce every vector. When this text and a vector disagree, that is a defect in this text: report it, do not pick one.
 
 The rule prefers losing words to keeping part of a path, a URL or a secret. Several steps therefore remove the rest of a clause.
 
@@ -28,7 +28,7 @@ Nothing else is whitespace. `U+001C`–`U+001F` and `U+200B` are not. Do not use
 
 **Case.** Keywords, schemes and hosts are compared after lowercasing ASCII letters only. No other scalar is folded: `ſ` (U+017F) is not `s`, and `K` (U+212A) is not `k`.
 
-**Placeholders.** `[redacted]`, `[url]`, `[reader-url]`, `[path]`.
+**Placeholders.** `[redacted]`, `[url]`, `[reader-url]`, `[email]`, `[path]`.
 
 **Linear time.** Each step must take time proportional to the length of its input, whatever the input. In particular, never rescan to the end of the line or of the text once per candidate: compute line ends once, and make every forward scan cover only text that the match then consumes.
 
@@ -128,7 +128,20 @@ Go on at the end of the range.
 
 Nothing else of a kept URL survives. Its path, query and fragment are always dropped, because a path can name the article being read.
 
-### Step 4: paths
+### Step 4: e-mail addresses
+
+Scan from left to right for `@`. A `@` inside a range that this step already replaced is skipped.
+
+- **Local part.** The longest run of ASCII letters, ASCII digits, `.`, `_`, `%`, `+` and `-` that ends directly before the `@`. It must not reach back into a range this step already replaced. It must not be empty.
+- **Host.** The longest run of ASCII letters, ASCII digits, `.` and `-` that starts directly after the `@`, with every `.` and `-` at its very end removed (those are sentence punctuation and stay in the text). Split it at `.`: there must be at least two labels, none empty, and the last label must be at least two scalars long and made of ASCII letters only.
+
+If both hold, replace from the start of the local part to the end of the host with `[email]` and go on there. Otherwise go on after the `@`.
+
+Both runs are taken whole. An address is never matched inside a longer run, so `a@b.c`, `pkg@1.2.3` and `user@host` stay.
+
+This step comes after step 3 because that step has already replaced `mailto:` URLs and dropped the userinfo of `scheme://user@host`. It comes before step 5 so that text directly after an address starts at a boundary: `jane@example.org/Inbox Folder` becomes `[email][path]`, where the other order would leave `/Inbox Folder` behind.
+
+### Step 5: paths
 
 Scan from left to right. A path starts at index `i` when the boundary rule and one start shape hold, and the exception does not.
 
@@ -145,28 +158,28 @@ Scan from left to right. A path starts at index `i` when the boundary rule and o
 
 Replace from `i` to `path_end(i)` with `[path]` and go on at that end. Otherwise copy the scalar and go on at `i + 1`.
 
-### Step 5: opaque tokens
+### Step 6: opaque tokens
 
 A token scalar is an ASCII letter, an ASCII digit, or one of `_` `-` `+` `/` `=` `.`. Replace every maximal run of token scalars that is at least 40 scalars long and contains at least one ASCII digit and at least one ASCII letter with `[redacted]`.
 
-### Step 6: whitespace
+### Step 7: whitespace
 
 Split the text at whitespace, drop the empty pieces, and join the rest with one `U+0020`. (So there is no leading or trailing space.)
 
-### Step 7: length
+### Step 8: length
 
 If the text is longer than 2,000 scalars, keep the first 1,999 and append `…` (U+2026). No vector is long enough to exercise this.
 
 ## 3. Where the steps are applied
 
-A message, a thread name, an operation name or an identifier goes through all seven steps. Each platform then applies its own shorter limit to some fields (for example 64 scalars for a thread name).
+A message, a thread name, an operation name or an identifier goes through all eight steps. Each platform then applies its own shorter limit to some fields (for example 64 scalars for a thread name).
 
-Stack frames are formatted differently on each platform, so their handling is per platform. Every platform must still run steps 1 to 4, in that order, on any frame text it keeps, and must cut a frame by scalars. What Rust does:
+Stack frames are formatted differently on each platform, so their handling is per platform. Every platform must still run steps 1 to 5, in that order, on any frame text it keeps, and must cut a frame by scalars. What Rust does:
 
-- A frame is a line of the backtrace that starts with decimal digits and `:`. That line goes through steps 1 to 4 only, so its spacing is kept.
+- A frame is a line of the backtrace that starts with decimal digits and `:`. That line goes through steps 1 to 5 only, so its spacing is kept.
 - If the next line starts with `at `, it is the source location. Rust runs step 3 on the rest of that line, keeps only what follows the last `/` or `\`, runs step 2 on that, and appends it to the frame after ` at `.
 - Each frame is cut to 240 scalars (239 and `…`). At most 24 frames are kept.
-- The panic location is `file name:line`, built from the compiler's own file name with everything up to the last `/` or `\` removed, and then goes through all seven steps. `lib.rs:1234` must come out unchanged.
+- The panic location is `file name:line`, built from the compiler's own file name with everything up to the last `/` or `\` removed, and then goes through all eight steps. `lib.rs:1234` must come out unchanged.
 
 ## 4. What this rule does not catch
 
@@ -176,7 +189,7 @@ These are known and accepted. They are not in the vectors as expected output.
 - A path that does not start with one of the start shapes: `My Books/a.zim`, `%USERPROFILE%\Jane Doe`.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
 - A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator).
-- A bare e-mail address.
+- An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`).
 
 ## 5. What it removes that was harmless
 
@@ -186,3 +199,4 @@ Also known and accepted.
 - A `/` after punctuation or a non-ASCII letter starts a path: `+/- 5` becomes `+[path]`, `café/menu` becomes `café[path]`, `</p>` becomes `<[path]>`. A `/` after an ASCII letter or digit does not: `and/or`, `1/2`, `I/O` stay.
 - Several escape sequences in a row look like a rooted path: `\d+\.\d+` becomes `[path]`.
 - A word after `pass:`, `auth:`, `pin:`, `signature:` and the other keywords, even in prose.
+- Anything shaped like an address: `git@github.com:org/repo.git` becomes `[email]:org/repo.git`.
