@@ -1,2 +1,0 @@
-CMD swiftc -parse ios/Sources/*.swift ios/Tests/*.swift
-EXIT 0
