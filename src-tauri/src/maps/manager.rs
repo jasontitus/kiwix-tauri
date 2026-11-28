@@ -5,7 +5,7 @@
 use super::*;
 
 /// What explicit cleanup kept, and the reason shown for it.
-struct KeptAt {
+pub(super) struct KeptAt {
     path: PathBuf,
     reason: String,
     /// False when `path` is the map's final name rather than a partial's.

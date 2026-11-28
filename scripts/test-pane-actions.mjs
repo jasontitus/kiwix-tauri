@@ -350,12 +350,16 @@ test("on iOS a kept map file's path is hidden without swallowing the reason besi
   }
   // A full stop or bracket inside a folder name is part of the path: the whole
   // path is hidden, not cut at "Dr." and shown from there on.
-  for (const folder of ["Dr. Who", "A. Smith", "Vol. II", "St. Louis Guide (Draft)", "Books (Old)"]) {
+  for (const folder of ["Dr. Who", "A. Smith", "Vol. II", "St. Louis Guide (Draft)", "Books (Old)",
+    "U.S. History", "J.R.R. Tolkien", "Notes.v2 (Draft)", "Report.Final (Draft)"]) {
     assert.equal(errorText(`Could not open ${root}/${folder}/wikipedia.zim right now`), "Could not open [File]", folder);
     assert.equal(errorText(`The archive ${root}/${folder}/notes.zim is not available`), "The archive [File] is not available", folder);
     assert.equal(errorText(`Import failed for ${root}/${folder}/b.zim`), "Import failed for [File]", folder);
   }
   assert.equal(errorText(`Could not open ${root}/a.zim. Try again.`), "Could not open [File]. Try again.");
+  assert.equal(errorText(`Could not open ${root}/a.zimaa. Try again.`), "Could not open [File]. Try again.");
+  assert.equal(errorText(`Some earlier map downloads could not be cleaned up. The files were kept here: ${root}/U.S. History/.streetzim-a.part (Its folder was moved or replaced, so Kiwix left the file alone)`),
+    "Some earlier map downloads could not be cleaned up. The files were kept here: [File] (Its folder was moved or replaced, so Kiwix left the file alone)");
   assert.equal(errorText(`Some earlier map downloads could not be cleaned up. The files were kept here: ${root}/Vol. II/.streetzim-a.part (Its folder was moved or replaced, so Kiwix left the file alone)`),
     "Some earlier map downloads could not be cleaned up. The files were kept here: [File] (Its folder was moved or replaced, so Kiwix left the file alone)");
   assert.equal(errorText(`(see ${root}/a.zim)`), "(see [File])", "a closing bracket after a path still ends it");

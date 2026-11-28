@@ -40,13 +40,12 @@ const filesystemRoot = String.raw`(?:file:(?:\\?\/){2,}|(?:\\?\/)(?:private|var|
 const quotedFilesystemPath = new RegExp(String.raw`(\\?["'\x60])${filesystemRoot}[^\r\n]*?\1`, "g");
 const bareFilesystemPath = new RegExp(
   // A path ends at a delimiter, before a verb that starts the sentence's
-  // predicate, or, right after a file extension only, before a parenthesised
-  // reason ("x.part (Its folder …)") or at a full stop that ends the sentence
-  // ("kept at x.part. Its folder …"). Folder names keep their abbreviations
-  // ("Dr. Who", "Vol. II") and brackets ("Books (Old)/…"): a ")" that a
-  // separator follows is still inside the path.
-  // Lookbehind needs Safari 16.4, the iOS minimum and macOS 13.3's WebKit.
-  String.raw`(^|[\s(=:\[])${filesystemRoot}(?:[^\r\n:;,"'\x60)\]]|\)(?=[\\/]))*?(?=[:;,"'\x60\]\r\n]|\)(?![\\/])|[ \t]+(?:is|was|has|requires|exceeds|without|outside|does|cannot|could|failed)\b|(?<=\.[A-Za-z0-9]{1,12})(?:[ \t]+\((?=[A-Z][a-z])|\.(?:[ \t]+(?=[A-Z])|$))|$)`,
+  // predicate, or, right after a `.part` or `.zim`/`.zimaa` name only, before a
+  // parenthesised reason ("x.part (Its folder …)") or at a full stop that ends
+  // the sentence ("kept at x.part. Its folder …"). Folder names keep their
+  // abbreviations ("Dr. Who", "U.S. History", "Notes.v2 (Draft)") and brackets
+  // ("Books (Old)/…"): a ")" that a separator follows is still inside the path.
+  String.raw`(^|[\s(=:\[])${filesystemRoot}(?:[^\r\n:;,"'\x60)\]]|\)(?=[\\/]))*?(?:(?=[:;,"'\x60\]\r\n]|\)(?![\\/])|[ \t]+(?:is|was|has|requires|exceeds|without|outside|does|cannot|could|failed)\b|$)|\.(?:part|zim(?:[a-z]{2})?)(?=[ \t]+\((?=[A-Z][a-z])|\.(?:[ \t]+(?=[A-Z])|$)))`,
   "g",
 );
 export function pathFileName(path: string): string {
