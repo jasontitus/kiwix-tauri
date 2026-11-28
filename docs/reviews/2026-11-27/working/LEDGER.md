@@ -340,3 +340,12 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - INTEGRATION: localization generate done (sources 1552->1669; coverage ~0.80->~0.74 = new untranslated strings, residual; check:localization failures []), npm run build OK, node suite w/ Chrome 545: 544 pass 0 fail 1 skip (macOS-only), python unittest 182 OK (2 skip), appimage test OK.
 - buildhygiene round 3: DEPENDENCIES rows refreshed (growth since 11-05), Phase 3 retitled. -> adv-buildhygiene quick check r2+r3
 - adv-buildhygiene r2+3: R1-R8 closed; DEPENDENCIES:3 false -> OWNER applied reviewer's exact 3-column table + line 3 text (+method note column wording). LANE buildhygiene CLOSED (docs-only fix per reviewer needs no Rust re-review; owner edit to be confirmed by final record reviewer). Residuals listed.
+- FINAL-TREE VERIFICATION (Rust tree identical fbcb420..1ae438d; locales regenerated before runs):
+  cargo test --lib: ok. 1493 passed; 0 failed; 16 ignored (93.25s). Base was 1329/5 failed.
+  clippy host -D warnings EXIT 0; Windows-gnu EXIT 0; Android aarch64 EXIT 0; host opt-in experimental-location EXIT 0.
+  unsafe census 75/75/2 in 20 files. Cargo.lock unchanged vs d98cac2.
+  node suite w/ Chrome: 545 tests 544 pass 0 fail 1 skip (macOS-only). python unittest 182 OK (2 skip); appimage test OK.
+  check:errors OK; check:localization failures []; npm run build OK.
+  Kotlin :tauri-plugin-kiwix-mobile:testDebugUnitTest 79/0/0/0.
+  Swift: Linux toolchain harness fixture 238/238, bound ALL PASSED, differential 1.6M+ 0 mismatches; swiftc -parse Sources+Tests OK.
+  NOT RUN: Apple compilers, iOS/macOS Rust, devices, simulator, Windows runtime, GitHub Actions, cargo deny/npm audit (network).
