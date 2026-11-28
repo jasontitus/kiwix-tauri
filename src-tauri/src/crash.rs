@@ -757,7 +757,9 @@ fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize
         let quote = after_key + usize::from(scalars.get(after_key) == Some(&'\\'));
         let quoted_key = matches!(scalars.get(quote), Some('"' | '\''));
         if quoted_key {
-            next = quote + 1;
+            // The key may sit inside wrappers that close after it, as Swift
+            // prints dictionary keys: `AnyHashable("token"): …`.
+            next = find_from(scalars, quote + 1, |scalar| scalar != ')');
         }
         let gap = next;
         next = find_from(scalars, next, |scalar| !scalar.is_whitespace());
@@ -786,7 +788,8 @@ fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize
 /// The range of the secret value that begins at `start`. The forms are tried
 /// in this order.
 ///
-/// 1. Quoted, possibly inside wrappers such as `Some(` or `Optional(`:
+/// 1. Quoted, possibly inside wrappers such as `Some(` or `Optional(`, each
+///    of which may be followed by whitespace:
 ///    * `"…"`: up to the closing quote (one not escaped by a backslash), a
 ///      line break or the end.
 ///    * `\"…\"` (the quote itself escaped by one backslash, as inside an
@@ -799,13 +802,17 @@ fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize
 ///    The quotes stay.
 /// 2. After `cookie`: the rest of the line, because one header carries several
 ///    `name=value` pairs.
-/// 3. One token, which ends at whitespace or one of `, ; & ) ] }`. After
+/// 3. One token, measured from after any wrappers, which ends at whitespace
+///    or one of `, ; & ) ] }`; the wrappers go with it. After
 ///    `authorization` a second token separated by whitespace goes too
 ///    (`Basic dXNlcjpwYXNz`, `Bearer …`). A value that contains `/` or `\` is
 ///    a path or a URL and may contain spaces: it takes at least what
 ///    `path_end` takes from where it starts.
 fn secret_value(scalars: &[char], lines: &Lines, start: usize, key: &str) -> (usize, usize) {
-    if let Some(quoted) = quoted_value(scalars, lines, skip_wrappers(scalars, start)) {
+    // An unquoted value inside wrappers (`Some(1234)`, or pretty-printed on
+    // the next line) is measured from inside them and goes with them.
+    let inner = skip_wrappers(scalars, start);
+    if let Some(quoted) = quoted_value(scalars, lines, inner) {
         return quoted;
     }
     if key == "cookie" {
@@ -816,20 +823,22 @@ fn secret_value(scalars: &[char], lines: &Lines, start: usize, key: &str) -> (us
             scalar.is_whitespace() || matches!(scalar, ',' | ';' | '&' | ')' | ']' | '}')
         })
     };
-    let mut end = token_end(start);
-    if key == "authorization" && end > start {
+    let mut end = token_end(inner);
+    if key == "authorization" && end > inner {
         let second = find_from(scalars, end, |scalar| !scalar.is_whitespace());
         if second > end && token_end(second) > second {
             end = token_end(second);
         }
     }
-    if has_path_separator(&scalars[start..end]) {
-        end = end.max(path_end(scalars, start));
+    if has_path_separator(&scalars[inner..end]) {
+        end = end.max(path_end(scalars, inner));
     }
     (start, end)
 }
 
-/// The index after any `Name(` wrappers that begin at `start`.
+/// The index after any `Name(` wrappers that begin at `start`. Whitespace may
+/// follow each `(`: pretty-printed debug output (`{:#?}`) puts the value on
+/// the next line.
 fn skip_wrappers(scalars: &[char], mut start: usize) -> usize {
     loop {
         if !scalars.get(start).is_some_and(|first| first.is_ascii_alphabetic()) {
@@ -839,7 +848,7 @@ fn skip_wrappers(scalars: &[char], mut start: usize) -> usize {
         if scalars.get(name_end) != Some(&'(') {
             return start;
         }
-        start = name_end + 1;
+        start = find_from(scalars, name_end + 1, |scalar| !scalar.is_whitespace());
     }
 }
 
@@ -1224,7 +1233,7 @@ mod tests {
         }
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../tests/fixtures/crash-redaction-cases.json")).unwrap();
-        assert!(cases.len() >= 228, "the shared fixture lost cases: {}", cases.len());
+        assert!(cases.len() >= 238, "the shared fixture lost cases: {}", cases.len());
         let differing: Vec<String> = cases
             .iter()
             .filter_map(|case| {
@@ -1357,7 +1366,7 @@ mod tests {
                 .unwrap()
         };
         for unit in [
-            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ", "a@b-", "a.b@", "Pin", "~a",
+            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ", "a@b-", "a.b@", "Pin", "~a", "pin=a( ", "'pin')",
         ] {
             let small = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS));
             let large = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS * 4));

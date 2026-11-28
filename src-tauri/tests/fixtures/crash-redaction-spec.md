@@ -70,7 +70,7 @@ A keyword matches at `p` when all of these hold:
    - the scalar after the keyword is not an ASCII letter, an ASCII digit or `_` (or the text ends there); or
    - a **camelCase suffix** follows: the scalar after the keyword is an ASCII uppercase letter and the keyword's last scalar, as written in the text, is an ASCII lowercase letter (`accessTokenValue`, `passwordHash`). The suffix is that letter and every ASCII letter, ASCII digit and `_` after it. It is skipped, and item 4 starts after it.
 4. What follows the keyword (or its suffix) is, in order:
-   1. optionally the closing quote of a quoted key: `"` or `'`, or one `\` followed by `"` or `'`;
+   1. optionally the closing quote of a quoted key: `"` or `'`, or one `\` followed by `"` or `'`; and, only after such a quote, any number of `)` (the key sits inside wrappers, as in Swift's `AnyHashable("token"): …`);
    2. any number of whitespace scalars;
    3. a **separator**: `=>`; or `=`; or `:` that is not followed by another `:`; or `,`, but only if the key was quoted (4.1) or the keyword is `authorization`;
    4. any number of whitespace scalars.
@@ -82,14 +82,14 @@ The first keyword in the list that matches wins. If none does, copy the scalar a
 
 **The value.** Use the first form that applies:
 
-1. **Quoted.** First skip any number of wrappers at `v`. A wrapper is an ASCII letter, then any ASCII letters, digits or `_`, then `(` (for example `Some(`, `Optional(`). Call the position after them `q`. If one of the following is at `q`, it is the value; otherwise ignore the wrappers and go to form 2 with `v`.
+1. **Quoted.** First skip any number of wrappers at `v`. A wrapper is an ASCII letter, then any ASCII letters, digits or `_`, then `(`, then any number of whitespace scalars, line breaks included (for example `Some(`, `Optional(`, and the pretty-printed `Some(` followed by a new line and indentation). Call the position after them `q`; without a wrapper `q` is `v`. If one of the following is at `q`, it is the value; otherwise go to form 2.
    - `"` at `q`: the value starts after it and ends before the first `"` on the same line for which the number of `\` directly before it (counted back no further than the value's start) is even; or at the line end if there is none.
    - `\` then `"` at `q`: the value starts after the `"` and ends before the `\` of the first `\"` on the same line whose `"` has exactly one `\` directly before it (counted back no further than the value's start); or at the line end if there is none.
    - `'` at `q`: the value starts after it and ends before the last `'` on the same line, or at the line end if there is none after `q`. If the value contains `/` or `\`, its end is the later of that and `path_end(value start)`.
 2. **`cookie`.** For the keyword `cookie`: from `v` to the line end.
-3. **Token.** From `v` to the first whitespace scalar or one of `,` `;` `&` `)` `]` `}`, or the end of the text.
-   - For the keyword `authorization`, if that token is not empty: skip whitespace after it, and if a non-empty token (same definition) follows, the value ends at the end of that second token.
-   - If the value contains `/` or `\`, its end is the later of that and `path_end(v)`.
+3. **Token.** The value starts at `v`. It ends at the first whitespace scalar or one of `,` `;` `&` `)` `]` `}` at or after `q`, or at the end of the text. So wrappers and the unquoted value inside them go together (`Some(1234)`, and the pretty-printed form with the value on the next line). The token is the part from `q`.
+   - For the keyword `authorization`, if the token is not empty: skip whitespace after it, and if a non-empty token (same definition) follows, the value ends at the end of that second token.
+   - If the token (with a second one, if any) contains `/` or `\`, the value's end is the later of that and `path_end(q)`.
 
 Replace the value, and only the value, with `[redacted]`. Quotes, wrappers, the keyword and the separator stay. Go on at the end of the value.
 
@@ -183,6 +183,11 @@ Stack frames are formatted differently on each platform, so their handling is pe
 - Each frame is cut to 240 scalars (239 and `…`). At most 24 frames are kept.
 - The panic location is `file name:line`, built from the compiler's own file name with everything up to the last `/` or `\` removed, and then goes through all eight steps. `lib.rs:1234` must come out unchanged.
 
+Because frame lines run the same steps as any other text, a symbol that contains a keyword or a `data:` or `file:` scheme loses what follows it. This costs diagnostic detail only, and it is expected:
+
+- `-[KiwixSession setAuthorization:forHost:] + 88` becomes `-[KiwixSession setAuthorization:[redacted]] + 88`;
+- `+[NSData(Kiwix) data:encoding:] + 88` becomes `+[NSData(Kiwix) [url]`, which loses the offset too.
+
 ## 4. What this rule does not catch
 
 These are known and accepted. They are not in the vectors as expected output.
@@ -193,7 +198,6 @@ These are known and accepted. They are not in the vectors as expected output.
 - What follows the `:` of an address-shaped remote: `git@github.com:janedoe/private-notes.git` becomes `[email]:janedoe/private-notes.git`, which still names the account and the repository.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
 - A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator, or a `_` suffix after a camelCase hump such as `accessToken_value=…` or `refreshToken_v2=…`).
-- A wrapper followed by whitespace before its quote: `token=Some( "x y") z` gives `token=[redacted] "x y") z`. Debug output never writes that space.
 - An empty quoted value (`password=""`, `Some("")`) is no match for that keyword; the value forms after it are not tried, so `cookie="" a=b` is left unchanged.
 - An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`), or whose local part is quoted (`"jane doe"@example.org`).
 

@@ -910,5 +910,45 @@
   {
     "input": "jane@example.XN--P1AI and bob@example.x1 stays",
     "expected": "[email] and bob@example.x1 stays"
+  },
+  {
+    "input": "token: Some(\n        \"abc def\",\n    )",
+    "expected": "token: Some( \"[redacted]\", )"
+  },
+  {
+    "input": "token=Some( \"x y\") z",
+    "expected": "token=Some( \"[redacted]\") z"
+  },
+  {
+    "input": "password: Some(\n    Some(\n        'p w',\n    ),\n)",
+    "expected": "password: Some( Some( '[redacted]', ), )"
+  },
+  {
+    "input": "[AnyHashable(\"token\"): abc def, AnyHashable(\"password\"): hunter2]",
+    "expected": "[AnyHashable(\"token\"): [redacted] def, AnyHashable(\"password\"): [redacted]]"
+  },
+  {
+    "input": "Optional(AnyHashable(\"secret\")): \"s 1\" and (\"pin\") = 12",
+    "expected": "Optional(AnyHashable(\"secret\")): \"[redacted]\" and (\"pin\") = [redacted]"
+  },
+  {
+    "input": "token: Some(\n    abc\n)",
+    "expected": "token: [redacted] )"
+  },
+  {
+    "input": "token: Some(\n    /home/jane doe/My Keys/id\n)",
+    "expected": "token: [redacted] )"
+  },
+  {
+    "input": "pin: Some(\n    1234,\n) and code: Ok(77) end",
+    "expected": "pin: [redacted], ) and code: Ok(77) end"
+  },
+  {
+    "input": "-[KiwixSession setAuthorization:forHost:] + 88",
+    "expected": "-[KiwixSession setAuthorization:[redacted]] + 88"
+  },
+  {
+    "input": "+[NSData(Kiwix) data:encoding:] + 88",
+    "expected": "+[NSData(Kiwix) [url]"
   }
 ]

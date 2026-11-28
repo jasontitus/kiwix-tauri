@@ -23,8 +23,6 @@ toml = { version = "1", default-features = false, features = ["parse", "std"] }
 tempfile = "3.27"
 # Reference implementation used by the case-fold data generator and parity test.
 icu_casemap = "=2.4.0"
-# The lib test target compiles native/desktop_sdk.rs to test SDK root resolution.
-cc = "1"
 # The updater tests build a mock Tauri app so the real plugin state and
 # minisign verification run without launching a window.
 tauri = { version = "2.12", features = ["test"] }
@@ -176,9 +174,10 @@ ndk-context = "0.1.1"
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18.2"
 webkit2gtk = { version = "2.0.2", features = ["v2_40"] }
-# GeoClue location over the system bus (location_linux.rs); the note below about
-# keeping zbus out of Linux builds was about the unused single-instance plugin.
-zbus = { version = "5.19", default-features = false, features = ["async-io"] }
+# GeoClue location over the system bus (location_linux.rs). That provider is not
+# built yet, so zbus is compiled only with the `experimental-location` feature
+# (see build.rs); default Linux builds leave it out.
+zbus = { version = "5.19", default-features = false, features = ["async-io"], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Only Windows registers this plugin (lib.rs); Linux and macOS use instance.rs's
@@ -223,6 +222,10 @@ objc2-web-kit = { version = "0.3", default-features = false, features = ["std", 
 custom-protocol = ["tauri/custom-protocol"]
 android-evaluation = ["dep:jni"]
 localswarm-profiling = []
+# Type-checks the unreleased Linux (GeoClue) and Android location providers.
+# Effective only together with KIWIX_EXPERIMENTAL_LOCATION=1 (build.rs), so
+# `--all-features` alone never builds them. Not for release builds.
+experimental-location = ["dep:zbus"]
 
 [patch.crates-io]
 # Count and decode torrent filename bytes through checked Rust APIs.

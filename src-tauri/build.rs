@@ -13,13 +13,21 @@ fn main() {
     // Platforms with an app-owned location provider (see permissions.rs). An
     // archive asks Kiwix, never the webview's own geolocation.
     println!("cargo::rustc-check-cfg=cfg(native_location)");
-    if matches!(
-        env::var("CARGO_CFG_TARGET_OS").as_deref(),
-        // Linux (GeoClue) and Android providers are written but not yet
-        // compiled; add "linux" | "android" here once they build and pass review.
-        Ok("macos" | "ios" | "windows")
-    ) {
-        println!("cargo:rustc-cfg=native_location");
+    println!("cargo:rerun-if-env-changed=KIWIX_EXPERIMENTAL_LOCATION");
+    match env::var("CARGO_CFG_TARGET_OS").as_deref() {
+        Ok("macos" | "ios" | "windows") => println!("cargo:rustc-cfg=native_location"),
+        // Linux (GeoClue) and Android providers are written but not shipped;
+        // move them to the arm above once they pass review and runtime tests.
+        // Until then the CI type-check opts in with this variable and the
+        // `experimental-location` feature (which supplies zbus on Linux).
+        Ok("linux" | "android") if env::var("KIWIX_EXPERIMENTAL_LOCATION").as_deref() == Ok("1") => {
+            assert!(
+                env::var_os("CARGO_FEATURE_EXPERIMENTAL_LOCATION").is_some(),
+                "KIWIX_EXPERIMENTAL_LOCATION=1 also needs --features experimental-location"
+            );
+            println!("cargo:rustc-cfg=native_location");
+        }
+        _ => {}
     }
     // The authenticated headless preview embeds this directory independently of
     // Tauri's platform-specific frontendDist. Rebuild it when those assets change.

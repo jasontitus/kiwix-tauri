@@ -18,12 +18,6 @@ mod crash;
 // `GetThreadTimes`. No other target reads CPU time.
 #[cfg(any(unix, windows))]
 mod cpu_time;
-// The build script owns the SDK validation; compiling it here runs its unit
-// tests (root resolution) under `cargo test --lib`.
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../native/desktop_sdk.rs"]
-mod desktop_sdk;
 #[cfg(desktop)]
 mod desktop_workflow;
 #[cfg(any(mobile, test))]

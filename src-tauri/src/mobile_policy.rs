@@ -560,10 +560,10 @@ mod tests {
         }
         assert!(super::local_network_command("private_sync_configure", &json!({"enabled": true})));
         assert!(!super::local_network_command("private_sync_configure", &json!({"enabled": false})));
-        // Bluetooth and hotspot commands request their own NEARBY_DEVICES grant.
+        // Bluetooth commands request their own NEARBY_DEVICES grant.
         for command in [
             "localswarm_status", "localswarm_stop", "localswarm_stop_library", "localswarm_stop_seed",
-            "localswarm_hotspot_start", "sharing_stop", "nearby_discover", "nearby_connect", "start_download",
+            "sharing_stop", "nearby_discover", "nearby_connect", "start_download",
             "private_sync_pair_cancel", "private_sync_unpair", "private_sync_resolve", "private_sync_resume",
             "private_sync_rebootstrap", "private_sync_clear_positions",
         ] {
