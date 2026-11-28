@@ -115,8 +115,7 @@ fn is_android_code(text: &str) -> bool {
 
 /// `java.lang.IllegalStateException`, `org.kiwix.mobile.NativeDocumentError`.
 fn is_java_throwable(name: &str) -> bool {
-    let mut segments = name.split('.');
-    let Some(last) = segments.next_back() else {
+    let Some((package, class)) = name.rsplit_once('.') else {
         return false;
     };
     let identifier = |segment: &str| {
@@ -125,17 +124,12 @@ fn is_java_throwable(name: &str) -> bool {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
     };
-    let mut packages = 0;
-    for segment in segments {
-        if !identifier(segment) || !segment.starts_with(|c: char| c.is_ascii_lowercase()) {
-            return false;
-        }
-        packages += 1;
-    }
-    packages > 0
-        && identifier(last)
-        && last.starts_with(|c: char| c.is_ascii_uppercase())
-        && (last.ends_with("Exception") || last.ends_with("Error"))
+    package
+        .split('.')
+        .all(|segment| identifier(segment) && segment.starts_with(|c: char| c.is_ascii_lowercase()))
+        && identifier(class)
+        && class.starts_with(|c: char| c.is_ascii_uppercase())
+        && (class.ends_with("Exception") || class.ends_with("Error"))
 }
 
 /// The code and platform detail inside one Android rejection payload: a bare
@@ -535,6 +529,237 @@ mod tests {
                 "internal vocabulary survived: {shown}"
             );
             assert!(shown.len() > 20, "no actionable sentence: {shown}");
+        }
+    }
+
+    /// Every code `android_message` maps; each must read as an instruction.
+    const ANDROID_CODES: [&str; 34] = [
+        "NOT_AN_ARCHIVE_DOCUMENT",
+        "DUPLICATE_DOCUMENT_NAME",
+        "NATIVE_OPERATION_BUSY",
+        "DOCUMENT_PERMISSION_DENIED",
+        "PROVIDER_PERMISSION_DENIED",
+        "TEXT_DOCUMENT_TOO_LARGE",
+        "EXPORT_DESTINATION_NOT_EMPTY",
+        "EXPORT_CANCELLED_PARTIAL",
+        "STAGING_COPY_BUDGET_EXCEEDED",
+        "STAGING_DURABILITY_ERROR",
+        "EXPORT_DURABILITY_ERROR",
+        "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT",
+        "PROVIDER_UNAVAILABLE_USE_COPY_IMPORT",
+        "PROVIDER_NOT_SEEKABLE_USE_COPY_IMPORT",
+        "SCANNED_ARCHIVE_UNAVAILABLE",
+        "PROVIDER_CANNOT_REMEMBER_USE_COPY_IMPORT",
+        "PROVIDER_INCOMING_CHOOSE_ORIGINAL_OR_COPY",
+        "DOCUMENT_PICKER_FAILED",
+        "DOCUMENT_PICKER_EMPTY_RESULT",
+        "DOCUMENT_URI_REQUIRED",
+        "DOCUMENT_METADATA_UNAVAILABLE",
+        "DOCUMENT_STREAM_UNAVAILABLE",
+        "DOCUMENT_TREE_UNAVAILABLE",
+        "DOCUMENT_PROVIDER_STILL_LOADING",
+        "SCAN_RESULT_EXPIRED",
+        "SCAN_ALREADY_RUNNING",
+        "VISIBLE_ACTIVITY_REQUIRED",
+        "ACTIVITY_RECREATED",
+        "ACTIVITY_DESTROYED",
+        "STALE_ACTIVITY_GENERATION",
+        "TRANSFER_FOREGROUND_START_FAILED",
+        "TRANSFER_FOREGROUND_START_TIMEOUT",
+        "TRANSFER_START_PENDING",
+        "TRANSFER_CONTROL_PENDING",
+    ];
+
+    /// The plugin's own message: `{"code":C,"data":{"paths":[],"detail":D}}`.
+    fn android_envelope(code: &str, detail: &str) -> String {
+        serde_json::json!({"code": code, "data": {"paths": [], "detail": detail}}).to_string()
+    }
+
+    /// How Tauri prints a rejected Android plugin command.
+    fn android_rejection(code: &str, detail: &str) -> String {
+        format!("[{code}] - {}", android_envelope(code, detail))
+    }
+
+    /// How the Java service endpoint relays the same rejection.
+    fn android_relayed(code: &str, detail: &str) -> String {
+        format!(
+            "java.lang.IllegalStateException: {}",
+            serde_json::json!({
+                "message": android_envelope(code, detail),
+                "code": code,
+                "data": {"paths": [], "detail": detail},
+            })
+        )
+    }
+
+    fn assert_copy_for_a_person(shown: &str) {
+        assert!(
+            !shown.contains(['{', '}', '[', ']', '"']),
+            "transport syntax survived: {shown}"
+        );
+        assert!(!shown.contains("java."), "Java class survived: {shown}");
+        assert!(
+            !shown
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .any(is_android_code),
+            "status code survived: {shown}"
+        );
+        assert!(
+            !has_internal_terms(shown),
+            "internal vocabulary survived: {shown}"
+        );
+        assert!(
+            shown.len() > 20 && shown.ends_with('.'),
+            "no actionable sentence: {shown}"
+        );
+    }
+
+    #[test]
+    fn android_plugin_rejections_become_instructions() {
+        assert_eq!(
+            plain(
+                r#"[NOT_AN_ARCHIVE_DOCUMENT] - {"code":"NOT_AN_ARCHIVE_DOCUMENT","data":{"paths":[],"detail":"NOT_AN_ARCHIVE_DOCUMENT"}}"#
+            ),
+            "That file is not a ZIM archive. Choose a file whose name ends in .zim."
+        );
+        for code in ANDROID_CODES {
+            for raw in [android_rejection(code, code), android_relayed(code, code)] {
+                let shown = plain(&raw);
+                assert_copy_for_a_person(&shown);
+                assert_ne!(shown, TRY_AGAIN, "{code} has no instruction of its own");
+            }
+        }
+    }
+
+    #[test]
+    fn android_service_endpoint_failures_become_instructions() {
+        // The endpoint wraps the rejection in a Java exception.
+        assert_eq!(
+            plain(&android_relayed("VISIBLE_ACTIVITY_REQUIRED", "VISIBLE_ACTIVITY_REQUIRED")),
+            "Bring Kiwix back to the screen, then try again."
+        );
+        // A rejection that carries only the code.
+        assert_eq!(
+            plain(
+                r#"java.lang.IllegalStateException: {"message":"TRANSFER_FOREGROUND_START_TIMEOUT","code":"TRANSFER_FOREGROUND_START_TIMEOUT"}"#
+            ),
+            "Android did not let the download keep running in the background. Keep Kiwix open, then try again."
+        );
+        // A rejection that carries only the exception's own text.
+        assert_eq!(
+            plain(
+                r#"java.lang.IllegalStateException: {"message":"org.kiwix.mobile.NativeDocumentError: NATIVE_OPERATION_BUSY"}"#
+            ),
+            "Another file action is still open. Finish or cancel it, then try again."
+        );
+        // Read-aloud codes keep their existing sentences in every shape.
+        for raw in [
+            r#"java.lang.IllegalStateException: {"message":"SPEECH_FOREGROUND_REQUIRED"}"#,
+            "[SPEECH_FOREGROUND_REQUIRED] - SPEECH_FOREGROUND_REQUIRED",
+        ] {
+            assert_eq!(
+                plain(raw),
+                "Bring Kiwix back to the screen to keep reading aloud."
+            );
+        }
+    }
+
+    #[test]
+    fn a_full_disk_is_named_whatever_code_carried_it() {
+        let space = "There is not enough free space on this device. Free some space, then try again.";
+        let detail = "write failed: ENOSPC (No space left on device)";
+        for code in ["NATIVE_DOCUMENT_ERROR", "STAGING_DURABILITY_ERROR"] {
+            assert_eq!(plain(&android_rejection(code, detail)), space);
+            assert_eq!(plain(&android_relayed(code, detail)), space);
+        }
+        // Without that cause the generic code has no better advice.
+        assert_eq!(
+            plain(&android_rejection("NATIVE_DOCUMENT_ERROR", "NATIVE_DOCUMENT_ERROR")),
+            TRY_AGAIN
+        );
+    }
+
+    #[test]
+    fn unknown_android_failures_never_show_codes_json_or_paths() {
+        for raw in [
+            android_rejection(
+                "SOME_FUTURE_FAILURE",
+                "/storage/emulated/0/Download/private.zim: open failed: EACCES",
+            ),
+            android_relayed("SOME_FUTURE_FAILURE", "SOME_FUTURE_FAILURE"),
+            "[SOME_FUTURE_FAILURE] - SOME_FUTURE_FAILURE".to_owned(),
+            "[SOME_FUTURE_FAILURE]".to_owned(),
+            r#"java.lang.IllegalStateException: {"message":"org.json.JSONException: No value for uris"}"#.to_owned(),
+            "java.lang.SecurityException: Permission Denial: reading content://media/external/file/12".to_owned(),
+            "org.kiwix.mobile.NativeDocumentError: SOME_FUTURE_FAILURE".to_owned(),
+        ] {
+            assert_eq!(plain(&raw), TRY_AGAIN, "{raw}");
+        }
+    }
+
+    #[test]
+    fn nearby_codes_reach_the_shell_in_a_form_it_localizes() {
+        // The shell reads bracketed Nearby rejections itself, with any sentence
+        // the plugin wrote beside the code.
+        for raw in [
+            "[NEARBY_PERMISSION_DENIED] - NEARBY_PERMISSION_DENIED",
+            "[HOTSPOT_PERMISSION_DENIED] - Allow nearby Wi-Fi devices to create a hotspot",
+        ] {
+            assert_eq!(plain(raw), raw);
+        }
+        // Java wrapping is not a form the shell reads: only the code remains.
+        assert_eq!(
+            plain("org.kiwix.mobile.NativeDocumentError: LOCAL_NETWORK_REQUIRED"),
+            "LOCAL_NETWORK_REQUIRED"
+        );
+        assert_eq!(
+            plain(r#"java.lang.IllegalStateException: {"message":"NEARBY_JOIN_BUSY","code":"NEARBY_JOIN_BUSY"}"#),
+            "NEARBY_JOIN_BUSY"
+        );
+    }
+
+    #[test]
+    fn messages_that_are_not_android_failures_keep_their_text() {
+        // The provider recovery envelope is parsed by the shell to offer a
+        // retry; its code is also an Android status code and must survive.
+        let provider = serde_json::json!({
+            "code": "PROVIDER_DOCUMENT_UNAVAILABLE_USE_COPY_IMPORT",
+            "message": "This archive is temporarily unavailable. Reconnect its storage, then reopen or reload the article.",
+            "retry": true,
+            "sourceReference": "0b9f3c5e-6d0a-4a55-9d53-0f0f3a7b9a11",
+        })
+        .to_string();
+        assert_eq!(plain(&provider), provider);
+        for text in [
+            // iOS codes are lower-case and matched by the shell in this form.
+            r#"[provider_incoming_choose_original_or_copy] - {"code":"provider_incoming_choose_original_or_copy","data":{}}"#,
+            // A Rust sentence in front is not the Android transport shape.
+            "Creating the Wi-Fi hotspot failed: [HOTSPOT_PERMISSION_DENIED] - Allow nearby Wi-Fi devices to create a hotspot",
+            "Import failed: the file is missing",
+            "[File] could not be read",
+            "Error: the catalog did not answer",
+            // Bare codes are the shell's own vocabulary.
+            "MOBILE_NETWORK_BLOCKED",
+            "VISIBLE_ACTIVITY_REQUIRED",
+            "LOCAL_NETWORK_PERMISSION_DENIED",
+        ] {
+            assert_eq!(plain(text), text);
+        }
+    }
+
+    #[test]
+    fn android_status_codes_are_distinguished_from_words() {
+        for code in ["NOT_AN_ARCHIVE_DOCUMENT", "ACTIVITY_RECREATED", "A_B", "HTTP_2_REQUIRED"] {
+            assert!(is_android_code(code), "{code}");
+        }
+        for word in ["ZIM", "HTTP", "Not_A_Code", "_LEADING", "FILE NAME", "", "A_"] {
+            assert_eq!(is_android_code(word), word == "A_", "{word}");
+        }
+        for class in ["java.lang.IllegalStateException", "org.kiwix.mobile.NativeDocumentError", "java.io.IOException"] {
+            assert!(is_java_throwable(class), "{class}");
+        }
+        for text in ["Error", "IllegalStateException", "Import failed", "java.lang.String", "Java.lang.Error", "std::io::Error", "a..Error"] {
+            assert!(!is_java_throwable(text), "{text}");
         }
     }
 

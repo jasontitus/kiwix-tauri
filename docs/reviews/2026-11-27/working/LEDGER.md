@@ -190,3 +190,7 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 - also stopped: net (a5a56…).
 - also stopped: transfers (a10ec…).
 - also stopped: adv-features (a43b0…). Only desktop (af117…, launched after model switch) still running.
+- 00:02 UTC: all 10 stopped agents resumed via SendMessage (transfers, files, startup, reader, android, shell, net, cidocs, adv-apple, adv-features). desktop still running.
+- adv-features DONE (adv/features.md): BLOCKING R1 (demotion irreversible on retryable failures; Delete Ok). Should-fix R2 (startup sweep handoff -> service lane), R3 (UI half -> panes lane), R4 (sync failure should not checkpoint current). Nits R5 (carry reclaim error; drop record if no file), R6 (FEAT-8 test can't fail), R7 docs (STATE_MACHINES:255 eta, PLATFORM-GAPS item 5 -> owner at end).
+  Owner decisions: R1 adopt reviewer fix 1+2+3 (re-reclaim proven recovery records on explicit Delete; Err on the demoting call; keep error). FEAT-3 STALE_AFTER keep 1h. FEAT-8 option set keep (same as localswarm), residual.
+  -> features implementer resumed for R1,R4,R5,R6

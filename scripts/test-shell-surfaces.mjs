@@ -17,7 +17,8 @@ function fixture(native) {
   const metadata = {
     id: "fixture-archive", title: "Example archive", description: "An offline archive", language: "eng",
     creator: "Fixture", publisher: "Fixture", date: "2026-01-01", name: "example_eng",
-    tags: ["_category:wikipedia", "Reference"],
+    // `_sw:yes` makes Discover ask before downloading: a second dialog to nest under.
+    tags: ["_category:wikipedia", "_sw:yes", "Reference"],
     size: 1024, articleCount: 1, mediaCount: 0, hasFulltextIndex: false, hasTitleIndex: true, mainPath: "Example",
   };
   const snapshot = {

@@ -479,12 +479,19 @@ test("the App reporter owns one surface per failure and paints no cancellation",
   assert.ok(reporter);
   const quit = { open: true };
   const recovery = { open: true };
-  const run = (failure, { dialogs = [], severity, technical = false } = {}) => {
+  class HTMLElement {
+    constructor(alert = false) { this.alert = alert; }
+    closest() { return this.alert ? this : null; }
+  }
+  const body = new HTMLElement();
+  const run = (failure, { dialogs = [], severity, technical = false, active = body, last = null, origin = null } = {}) => {
     const log = new DiagnosticLog();
     const shown = [];
+    const errorOrigin = { current: origin };
     const context = vm.createContext({
       Error, reportError, diagnostics: log, normalizeSeverity, isSuspendedError, isUserCancelledError,
-      errorSurface, openDialogs, document: { querySelectorAll: (selector) => selector === "dialog[open]" ? dialogs : [] },
+      errorSurface, openDialogs, HTMLElement, errorOrigin, lastFocus: { current: last },
+      document: { body, activeElement: active, querySelectorAll: (selector) => selector === "dialog[open]" ? dialogs : [] },
       quitDialog: { current: quit }, mobileRecoveryDialog: { current: recovery },
       showTechnicalErrors: { current: technical }, setError: (value) => shown.push({ ...value }),
       isIOS: false, t: interpolate, failure, severity,
@@ -493,9 +500,18 @@ test("the App reporter owns one surface per failure and paints no cancellation",
       (${reporter.getText(app)})(failure, severity);`, {
       compilerOptions: { target: ts.ScriptTarget.ES2022 },
     }).outputText, context);
-    return { shown, log };
+    return { shown, log, origin: errorOrigin.current };
   };
   const failure = new Error("The write was refused");
+  // Focus returns to where the action started: the focused control, or the
+  // last one when a button that disabled itself already lost focus.
+  const save = new HTMLElement();
+  const dismiss = new HTMLElement(true);
+  assert.equal(run(failure, { dialogs: [{ open: true }], active: save }).origin, save);
+  assert.equal(run(failure, { dialogs: [{ open: true }], last: save }).origin, save);
+  assert.equal(run(failure, { dialogs: [{ open: true }], active: dismiss, last: dismiss, origin: save }).origin, save,
+    "a newer failure shown in the open alert keeps the first origin");
+  assert.equal(run(failure, { active: save }).origin, null, "the band takes no focus, so there is nothing to return");
   assert.deepEqual(run(failure).shown, [{ message: failure.message, severity: "blocking", surface: "band" }]);
   // A modal covers the band: the same failure is owned by the top layer, once.
   assert.deepEqual(run(failure, { dialogs: [{ open: true }] }).shown,

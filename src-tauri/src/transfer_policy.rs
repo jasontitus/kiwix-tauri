@@ -399,6 +399,27 @@ mod tests {
         }
     }
 
+    /// The peer-locality fence and the addresses offered for sharing ask one
+    /// question. Carrier links are a separate one, asked only of addresses
+    /// this device offers.
+    #[test]
+    fn one_classifier_decides_what_a_lan_interface_is() {
+        for name in ["en0", "eth0", "enp3s0", "wlan0", "wlp2s0", "Ethernet", "Wi-Fi", "ap0", "swlan0", "wlan1", "p2p1"] {
+            assert!(super::lan_interface(name, false, false), "{name}");
+            assert!(!super::lan_interface(name, true, false), "{name} as a tunnel");
+            assert!(!super::lan_interface(name, false, true), "{name} as loopback");
+            assert!(!super::cellular_interface(name), "{name}");
+        }
+        for name in ["docker0", "vEthernet (WSL)", "tun0", "wg0", "utun3", "bridge100", "pdp_ip0", "lo"] {
+            assert!(!super::lan_interface(name, false, false), "{name}");
+        }
+        for name in ["rmnet_data0", "rmnet0", "ccmni1", "seth_lte0", "ppp0", "v4-rmnet_data0", "clat4", "wwan0"] {
+            assert!(super::cellular_interface(name), "{name}");
+            // Not part of the locality fence: that proves the peer on-link.
+            assert!(super::lan_interface(name, false, false), "{name}");
+        }
+    }
+
     fn opted_in() -> crate::store::Settings {
         crate::store::Settings { auto_resume_downloads: true, ..Default::default() }
     }
