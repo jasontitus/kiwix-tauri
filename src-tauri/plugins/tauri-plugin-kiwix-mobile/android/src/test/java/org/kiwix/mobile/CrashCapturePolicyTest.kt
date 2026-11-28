@@ -22,13 +22,14 @@ class CrashCapturePolicyTest {
             """.trimIndent()
         )
         // A reader page, an archive or provider link and a path may all be
-        // written with spaces, so each is redacted to the end of its line. The
-        // canonical cases in CrashRedactionTest pin every shape on its own.
+        // written with spaces, so each is redacted to the end of its line, and
+        // an external address keeps its scheme and host only. The shared cases
+        // in CrashRedactionTest pin every shape on its own.
         assertEquals(
-            "[reader-url] [reader-url] [reader-url] path=[path] [url] [url] [url]",
+            "[reader-url] [reader-url] https://example.org path=[path] [url] [url] [url]",
             text
         )
-        assertEquals("https://example.org/read",
+        assertEquals("https://example.org",
             CrashIntake.redact("https://user:pass@example.org/read?q=private#private"))
     }
 

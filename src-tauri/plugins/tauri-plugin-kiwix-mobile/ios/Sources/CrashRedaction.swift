@@ -77,10 +77,10 @@ enum CrashRedaction {
     return text
   }
 
-  // MARK: Character classes
+  // MARK: Terms
 
-  /// Unicode White_Space, spelled out so every platform agrees with Rust's
-  /// `char::is_whitespace`.
+  /// Unicode White_Space, spelled out: no platform function is trusted to
+  /// agree with this list.
   private static func isWhitespace(_ scalar: Unicode.Scalar) -> Bool {
     switch scalar.value {
     case 0x09...0x0D, 0x20, 0x85, 0xA0, 0x1680, 0x2000...0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000:
@@ -90,8 +90,20 @@ enum CrashRedaction {
     }
   }
 
+  private static func isLineBreak(_ scalar: Unicode.Scalar) -> Bool {
+    scalar == "\n" || scalar == "\r"
+  }
+
+  private static func isASCIIUppercase(_ scalar: Unicode.Scalar) -> Bool {
+    (0x41...0x5A).contains(scalar.value)
+  }
+
+  private static func isASCIILowercase(_ scalar: Unicode.Scalar) -> Bool {
+    (0x61...0x7A).contains(scalar.value)
+  }
+
   private static func isASCIILetter(_ scalar: Unicode.Scalar) -> Bool {
-    (0x41...0x5A).contains(scalar.value) || (0x61...0x7A).contains(scalar.value)
+    isASCIIUppercase(scalar) || isASCIILowercase(scalar)
   }
 
   private static func isASCIIDigit(_ scalar: Unicode.Scalar) -> Bool {
@@ -102,50 +114,105 @@ enum CrashRedaction {
     isASCIILetter(scalar) || isASCIIDigit(scalar)
   }
 
+  /// ASCII letters only: `ſ` is not `s` and the Kelvin sign is not `k`.
   private static func lowercasedASCII(_ scalar: Unicode.Scalar) -> Unicode.Scalar {
-    (0x41...0x5A).contains(scalar.value) ? Unicode.Scalar(UInt8(scalar.value + 0x20)) : scalar
+    isASCIIUppercase(scalar) ? Unicode.Scalar(UInt8(scalar.value + 0x20)) : scalar
   }
 
-  private static func isLineBreak(_ scalar: Unicode.Scalar) -> Bool {
-    scalar == "\n" || scalar == "\r"
+  /// The scalar at `index`, or nil past either end.
+  private static func scalar(_ chars: Text, _ index: Int) -> Unicode.Scalar? {
+    index >= 0 && index < chars.count ? chars[index] : nil
   }
 
-  /// Space, tab or a line break: the gaps the secret rules skip.
-  private static func isGap(_ scalar: Unicode.Scalar) -> Bool {
-    scalar == " " || scalar == "\t" || isLineBreak(scalar)
-  }
-
-  /// Whether the character at `index` follows an odd run of backslashes that
-  /// begins no earlier than `floor`.
-  private static func backslashEscaped(_ chars: Text, floor: Int, index: Int) -> Bool {
-    var run = 0
-    var position = index
-    while position > floor, chars[position - 1] == "\\" {
-      run += 1
-      position -= 1
-    }
-    return run % 2 == 1
-  }
-
-  private static func lineEnd(_ chars: Text, from: Int) -> Int {
+  /// The first index at or after `from` whose scalar is not whitespace.
+  private static func skipWhitespace(_ chars: Text, from: Int) -> Int {
     var index = from
-    while index < chars.count, !isLineBreak(chars[index]) { index += 1 }
+    while index < chars.count, isWhitespace(chars[index]) { index += 1 }
     return index
   }
 
-  // MARK: Step 2, secret values
+  /// The number of backslashes directly before `index`, counted back no
+  /// further than `floor`.
+  private static func backslashesBefore(_ chars: Text, floor: Int, index: Int) -> Int {
+    var position = index
+    while position > floor, chars[position - 1] == "\\" { position -= 1 }
+    return index - position
+  }
+
+  private static func hasPathSeparator(_ chars: Text, _ range: Range<Int>) -> Bool {
+    for index in range where chars[index] == "/" || chars[index] == "\\" { return true }
+    return false
+  }
+
+  /// Where a path-like range that begins at `start` stops (specification
+  /// 1.1). Names contain spaces and apostrophes, so neither ends it. It ends
+  /// before a line break, an angle bracket, a backtick, a `"` that is not
+  /// escaped, or the `: ` that introduces an error's cause; words in between
+  /// go with it. The whitespace before that stop is not part of the range.
+  private static func pathEnd(_ chars: Text, _ start: Int) -> Int {
+    var end = start
+    scan: while end < chars.count {
+      switch chars[end] {
+      case "\n", "\r", "<", ">", "`":
+        break scan
+      case "\"":
+        if backslashesBefore(chars, floor: start, index: end) % 2 == 0 { break scan }
+      case ":":
+        if end + 1 < chars.count, isWhitespace(chars[end + 1]) { break scan }
+      default:
+        break
+      }
+      end += 1
+    }
+    while end > start, isWhitespace(chars[end - 1]) { end -= 1 }
+    return end
+  }
+
+  // MARK: Step 2, secrets
 
   private static let secretKeys: [(name: String, scalars: Text)] = [
     "authorization", "access_token", "refresh_token", "api_key", "api-key", "apikey",
-    "password", "passwd", "cookie", "bearer", "token", "secret", "pin",
+    "password", "passwd", "passphrase", "pass", "pwd", "private_key", "private-key", "privatekey",
+    "client_secret", "secret", "session_id", "sessionid", "jsessionid", "credentials", "credential",
+    "signature", "cookie", "bearer", "token", "auth", "pin",
   ].map { (name: $0, scalars: Text($0.unicodeScalars)) }
 
+  /// Line ends and the last apostrophe of each line, computed once so that no
+  /// secret value rescans its line.
+  private struct Lines {
+    /// For each index, and for the text length: the first line break at or
+    /// after it, or the text length.
+    var end: [Int]
+    /// For each index: the last `'` on its line, or -1.
+    var lastApostrophe: [Int]
+
+    init(_ chars: Text) {
+      end = [Int](repeating: chars.count, count: chars.count + 1)
+      lastApostrophe = [Int](repeating: -1, count: chars.count + 1)
+      var lineEnd = chars.count
+      var apostrophe = -1
+      var index = chars.count
+      while index > 0 {
+        index -= 1
+        if isLineBreak(chars[index]) {
+          lineEnd = index
+          apostrophe = -1
+        } else if chars[index] == "'", apostrophe < 0 {
+          apostrophe = index
+        }
+        end[index] = lineEnd
+        lastApostrophe[index] = apostrophe
+      }
+    }
+  }
+
   private static func redactSecrets(_ chars: Text) -> Text {
+    let lines = Lines(chars)
     var output = Text()
     output.reserveCapacity(chars.count)
     var cursor = 0
     while cursor < chars.count {
-      if let value = secretAt(chars, cursor) {
+      if let value = secretAt(chars, lines, cursor) {
         output.append(contentsOf: chars[cursor..<value.lowerBound])
         output.append(contentsOf: redactedMark)
         cursor = value.upperBound
@@ -158,8 +225,16 @@ enum CrashRedaction {
   }
 
   /// The value range of a secret whose keyword starts at `at`, if any.
-  private static func secretAt(_ chars: Text, _ at: Int) -> Range<Int>? {
-    if at > 0, isASCIIAlphanumeric(chars[at - 1]) { return nil }
+  private static func secretAt(_ chars: Text, _ lines: Lines, _ at: Int) -> Range<Int>? {
+    let first = chars[at]
+    guard isASCIILetter(first) else { return nil }
+    // Left side: not inside a longer word, except at a camelCase hump
+    // (`accessToken`, `oauth2Token`).
+    if at > 0 {
+      let previous = chars[at - 1]
+      let hump = isASCIIUppercase(first) && (isASCIILowercase(previous) || isASCIIDigit(previous))
+      guard !isASCIIAlphanumeric(previous) || hump else { return nil }
+    }
     for key in secretKeys {
       let afterKey = at + key.scalars.count
       if afterKey > chars.count { continue }
@@ -170,119 +245,155 @@ enum CrashRedaction {
       }
       if !matches { continue }
       if afterKey < chars.count, isASCIIAlphanumeric(chars[afterKey]) || chars[afterKey] == "_" { continue }
+      // A quoted key ends with its quote, which an outer string may have
+      // escaped: `"password":`, `\"password\":`, `("authorization", …)`.
       var next = afterKey
-      // `"password":` — the closing quote of a quoted key.
-      let quotedKey = next < chars.count && (chars[next] == "\"" || chars[next] == "'")
-      if quotedKey { next += 1 }
+      let quote = scalar(chars, afterKey) == "\\" ? afterKey + 1 : afterKey
+      let quotedKey = scalar(chars, quote) == "\"" || scalar(chars, quote) == "'"
+      if quotedKey { next = quote + 1 }
       let gap = next
-      while next < chars.count, isGap(chars[next]) { next += 1 }
-      var separator = false
-      if next < chars.count {
-        if chars[next] == "=" {
-          separator = true
-        } else if chars[next] == ":" {
-          // `::` separates Rust path segments; it does not introduce a value.
-          separator = !(next + 1 < chars.count && chars[next + 1] == ":")
-        }
+      next = skipWhitespace(chars, from: next)
+      var separator = 0
+      switch scalar(chars, next) {
+      case "=":
+        separator = scalar(chars, next + 1) == ">" ? 2 : 1
+      case ":":
+        // `::` separates Rust path segments, not a key from its value.
+        if scalar(chars, next + 1) != ":" { separator = 1 }
+      case ",":
+        // Tuples and pairs: `("token", "…")`, `(authorization, Basic …)`.
+        if quotedKey || key.name == "authorization" { separator = 1 }
+      default:
+        break
       }
-      if separator {
-        next += 1
-        while next < chars.count, chars[next] == " " || chars[next] == "\t" { next += 1 }
+      if separator > 0 {
+        next = skipWhitespace(chars, from: next + separator)
       } else if quotedKey || next == gap || !(key.name == "authorization" || key.name == "bearer") {
         continue
       }
-      let value = secretValue(chars, next, key: key.name)
+      let value = secretValue(chars, lines, next, key: key.name)
       if value.upperBound > value.lowerBound { return value }
     }
     return nil
   }
 
-  /// The range of the secret value that begins at `start`.
-  private static func secretValue(_ chars: Text, _ start: Int, key: String) -> Range<Int> {
+  /// The range of the secret value that begins at `start`: quoted (possibly
+  /// inside wrappers such as `Some(`), the rest of the line after `cookie`,
+  /// or one token.
+  private static func secretValue(_ chars: Text, _ lines: Lines, _ start: Int, key: String) -> Range<Int> {
+    if let quoted = quotedValue(chars, lines, open: skipWrappers(chars, start)) { return quoted }
+    if key == "cookie" {
+      // One header carries several `name=value` pairs.
+      return start..<lines.end[start]
+    }
     func tokenEnd(_ from: Int) -> Int {
       var index = from
       while index < chars.count {
         let scalar = chars[index]
-        if isGap(scalar) || scalar == "," || scalar == ";" || scalar == "&"
+        if isWhitespace(scalar) || scalar == "," || scalar == ";" || scalar == "&"
             || scalar == ")" || scalar == "]" || scalar == "}" { break }
         index += 1
       }
       return index
     }
-    func hasPathSeparator(_ range: Range<Int>) -> Bool {
-      for index in range where chars[index] == "/" || chars[index] == "\\" { return true }
-      return false
-    }
-    if start < chars.count, chars[start] == "\"" {
-      // Up to the closing quote (one not escaped by a backslash), else the
-      // rest of the line. The quotes stay.
-      var close = start + 1
-      while close < chars.count, !isLineBreak(chars[close]) {
-        if chars[close] == "\"", !backslashEscaped(chars, floor: start + 1, index: close) { break }
-        close += 1
-      }
-      return (start + 1)..<close
-    }
-    if start < chars.count, chars[start] == "'" {
-      // Up to the last `'` on the line, because a value may contain an
-      // apostrophe; else the rest of the line.
-      let line = lineEnd(chars, from: start + 1)
-      var end = line
-      var index = line
-      while index > start + 1 {
-        index -= 1
-        if chars[index] == "'" {
-          end = index
-          break
-        }
-      }
-      // The closing quote may be missing, and then the last `'` is an
-      // apostrophe inside a path.
-      if hasPathSeparator((start + 1)..<end) { end = max(end, pathEnd(chars, start + 1)) }
-      return (start + 1)..<end
-    }
-    if key == "cookie" {
-      // One header carries several `name=value` pairs.
-      return start..<lineEnd(chars, from: start)
-    }
     var end = tokenEnd(start)
     if key == "authorization", end > start {
       // `Basic dXNlcjpwYXNz`, `Bearer …`: the scheme and the credential.
-      var second = end
-      while second < chars.count, isGap(chars[second]) { second += 1 }
+      let second = skipWhitespace(chars, from: end)
       if second > end {
         let secondEnd = tokenEnd(second)
         if secondEnd > second { end = secondEnd }
       }
     }
     // A value with a separator is a path or a URL and may contain spaces.
-    if hasPathSeparator(start..<end) { end = max(end, pathEnd(chars, start)) }
+    if hasPathSeparator(chars, start..<end) { end = max(end, pathEnd(chars, start)) }
     return start..<end
+  }
+
+  /// The index after any `Name(` wrappers that begin at `start`.
+  private static func skipWrappers(_ chars: Text, _ start: Int) -> Int {
+    var position = start
+    while position < chars.count, isASCIILetter(chars[position]) {
+      var nameEnd = position
+      while nameEnd < chars.count, isASCIIAlphanumeric(chars[nameEnd]) || chars[nameEnd] == "_" { nameEnd += 1 }
+      guard scalar(chars, nameEnd) == "(" else { break }
+      position = nameEnd + 1
+    }
+    return position
+  }
+
+  /// The content range of a quoted value whose opening quote, or the
+  /// backslash that escapes it, is at `open`. The quotes stay.
+  private static func quotedValue(_ chars: Text, _ lines: Lines, open: Int) -> Range<Int>? {
+    let escaped = scalar(chars, open) == "\\"
+    let quote = escaped ? open + 1 : open
+    if scalar(chars, quote) == "\"" {
+      // `"…"` ends at a quote that is not escaped; `\"…\"`, as inside an
+      // outer string, at the next quote with exactly one backslash before
+      // it. Either way the line end is the limit.
+      let start = quote + 1
+      let line = lines.end[start]
+      var close = start
+      while close < line {
+        if chars[close] == "\"" {
+          let before = backslashesBefore(chars, floor: start, index: close)
+          if escaped ? before == 1 : before % 2 == 0 { break }
+        }
+        close += 1
+      }
+      // The backslash that escapes the closing quote stays with it.
+      return start..<(close < line && escaped ? close - 1 : close)
+    }
+    if scalar(chars, quote) == "'", !escaped {
+      // Up to the last `'` on the line, because a value may contain an
+      // apostrophe; else the rest of the line.
+      let start = quote + 1
+      var end = lines.lastApostrophe[start] >= start ? lines.lastApostrophe[start] : lines.end[start]
+      // The closing quote may be missing, and then the last `'` is an
+      // apostrophe inside a path.
+      if hasPathSeparator(chars, start..<end) { end = max(end, pathEnd(chars, start)) }
+      return start..<end
+    }
+    return nil
   }
 
   // MARK: Step 3, URLs
 
-  private static let opaqueSchemes: Set<String> = ["blob", "content", "data", "file", "mailto", "tauri", "tel", "zim"]
+  private static let opaqueSchemes: [Text] = ["blob", "content", "data", "file", "mailto", "tauri", "tel", "zim"]
+    .map { Text($0.unicodeScalars) }
+  private static let fileScheme = Text("file".unicodeScalars)
+  private static let dataScheme = Text("data".unicodeScalars)
+  /// Final labels of host names that only mean something on the person's own
+  /// network, where the name itself is theirs (`janes-macbook.local`).
+  private static let privateSuffixes: [Text] = ["local", "localdomain", "lan", "home", "internal", "arpa"]
+    .map { Text($0.unicodeScalars) }
 
   private static func replaceURLs(_ chars: Text) -> Text {
     var output = Text()
     output.reserveCapacity(chars.count)
     var cursor = 0
-    for colon in chars.indices where chars[colon] == ":" {
-      if colon < cursor { continue }
+    var colon = 0
+    while colon < chars.count {
+      guard chars[colon] == ":" else {
+        colon += 1
+        continue
+      }
+      // The scheme is the run of scheme scalars before the colon, from its
+      // first letter (`+https:` is still `https:`). It cannot reach back into
+      // text that an earlier URL already replaced.
       var start = colon
       while start > cursor {
         let previous = chars[start - 1]
         guard isASCIIAlphanumeric(previous) || previous == "+" || previous == "-" || previous == "." else { break }
         start -= 1
       }
-      guard start < colon, isASCIILetter(chars[start]) else { continue }
-      let scheme = string(chars[start..<colon].map(lowercasedASCII))
+      while start < colon, !isASCIILetter(chars[start]) { start += 1 }
       let tail = colon + 1
-      let authority = tail + 1 < chars.count && chars[tail] == "/" && chars[tail + 1] == "/"
-      if !authority {
-        if tail < chars.count, chars[tail] == ":" { continue }
-        if !opaqueSchemes.contains(scheme) { continue }
+      let slashes = scalar(chars, tail) == "/" && scalar(chars, tail + 1) == "/"
+      let scheme = chars[start..<colon].map(lowercasedASCII)
+      if start == colon || (!slashes && (scalar(chars, tail) == ":" || !opaqueSchemes.contains(scheme))) {
+        colon += 1
+        continue
       }
       var tokenEnd = tail
       while tokenEnd < chars.count {
@@ -291,393 +402,105 @@ enum CrashRedaction {
         tokenEnd += 1
       }
       let hasBody = tail < chars.count && !isWhitespace(chars[tail])
-      let end: Int
-      let replacement: Text
-      if scheme == "file", hasBody {
-        // A file URL is a path and may be written with unencoded spaces.
-        // `file: ` followed by a space is prose; step 4 finds the path.
-        end = pathEnd(chars, tail)
-        replacement = urlMark
-      } else if scheme == "data", hasBody {
-        // A data URL carries content itself: the rest of the line goes.
-        end = lineEnd(chars, from: tail)
-        replacement = urlMark
-      } else {
-        replacement = safeURL(Text(chars[start..<tokenEnd]), scheme: scheme)
-        // A `scheme://` URL that is not kept goes whole, like a path.
-        if authority, replacement == urlMark || replacement == readerURLMark {
-          end = max(tokenEnd, pathEnd(chars, tail))
+      var end = tokenEnd
+      var replacement = urlMark
+      if scheme == fileScheme || scheme == dataScheme {
+        // A file URL is a path, in any form (`file:///x`, `file:C:/x`), and
+        // may be written with unencoded spaces. A data URL carries content
+        // itself, spaces and markup included: the rest of the line goes.
+        if !hasBody {
+          end = tail
+        } else if scheme == fileScheme {
+          end = pathEnd(chars, tail)
         } else {
-          end = tokenEnd
+          end = tail
+          while end < chars.count, !isLineBreak(chars[end]) { end += 1 }
         }
+      } else if slashes {
+        var authorityEnd = tail + 2
+        while authorityEnd < tokenEnd {
+          let scalar = chars[authorityEnd]
+          if scalar == "/" || scalar == "\\" || scalar == "?" || scalar == "#" { break }
+          authorityEnd += 1
+        }
+        replacement = classify(scheme: scheme, authority: chars[(tail + 2)..<authorityEnd])
+        // A URL that is not kept, or whose path, query or fragment is
+        // dropped, goes whole, like a path: what follows the first space of
+        // an unencoded article title must not stay behind.
+        if replacement.first == "[" || authorityEnd < tokenEnd { end = max(tokenEnd, pathEnd(chars, tail)) }
       }
       output.append(contentsOf: chars[cursor..<start])
       output.append(contentsOf: replacement)
       cursor = end
+      colon = end
     }
     output.append(contentsOf: chars[cursor...])
     return output
   }
 
-  /// `[reader-url]` for a page served by this device, `[url]` for anything
-  /// that is not a well-formed web address, and otherwise the address reduced
-  /// to scheme, host, port and path.
-  private static func safeURL(_ raw: Text, scheme: String) -> Text {
-    guard scheme == "http" || scheme == "https", let url = WebAddress(raw, scheme: scheme) else { return urlMark }
-    let decoded = String(decoding: percentDecoded(url.path), as: UTF8.self)
-    let nested = decoded.contains("://")
-      || ["mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:"].contains { decoded.contains($0) }
-    if url.isLocal || decoded.contains("/.kiwix/") || nested { return readerURLMark }
-    let port = url.port.map { ":\($0)" } ?? ""
-    return Text("\(scheme)://\(url.host)\(port)".unicodeScalars) + url.path.map { Unicode.Scalar($0) }
-  }
-
-  private static func percentDecoded(_ bytes: [UInt8]) -> [UInt8] {
-    func hex(_ byte: UInt8) -> UInt8? {
-      switch byte {
-      case 0x30...0x39: return byte - 0x30
-      case 0x41...0x46: return byte - 0x41 + 10
-      case 0x61...0x66: return byte - 0x61 + 10
-      default: return nil
+  /// What may be kept of a `scheme://authority…` URL, decided from its text
+  /// alone so that every platform decides alike.
+  ///
+  /// * `http` and `https` only; any other scheme is `[url]`.
+  /// * `[reader-url]`: `localhost`, a name ending in `.localhost`, `127.`
+  ///   followed only by digits and dots, or `[::1]`. These are archive pages.
+  /// * Kept as `scheme://host[:port]`: a DNS name of at least two labels of
+  ///   `a-z 0-9 -` whose last label starts with a letter and is not a
+  ///   private-network suffix. The path, query and fragment are never kept: a
+  ///   path can name the article being read.
+  /// * Everything else is `[url]`: IP literals in any spelling, single-label
+  ///   hosts, private-network names, a malformed port.
+  private static func classify(scheme: Text, authority: ArraySlice<Unicode.Scalar>) -> Text {
+    let http = Text("http".unicodeScalars)
+    guard scheme == http || scheme == Text("https".unicodeScalars) else { return urlMark }
+    // Userinfo ends at the last `@`.
+    var rest = authority
+    if let at = rest.lastIndex(of: "@") { rest = rest[(at + 1)...] }
+    var hostPart = rest
+    var portPart = rest[rest.endIndex...]
+    if rest.first == "[" {
+      guard let close = rest.firstIndex(of: "]") else { return urlMark }
+      hostPart = rest[...close]
+      portPart = rest[(close + 1)...]
+    } else if let colon = rest.lastIndex(of: ":") {
+      hostPart = rest[..<colon]
+      portPart = rest[colon...]
+    }
+    var host = hostPart.map(lowercasedASCII)
+    if host.last == "." { host.removeLast() }
+    let localhost = Text("localhost".unicodeScalars)
+    let dotLocalhost = Text(".localhost".unicodeScalars)
+    let loopbackPrefix = Text("127.".unicodeScalars)
+    let loopback = host.starts(with: loopbackPrefix)
+      && host.dropFirst(loopbackPrefix.count).allSatisfy { isASCIIDigit($0) || $0 == "." }
+    if host == localhost || host.suffix(dotLocalhost.count) == dotLocalhost[...]
+        || loopback || host == Text("[::1]".unicodeScalars) {
+      return readerURLMark
+    }
+    var port = Text()
+    if !portPart.isEmpty {
+      let digits = portPart.dropFirst()
+      guard (1...5).contains(digits.count), digits.allSatisfy(isASCIIDigit) else { return urlMark }
+      port = Text(digits)
+    }
+    // A DNS name: at least two labels, each non-empty and made of `a-z`,
+    // `0-9` and `-`; the last one starts with a letter and is not private.
+    let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+    guard labels.count >= 2, let last = labels.last, let lastFirst = last.first, isASCIILowercase(lastFirst),
+          !privateSuffixes.contains(Text(last)) else { return urlMark }
+    for label in labels {
+      guard !label.isEmpty, label.allSatisfy({ isASCIILowercase($0) || isASCIIDigit($0) || $0 == "-" }) else {
+        return urlMark
       }
     }
-    var output: [UInt8] = []
-    output.reserveCapacity(bytes.count)
-    var index = 0
-    while index < bytes.count {
-      if bytes[index] == 0x25, index + 2 < bytes.count, let high = hex(bytes[index + 1]), let low = hex(bytes[index + 2]) {
-        output.append(high << 4 | low)
-        index += 3
-      } else {
-        output.append(bytes[index])
-        index += 1
-      }
+    var kept = scheme + Text("://".unicodeScalars) + host
+    // The default port is dropped, whatever its leading zeros.
+    let defaultPort = Text((scheme == http ? "80" : "443").unicodeScalars)
+    if !port.isEmpty, Text(port.drop(while: { $0 == "0" })) != defaultPort {
+      kept.append(":")
+      kept.append(contentsOf: port)
     }
-    return output
-  }
-
-  /// The parts of an `http` or `https` address the redaction needs, read the
-  /// way the `url` crate reads them in `crash.rs`. An address this cannot read
-  /// with certainty yields nil and is then replaced whole, never kept: a host
-  /// with percent escapes, non-ASCII characters or a punycode label.
-  private struct WebAddress {
-    let host: String
-    let port: Int?
-    /// Normalized and percent-encoded; always starts with `/`.
-    let path: [UInt8]
-    let isLocal: Bool
-
-    init?(_ raw: Text, scheme: String) {
-      // Trailing control characters are not part of the address.
-      var end = raw.count
-      while end > 0, raw[end - 1].value <= 0x20 { end -= 1 }
-      var index = scheme.unicodeScalars.count + 1
-      while index < end, raw[index] == "/" || raw[index] == "\\" { index += 1 }
-      // Credentials end at the last `@` before the path.
-      var authorityEnd = index
-      while authorityEnd < end {
-        let scalar = raw[authorityEnd]
-        if scalar == "/" || scalar == "\\" || scalar == "?" || scalar == "#" { break }
-        authorityEnd += 1
-      }
-      for position in index..<authorityEnd where raw[position] == "@" { index = position + 1 }
-      var hostEnd = index
-      var bracketed = false
-      while hostEnd < authorityEnd {
-        let scalar = raw[hostEnd]
-        if scalar == ":", !bracketed { break }
-        if scalar == "[" { bracketed = true }
-        if scalar == "]" { bracketed = false }
-        hostEnd += 1
-      }
-      guard hostEnd > index, let host = WebAddress.host(Text(raw[index..<hostEnd])) else { return nil }
-      self.host = host.text
-      self.isLocal = host.isLocal
-      index = hostEnd
-      var port: Int?
-      if index < authorityEnd {
-        // Only a colon can end the host before the authority does.
-        index += 1
-        var value = 0
-        var hasDigit = false
-        while index < authorityEnd {
-          guard isASCIIDigit(raw[index]) else { return nil }
-          value = value * 10 + Int(raw[index].value - 0x30)
-          guard value <= 65_535 else { return nil }
-          hasDigit = true
-          index += 1
-        }
-        if hasDigit, value != (scheme == "http" ? 80 : 443) { port = value }
-      }
-      self.port = port
-      self.path = WebAddress.path(raw, from: index, to: end)
-    }
-
-    private static func host(_ text: Text) -> (text: String, isLocal: Bool)? {
-      if text[0] == "[" {
-        guard text[text.count - 1] == "]", let pieces = ipv6(Text(text[1..<(text.count - 1)])) else { return nil }
-        let loopback = pieces == [0, 0, 0, 0, 0, 0, 0, 1]
-        let mappedLoopback = Array(pieces[0..<5]) == [0, 0, 0, 0, 0] && pieces[5] == 0xFFFF && pieces[6] >> 8 == 127
-        return ("[" + serialized(ipv6: pieces) + "]", loopback || mappedLoopback)
-      }
-      var name = ""
-      for scalar in text {
-        // Forbidden in a domain, or outside what this reader vouches for.
-        guard (0x21...0x7E).contains(scalar.value), !"%#/:<>?@[\\]^|".unicodeScalars.contains(scalar) else { return nil }
-        name.unicodeScalars.append(lowercasedASCII(scalar))
-      }
-      let labels = name.split(separator: ".", omittingEmptySubsequences: false)
-      guard !labels.contains(where: { $0.hasPrefix("xn--") }) else { return nil }
-      // A name whose last label is a number is an IPv4 address or nothing.
-      var last = labels[labels.count - 1]
-      if last.isEmpty, labels.count > 1 { last = labels[labels.count - 2] }
-      let numeric = !last.isEmpty && last.unicodeScalars.allSatisfy(isASCIIDigit)
-      if numeric || ipv4Number(last) != nil {
-        var parts = labels
-        if parts[parts.count - 1].isEmpty { parts.removeLast() }
-        guard parts.count <= 4 else { return nil }
-        var numbers: [UInt64] = []
-        for part in parts {
-          // A part that does not fit 32 bits is no address at all.
-          guard let number = ipv4Number(part), number <= 0xFFFF_FFFF else { return nil }
-          numbers.append(number)
-        }
-        guard var address = numbers.popLast(), address <= UInt64(0xFFFF_FFFF) >> UInt64(8 * numbers.count),
-              !numbers.contains(where: { $0 > 255 }) else { return nil }
-        for (position, number) in numbers.enumerated() { address += number << UInt64(8 * (3 - position)) }
-        let octets = [address >> 24 & 0xFF, address >> 16 & 0xFF, address >> 8 & 0xFF, address & 0xFF]
-        return (octets.map { String($0) }.joined(separator: "."), octets[0] == 127)
-      }
-      var trimmed = Substring(name)
-      while trimmed.hasSuffix(".") { trimmed = trimmed.dropLast() }
-      return (name, trimmed == "localhost" || trimmed.hasSuffix(".localhost"))
-    }
-
-    /// One part of a dotted IPv4 address: decimal, `0x` hexadecimal or
-    /// leading-zero octal. Nil when it is not a number; a value above 32 bits
-    /// is returned as is and rejected by the caller.
-    private static func ipv4Number(_ part: Substring) -> UInt64? {
-      var digits = Text(part.unicodeScalars)
-      guard !digits.isEmpty else { return nil }
-      var radix: UInt64 = 10
-      if digits.count >= 2, digits[0] == "0", digits[1] == "x" || digits[1] == "X" {
-        digits.removeFirst(2)
-        radix = 16
-      } else if digits.count >= 2, digits[0] == "0" {
-        digits.removeFirst()
-        radix = 8
-      }
-      var value: UInt64 = 0
-      for scalar in digits {
-        let digit: UInt64
-        switch scalar.value {
-        case 0x30...0x39: digit = UInt64(scalar.value - 0x30)
-        case 0x41...0x46: digit = UInt64(scalar.value - 0x41 + 10)
-        case 0x61...0x66: digit = UInt64(scalar.value - 0x61 + 10)
-        default: return nil
-        }
-        guard digit < radix else { return nil }
-        // Saturate: anything this large is rejected by the caller anyway.
-        value = min(value * radix + digit, 0x1_0000_0000)
-      }
-      return value
-    }
-
-    /// The eight 16-bit pieces of the address between the brackets.
-    private static func ipv6(_ input: Text) -> [UInt32]? {
-      let length = input.count
-      var pieces = [UInt32](repeating: 0, count: 8)
-      var piece = 0
-      var compress: Int?
-      var index = 0
-      var embeddedIPv4 = false
-      guard length >= 2 else { return nil }
-      if input[0] == ":" {
-        guard input[1] == ":" else { return nil }
-        index = 2
-        piece = 1
-        compress = 1
-      }
-      while index < length {
-        guard piece < 8 else { return nil }
-        if input[index] == ":" {
-          guard compress == nil else { return nil }
-          index += 1
-          piece += 1
-          compress = piece
-          continue
-        }
-        let start = index
-        let limit = min(length, start + 4)
-        var value: UInt32 = 0
-        while index < limit {
-          let digit: UInt32
-          switch input[index].value {
-          case 0x30...0x39: digit = input[index].value - 0x30
-          case 0x41...0x46: digit = input[index].value - 0x41 + 10
-          case 0x61...0x66: digit = input[index].value - 0x61 + 10
-          default: digit = 16
-          }
-          guard digit < 16 else { break }
-          value = value * 16 + digit
-          index += 1
-        }
-        if index < length {
-          if input[index] == "." {
-            guard index > start, piece <= 6 else { return nil }
-            index = start
-            embeddedIPv4 = true
-          } else if input[index] == ":" {
-            index += 1
-            guard index < length else { return nil }
-          } else {
-            return nil
-          }
-        }
-        if embeddedIPv4 { break }
-        pieces[piece] = value
-        piece += 1
-      }
-      if embeddedIPv4 {
-        guard piece <= 6 else { return nil }
-        var seen = 0
-        while index < length {
-          if seen > 0 {
-            guard seen < 4, input[index] == "." else { return nil }
-            index += 1
-          }
-          var octet: UInt32?
-          while index < length, isASCIIDigit(input[index]) {
-            let digit = input[index].value - 0x30
-            if let current = octet {
-              // No leading zero, and no more than one byte.
-              guard current != 0 else { return nil }
-              octet = current * 10 + digit
-              guard current * 10 + digit <= 255 else { return nil }
-            } else {
-              octet = digit
-            }
-            index += 1
-          }
-          guard let parsed = octet else { return nil }
-          pieces[piece] = pieces[piece] * 0x100 + parsed
-          seen += 1
-          if seen == 2 || seen == 4 { piece += 1 }
-        }
-        guard seen == 4 else { return nil }
-      }
-      guard index >= length else { return nil }
-      if let compress = compress {
-        var swaps = piece - compress
-        piece = 7
-        while swaps > 0 {
-          pieces.swapAt(piece, compress + swaps - 1)
-          swaps -= 1
-          piece -= 1
-        }
-      } else if piece != 8 {
-        return nil
-      }
-      return pieces
-    }
-
-    /// Lowercase hexadecimal with the longest run of zero pieces compressed.
-    private static func serialized(ipv6 pieces: [UInt32]) -> String {
-      var longest = -1
-      var longestLength = -1
-      var start = -1
-      for position in 0...8 {
-        if position < 8, pieces[position] == 0 {
-          if start < 0 { start = position }
-        } else {
-          if start >= 0, position - start > longestLength {
-            longest = start
-            longestLength = position - start
-          }
-          start = -1
-        }
-      }
-      let compressStart = longestLength < 2 ? -1 : longest
-      let compressEnd = longestLength < 2 ? -2 : longest + longestLength
-      var output = ""
-      var position = 0
-      while position < 8 {
-        if position == compressStart {
-          output += position == 0 ? "::" : ":"
-          guard compressEnd < 8 else { break }
-          position = compressEnd
-        }
-        output += String(pieces[position], radix: 16)
-        if position < 7 { output += ":" }
-        position += 1
-      }
-      return output
-    }
-
-    /// The path up to `?` or `#`: backslashes become slashes, dot segments are
-    /// resolved and everything outside printable ASCII is percent-encoded.
-    private static func path(_ raw: Text, from: Int, to end: Int) -> [UInt8] {
-      let slash = UInt8(ascii: "/")
-      let hexDigits = Array("0123456789ABCDEF".utf8)
-      var path = [slash]
-      var index = from
-      if index < end, raw[index] == "/" || raw[index] == "\\" { index += 1 }
-      while true {
-        let segmentStart = path.count
-        var endsWithSlash = false
-        while index < end {
-          let scalar = raw[index]
-          if scalar == "?" || scalar == "#" {
-            index = end
-            break
-          }
-          index += 1
-          if scalar == "/" || scalar == "\\" {
-            path.append(slash)
-            endsWithSlash = true
-            break
-          }
-          if (0x21...0x7E).contains(scalar.value), !"\"<>`{}".unicodeScalars.contains(scalar) {
-            path.append(UInt8(scalar.value))
-          } else {
-            for byte in String(scalar).utf8 {
-              path.append(UInt8(ascii: "%"))
-              path.append(hexDigits[Int(byte >> 4)])
-              path.append(hexDigits[Int(byte & 0x0F)])
-            }
-          }
-        }
-        let segmentEnd = endsWithSlash ? path.count - 1 : path.count
-        let segment = String(decoding: path[segmentStart..<segmentEnd], as: UTF8.self).lowercased()
-        if segment == ".." || segment == "%2e%2e" || segment == "%2e." || segment == ".%2e" {
-          path.removeSubrange(segmentStart...)
-          if path.last == slash, lastSlashCanBeRemoved(path) { path.removeLast() }
-          if let last = path.lastIndex(of: slash) { path.removeSubrange((last + 1)...) }
-          if endsWithSlash, path.last != slash { path.append(slash) }
-        } else if segment == "." || segment == "%2e" {
-          path.removeSubrange(segmentStart...)
-          if path.last != slash { path.append(slash) }
-        }
-        if !endsWithSlash { break }
-      }
-      return path
-    }
-
-    /// Whether the slash that ends `path` closes a segment that `..` may
-    /// remove: not the root, and not a drive letter such as `/C:/`.
-    private static func lastSlashCanBeRemoved(_ path: [UInt8]) -> Bool {
-      guard let before = path.dropLast().lastIndex(of: UInt8(ascii: "/")) else { return false }
-      let segment = path[(before + 1)...]
-      guard segment.count >= 2 else { return true }
-      let first = segment[segment.startIndex]
-      let second = segment[segment.startIndex + 1]
-      let letter = (0x41...0x5A).contains(first) || (0x61...0x7A).contains(first)
-      let drive = letter && (second == UInt8(ascii: ":") || second == UInt8(ascii: "|"))
-      guard drive else { return true }
-      if segment.count == 2 { return false }
-      let third = segment[segment.startIndex + 2]
-      return !(third == UInt8(ascii: "/") || third == UInt8(ascii: "\\") || third == UInt8(ascii: "?") || third == UInt8(ascii: "#"))
-    }
+    return kept
   }
 
   // MARK: Step 4, paths
@@ -698,66 +521,50 @@ enum CrashRedaction {
     return output
   }
 
-  /// Whether a path may begin right after `previous`.
-  private static func isPathBoundary(_ previous: Unicode.Scalar) -> Bool {
-    if isWhitespace(previous) { return true }
-    switch previous {
-    case "=", "(", "[", "{", "\"", "'", ",", ";", ":", "`", "<", ">", "|", "\u{201C}", "\u{2018}": return true
-    default: return false
-    }
-  }
-
   /// A drive (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`,
-  /// `~\`) or a share (`\\`, `//host`).
+  /// `~\`), a share (`\\`, `//host`) or a rooted Windows path (`\Users\…`).
   private static func isPathStart(_ chars: Text, _ index: Int) -> Bool {
-    func scalar(_ offset: Int) -> Unicode.Scalar? {
-      index + offset < chars.count ? chars[index + offset] : nil
-    }
     func isName(_ scalar: Unicode.Scalar?) -> Bool {
       guard let scalar = scalar else { return false }
       return scalar != "/" && !isWhitespace(scalar)
     }
     let current = chars[index]
-    let next = scalar(1)
-    let drive = isASCIILetter(current) && next == ":" && (scalar(2) == "\\" || scalar(2) == "/")
-    let absolute = current == "/" && isName(next)
-    let home = current == "~" && (next == "/" || next == "\\")
-    let share = (current == "\\" && next == "\\") || (current == "/" && next == "/" && isName(scalar(2)))
-    return drive || absolute || home || share
+    let next = scalar(chars, index + 1)
+    let third = scalar(chars, index + 2)
+    if isASCIILetter(current), next == ":", third == "\\" || third == "/" { return true }
+    if current == "/", isName(next) { return true }
+    if current == "~", next == "/" || next == "\\" { return true }
+    if current == "\\", next == "\\" { return true }
+    if current == "/", next == "/", isName(third) { return true }
+    // One backslash and a name is a path only if another backslash follows
+    // before the next whitespace; `\n` in prose is not. The scan ends at that
+    // backslash, so it never passes the next candidate.
+    if current == "\\", let next = next, isASCIIAlphanumeric(next) {
+      var position = index + 1
+      while position < chars.count, !isWhitespace(chars[position]) {
+        if chars[position] == "\\" { return true }
+        position += 1
+      }
+    }
+    return false
   }
 
   private static func pathAt(_ chars: Text, _ index: Int) -> Int? {
-    let previous: Unicode.Scalar? = index > 0 ? chars[index - 1] : nil
-    if let previous = previous, !isPathBoundary(previous) { return nil }
-    guard isPathStart(chars, index) else { return nil }
-    // `//host` right after a colon is the authority of a URL that step 3
-    // kept (`https://example.org/a`), not a share.
-    if previous == ":", chars[index] == "/", index + 1 < chars.count, chars[index + 1] == "/" { return nil }
-    return pathEnd(chars, index)
-  }
-
-  /// Where the redaction of a path that starts at `start` stops. Names
-  /// contain spaces and apostrophes, so neither ends a path. It ends before a
-  /// closing double quote (not `\"`), an angle bracket, a backtick, a line
-  /// break or the `: ` that introduces an error's cause; words in between go
-  /// with it. The whitespace before that delimiter is not part of the path.
-  private static func pathEnd(_ chars: Text, _ start: Int) -> Int {
-    var end = start
-    scan: while end < chars.count {
-      switch chars[end] {
-      case "\n", "\r", "<", ">", "`":
-        break scan
-      case "\"":
-        if !backslashEscaped(chars, floor: start, index: end) { break scan }
-      case ":":
-        if end + 1 < chars.count, isWhitespace(chars[end + 1]) { break scan }
-      default:
-        break
-      }
-      end += 1
+    // A path may begin anywhere but directly after an ASCII letter, an ASCII
+    // digit, `_`, `.` or `-`.
+    let previous = scalar(chars, index - 1)
+    if let previous = previous, isASCIIAlphanumeric(previous) || previous == "_" || previous == "." || previous == "-" {
+      return nil
     }
-    while end > start, isWhitespace(chars[end - 1]) { end -= 1 }
-    return end
+    guard isPathStart(chars, index) else { return nil }
+    // Neither slash of `://` starts a path: what follows is the host of a URL
+    // that step 3 kept (`https://example.org`).
+    if chars[index] == "/" {
+      let first = previous == ":" && scalar(chars, index + 1) == "/"
+      let second = previous == "/" && scalar(chars, index - 2) == ":"
+      if first || second { return nil }
+    }
+    return pathEnd(chars, index)
   }
 
   // MARK: Step 5, opaque tokens

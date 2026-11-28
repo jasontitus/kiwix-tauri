@@ -1,25 +1,27 @@
 package org.kiwix.mobile
 
 /**
- * The redaction every crash-record text field goes through. A port of the
- * canonical pipeline in `src-tauri/src/crash.rs`, pinned by the shared vectors
- * in `src-tauri/tests/fixtures/crash-redaction-cases.json`: the same steps in
- * the same order, so the Rust, Swift and Kotlin intakes agree on every case.
+ * The redaction every crash-record text field goes through.
  *
- * 1. Keep at most [MAX_INPUT] characters.
- * 2. Secret values. First, because a value that is a path with spaces must go
- *    as a whole, and a path must not swallow the key that marks the text after
- *    it as secret.
- * 3. URLs.
- * 4. Paths.
- * 5. Long opaque tokens.
- * 6. Collapse whitespace.
- * 7. Cut to [MAX_MESSAGE] characters.
+ * This is the Kotlin implementation of the one rule written down in
+ * `src-tauri/tests/fixtures/crash-redaction-spec.md`. The Rust panic hook
+ * (`src-tauri/src/crash.rs`) and the iOS intake implement the same text, and
+ * all three must reproduce every vector in `crash-redaction-cases.json` next
+ * to it. The section and step numbers below are the specification's.
  *
- * A "character" is a Unicode code point throughout, as in Rust: the text is
- * handled as an array of code points, so a bound or a cut never splits a
- * surrogate pair. Whitespace is the Unicode White_Space property, which is not
- * what `Char.isWhitespace` or `Character.isWhitespace` test.
+ * Three things the specification requires of every port:
+ *
+ * * Every index, count, scan and cut is in Unicode scalar values. The text is
+ *   handled as an array of code points, so nothing can split a surrogate pair.
+ * * Whitespace is the explicit `White_Space` list in [isWhiteSpace].
+ *   `Char.isWhitespace`, `Character.isWhitespace` and a regular-expression
+ *   `\s` all differ from it and are not used.
+ * * Case is folded for ASCII letters only. `equals(ignoreCase = true)` and
+ *   `lowercase()` fold `ſ` to `s` and the Kelvin sign to `k`, and are not used.
+ *
+ * Each step runs in time proportional to its input: line ends and the other
+ * look-ahead facts are computed once per step, and every forward scan covers
+ * only text that the match then consumes.
  */
 internal object CrashRedaction {
     const val MAX_INPUT = 32_768
@@ -30,7 +32,7 @@ internal object CrashRedaction {
     private const val READER_URL = "[reader-url]"
     private const val PATH = "[path]"
 
-    /** Full redaction for one bounded text field. */
+    /** Steps 1 to 7: a message, a thread name, a location. */
     fun redact(value: String): String {
         var text = bounded(codePoints(value))
         text = redactSecrets(text)
@@ -40,7 +42,7 @@ internal object CrashRedaction {
         return string(truncate(collapseWhitespace(text), MAX_MESSAGE))
     }
 
-    /** Stack-frame redaction: steps 1 to 4, keeping spacing so frames stay readable. */
+    /** Steps 1 to 4, for the text of a stack frame: its spacing is kept. */
     fun redactLine(value: String): String {
         var text = bounded(codePoints(value))
         text = redactSecrets(text)
@@ -48,75 +50,529 @@ internal object CrashRedaction {
         return string(redactPaths(text))
     }
 
-    /** At most [limit] characters, the last one an ellipsis when something was cut. */
+    /** At most [limit] scalars, the last one `…` when something was cut. */
     fun truncate(value: String, limit: Int): String = string(truncate(codePoints(value), limit))
 
-    // ---- code points -----------------------------------------------------
+    // ---- 1. Terms --------------------------------------------------------
 
-    private fun codePoints(value: String): IntArray {
-        val result = IntArray(value.codePointCount(0, value.length))
+    private fun codePoints(value: CharSequence): IntArray {
+        val result = IntArray(Character.codePointCount(value, 0, value.length))
         var index = 0
         var count = 0
         while (index < value.length) {
-            val point = value.codePointAt(index)
+            val point = Character.codePointAt(value, index)
             result[count++] = point
             index += Character.charCount(point)
         }
         return result
     }
 
-    private fun string(points: IntArray, from: Int = 0, to: Int = points.size): String =
-        String(points, from, to - from)
+    private fun string(points: IntArray): String = String(points, 0, points.size)
 
-    /** Collects output as code points and plain replacement text. */
+    /** Collects output as code points and plain placeholder text. */
     private class Output(capacity: Int) {
         private val text = StringBuilder(capacity)
         fun point(point: Int) { text.appendCodePoint(point) }
         fun range(points: IntArray, from: Int, to: Int) { for (index in from until to) text.appendCodePoint(points[index]) }
         fun literal(value: String) { text.append(value) }
-        fun points(): IntArray = codePoints(text.toString())
+        fun points(): IntArray = codePoints(text)
     }
 
-    private fun bounded(points: IntArray): IntArray =
-        if (points.size <= MAX_INPUT) points else points.copyOf(MAX_INPUT)
-
-    private fun truncate(points: IntArray, limit: Int): IntArray {
-        if (points.size <= limit) return points
-        val cut = points.copyOf(limit.coerceAtLeast(1))
-        cut[cut.size - 1] = '…'.code
-        return cut
-    }
-
-    /** Unicode White_Space, the definition of Rust's `char::is_whitespace`. */
+    /** Exactly the Unicode `White_Space` property. */
     internal fun isWhiteSpace(point: Int): Boolean = when (point) {
         in 0x09..0x0D, 0x20, 0x85, 0xA0, 0x1680, in 0x2000..0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000 -> true
         else -> false
     }
 
-    private fun isAsciiLetter(point: Int) = point in 'a'.code..'z'.code || point in 'A'.code..'Z'.code
+    private fun isLineBreak(point: Int) = point == '\n'.code || point == '\r'.code
+    private fun isAsciiUpper(point: Int) = point in 'A'.code..'Z'.code
+    private fun isAsciiLower(point: Int) = point in 'a'.code..'z'.code
+    private fun isAsciiLetter(point: Int) = isAsciiUpper(point) || isAsciiLower(point)
     private fun isAsciiDigit(point: Int) = point in '0'.code..'9'.code
     private fun isAsciiAlphanumeric(point: Int) = isAsciiLetter(point) || isAsciiDigit(point)
-    private fun asciiLower(point: Int) = if (point in 'A'.code..'Z'.code) point + 32 else point
+    private fun asciiLower(point: Int) = if (isAsciiUpper(point)) point + 32 else point
 
-    /**
-     * Whether `points[from, to)` is [lower] when only ASCII letters are folded.
-     * Never `equals(ignoreCase = true)` or `lowercase()`: those fold `ſ` to `s`
-     * and the Kelvin sign to `k`, which would make a key or scheme match text
-     * the other platforms leave alone.
-     */
+    /** The scalar at [index], or -1 outside the text. */
+    private fun IntArray.at(index: Int): Int = if (index in indices) this[index] else -1
+
+    /** Whether [point] is one of the ASCII [characters]. */
+    private fun isOneOf(point: Int, characters: String) = point in 0..0x7F && characters.indexOf(point.toChar()) >= 0
+
+    /** Whether `points[from, to)` equals [lower] after lowercasing ASCII letters only. */
     private fun asciiEquals(points: IntArray, from: Int, to: Int, lower: String): Boolean {
-        if (to - from != lower.length || from < 0 || to > points.size) return false
+        if (from < 0 || to > points.size || to - from != lower.length) return false
         for (offset in lower.indices) if (asciiLower(points[from + offset]) != lower[offset].code) return false
         return true
     }
 
-    private fun asciiLower(text: String): String {
-        val lowered = StringBuilder(text.length)
-        for (character in text) lowered.append(if (character in 'A'..'Z') character + 32 else character)
-        return lowered.toString()
+    /** The first index at or after [from] whose scalar is not whitespace, or the text length. */
+    private fun skipWhitespace(points: IntArray, from: Int): Int {
+        var index = from
+        while (index < points.size && isWhiteSpace(points[index])) index++
+        return index
     }
-    private fun IntArray.at(index: Int): Int = if (index in indices) this[index] else -1
-    private fun isOneOf(point: Int, characters: String) = point in 0..0xFFFF && characters.indexOf(point.toChar()) >= 0
+
+    /** The number of `\` directly before [index], counted back no further than [floor]. */
+    private fun backslashesBefore(points: IntArray, floor: Int, index: Int): Int {
+        var cursor = index - 1
+        while (cursor >= floor && points[cursor] == '\\'.code) cursor--
+        return index - 1 - cursor
+    }
+
+    private fun hasPathSeparator(points: IntArray, from: Int, to: Int): Boolean {
+        for (index in from until to) if (points[index] == '/'.code || points[index] == '\\'.code) return true
+        return false
+    }
+
+    /**
+     * 1.1 Where a path-like range that begins at [start] stops.
+     *
+     * Folder and file names contain spaces (`/storage/emulated/0/My Books/…`),
+     * so whitespace cannot end a path: stopping there kept every later
+     * component. Only text that cannot continue the path ends it: a line
+     * break, `<`, `>`, a backtick, a `"` that is not escaped, or the `: ` that
+     * introduces an error's cause. Whitespace directly before that stop is not
+     * part of the range. An apostrophe does not end a path, because names such
+     * as `Jane's Backup` contain one.
+     */
+    private fun pathEnd(points: IntArray, start: Int): Int {
+        var end = start
+        while (end < points.size) {
+            val stop = when (points[end]) {
+                '\n'.code, '\r'.code, '<'.code, '>'.code, '`'.code -> true
+                '"'.code -> backslashesBefore(points, start, end) % 2 == 0
+                ':'.code -> end + 1 < points.size && isWhiteSpace(points[end + 1])
+                else -> false
+            }
+            if (stop) break
+            end++
+        }
+        while (end > start && isWhiteSpace(points[end - 1])) end--
+        return end
+    }
+
+    // ---- Step 1: bound the input -----------------------------------------
+
+    /**
+     * The first [MAX_INPUT] scalars. When the cut falls inside a run of
+     * non-whitespace, that partial run is dropped as well: half a host name or
+     * half a path must not be judged as if it were whole.
+     */
+    private fun bounded(points: IntArray): IntArray {
+        if (points.size <= MAX_INPUT) return points
+        var end = MAX_INPUT
+        if (!isWhiteSpace(points[MAX_INPUT])) {
+            while (end > 0 && !isWhiteSpace(points[end - 1])) end--
+        }
+        return points.copyOf(end)
+    }
+
+    // ---- Step 2: secrets -------------------------------------------------
+
+    /** Tried in this order at every position. */
+    private val secretKeys = arrayOf(
+        "authorization", "access_token", "refresh_token", "api_key", "api-key", "apikey", "password", "passwd",
+        "passphrase", "pass", "pwd", "private_key", "private-key", "privatekey", "client_secret", "secret",
+        "session_id", "sessionid", "jsessionid", "credentials", "credential", "signature", "cookie", "bearer",
+        "token", "auth", "pin",
+    )
+
+    /** A half-open range of scalars. */
+    private class Span(val start: Int, val end: Int)
+
+    /**
+     * Line ends and the last apostrophe of each line, computed once so that
+     * no secret value rescans its line.
+     */
+    private class Lines(points: IntArray) {
+        /** For each index and the text length: the first line break at or after it. */
+        val end = IntArray(points.size + 1)
+        /** For each index: the last `'` on its line, or -1. */
+        val lastApostrophe = IntArray(points.size + 1)
+
+        init {
+            var lineEnd = points.size
+            var apostrophe = -1
+            end[points.size] = points.size
+            lastApostrophe[points.size] = -1
+            for (index in points.indices.reversed()) {
+                if (points[index] == '\n'.code || points[index] == '\r'.code) {
+                    lineEnd = index
+                    apostrophe = -1
+                } else if (points[index] == '\''.code && apostrophe == -1) {
+                    apostrophe = index
+                }
+                end[index] = lineEnd
+                lastApostrophe[index] = apostrophe
+            }
+        }
+    }
+
+    private fun redactSecrets(points: IntArray): IntArray {
+        val lines = Lines(points)
+        val output = Output(points.size)
+        var cursor = 0
+        while (cursor < points.size) {
+            val value = secretAt(points, lines, cursor)
+            if (value != null) {
+                // Quotes, wrappers, the keyword and the separator stay.
+                output.range(points, cursor, value.start)
+                output.literal(REDACTED)
+                cursor = value.end
+            } else {
+                output.point(points[cursor])
+                cursor++
+            }
+        }
+        return output.points()
+    }
+
+    /** The value of the secret whose keyword starts at [at], if a keyword matches there. */
+    private fun secretAt(points: IntArray, lines: Lines, at: Int): Span? {
+        val first = points[at]
+        if (!isAsciiLetter(first)) return null
+        // Left side: not inside a longer word, except at a camelCase hump
+        // (`accessToken`, `oauth2Token`).
+        val previous = points.at(at - 1)
+        val apart = previous == -1 || !isAsciiAlphanumeric(previous)
+        val hump = isAsciiUpper(first) && (isAsciiLower(previous) || isAsciiDigit(previous))
+        if (!apart && !hump) return null
+        for (key in secretKeys) {
+            val afterKey = at + key.length
+            if (!asciiEquals(points, at, afterKey, key)) continue
+            // Right side: the keyword is not the start of a longer word.
+            val following = points.at(afterKey)
+            if (isAsciiAlphanumeric(following) || following == '_'.code) continue
+            // 4.1 The closing quote of a quoted key, which an outer string may
+            // have escaped: `"password":`, `\"password\":`.
+            var next = afterKey
+            val quote = if (following == '\\'.code) afterKey + 1 else afterKey
+            val quotedKey = points.at(quote) == '"'.code || points.at(quote) == '\''.code
+            if (quotedKey) next = quote + 1
+            // 4.2 Whitespace, then 4.3 the separator, then 4.4 whitespace.
+            val gap = next
+            next = skipWhitespace(points, next)
+            val separator = when {
+                points.at(next) == '='.code && points.at(next + 1) == '>'.code -> 2
+                points.at(next) == '='.code -> 1
+                // `::` separates Rust path segments, not a key from its value.
+                points.at(next) == ':'.code && points.at(next + 1) != ':'.code -> 1
+                // Tuples and pairs: `("token", "…")`, `(authorization, Basic …)`.
+                points.at(next) == ','.code && (quotedKey || key == "authorization") -> 1
+                else -> 0
+            }
+            if (separator > 0) {
+                next = skipWhitespace(points, next + separator)
+            } else if (quotedKey || next == gap || (key != "authorization" && key != "bearer")) {
+                continue
+            }
+            val value = secretValue(points, lines, next, key)
+            if (value.end > value.start) return value
+        }
+        return null
+    }
+
+    private fun secretTokenEnd(points: IntArray, from: Int): Int {
+        var index = from
+        while (index < points.size && !isWhiteSpace(points[index]) && !isOneOf(points[index], ",;&)]}")) index++
+        return index
+    }
+
+    /** The value that begins at [start]: the first form that applies. */
+    private fun secretValue(points: IntArray, lines: Lines, start: Int, key: String): Span {
+        // 1. Quoted, possibly inside wrappers such as `Some(`.
+        quotedValue(points, lines, skipWrappers(points, start))?.let { return it }
+        // 2. One cookie header carries several `name=value` pairs.
+        if (key == "cookie") return Span(start, lines.end[start])
+        // 3. One token; two after `authorization` (`Basic dXNlcjpwYXNz`).
+        var end = secretTokenEnd(points, start)
+        if (key == "authorization" && end > start) {
+            val second = skipWhitespace(points, end)
+            if (second > end) {
+                val secondEnd = secretTokenEnd(points, second)
+                if (secondEnd > second) end = secondEnd
+            }
+        }
+        // A value with `/` or `\` is a path or a URL and may contain spaces.
+        if (hasPathSeparator(points, start, end)) end = maxOf(end, pathEnd(points, start))
+        return Span(start, end)
+    }
+
+    /** The index after any `Name(` wrappers that begin at [start]. */
+    private fun skipWrappers(points: IntArray, start: Int): Int {
+        var position = start
+        while (true) {
+            if (!isAsciiLetter(points.at(position))) return position
+            var nameEnd = position
+            while (nameEnd < points.size && (isAsciiAlphanumeric(points[nameEnd]) || points[nameEnd] == '_'.code)) nameEnd++
+            if (points.at(nameEnd) != '('.code) return position
+            position = nameEnd + 1
+        }
+    }
+
+    /** The content of a quoted value whose opening quote is at [open], if one is there. */
+    private fun quotedValue(points: IntArray, lines: Lines, open: Int): Span? {
+        val escaped = points.at(open) == '\\'.code
+        val quote = if (escaped) open + 1 else open
+        when (points.at(quote)) {
+            '"'.code -> {
+                val start = quote + 1
+                val line = lines.end[start]
+                var close = start
+                while (close < line) {
+                    if (points[close] == '"'.code) {
+                        val before = backslashesBefore(points, start, close)
+                        if (if (escaped) before == 1 else before % 2 == 0) break
+                    }
+                    close++
+                }
+                // The backslash that escapes the closing quote stays with it.
+                return Span(start, if (close < line && escaped) close - 1 else close)
+            }
+            '\''.code -> {
+                if (escaped) return null
+                val start = quote + 1
+                val last = lines.lastApostrophe[start]
+                var end = if (last >= start) last else lines.end[start]
+                // The closing quote may be missing, and then the last `'` is an
+                // apostrophe inside a path.
+                if (hasPathSeparator(points, start, end)) end = maxOf(end, pathEnd(points, start))
+                return Span(start, end)
+            }
+            else -> return null
+        }
+    }
+
+    // ---- Step 3: URLs ----------------------------------------------------
+
+    /** Schemes that are URLs without `//`. */
+    private val opaqueSchemes = arrayOf("blob", "content", "data", "file", "mailto", "tauri", "tel", "zim")
+
+    /**
+     * Final labels of host names that only mean something on the person's own
+     * network, where the name itself is theirs (`janes-phone.local`).
+     */
+    private val privateSuffixes = arrayOf("local", "localdomain", "lan", "home", "internal", "arpa")
+
+    private fun isSchemeScalar(point: Int) = isAsciiAlphanumeric(point) || isOneOf(point, "+-.")
+
+    private fun replaceUrls(points: IntArray): IntArray {
+        val output = Output(points.size)
+        var cursor = 0
+        var colon = 0
+        while (colon < points.size) {
+            if (points[colon] != ':'.code) {
+                colon++
+                continue
+            }
+            // The scheme is the run of scheme scalars before the colon, from its
+            // first letter (`+https:` is still `https:`). It cannot reach back
+            // into text that an earlier URL already replaced.
+            var start = colon
+            while (start > cursor && isSchemeScalar(points[start - 1])) start--
+            while (start < colon && !isAsciiLetter(points[start])) start++
+            val tail = colon + 1
+            val slashes = points.at(tail) == '/'.code && points.at(tail + 1) == '/'.code
+            val opaque = opaqueSchemes.any { asciiEquals(points, start, colon, it) }
+            if (start == colon || (!slashes && (points.at(tail) == ':'.code || !opaque))) {
+                colon++
+                continue
+            }
+            var tokenEnd = tail
+            while (tokenEnd < points.size && !isWhiteSpace(points[tokenEnd]) && !isOneOf(points[tokenEnd], "\"<>`")) tokenEnd++
+            val hasBody = tail < points.size && !isWhiteSpace(points[tail])
+            val end: Int
+            val replacement: String
+            if (asciiEquals(points, start, colon, "file")) {
+                // A file URL is a path, in any form (`file:///x`, `file:C:/x`),
+                // and may be written with unencoded spaces.
+                end = if (hasBody) pathEnd(points, tail) else tail
+                replacement = URL
+            } else if (asciiEquals(points, start, colon, "data")) {
+                // A data URL carries content itself, spaces and markup included.
+                var lineEnd = tail
+                if (hasBody) while (lineEnd < points.size && !isLineBreak(points[lineEnd])) lineEnd++
+                end = lineEnd
+                replacement = URL
+            } else if (slashes) {
+                var authorityEnd = tail + 2
+                while (authorityEnd < tokenEnd && !isOneOf(points[authorityEnd], "/\\?#")) authorityEnd++
+                replacement = classify(points, start, colon, tail + 2, authorityEnd)
+                // A URL that is not kept, or whose path, query or fragment is
+                // dropped, goes whole, like a path: what follows the first space
+                // of an unencoded article title must not stay behind.
+                end = if (replacement.startsWith("[") || authorityEnd < tokenEnd)
+                    maxOf(tokenEnd, pathEnd(points, tail)) else tokenEnd
+            } else {
+                end = tokenEnd
+                replacement = URL
+            }
+            output.range(points, cursor, start)
+            output.literal(replacement)
+            cursor = end
+            colon = end
+        }
+        output.range(points, cursor, points.size)
+        return output.points()
+    }
+
+    /**
+     * What may be kept of a `scheme://authority…` URL, decided from its text
+     * alone so that every platform decides alike. The scheme is
+     * `points[schemeStart, colon)` and the authority `points[from, to)`.
+     *
+     * Only `scheme://host[:port]` of an http(s) address with a public DNS name
+     * is kept. Its path, query and fragment never are: a path can name the
+     * article being read. This device (`localhost`, `127.…`, `[::1]`) is a
+     * reader page. Everything else is `[url]`: other schemes, IP literals in
+     * any spelling, single-label and private-network names, a malformed port.
+     */
+    private fun classify(points: IntArray, schemeStart: Int, colon: Int, from: Int, to: Int): String {
+        val scheme: String
+        val defaultPort: String
+        when {
+            asciiEquals(points, schemeStart, colon, "http") -> { scheme = "http"; defaultPort = "80" }
+            asciiEquals(points, schemeStart, colon, "https") -> { scheme = "https"; defaultPort = "443" }
+            else -> return URL
+        }
+        // 2. The userinfo ends at the last `@`.
+        var hostStart = from
+        for (index in from until to) if (points[index] == '@'.code) hostStart = index + 1
+        // 3. The host, and after it the port part.
+        var hostEnd = to
+        if (hostStart < to && points[hostStart] == '['.code) {
+            var close = hostStart
+            while (close < to && points[close] != ']'.code) close++
+            if (close == to) return URL
+            hostEnd = close + 1
+        } else {
+            for (index in hostStart until to) if (points[index] == ':'.code) hostEnd = index
+        }
+        // 4. Lowercased, ASCII only, and without one trailing dot.
+        val lowered = StringBuilder(hostEnd - hostStart)
+        for (index in hostStart until hostEnd) lowered.appendCodePoint(asciiLower(points[index]))
+        if (lowered.isNotEmpty() && lowered[lowered.length - 1] == '.') lowered.setLength(lowered.length - 1)
+        val host = lowered.toString()
+        // 5. This device.
+        val loopback = host.startsWith("127.") && host.substring(4).all { it in '0'..'9' || it == '.' }
+        if (host == "localhost" || host.endsWith(".localhost") || loopback || host == "[::1]") return READER_URL
+        // 6. No port, or `:` and one to five digits.
+        val portLength = to - hostEnd - 1
+        if (hostEnd < to) {
+            if (points[hostEnd] != ':'.code || portLength !in 1..5) return URL
+            for (index in hostEnd + 1 until to) if (!isAsciiDigit(points[index])) return URL
+        }
+        // 7. A public DNS name.
+        val labels = host.split('.')
+        val last = labels[labels.size - 1]
+        val dnsName = labels.size >= 2 &&
+            labels.all { label -> label.isNotEmpty() && label.all { it in 'a'..'z' || it in '0'..'9' || it == '-' } } &&
+            last[0] in 'a'..'z' && last !in privateSuffixes
+        if (!dnsName) return URL
+        // 8. The port as written, unless it is the scheme's default.
+        if (hostEnd == to) return "$scheme://$host"
+        val port = String(points, hostEnd + 1, portLength)
+        return if (port.trimStart('0') == defaultPort) "$scheme://$host" else "$scheme://$host:$port"
+    }
+
+    // ---- Step 4: paths ---------------------------------------------------
+
+    /** Whether a path may begin right after [previous]; -1 is the start of the text. */
+    private fun pathBoundary(previous: Int): Boolean =
+        previous == -1 || !(isAsciiAlphanumeric(previous) || isOneOf(previous, "_.-"))
+
+    /**
+     * For each index, whether a `\` occurs after it and before the next
+     * whitespace scalar. Computed once, so a rooted path start (`\Users\…`)
+     * is recognised without scanning ahead from every backslash.
+     */
+    private fun backslashAhead(points: IntArray): BooleanArray {
+        val ahead = BooleanArray(points.size + 1)
+        var seen = false
+        for (index in points.indices.reversed()) {
+            if (isWhiteSpace(points[index])) {
+                seen = false
+                continue
+            }
+            ahead[index] = seen
+            if (points[index] == '\\'.code) seen = true
+        }
+        return ahead
+    }
+
+    /** Whether the text at [index] has one of the path start shapes. */
+    private fun pathStart(points: IntArray, backslashAhead: BooleanArray, index: Int): Boolean {
+        val current = points[index]
+        val next = points.at(index + 1)
+        fun name(point: Int) = point != -1 && point != '/'.code && !isWhiteSpace(point)
+        val drive = isAsciiLetter(current) && next == ':'.code &&
+            (points.at(index + 2) == '\\'.code || points.at(index + 2) == '/'.code)
+        val absolute = current == '/'.code && name(next)
+        val home = current == '~'.code && (next == '/'.code || next == '\\'.code)
+        val share = (current == '\\'.code && next == '\\'.code) ||
+            (current == '/'.code && next == '/'.code && name(points.at(index + 2)))
+        // One backslash and a name is a path only if another backslash follows
+        // before the next whitespace; `\n` in prose is not.
+        val rooted = current == '\\'.code && isAsciiAlphanumeric(next) && backslashAhead[index]
+        return drive || absolute || home || share || rooted
+    }
+
+    private fun pathAt(points: IntArray, backslashAhead: BooleanArray, index: Int): Int {
+        val previous = points.at(index - 1)
+        if (!pathBoundary(previous) || !pathStart(points, backslashAhead, index)) return -1
+        // Neither slash of `://` starts a path: what follows is the authority
+        // of a URL that step 3 kept (`https://example.org`).
+        if (points[index] == '/'.code) {
+            val first = previous == ':'.code && points.at(index + 1) == '/'.code
+            val second = previous == '/'.code && points.at(index - 2) == ':'.code
+            if (first || second) return -1
+        }
+        return pathEnd(points, index)
+    }
+
+    private fun redactPaths(points: IntArray): IntArray {
+        val backslashAhead = backslashAhead(points)
+        val output = Output(points.size)
+        var index = 0
+        while (index < points.size) {
+            val end = pathAt(points, backslashAhead, index)
+            if (end != -1) {
+                output.literal(PATH)
+                index = end
+            } else {
+                output.point(points[index])
+                index++
+            }
+        }
+        return output.points()
+    }
+
+    // ---- Step 5: opaque tokens -------------------------------------------
+
+    private const val MIN_OPAQUE = 40
+
+    private fun redactOpaque(points: IntArray): IntArray {
+        val output = Output(points.size)
+        var index = 0
+        while (index < points.size) {
+            var end = index
+            var digit = false
+            var letter = false
+            while (end < points.size && (isAsciiAlphanumeric(points[end]) || isOneOf(points[end], "_-+/=."))) {
+                if (isAsciiDigit(points[end])) digit = true
+                if (isAsciiLetter(points[end])) letter = true
+                end++
+            }
+            when {
+                end == index -> { output.point(points[index]); index++ }
+                end - index >= MIN_OPAQUE && digit && letter -> { output.literal(REDACTED); index = end }
+                else -> { output.range(points, index, end); index = end }
+            }
+        }
+        return output.points()
+    }
+
+    // ---- Step 6: whitespace, step 7: length ------------------------------
 
     private fun collapseWhitespace(points: IntArray): IntArray {
         val output = Output(points.size)
@@ -135,628 +591,10 @@ internal object CrashRedaction {
         return output.points()
     }
 
-    // ---- shared path rule ------------------------------------------------
-
-    /** Whether [index] follows an odd run of backslashes that begins no earlier than [floor]. */
-    private fun backslashEscaped(points: IntArray, floor: Int, index: Int): Boolean {
-        var run = 0
-        var cursor = index - 1
-        while (cursor >= floor && points[cursor] == '\\'.code) { run++; cursor-- }
-        return run % 2 == 1
-    }
-
-    /**
-     * Where the redaction of a path that starts at [start] stops.
-     *
-     * Folder and file names contain spaces (`/storage/emulated/0/My Books/…`),
-     * so whitespace cannot end a path: stopping there kept every later
-     * component. Only text that cannot continue the path ends it: a closing
-     * double quote, an angle bracket, a backtick, a line break, or the `: `
-     * that introduces an error's cause. Prose between the path and that
-     * delimiter is dropped with it; losing those words is the accepted price
-     * of never keeping part of a path. An apostrophe does not end a path,
-     * because names such as `Jane's Backup` contain one.
-     */
-    private fun pathEnd(points: IntArray, start: Int): Int {
-        var end = start
-        while (end < points.size) {
-            val stop = when (points[end]) {
-                '\n'.code, '\r'.code, '<'.code, '>'.code, '`'.code -> true
-                // A path printed inside a quoted string escapes an embedded quote as `\"`.
-                '"'.code -> !backslashEscaped(points, start, end)
-                ':'.code -> end + 1 < points.size && isWhiteSpace(points[end + 1])
-                else -> false
-            }
-            if (stop) break
-            end++
-        }
-        // The separator before the delimiter is not part of the path.
-        while (end > start && isWhiteSpace(points[end - 1])) end--
-        return end
-    }
-
-    // ---- step 2: secrets -------------------------------------------------
-
-    /** Tried in this order at every position; ASCII case is ignored. */
-    private val secretKeys = arrayOf(
-        "authorization", "access_token", "refresh_token", "api_key", "api-key", "apikey",
-        "password", "passwd", "cookie", "bearer", "token", "secret", "pin",
-    )
-
-    private fun isWordCharacter(point: Int) = isAsciiAlphanumeric(point) || point == '_'.code
-    private fun isBlank(point: Int) = point == ' '.code || point == '\t'.code
-    private fun isBlankOrBreak(point: Int) = isBlank(point) || point == '\r'.code || point == '\n'.code
-
-    private fun redactSecrets(points: IntArray): IntArray {
-        val output = Output(points.size)
-        var cursor = 0
-        while (cursor < points.size) {
-            val value = secretAt(points, cursor)
-            if (value != null) {
-                output.range(points, cursor, value.first)
-                output.literal(REDACTED)
-                cursor = value.last
-            } else {
-                output.point(points[cursor])
-                cursor++
-            }
-        }
-        return output.points()
-    }
-
-    /** A half-open range of code points. */
-    private class Span(val first: Int, val last: Int)
-
-    /** The value range of a secret whose keyword starts at [at], if any. */
-    private fun secretAt(points: IntArray, at: Int): Span? {
-        // No ASCII letter or digit directly before a key; an underscore may (`client_secret`).
-        if (at > 0 && isAsciiAlphanumeric(points[at - 1])) return null
-        for (key in secretKeys) {
-            val afterKey = at + key.length
-            if (afterKey > points.size) continue
-            if (!asciiEquals(points, at, afterKey, key) || isWordCharacter(points.at(afterKey))) continue
-            var next = afterKey
-            // The closing quote of a quoted key: `"password":`.
-            val quotedKey = points.at(next) == '"'.code || points.at(next) == '\''.code
-            if (quotedKey) next++
-            val gap = next
-            while (next < points.size && isBlankOrBreak(points[next])) next++
-            // `::` is a Rust path separator, not a key-value separator.
-            val separator = points.at(next) == '='.code ||
-                (points.at(next) == ':'.code && points.at(next + 1) != ':'.code)
-            if (separator) {
-                next++
-                while (next < points.size && isBlank(points[next])) next++
-            } else if (quotedKey || next == gap || (key != "authorization" && key != "bearer")) {
-                // Only `authorization` and `bearer` accept plain whitespace instead.
-                continue
-            }
-            val value = secretValue(points, next, key)
-            if (value.last > value.first) return value
-        }
-        return null
-    }
-
-    private fun lineEnd(points: IntArray, from: Int): Int {
-        var index = from
-        while (index < points.size && points[index] != '\n'.code && points[index] != '\r'.code) index++
-        return index
-    }
-
-    private fun secretTokenEnd(points: IntArray, from: Int): Int {
-        var index = from
-        while (index < points.size && !isBlankOrBreak(points[index]) && !isOneOf(points[index], ",;&)]}")) index++
-        return index
-    }
-
-    private fun hasPathSeparator(points: IntArray, from: Int, to: Int): Boolean {
-        for (index in from until to) if (points[index] == '/'.code || points[index] == '\\'.code) return true
-        return false
-    }
-
-    /**
-     * The range of the secret value that begins at [start].
-     *
-     * * `"…"`: up to the closing quote (one not escaped by a backslash), a line
-     *   break or the end. The quotes stay.
-     * * `'…'`: up to the last `'` on the line, or to the end of the line when
-     *   there is none, because a value may itself contain an apostrophe. With a
-     *   `/` or `\` inside it takes at least what [pathEnd] takes.
-     * * After `cookie`: the rest of the line; one header carries several pairs.
-     * * Otherwise one token, ending at a space, tab, line break or one of
-     *   `, ; & ) ] }`. After `authorization` a second token goes too
-     *   (`Basic dXNlcjpwYXNz`). A value containing `/` or `\` is a path or a
-     *   URL and may contain spaces: it also takes everything [pathEnd] takes.
-     */
-    private fun secretValue(points: IntArray, start: Int, key: String): Span {
-        when {
-            points.at(start) == '"'.code -> {
-                // The line end is found by the same scan, never ahead of it: a run
-                // of empty quoted values must not rescan the rest of the line.
-                var close = start + 1
-                while (close < points.size && points[close] != '\n'.code && points[close] != '\r'.code &&
-                    !(points[close] == '"'.code && !backslashEscaped(points, start + 1, close))) close++
-                return Span(start + 1, close)
-            }
-            points.at(start) == '\''.code -> {
-                val line = lineEnd(points, start + 1)
-                var end = line
-                for (index in line - 1 downTo start + 1) {
-                    if (points[index] == '\''.code) { end = index; break }
-                }
-                // The closing quote may be missing, and then the last `'` is an
-                // apostrophe inside a path.
-                if (hasPathSeparator(points, start + 1, end)) end = maxOf(end, pathEnd(points, start + 1))
-                return Span(start + 1, end)
-            }
-            key == "cookie" -> return Span(start, lineEnd(points, start))
-            else -> {
-                var end = secretTokenEnd(points, start)
-                if (key == "authorization" && end > start) {
-                    var second = end
-                    while (second < points.size && isBlankOrBreak(points[second])) second++
-                    if (second > end && secretTokenEnd(points, second) > second) end = secretTokenEnd(points, second)
-                }
-                if (hasPathSeparator(points, start, end)) end = maxOf(end, pathEnd(points, start))
-                return Span(start, end)
-            }
-        }
-    }
-
-    // ---- step 3: URLs ----------------------------------------------------
-
-    /** Schemes that are URLs without `//`. */
-    private val opaqueSchemes = arrayOf("blob", "content", "data", "file", "mailto", "tauri", "tel", "zim")
-
-    private fun isSchemeCharacter(point: Int) =
-        isAsciiAlphanumeric(point) || point == '+'.code || point == '-'.code || point == '.'.code
-
-    private fun replaceUrls(points: IntArray): IntArray {
-        val output = Output(points.size)
-        var cursor = 0
-        for (colon in points.indices) {
-            if (points[colon] != ':'.code || colon < cursor) continue
-            var start = colon
-            while (start > cursor && isSchemeCharacter(points[start - 1])) start--
-            if (start == colon || !isAsciiLetter(points[start])) continue
-            val tail = colon + 1
-            val authority = points.at(tail) == '/'.code && points.at(tail + 1) == '/'.code
-            if (!authority && (points.at(tail) == ':'.code || opaqueSchemes.none { asciiEquals(points, start, colon, it) })) continue
-            var tokenEnd = tail
-            while (tokenEnd < points.size && !isWhiteSpace(points[tokenEnd]) && !isOneOf(points[tokenEnd], "\"<>`")) tokenEnd++
-            val hasBody = tail < points.size && !isWhiteSpace(points[tail])
-            val end: Int
-            val replacement: String
-            if (asciiEquals(points, start, colon, "file") && hasBody) {
-                // A file URL is a path and may be written with unencoded spaces: it
-                // ends where a path would. `file: ` followed by a space is prose; a
-                // path after it is found by the path step.
-                end = pathEnd(points, tail)
-                replacement = URL
-            } else if (asciiEquals(points, start, colon, "data") && hasBody) {
-                // A data URL carries content itself, spaces and markup included.
-                end = lineEnd(points, tail)
-                replacement = URL
-            } else {
-                replacement = safeUrl(points, start, colon, tokenEnd)
-                // Every `scheme://` URL that is not kept (reader pages, content and
-                // archive links, shares) goes whole, like a path.
-                end = if (authority && (replacement == URL || replacement == READER_URL))
-                    maxOf(tokenEnd, pathEnd(points, tail)) else tokenEnd
-            }
-            output.range(points, cursor, start)
-            output.literal(replacement)
-            cursor = end
-        }
-        output.range(points, cursor, points.size)
-        return output.points()
-    }
-
-    /**
-     * What may be kept of the URL in `points[start, end)`, whose scheme ends at
-     * [colon]: nothing but
-     * `scheme://host[:port]path` of an external http(s) address. A reader page
-     * (a local host, a `/.kiwix/` route, or another URL nested in the path) is
-     * `[reader-url]`. Anything else, including an address this parser does not
-     * fully understand, is `[url]`.
-     */
-    private fun safeUrl(points: IntArray, start: Int, colon: Int, end: Int): String {
-        val scheme = when {
-            asciiEquals(points, start, colon, "http") -> "http"
-            asciiEquals(points, start, colon, "https") -> "https"
-            else -> return URL
-        }
-        val address = HttpAddress.parse(points, colon + 1, end, scheme) ?: return URL
-        val decoded = address.decodedPath()
-        val nested = decoded.contains("://") ||
-            arrayOf("mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:").any { decoded.contains(it) }
-        if (address.local || decoded.contains("/.kiwix/") || nested) return READER_URL
-        return address.scheme + "://" + address.host + address.port + address.path
-    }
-
-    /**
-     * The authority and path of an http(s) address, read the way the WHATWG URL
-     * standard (and so the Rust `url` crate) reads them. Hosts that would need
-     * percent-decoding or IDNA processing are not parsed: the caller redacts
-     * the whole address instead of guessing.
-     */
-    private class HttpAddress(
-        val scheme: String, val host: String, val port: String, val path: String, val local: Boolean,
-    ) {
-        /** The path with its percent escapes decoded as UTF-8, malformed bytes replaced. */
-        fun decodedPath(): String {
-            val bytes = java.io.ByteArrayOutputStream(path.length)
-            var index = 0
-            while (index < path.length) {
-                val character = path[index]
-                val high = if (character == '%' && index + 2 < path.length) Character.digit(path[index + 1], 16) else -1
-                val low = if (high >= 0) Character.digit(path[index + 2], 16) else -1
-                if (high >= 0 && low >= 0) {
-                    bytes.write(high * 16 + low)
-                    index += 3
-                } else {
-                    // The serialized path is ASCII: everything else was percent-encoded.
-                    bytes.write(character.code)
-                    index++
-                }
-            }
-            return String(bytes.toByteArray(), Charsets.UTF_8)
-        }
-
-        companion object {
-            fun parse(points: IntArray, from: Int, to: Int, scheme: String): HttpAddress? {
-                var end = to
-                // Trailing C0 controls and spaces are not part of an address.
-                while (end > from && points[end - 1] <= 0x20) end--
-                var index = from
-                // Any run of slashes and backslashes introduces the authority.
-                while (index < end && (points[index] == '/'.code || points[index] == '\\'.code)) index++
-                var authorityEnd = index
-                while (authorityEnd < end && !isOneOf(points[authorityEnd], "/\\?#")) authorityEnd++
-                // Credentials end at the last `@` and are never kept.
-                var hostStart = index
-                for (cursor in index until authorityEnd) if (points[cursor] == '@'.code) hostStart = cursor + 1
-                val hostEnd: Int
-                if (points.at(hostStart) == '['.code) {
-                    var close = hostStart
-                    while (close < authorityEnd && points[close] != ']'.code) close++
-                    if (close == authorityEnd) return null
-                    hostEnd = close + 1
-                } else {
-                    var colon = hostStart
-                    while (colon < authorityEnd && points[colon] != ':'.code) colon++
-                    hostEnd = colon
-                }
-                val port = port(points, hostEnd, authorityEnd, scheme) ?: return null
-                val host = host(points, hostStart, hostEnd) ?: return null
-                var pathEnd = authorityEnd
-                while (pathEnd < end && points[pathEnd] != '?'.code && points[pathEnd] != '#'.code) pathEnd++
-                return HttpAddress(scheme, host.first, port, path(points, authorityEnd, pathEnd), host.second)
-            }
-
-            /** `""` for none or the scheme's default, `":n"` otherwise; null when it is not a port. */
-            private fun port(points: IntArray, from: Int, to: Int, scheme: String): String? {
-                if (from == to) return ""
-                if (points[from] != ':'.code) return null
-                var value = 0
-                for (index in from + 1 until to) {
-                    if (!isAsciiDigit(points[index])) return null
-                    value = value * 10 + (points[index] - '0'.code)
-                    if (value > 65_535) return null
-                }
-                if (from + 1 == to) return ""
-                return if (value == (if (scheme == "https") 443 else 80)) "" else ":$value"
-            }
-
-            /** The serialized host and whether it is this device. */
-            private fun host(points: IntArray, from: Int, to: Int): Pair<String, Boolean>? {
-                if (from == to) return null
-                if (points[from] == '['.code) {
-                    val pieces = ipv6(points, from + 1, to - 1) ?: return null
-                    val loopback = (0..6).all { pieces[it] == 0 } && pieces[7] == 1
-                    val mappedLoopback = (0..4).all { pieces[it] == 0 } && pieces[5] == 0xFFFF && pieces[6] shr 8 == 127
-                    return Pair("[" + serializeIpv6(pieces) + "]", loopback || mappedLoopback)
-                }
-                val text = StringBuilder(to - from)
-                for (index in from until to) {
-                    val point = points[index]
-                    // Forbidden in a domain, or in need of decoding this parser does not do.
-                    if (point <= 0x20 || point >= 0x7F || isOneOf(point, "#%/:<>?@[\\]^|")) return null
-                    text.append(asciiLower(point).toChar())
-                }
-                val name = text.toString()
-                if (endsInNumber(name)) {
-                    val address = ipv4(name) ?: return null
-                    val dotted = "${address ushr 24 and 255}.${address ushr 16 and 255}.${address ushr 8 and 255}.${address and 255}"
-                    return Pair(dotted, address ushr 24 and 255 == 127L)
-                }
-                val trimmed = name.trimEnd('.')
-                return Pair(name, trimmed == "localhost" || trimmed.endsWith(".localhost"))
-            }
-
-            private fun endsInNumber(name: String): Boolean {
-                val parts = name.split('.').toMutableList()
-                if (parts.last().isEmpty()) {
-                    if (parts.size == 1) return false
-                    parts.removeAt(parts.size - 1)
-                }
-                val last = parts.last()
-                if (last.isNotEmpty() && last.all { it in '0'..'9' }) return true
-                return ipv4Number(last) != null
-            }
-
-            /** One part of a dotted address: decimal, `0x` hexadecimal or leading-zero octal. */
-            private fun ipv4Number(part: String): Long? {
-                if (part.isEmpty()) return null
-                var digits = part
-                var radix = 10
-                if (digits.length >= 2 && (digits.startsWith("0x") || digits.startsWith("0X"))) {
-                    digits = digits.substring(2); radix = 16
-                } else if (digits.length >= 2 && digits[0] == '0') {
-                    digits = digits.substring(1); radix = 8
-                }
-                if (digits.isEmpty()) return 0
-                var value = 0L
-                for (character in digits) {
-                    val digit = Character.digit(character, radix)
-                    if (digit < 0 || character.code > 0x7F) return null
-                    value = value * radix + digit
-                    if (value > 0xFFFF_FFFFL) return null
-                }
-                return value
-            }
-
-            private fun ipv4(name: String): Long? {
-                val parts = name.split('.').toMutableList()
-                if (parts.last().isEmpty() && parts.size > 1) parts.removeAt(parts.size - 1)
-                if (parts.size > 4) return null
-                val numbers = parts.map { ipv4Number(it) ?: return null }
-                for (index in 0 until numbers.size - 1) if (numbers[index] > 255) return null
-                var limit = 1L
-                repeat(5 - numbers.size) { limit *= 256 }
-                if (numbers.last() >= limit) return null
-                var address = numbers.last()
-                for (index in 0 until numbers.size - 1) {
-                    var weight = 1L
-                    repeat(3 - index) { weight *= 256 }
-                    address += numbers[index] * weight
-                }
-                return address
-            }
-
-            /** The eight 16-bit pieces of the address in `points[from, to)`, or null. */
-            private fun ipv6(points: IntArray, from: Int, to: Int): IntArray? {
-                val pieces = IntArray(8)
-                var piece = 0
-                var compress = -1
-                var index = from
-                if (points.at(index) == ':'.code && index < to) {
-                    if (index + 1 >= to || points[index + 1] != ':'.code) return null
-                    index += 2
-                    piece++
-                    compress = piece
-                }
-                while (index < to) {
-                    if (piece == 8) return null
-                    if (points[index] == ':'.code) {
-                        if (compress != -1) return null
-                        index++
-                        piece++
-                        compress = piece
-                        continue
-                    }
-                    var value = 0
-                    var length = 0
-                    while (length < 4 && index < to && Character.digit(points[index], 16) >= 0 && points[index] < 0x80) {
-                        value = value * 16 + Character.digit(points[index], 16)
-                        index++
-                        length++
-                    }
-                    if (index < to && points[index] == '.'.code) {
-                        // An embedded dotted address fills the last two pieces.
-                        if (length == 0) return null
-                        index -= length
-                        if (piece > 6) return null
-                        var seen = 0
-                        while (index < to) {
-                            var part = -1
-                            if (seen > 0) {
-                                if (points[index] == '.'.code && seen < 4) index++ else return null
-                            }
-                            if (index >= to || !isAsciiDigit(points[index])) return null
-                            while (index < to && isAsciiDigit(points[index])) {
-                                val digit = points[index] - '0'.code
-                                part = when {
-                                    part == -1 -> digit
-                                    part == 0 -> return null
-                                    else -> part * 10 + digit
-                                }
-                                if (part > 255) return null
-                                index++
-                            }
-                            pieces[piece] = pieces[piece] * 256 + part
-                            seen++
-                            if (seen == 2 || seen == 4) piece++
-                        }
-                        if (seen != 4) return null
-                        break
-                    } else if (index < to && points[index] == ':'.code) {
-                        index++
-                        if (index >= to) return null
-                    } else if (index < to) {
-                        return null
-                    }
-                    pieces[piece] = value
-                    piece++
-                }
-                if (compress != -1) {
-                    var swaps = piece - compress
-                    piece = 7
-                    while (piece != 0 && swaps > 0) {
-                        val other = compress + swaps - 1
-                        val held = pieces[other]
-                        pieces[other] = pieces[piece]
-                        pieces[piece] = held
-                        piece--
-                        swaps--
-                    }
-                } else if (piece != 8) {
-                    return null
-                }
-                return pieces
-            }
-
-            private fun serializeIpv6(pieces: IntArray): String {
-                // The first longest run of two or more zero pieces is written as `::`.
-                var bestStart = -1
-                var bestLength = 0
-                var index = 0
-                while (index < 8) {
-                    if (pieces[index] != 0) { index++; continue }
-                    var run = index
-                    while (run < 8 && pieces[run] == 0) run++
-                    if (run - index > bestLength) { bestStart = index; bestLength = run - index }
-                    index = run
-                }
-                if (bestLength < 2) bestStart = -1
-                val text = StringBuilder()
-                var ignoreZeros = false
-                for (position in 0 until 8) {
-                    if (ignoreZeros && pieces[position] == 0) continue
-                    ignoreZeros = false
-                    if (position == bestStart) {
-                        text.append(if (position == 0) "::" else ":")
-                        ignoreZeros = true
-                        continue
-                    }
-                    text.append(Integer.toHexString(pieces[position]))
-                    if (position != 7) text.append(':')
-                }
-                return text.toString()
-            }
-
-            /** The path as the standard serializes it: dot segments resolved, unsafe characters escaped. */
-            private fun path(points: IntArray, from: Int, to: Int): String {
-                val segments = ArrayList<String>()
-                var index = from
-                // The first separator only introduces the path.
-                if (index < to && (points[index] == '/'.code || points[index] == '\\'.code)) index++
-                var segment = StringBuilder()
-                fun close(last: Boolean) {
-                    val name = segment.toString()
-                    val lower = asciiLower(name)
-                    when {
-                        lower == ".." || lower == ".%2e" || lower == "%2e." || lower == "%2e%2e" -> {
-                            if (segments.isNotEmpty()) segments.removeAt(segments.size - 1)
-                            if (last) segments.add("")
-                        }
-                        lower == "." || lower == "%2e" -> if (last) segments.add("")
-                        else -> segments.add(name)
-                    }
-                    segment = StringBuilder()
-                }
-                while (index < to) {
-                    val point = points[index]
-                    if (point == '/'.code || point == '\\'.code) {
-                        close(last = false)
-                    } else {
-                        if (point <= 0x20 || point >= 0x7F || isOneOf(point, "\"#<>?^`{}")) {
-                            for (byte in String(Character.toChars(point)).toByteArray(Charsets.UTF_8)) {
-                                segment.append('%')
-                                segment.append("0123456789ABCDEF"[(byte.toInt() shr 4) and 15])
-                                segment.append("0123456789ABCDEF"[byte.toInt() and 15])
-                            }
-                        } else {
-                            segment.append(point.toChar())
-                        }
-                    }
-                    index++
-                }
-                close(last = true)
-                return "/" + segments.joinToString("/")
-            }
-        }
-    }
-
-    // ---- step 4: paths ---------------------------------------------------
-
-    /** Whether a path may begin right after [previous]; -1 is the start of the text. */
-    private fun pathBoundary(previous: Int): Boolean =
-        previous == -1 || isWhiteSpace(previous) || isOneOf(previous, "=([{\"',;:`<>|\u201C\u2018")
-
-    /**
-     * Whether the text at [index] has the shape of a path start: a drive
-     * (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`), or a
-     * share (`\\`, `//host`).
-     */
-    private fun pathStart(points: IntArray, index: Int): Boolean {
-        val current = points.at(index)
-        if (current == -1) return false
-        val next = points.at(index + 1)
-        fun name(point: Int) = point != -1 && point != '/'.code && !isWhiteSpace(point)
-        val drive = isAsciiLetter(current) && next == ':'.code &&
-            (points.at(index + 2) == '\\'.code || points.at(index + 2) == '/'.code)
-        val rooted = current == '/'.code && name(next)
-        val home = current == '~'.code && (next == '/'.code || next == '\\'.code)
-        val share = (current == '\\'.code && next == '\\'.code) ||
-            (current == '/'.code && next == '/'.code && name(points.at(index + 2)))
-        return drive || rooted || home || share
-    }
-
-    private fun pathAt(points: IntArray, index: Int): Int {
-        val previous = points.at(index - 1)
-        if (!pathBoundary(previous) || !pathStart(points, index)) return -1
-        // `//host` right after a colon is the authority of a URL the URL step
-        // kept (`https://example.org/a`), not a share.
-        if (previous == ':'.code && points[index] == '/'.code && points.at(index + 1) == '/'.code) return -1
-        return pathEnd(points, index)
-    }
-
-    private fun redactPaths(points: IntArray): IntArray {
-        val output = Output(points.size)
-        var index = 0
-        while (index < points.size) {
-            val end = pathAt(points, index)
-            if (end != -1) {
-                output.literal(PATH)
-                index = end
-            } else {
-                output.point(points[index])
-                index++
-            }
-        }
-        return output.points()
-    }
-
-    // ---- step 5: opaque tokens -------------------------------------------
-
-    private const val MIN_OPAQUE = 40
-
-    private fun redactOpaque(points: IntArray): IntArray {
-        val output = Output(points.size)
-        var runStart = -1
-        fun flush(end: Int) {
-            if (runStart == -1) return
-            var digit = false
-            var letter = false
-            for (index in runStart until end) {
-                if (isAsciiDigit(points[index])) digit = true
-                if (isAsciiLetter(points[index])) letter = true
-            }
-            if (end - runStart >= MIN_OPAQUE && digit && letter) output.literal(REDACTED)
-            else output.range(points, runStart, end)
-            runStart = -1
-        }
-        for (index in points.indices) {
-            val point = points[index]
-            if (isAsciiAlphanumeric(point) || isOneOf(point, "_-+/=.")) {
-                if (runStart == -1) runStart = index
-            } else {
-                flush(index)
-                output.point(point)
-            }
-        }
-        flush(points.size)
-        return output.points()
+    private fun truncate(points: IntArray, limit: Int): IntArray {
+        if (points.size <= limit) return points
+        val cut = points.copyOf(limit.coerceAtLeast(1))
+        cut[cut.size - 1] = '…'.code
+        return cut
     }
 }

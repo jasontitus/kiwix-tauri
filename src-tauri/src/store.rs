@@ -2453,6 +2453,9 @@ impl Store {
     /// The skipped-records notice as it stands now. It differs from
     /// `load_notice` once leaving read-only mode has kept the copy that the
     /// read-only notice asked the person to make, and then names that copy.
+    // The shell reads `load_notice` until the service lane switches its
+    // startup band to this accessor (see the desktop-lane handoff).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn current_load_notice(&self) -> Result<Option<String>, String> {
         Ok(self.lock()?.notice.clone())
     }

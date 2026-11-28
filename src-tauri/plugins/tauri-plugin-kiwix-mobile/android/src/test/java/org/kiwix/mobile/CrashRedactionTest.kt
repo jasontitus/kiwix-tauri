@@ -46,25 +46,43 @@ class CrashRedactionTest {
     }
 
     @Test
-    fun inputIsBoundedInCodePointsBeforeAnyStepRuns() {
+    fun inputIsBoundedInScalarsBeforeAnyStepRuns() {
         val limit = CrashRedaction.MAX_INPUT
-        // Far over the bound: still one path, and the scan stays bounded.
-        val long = "/" + "a".repeat(limit * 4)
-        assertEquals("[path]", CrashRedaction.redact(long))
-        assertEquals("[path]", CrashRedaction.redactLine(long))
-        // Characters, not UTF-16 units or bytes.
-        val accented = CrashRedaction.redactLine("\u00e9".repeat(limit + 10))
-        assertEquals(limit, accented.codePointCount(0, accented.length))
-        // A character outside the basic plane is two UTF-16 units and is never split,
-        // wherever the bound falls inside the text.
         val emoji = "\uD83D\uDE00"
-        assertEquals(emoji.repeat(limit), CrashRedaction.redactLine(emoji.repeat(limit + 5)))
-        assertEquals("a" + emoji.repeat(limit - 1), CrashRedaction.redactLine("a" + emoji.repeat(limit + 5)))
-        // What lies beyond the bound is never read, so it cannot be kept either.
-        val beyond = CrashRedaction.redactLine("x".repeat(limit) + " /storage/emulated/0/My Books/a.zim")
-        assertEquals("x".repeat(limit), beyond)
-        // A short field is untouched.
+        // Scalar values, not UTF-16 units or bytes: the cut lands between words
+        // and nothing is split.
+        val accented = CrashRedaction.redactLine("\u00e9 ".repeat(limit) + "tail")
+        assertEquals(limit, accented.codePointCount(0, accented.length))
+        assertEquals("$emoji ".repeat(limit / 2), CrashRedaction.redactLine("$emoji ".repeat(limit)))
+        // A short field, and one exactly at the bound, are untouched.
         assertEquals("File.kt:12", CrashRedaction.redact("File.kt:12"))
+        assertEquals("a".repeat(limit), CrashRedaction.redactLine("a".repeat(limit)))
+        assertEquals(emoji.repeat(limit), CrashRedaction.redactLine(emoji.repeat(limit)))
+        // The cut falls between words, on either side of the space: every whole
+        // word before it stays.
+        assertEquals("a".repeat(limit - 1) + " ", CrashRedaction.redactLine("a".repeat(limit - 1) + " next"))
+        assertEquals("a".repeat(limit), CrashRedaction.redactLine("a".repeat(limit) + " next"))
+
+        // The cut falls inside a token: the partial token goes. Kept, the first
+        // half of this reader address's host would pass for a public name.
+        val prefix = " ".repeat(limit - 19)
+        val straddling = prefix + "http://12b34567.localhost:9/A/Private_Page"
+        assertEquals(prefix, CrashRedaction.redactLine(straddling))
+        assertEquals("", CrashRedaction.redact(straddling))
+        assertEquals("[reader-url]", CrashRedaction.redact("http://12b34567.localhost:9/A/Private_Page"))
+        // A path cut in half is dropped too, and nothing of it stays.
+        val path = CrashRedaction.redactLine("x ".repeat(limit / 2 - 8) + "/home/jane doe/Private Notes/a.zim")
+        assertFalse(path.contains("jane") || path.contains("Private") || path.contains("home"))
+        // A surrogate pair straddling the cut goes whole with its run, never as half a pair.
+        val pairs = CrashRedaction.redactLine("ab " + emoji.repeat(limit))
+        assertEquals("ab ", pairs)
+        // One unbroken run longer than the bound leaves nothing.
+        val long = "/" + "a".repeat(limit * 4)
+        assertEquals("", CrashRedaction.redact(long))
+        assertEquals("", CrashRedaction.redactLine(long))
+        // What lies beyond the bound is never read, so it cannot be kept either.
+        assertEquals("x ".repeat(limit / 2),
+            CrashRedaction.redactLine("x ".repeat(limit / 2) + "/storage/emulated/0/My Books/a.zim"))
     }
 
     @Test
@@ -94,8 +112,9 @@ class CrashRedactionTest {
             assertFalse(Integer.toHexString(point), CrashRedaction.isWhiteSpace(point))
         // A path after a narrow no-break space, and collapsed around one.
         assertEquals("open [path]", CrashRedaction.redact("open\u202F/storage/emulated/0/My Books/a.zim"))
+        assertEquals("x [path]", CrashRedaction.redact("x\u0085/sdcard/My Books/a.zim"))
         assertEquals("a b", CrashRedaction.redact("a\u00A0\u2003 b"))
-        // An information separator is not whitespace: it neither starts a path nor is collapsed.
+        // An information separator is not whitespace and is not collapsed.
         assertEquals("a\u001Fb", CrashRedaction.redact("a\u001Fb"))
     }
 
@@ -126,6 +145,8 @@ class CrashRedactionTest {
             "android.os.Handler.dispatchMessage(Handler.java:106)",
             // A long dotted name with a digit is not an opaque secret in a frame.
             "androidx.appcompat.app.AppCompatDelegateImpl2.updateResourcesConfiguration(AppCompatDelegateImpl2.java:99)",
+            "org.kiwix.mobile.TokenStore.getToken(TokenStore.kt:42)",
+            "org.kiwix.mobile.Auth.pass(Auth.kt:7)",
             "kotlinx.coroutines.internal.LockFreeLinkedListNode2.helpRemovePrevious8",
         )) assertEquals(frame, CrashRedaction.redactLine(frame))
         // The same steps as a message otherwise: secrets, URLs and paths go.
@@ -136,26 +157,28 @@ class CrashRedactionTest {
     }
 
     @Test
-    fun onlyAnExternalHttpAddressKeepsItsHostAndPath() {
+    fun onlyAPublicHttpHostIsKeptAndNeverItsPath() {
         fun shown(url: String) = CrashRedaction.redact(url)
-        assertEquals("https://example.org/a/b", shown("https://user:pass@example.org/a/b?q=1#f"))
-        assertEquals("http://example.org/", shown("HTTP://Example.ORG"))
-        assertEquals("https://example.org/", shown("https://example.org:443"))
-        assertEquals("https://example.org:8443/x", shown("https://example.org:8443/x"))
-        assertEquals("http://93.184.216.34/a", shown("http://93.184.216.34/a"))
-        assertEquals("http://[2001:db8::1]:8080/a", shown("http://[2001:DB8:0:0:0:0:0:1]:8080/a"))
-        assertEquals("https://example.org/b", shown("https://example.org/a/../b"))
-        assertEquals("https://example.org/a%7Bb%7D", shown("https://example.org/a{b}"))
-        // This device, in every spelling, is a reader page.
+        assertEquals("https://example.org", shown("https://user:pass@example.org/a/b?q=1#f"))
+        assertEquals("http://example.org", shown("HTTP://Example.ORG."))
+        assertEquals("https://example.org", shown("https://example.org:0443/x"))
+        assertEquals("https://example.org:8443", shown("https://example.org:8443/Private Page"))
+        // This device is a reader page.
         for (local in listOf(
-            "http://localhost/x", "http://LOCALHOST.:9/x", "http://book.localhost/x", "http://127.0.0.1/x",
-            "http://127.1/x", "http://0x7f.0.0.1/x", "http://[::1]/x", "http://[0:0:0:0:0:0:0:1]:9/x",
-            "http://[::ffff:127.0.0.1]/x",
+            "http://localhost/x", "http://LOCALHOST.:9/x", "http://book.localhost/A/Private Page",
+            "http://127.0.0.1:1234/x", "http://127.1/x", "http://[::1]:9/x", "http://localhost:port/x",
         )) assertEquals(local, "[reader-url]", shown(local))
-        // An address this parser does not fully understand is dropped whole.
-        for (unclear in listOf(
-            "http://exa%6dple.org/a", "http://b\u00fccher.example/a", "http://example.org:port/a",
-            "http://example.org:99999/a", "http://[::1/a", "http://[zz::1]/a", "http:///", "http://1.2.3.4.5/a",
-        )) assertEquals(unclear, "[url]", shown(unclear))
+        // Everything else goes whole: other schemes, IP literals in any spelling,
+        // single-label and home-network names, a malformed port.
+        for (dropped in listOf(
+            "http://93.184.216.34/a", "http://[2001:db8::1]/a", "http://0x7f.0.0.1/x", "http://2130706433/x",
+            "http://[0:0:0:0:0:0:0:1]:9/x", "http://[::ffff:127.0.0.1]/x", "http://intranet/a b",
+            "http://janes-phone.local:8080/A/Private", "http://b\u00fccher.example/a", "http://example.org:port/a",
+            "http://example.org:999999/a", "http://[::1/a", "http:///", "ws://example.org/a",
+            "http://192.168.1.5:43123/.kiwix-access/0123456789abcdef",
+        )) assertEquals(dropped, "[url]", shown(dropped))
+        // Case folding is ASCII only: a Kelvin sign is not `k`, a long s is not `s`.
+        assertEquals("[url]", shown("http://\u212Aiwix.example/a"))
+        assertEquals("pas\u017Fword=hunter2", shown("pas\u017Fword=hunter2"))
     }
 }
