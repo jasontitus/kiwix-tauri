@@ -97,6 +97,24 @@ internal object CrashRedaction {
     private fun isAsciiDigit(point: Int) = point in '0'.code..'9'.code
     private fun isAsciiAlphanumeric(point: Int) = isAsciiLetter(point) || isAsciiDigit(point)
     private fun asciiLower(point: Int) = if (point in 'A'.code..'Z'.code) point + 32 else point
+
+    /**
+     * Whether `points[from, to)` is [lower] when only ASCII letters are folded.
+     * Never `equals(ignoreCase = true)` or `lowercase()`: those fold `ſ` to `s`
+     * and the Kelvin sign to `k`, which would make a key or scheme match text
+     * the other platforms leave alone.
+     */
+    private fun asciiEquals(points: IntArray, from: Int, to: Int, lower: String): Boolean {
+        if (to - from != lower.length || from < 0 || to > points.size) return false
+        for (offset in lower.indices) if (asciiLower(points[from + offset]) != lower[offset].code) return false
+        return true
+    }
+
+    private fun asciiLower(text: String): String {
+        val lowered = StringBuilder(text.length)
+        for (character in text) lowered.append(if (character in 'A'..'Z') character + 32 else character)
+        return lowered.toString()
+    }
     private fun IntArray.at(index: Int): Int = if (index in indices) this[index] else -1
     private fun isOneOf(point: Int, characters: String) = point in 0..0xFFFF && characters.indexOf(point.toChar()) >= 0
 
@@ -196,11 +214,7 @@ internal object CrashRedaction {
         for (key in secretKeys) {
             val afterKey = at + key.length
             if (afterKey > points.size) continue
-            var matches = true
-            for (offset in key.indices) {
-                if (asciiLower(points[at + offset]) != key[offset].code) { matches = false; break }
-            }
-            if (!matches || isWordCharacter(points.at(afterKey))) continue
+            if (!asciiEquals(points, at, afterKey, key) || isWordCharacter(points.at(afterKey))) continue
             var next = afterKey
             // The closing quote of a quoted key: `"password":`.
             val quotedKey = points.at(next) == '"'.code || points.at(next) == '\''.code
@@ -257,9 +271,11 @@ internal object CrashRedaction {
     private fun secretValue(points: IntArray, start: Int, key: String): Span {
         when {
             points.at(start) == '"'.code -> {
-                val line = lineEnd(points, start + 1)
+                // The line end is found by the same scan, never ahead of it: a run
+                // of empty quoted values must not rescan the rest of the line.
                 var close = start + 1
-                while (close < line && !(points[close] == '"'.code && !backslashEscaped(points, start + 1, close))) close++
+                while (close < points.size && points[close] != '\n'.code && points[close] != '\r'.code &&
+                    !(points[close] == '"'.code && !backslashEscaped(points, start + 1, close))) close++
                 return Span(start + 1, close)
             }
             points.at(start) == '\''.code -> {
@@ -303,27 +319,26 @@ internal object CrashRedaction {
             var start = colon
             while (start > cursor && isSchemeCharacter(points[start - 1])) start--
             if (start == colon || !isAsciiLetter(points[start])) continue
-            val scheme = string(points, start, colon)
             val tail = colon + 1
             val authority = points.at(tail) == '/'.code && points.at(tail + 1) == '/'.code
-            if (!authority && (points.at(tail) == ':'.code || opaqueSchemes.none { it.equals(scheme, ignoreCase = true) })) continue
+            if (!authority && (points.at(tail) == ':'.code || opaqueSchemes.none { asciiEquals(points, start, colon, it) })) continue
             var tokenEnd = tail
             while (tokenEnd < points.size && !isWhiteSpace(points[tokenEnd]) && !isOneOf(points[tokenEnd], "\"<>`")) tokenEnd++
             val hasBody = tail < points.size && !isWhiteSpace(points[tail])
             val end: Int
             val replacement: String
-            if (scheme.equals("file", ignoreCase = true) && hasBody) {
+            if (asciiEquals(points, start, colon, "file") && hasBody) {
                 // A file URL is a path and may be written with unencoded spaces: it
                 // ends where a path would. `file: ` followed by a space is prose; a
                 // path after it is found by the path step.
                 end = pathEnd(points, tail)
                 replacement = URL
-            } else if (scheme.equals("data", ignoreCase = true) && hasBody) {
+            } else if (asciiEquals(points, start, colon, "data") && hasBody) {
                 // A data URL carries content itself, spaces and markup included.
                 end = lineEnd(points, tail)
                 replacement = URL
             } else {
-                replacement = safeUrl(points, start, tokenEnd, scheme)
+                replacement = safeUrl(points, start, colon, tokenEnd)
                 // Every `scheme://` URL that is not kept (reader pages, content and
                 // archive links, shares) goes whole, like a path.
                 end = if (authority && (replacement == URL || replacement == READER_URL))
@@ -338,16 +353,20 @@ internal object CrashRedaction {
     }
 
     /**
-     * What may be kept of the URL in `points[start, end)`: nothing but
+     * What may be kept of the URL in `points[start, end)`, whose scheme ends at
+     * [colon]: nothing but
      * `scheme://host[:port]path` of an external http(s) address. A reader page
      * (a local host, a `/.kiwix/` route, or another URL nested in the path) is
      * `[reader-url]`. Anything else, including an address this parser does not
      * fully understand, is `[url]`.
      */
-    private fun safeUrl(points: IntArray, start: Int, end: Int, scheme: String): String {
-        if (!scheme.equals("http", ignoreCase = true) && !scheme.equals("https", ignoreCase = true)) return URL
-        val address = HttpAddress.parse(points, start + scheme.length + 1, end, scheme.lowercase(java.util.Locale.ROOT))
-            ?: return URL
+    private fun safeUrl(points: IntArray, start: Int, colon: Int, end: Int): String {
+        val scheme = when {
+            asciiEquals(points, start, colon, "http") -> "http"
+            asciiEquals(points, start, colon, "https") -> "https"
+            else -> return URL
+        }
+        val address = HttpAddress.parse(points, colon + 1, end, scheme) ?: return URL
         val decoded = address.decodedPath()
         val nested = decoded.contains("://") ||
             arrayOf("mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:").any { decoded.contains(it) }
@@ -625,7 +644,7 @@ internal object CrashRedaction {
                 var segment = StringBuilder()
                 fun close(last: Boolean) {
                     val name = segment.toString()
-                    val lower = name.lowercase(java.util.Locale.ROOT)
+                    val lower = asciiLower(name)
                     when {
                         lower == ".." || lower == ".%2e" || lower == "%2e." || lower == "%2e%2e" -> {
                             if (segments.isNotEmpty()) segments.removeAt(segments.size - 1)
