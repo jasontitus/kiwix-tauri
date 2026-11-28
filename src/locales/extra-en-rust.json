@@ -24,6 +24,8 @@
   "Refine your search to see more results.": "Refine your search to see more results.",
   "Resolving": "Resolving",
   "Retry after fixing the problem, for example by freeing disk space or reconnecting the drive that holds your Kiwix data. If you quit without saving, changes to open tabs and reading positions since the last successful save are lost, and unfinished transfers may have to repeat their most recent progress.": "Retry after fixing the problem, for example by freeing disk space or reconnecting the drive that holds your Kiwix data. If you quit without saving, changes to open tabs and reading positions since the last successful save are lost, and unfinished transfers may have to repeat their most recent progress.",
+  "Serving {count} archives from this device. Read-only; no application controls are exposed.": "Serving {count} archives from this device. Read-only; no application controls are exposed.",
   "Sharing PIN": "Sharing PIN",
-  "Stop": "Stop"
+  "Stop": "Stop",
+  "{count} articles": "{count} articles"
 }

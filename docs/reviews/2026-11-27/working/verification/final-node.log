@@ -1,0 +1,3281 @@
+TAP version 13
+# Subtest: attaching a keyboard or controller does not recreate the Activity
+ok 1 - attaching a keyboard or controller does not recreate the Activity
+  ---
+  duration_ms: 9.307784
+  type: 'test'
+  ...
+# Subtest: changes the shell reads only once still recreate the Activity
+ok 2 - changes the shell reads only once still recreate the Activity
+  ---
+  duration_ms: 1.612208
+  type: 'test'
+  ...
+# Subtest: a restored Activity tells the plugin its launch intent was already delivered
+ok 3 - a restored Activity tells the plugin its launch intent was already delivered
+  ---
+  duration_ms: 1.826476
+  type: 'test'
+  ...
+# Subtest: native methods keep the names Rust links against in a minified build
+ok 4 - native methods keep the names Rust links against in a minified build
+  ---
+  duration_ms: 1.00095
+  type: 'test'
+  ...
+# Subtest: vendored Kotlin component matches the locked Rust crates
+ok 5 - vendored Kotlin component matches the locked Rust crates
+  ---
+  duration_ms: 7.254478
+  type: 'test'
+  ...
+# Subtest: vendored upstream files are byte-identical to the recorded commit
+ok 6 - vendored upstream files are byte-identical to the recorded commit
+  ---
+  duration_ms: 1.623703
+  type: 'test'
+  ...
+# Subtest: the app permits cleartext to exactly upstream's CA revocation hosts
+ok 7 - the app permits cleartext to exactly upstream's CA revocation hosts
+  ---
+  duration_ms: 1.899483
+  type: 'test'
+  ...
+# Subtest: rejects native SDK libraries and permits Rust reader notices and unrelated libraries
+ok 8 - rejects native SDK libraries and permits Rust reader notices and unrelated libraries
+  ---
+  duration_ms: 1.002393
+  type: 'test'
+  ...
+# Subtest: inspects nested package names including symlinks
+ok 9 - inspects nested package names including symlinks
+  ---
+  duration_ms: 6.276672
+  type: 'test'
+  ...
+# Subtest: Windows resource selection requires the pinned speech runtime with no archive SDK
+ok 10 - Windows resource selection requires the pinned speech runtime with no archive SDK
+  ---
+  duration_ms: 3.232625
+  type: 'test'
+  ...
+# Subtest: ELF import inspection rejects an SDK link with no SDK file in the package
+ok 11 - ELF import inspection rejects an SDK link with no SDK file in the package
+  ---
+  duration_ms: 113.303382
+  type: 'test'
+  ...
+# Subtest: macOS finalizer rejects a linked SDK outside the bundle before signing
+ok 12 - macOS finalizer rejects a linked SDK outside the bundle before signing # SKIP
+  ---
+  duration_ms: 0.202504
+  type: 'test'
+  ...
+# Subtest: every native Rust source is consumed by the build script or the crate
+ok 13 - every native Rust source is consumed by the build script or the crate
+  ---
+  duration_ms: 1.218515
+  type: 'test'
+  ...
+# Subtest: current documentation does not claim the app links libzim
+ok 14 - current documentation does not claim the app links libzim
+  ---
+  duration_ms: 45.035857
+  type: 'test'
+  ...
+# Subtest: the checks detect an orphaned native source and a stale libzim claim
+ok 15 - the checks detect an orphaned native source and a stale libzim claim
+  ---
+  duration_ms: 2.426574
+  type: 'test'
+  ...
+# Subtest: zbus stays optional and out of default Linux builds
+ok 16 - zbus stays optional and out of default Linux builds
+  ---
+  duration_ms: 0.394133
+  type: 'test'
+  ...
+# Subtest: CI type-checks the unreleased Linux and Android location providers
+ok 17 - CI type-checks the unreleased Linux and Android location providers
+  ---
+  duration_ms: 0.426018
+  type: 'test'
+  ...
+# Subtest: a rejected capture leaves a message and a working Cancel instead of a dead window
+ok 18 - a rejected capture leaves a message and a working Cancel instead of a dead window
+  ---
+  duration_ms: 10.468244
+  type: 'test'
+  ...
+# Subtest: Cancel after a rejected capture reaches the app when the session is still live
+ok 19 - Cancel after a rejected capture reaches the app when the session is still live
+  ---
+  duration_ms: 1.420879
+  type: 'test'
+  ...
+# Subtest: an accepted capture is sent once and the page waits for the app to close it
+ok 20 - an accepted capture is sent once and the page waits for the app to close it
+  ---
+  duration_ms: 1.183675
+  type: 'test'
+  ...
+# Subtest: the camera starts in English when its locale cannot be loaded or is not supported
+ok 21 - the camera starts in English when its locale cannot be loaded or is not supported
+  ---
+  duration_ms: 1.904182
+  type: 'test'
+  ...
+# Subtest: device languages select matching catalog facet codes
+ok 22 - device languages select matching catalog facet codes
+  ---
+  duration_ms: 29.542143
+  type: 'test'
+  ...
+# Subtest: base languages match script and region variants
+ok 23 - base languages match script and region variants
+  ---
+  duration_ms: 0.336191
+  type: 'test'
+  ...
+# Subtest: two-letter facet codes and multi-language facets are supported
+ok 24 - two-letter facet codes and multi-language facets are supported
+  ---
+  duration_ms: 0.135102
+  type: 'test'
+  ...
+# Subtest: no match leaves the catalog unfiltered
+ok 25 - no match leaves the catalog unfiltered
+  ---
+  duration_ms: 0.197314
+  type: 'test'
+  ...
+# Subtest: duplicate device languages produce one facet selection
+ok 26 - duplicate device languages produce one facet selection
+  ---
+  duration_ms: 4.430942
+  type: 'test'
+  ...
+# Subtest: save completion preserves editor ownership: same draft
+ok 27 - save completion preserves editor ownership: same draft
+  ---
+  duration_ms: 1.632933
+  type: 'test'
+  ...
+# Subtest: save completion preserves editor ownership: newer text
+ok 28 - save completion preserves editor ownership: newer text
+  ---
+  duration_ms: 0.479743
+  type: 'test'
+  ...
+# Subtest: save completion preserves editor ownership: another article
+ok 29 - save completion preserves editor ownership: another article
+  ---
+  duration_ms: 0.426543
+  type: 'test'
+  ...
+# Subtest: save completion preserves editor ownership: reopened same article
+ok 30 - save completion preserves editor ownership: reopened same article
+  ---
+  duration_ms: 0.411593
+  type: 'test'
+  ...
+# Subtest: save completion preserves editor ownership: dismissed
+ok 31 - save completion preserves editor ownership: dismissed
+  ---
+  duration_ms: 0.435923
+  type: 'test'
+  ...
+# Subtest: a failed save preserves the draft and reports the failure
+ok 32 - a failed save preserves the draft and reports the failure
+  ---
+  duration_ms: 5.078472
+  type: 'test'
+  ...
+# Subtest: save does not dispatch while busy
+ok 33 - save does not dispatch while busy
+  ---
+  duration_ms: 0.574819
+  type: 'test'
+  ...
+# Subtest: save does not dispatch while readOnly
+ok 34 - save does not dispatch while readOnly
+  ---
+  duration_ms: 0.400643
+  type: 'test'
+  ...
+# Subtest: clear reading list reconciles a failed response for one
+ok 35 - clear reading list reconciles a failed response for one
+  ---
+  duration_ms: 0.843313
+  type: 'test'
+  ...
+# Subtest: clear reading list reconciles a failed response for two
+ok 36 - clear reading list reconciles a failed response for two
+  ---
+  duration_ms: 0.607122
+  type: 'test'
+  ...
+# Subtest: clear reading list refreshes once after success and respects declined confirmation
+ok 37 - clear reading list refreshes once after success and respects declined confirmation
+  ---
+  duration_ms: 0.872872
+  type: 'test'
+  ...
+# Subtest: a privacy cutover stops the remaining batch and suppresses stale callbacks
+ok 38 - a privacy cutover stops the remaining batch and suppresses stale callbacks
+  ---
+  duration_ms: 4.711261
+  type: 'test'
+  ...
+# Subtest: browser text picker returns selected contents
+ok 39 - browser text picker returns selected contents
+  ---
+  duration_ms: 0.79043
+  type: 'test'
+  ...
+# Subtest: browser text picker settles cancel
+ok 40 - browser text picker settles cancel
+  ---
+  duration_ms: 0.365762
+  type: 'test'
+  ...
+# Subtest: browser text picker settles empty selection
+ok 41 - browser text picker settles empty selection
+  ---
+  duration_ms: 0.386125
+  type: 'test'
+  ...
+# Subtest: unreadable browser file rejects through import and releases its busy state
+ok 42 - unreadable browser file rejects through import and releases its busy state
+  ---
+  duration_ms: 1.016025
+  type: 'test'
+  ...
+# Subtest: browser import enforces the byte limit before reading the selected file
+ok 43 - browser import enforces the byte limit before reading the selected file
+  ---
+  duration_ms: 2.00227
+  type: 'test'
+  ...
+# Subtest: mobile text handoff waits for native foreground generation and retains its initiating policy
+ok 44 - mobile text handoff waits for native foreground generation and retains its initiating policy
+  ---
+  duration_ms: 0.913485
+  type: 'test'
+  ...
+# Subtest: import retains picker policy while using the active foreground generation
+ok 45 - import retains picker policy while using the active foreground generation
+  ---
+  duration_ms: 0.943986
+  type: 'test'
+  ...
+# Subtest: a late bookmarks export cannot open a file picker after a privacy change
+ok 46 - a late bookmarks export cannot open a file picker after a privacy change
+  ---
+  duration_ms: 0.525155
+  type: 'test'
+  ...
+# Subtest: a late history export cannot open a file picker after a privacy change
+ok 47 - a late history export cannot open a file picker after a privacy change
+  ---
+  duration_ms: 0.481228
+  type: 'test'
+  ...
+# Subtest: resource exports retain the reader installation through each platform handoff
+ok 48 - resource exports retain the reader installation through each platform handoff
+  ---
+  duration_ms: 1.529177
+  type: 'test'
+  ...
+# Subtest: retired binary exports never reach a native picker or browser download
+ok 49 - retired binary exports never reach a native picker or browser download
+  ---
+  duration_ms: 0.985084
+  type: 'test'
+  ...
+# Subtest: a 10,000-result group mounts a single accessible page
+ok 50 - a 10,000-result group mounts a single accessible page
+  ---
+  duration_ms: 6.972699
+  type: 'test'
+  ...
+# Subtest: Windows verbatim drive and UNC paths are shown in their ordinary form
+ok 51 - Windows verbatim drive and UNC paths are shown in their ordinary form
+  ---
+  duration_ms: 4.684682
+  type: 'test'
+  ...
+# Subtest: other paths are unchanged
+ok 52 - other paths are unchanged
+  ---
+  duration_ms: 0.166931
+  type: 'test'
+  ...
+# Subtest: a crash-interrupted pause outranks its informational error
+ok 53 - a crash-interrupted pause outranks its informational error
+  ---
+  duration_ms: 0.986066
+  type: 'test'
+  ...
+# Subtest: an ordinary paused job with an error still reads as paused
+ok 54 - an ordinary paused job with an error still reads as paused
+  ---
+  duration_ms: 0.130667
+  type: 'test'
+  ...
+# Subtest: the disk-space confirmation stays ahead of every status
+ok 55 - the disk-space confirmation stays ahead of every status
+  ---
+  duration_ms: 0.074142
+  type: 'test'
+  ...
+# Subtest: a real error still reports failed when the job is not paused
+ok 56 - a real error still reports failed when the job is not paused
+  ---
+  duration_ms: 0.073797
+  type: 'test'
+  ...
+# Subtest: a ready completed job reads completed
+ok 57 - a ready completed job reads completed
+  ---
+  duration_ms: 0.097659
+  type: 'test'
+  ...
+# Subtest: a history warning preserves access only after the verified archive was imported
+ok 58 - a history warning preserves access only after the verified archive was imported
+  ---
+  duration_ms: 0.17229
+  type: 'test'
+  ...
+# Subtest: a verifying job is a local finalize, never a stalled download
+ok 59 - a verifying job is a local finalize, never a stalled download
+  ---
+  duration_ms: 0.076873
+  type: 'test'
+  ...
+# Subtest: verification outranks a stale informational error
+ok 60 - verification outranks a stale informational error
+  ---
+  duration_ms: 0.052553
+  type: 'test'
+  ...
+# Subtest: the card projects a live rate and remaining time for an active transfer
+ok 61 - the card projects a live rate and remaining time for an active transfer
+  ---
+  duration_ms: 0.271886
+  type: 'test'
+  ...
+# Subtest: paused and verifying rows replace the rate with a note instead of a stale number
+ok 62 - paused and verifying rows replace the rate with a note instead of a stale number
+  ---
+  duration_ms: 0.200615
+  type: 'test'
+  ...
+# Subtest: terminal rows carry no live line
+ok 63 - terminal rows carry no live line
+  ---
+  duration_ms: 0.097827
+  type: 'test'
+  ...
+# Subtest: remaining time uses the coarsest unit a person can act on
+ok 64 - remaining time uses the coarsest unit a person can act on
+  ---
+  duration_ms: 0.075233
+  type: 'test'
+  ...
+# Subtest: notification replay follows native acquisition ownership and phase, not HTTP provenance
+ok 65 - notification replay follows native acquisition ownership and phase, not HTTP provenance
+  ---
+  duration_ms: 0.222101
+  type: 'test'
+  ...
+# Subtest: new and legacy library acquisition cleanup retains installed destination candidates
+ok 66 - new and legacy library acquisition cleanup retains installed destination candidates
+  ---
+  duration_ms: 0.213542
+  type: 'test'
+  ...
+# Subtest: library transport provenance never opts generic resumes into selected-book PIN admission
+ok 67 - library transport provenance never opts generic resumes into selected-book PIN admission
+  ---
+  duration_ms: 2.181632
+  type: 'test'
+  ...
+# Subtest: notification cancellation accepts native library acquisition IDs but revalidates phase and destination
+ok 68 - notification cancellation accepts native library acquisition IDs but revalidates phase and destination
+  ---
+  duration_ms: 2.894502
+  type: 'test'
+  ...
+# Subtest: library provenance does not bypass read-only, retired privacy, or interactive notification gates
+ok 69 - library provenance does not bypass read-only, retired privacy, or interactive notification gates
+  ---
+  duration_ms: 2.21789
+  type: 'test'
+  ...
+# Subtest: downloads are listed newest first, whatever their state
+ok 70 - downloads are listed newest first, whatever their state
+  ---
+  duration_ms: 0.170203
+  type: 'test'
+  ...
+# Subtest: a download keeps its place when it finishes
+ok 71 - a download keeps its place when it finishes
+  ---
+  duration_ms: 2.969198
+  type: 'test'
+  ...
+# Subtest: resuming or retrying a download moves it back to the top
+ok 72 - resuming or retrying a download moves it back to the top
+  ---
+  duration_ms: 0.125488
+  type: 'test'
+  ...
+# Subtest: the map download takes its place by start time
+ok 73 - the map download takes its place by start time
+  ---
+  duration_ms: 0.06465
+  type: 'test'
+  ...
+# Subtest: jobs without a start stamp follow, newest first-seen first
+ok 74 - jobs without a start stamp follow, newest first-seen first
+  ---
+  duration_ms: 0.051845
+  type: 'test'
+  ...
+# Subtest: catalog freshness describes only the displayed page and offers offline retry
+ok 75 - catalog freshness describes only the displayed page and offers offline retry
+  ---
+  duration_ms: 153.576599
+  type: 'test'
+  ...
+# Subtest: private and read-only catalog metadata does not promise offline persistence
+ok 76 - private and read-only catalog metadata does not promise offline persistence
+  ---
+  duration_ms: 80.707201
+  type: 'test'
+  ...
+# Subtest: verified Ready requires review and then a separate explicit Replace action
+ok 77 - verified Ready requires review and then a separate explicit Replace action
+  ---
+  duration_ms: 83.625812
+  type: 'test'
+  ...
+# Subtest: downloading never offers Replace and stale or blocked installations cannot cut over
+ok 78 - downloading never offers Replace and stale or blocked installations cannot cut over
+  ---
+  duration_ms: 71.746367
+  type: 'test'
+  ...
+# Subtest: association requires an explicit selection and prepares the exact installed principal
+ok 79 - association requires an explicit selection and prepares the exact installed principal
+  ---
+  duration_ms: 25.192658
+  type: 'test'
+  ...
+# Subtest: late preparation cannot resurrect a decision after source or privacy retirement
+ok 80 - late preparation cannot resurrect a decision after source or privacy retirement
+  ---
+  duration_ms: 21.727363
+  type: 'test'
+  ...
+# Subtest: Downloads reviews a retained intent after catalog refresh and loads its refreshed native selection
+ok 81 - Downloads reviews a retained intent after catalog refresh and loads its refreshed native selection
+  ---
+  duration_ms: 115.604465
+  type: 'test'
+  ...
+# Subtest: reviewing sequential Ready rows retires sibling tokens and permits reviewing the first again
+ok 82 - reviewing sequential Ready rows retires sibling tokens and permits reviewing the first again
+  ---
+  duration_ms: 71.959132
+  type: 'test'
+  ...
+# Subtest: committed-but-uncertain errors refresh native state and do not retry a cutover
+ok 83 - committed-but-uncertain errors refresh native state and do not retry a cutover
+  ---
+  duration_ms: 36.328283
+  type: 'test'
+  ...
+# Subtest: rollback confirms and binds the currently installed replacement principal
+ok 84 - rollback confirms and binds the currently installed replacement principal
+  ---
+  duration_ms: 31.611615
+  type: 'test'
+  ...
+# Subtest: bulk selection excludes ambiguous, retired, and duplicate installations
+ok 85 - bulk selection excludes ambiguous, retired, and duplicate installations
+  ---
+  duration_ms: 3.707694
+  type: 'test'
+  ...
+# Subtest: queue serializes the prepare-start handoff and starts every edition
+ok 86 - queue serializes the prepare-start handoff and starts every edition
+  ---
+  duration_ms: 58.686965
+  type: 'test'
+  ...
+# Subtest: two eligible editions both reach download start after a serialized handoff
+ok 87 - two eligible editions both reach download start after a serialized handoff
+  ---
+  duration_ms: 0.72415
+  type: 'test'
+  ...
+# Subtest: partial prepare and start failures keep later editions queued
+ok 88 - partial prepare and start failures keep later editions queued
+  ---
+  duration_ms: 0.491559
+  type: 'test'
+  ...
+# Subtest: cancelling the queue starts nothing further and accounts for skipped editions
+ok 89 - cancelling the queue starts nothing further and accounts for skipped editions
+  ---
+  duration_ms: 0.248621
+  type: 'test'
+  ...
+# Subtest: cancellation after preparation never starts the prepared transfer
+ok 90 - cancellation after preparation never starts the prepared transfer
+  ---
+  duration_ms: 1.712398
+  type: 'test'
+  ...
+# Subtest: an empty candidate list settles without work
+ok 91 - an empty candidate list settles without work
+  ---
+  duration_ms: 0.879018
+  type: 'test'
+  ...
+# Subtest: docs/ERRORS.md matches the error copy in the current sources
+ok 92 - docs/ERRORS.md matches the error copy in the current sources
+  ---
+  duration_ms: 1206.805395
+  type: 'test'
+  ...
+# Subtest: only a bare invocation writes; help and unrecognized arguments leave the document alone
+ok 93 - only a bare invocation writes; help and unrecognized arguments leave the document alone
+  ---
+  duration_ms: 201.036125
+  type: 'test'
+  ...
+# Subtest: the document omits line numbers and does not depend on scan order
+ok 94 - the document omits line numbers and does not depend on scan order
+  ---
+  duration_ms: 3.233883
+  type: 'test'
+  ...
+# Subtest: the check names added and removed literals instead of only failing
+ok 95 - the check names added and removed literals instead of only failing
+  ---
+  duration_ms: 1.143989
+  type: 'test'
+  ...
+# Subtest: test-only Rust sources are excluded whatever the host's path separator
+ok 96 - test-only Rust sources are excluded whatever the host's path separator
+  ---
+  duration_ms: 952.702995
+  type: 'test'
+  ...
+# Subtest: only the sensor decision write is blocking; the rest stay recoverable
+ok 97 - only the sensor decision write is blocking; the rest stay recoverable
+  ---
+  duration_ms: 0.747956
+  type: 'test'
+  ...
+# Subtest: the reporting path defaults to blocking
+ok 98 - the reporting path defaults to blocking
+  ---
+  duration_ms: 0.08007
+  type: 'test'
+  ...
+# Subtest: recoverable errors render only when technical details are on
+ok 99 - recoverable errors render only when technical details are on
+  ---
+  duration_ms: 0.089757
+  type: 'test'
+  ...
+# Subtest: blocking errors render regardless of the setting
+ok 100 - blocking errors render regardless of the setting
+  ---
+  duration_ms: 0.056404
+  type: 'test'
+  ...
+# Subtest: a recoverable error is recorded but not rendered with the setting off
+ok 101 - a recoverable error is recorded but not rendered with the setting off
+  ---
+  duration_ms: 0.381831
+  type: 'test'
+  ...
+# Subtest: a blocking error is recorded and rendered with the setting off
+ok 102 - a blocking error is recorded and rendered with the setting off
+  ---
+  duration_ms: 0.075979
+  type: 'test'
+  ...
+# Subtest: the in-memory log keeps only the newest bounded entries
+ok 103 - the in-memory log keeps only the newest bounded entries
+  ---
+  duration_ms: 0.427926
+  type: 'test'
+  ...
+# Subtest: clearing the log notifies subscribers and empties the copy text
+ok 104 - clearing the log notifies subscribers and empties the copy text
+  ---
+  duration_ms: 0.205135
+  type: 'test'
+  ...
+# Subtest: a cancellation the user chose is neither recorded nor rendered
+ok 105 - a cancellation the user chose is neither recorded nor rendered
+  ---
+  duration_ms: 0.270341
+  type: 'test'
+  ...
+# Subtest: the Rust lifecycle gate becomes a typed error, never a text match
+ok 106 - the Rust lifecycle gate becomes a typed error, never a text match
+  ---
+  duration_ms: 0.27303
+  type: 'test'
+  ...
+# Subtest: a suspended command is neither recorded nor rendered
+ok 107 - a suspended command is neither recorded nor rendered
+  ---
+  duration_ms: 0.096067
+  type: 'test'
+  ...
+# Subtest: only Nearby sender verification failures become the sender sentence
+ok 108 - only Nearby sender verification failures become the sender sentence
+  ---
+  duration_ms: 111.179173
+  type: 'test'
+  ...
+# Subtest: the sender-verification list covers every Nearby producer, and no other Rust message is rewritten
+ok 109 - the sender-verification list covers every Nearby producer, and no other Rust message is rewritten
+  ---
+  duration_ms: 130.361258
+  type: 'test'
+  ...
+# Subtest: no native status code produced by Kotlin, Swift or Rust is ever shown as the message
+ok 110 - no native status code produced by Kotlin, Swift or Rust is ever shown as the message
+  ---
+  duration_ms: 195.377368
+  type: 'test'
+  ...
+# Subtest: native code families map to their instruction in every form they arrive in
+ok 111 - native code families map to their instruction in every form they arrive in
+  ---
+  duration_ms: 30.033762
+  type: 'test'
+  ...
+# Subtest: a sentence is never mistaken for a native code
+ok 112 - a sentence is never mistaken for a native code
+  ---
+  duration_ms: 21.111773
+  type: 'test'
+  ...
+# Subtest: a cancellation the user chose is a type of its own, never a sentence to match
+ok 113 - a cancellation the user chose is a type of its own, never a sentence to match
+  ---
+  duration_ms: 28.958512
+  type: 'test'
+  ...
+# Subtest: only the user's own answer to the low-storage prompt is a cancellation
+ok 114 - only the user's own answer to the low-storage prompt is a cancellation
+  ---
+  duration_ms: 129.574783
+  type: 'test'
+  ...
+# Subtest: the App reporter owns one surface per failure and paints no cancellation
+ok 115 - the App reporter owns one surface per failure and paints no cancellation
+  ---
+  duration_ms: 290.228819
+  type: 'test'
+  ...
+# Subtest: the error surface is the band unless a blocking failure is covered by a dialog
+ok 116 - the error surface is the band unless a blocking failure is covered by a dialog
+  ---
+  duration_ms: 0.171609
+  type: 'test'
+  ...
+# Subtest: selected-storage operations preserve terminal SuspendedError through Library and App reporting
+ok 117 - selected-storage operations preserve terminal SuspendedError through Library and App reporting
+  ---
+  duration_ms: 128.854157
+  type: 'test'
+  ...
+# Subtest: decimal units switch at exact thousand boundaries
+ok 118 - decimal units switch at exact thousand boundaries
+  ---
+  duration_ms: 1.259359
+  type: 'test'
+  ...
+# Subtest: rounding never prints 1000 of the smaller unit
+ok 119 - rounding never prints 1000 of the smaller unit
+  ---
+  duration_ms: 0.096214
+  type: 'test'
+  ...
+# Subtest: the largest unit is capped
+ok 120 - the largest unit is capped
+  ---
+  duration_ms: 0.086074
+  type: 'test'
+  ...
+# Subtest: invalid input stays on bytes
+ok 121 - invalid input stays on bytes
+  ---
+  duration_ms: 0.059746
+  type: 'test'
+  ...
+# Subtest: archive dialogs and editors recover without losing the current interaction
+ok 122 - archive dialogs and editors recover without losing the current interaction
+  ---
+  duration_ms: 10562.144888
+  type: 'test'
+  ...
+# Subtest: ios normal-size primary labels retain contrast in light, dark and system-dark palettes
+ok 123 - ios normal-size primary labels retain contrast in light, dark and system-dark palettes
+  ---
+  duration_ms: 3.034597
+  type: 'test'
+  ...
+# Subtest: macos normal-size primary labels retain contrast in light, dark and system-dark palettes
+ok 124 - macos normal-size primary labels retain contrast in light, dark and system-dark palettes
+  ---
+  duration_ms: 0.972005
+  type: 'test'
+  ...
+# Subtest: linux normal-size primary labels retain contrast in light, dark and system-dark palettes
+ok 125 - linux normal-size primary labels retain contrast in light, dark and system-dark palettes
+  ---
+  duration_ms: 1.558442
+  type: 'test'
+  ...
+# Subtest: reader filled actions keep contrast through platform pressed styles
+ok 126 - reader filled actions keep contrast through platform pressed styles
+  ---
+  duration_ms: 5.671746
+  type: 'test'
+  ...
+# Subtest: Linux secondary text remains readable on shell, card and navigation surfaces
+ok 127 - Linux secondary text remains readable on shell, card and navigation surfaces
+  ---
+  duration_ms: 0.560523
+  type: 'test'
+  ...
+# Subtest: iOS inactive destinations remain readable on the tab bar's light and dark surfaces
+ok 128 - iOS inactive destinations remain readable on the tab bar's light and dark surfaces
+  ---
+  duration_ms: 0.330407
+  type: 'test'
+  ...
+# Subtest: iOS filled tablet navigation retains contrast when pressed
+ok 129 - iOS filled tablet navigation retains contrast when pressed
+  ---
+  duration_ms: 0.724912
+  type: 'test'
+  ...
+# Subtest: filled actions consume separate foreground and background tokens
+ok 130 - filled actions consume separate foreground and background tokens
+  ---
+  duration_ms: 0.109706
+  type: 'test'
+  ...
+# Subtest: archive content typography participates in the native text-size contract
+ok 131 - archive content typography participates in the native text-size contract
+  ---
+  duration_ms: 0.361649
+  type: 'test'
+  ...
+# Subtest: download emphasis uses the defined foreground token
+ok 132 - download emphasis uses the defined foreground token
+  ---
+  duration_ms: 0.351276
+  type: 'test'
+  ...
+# Subtest: pinned archives lead in pin order and unpinning restores the previous sort
+ok 133 - pinned archives lead in pin order and unpinning restores the previous sort
+  ---
+  duration_ms: 1.584881
+  type: 'test'
+  ...
+# Subtest: pin order survives a settings round trip
+ok 134 - pin order survives a settings round trip
+  ---
+  duration_ms: 0.120083
+  type: 'test'
+  ...
+# Subtest: removed archives and duplicates never consume a pin slot
+ok 135 - removed archives and duplicates never consume a pin slot
+  ---
+  duration_ms: 0.147027
+  type: 'test'
+  ...
+# Subtest: leaving search before debounce prevents a popup over the newly focused control
+ok 136 - leaving search before debounce prevents a popup over the newly focused control
+  ---
+  duration_ms: 1.34575
+  type: 'test'
+  ...
+# Subtest: blur retires in-flight suggestions; refocus admits only the new result
+ok 137 - blur retires in-flight suggestions; refocus admits only the new result
+  ---
+  duration_ms: 0.915664
+  type: 'test'
+  ...
+# Subtest: a dismissed continuation cannot append results or reopen the popup
+ok 138 - a dismissed continuation cannot append results or reopen the popup
+  ---
+  duration_ms: 0.641114
+  type: 'test'
+  ...
+# Subtest: every UI string in the sources is collected in the localization manifest
+ok 139 - every UI string in the sources is collected in the localization manifest
+  ---
+  duration_ms: 1379.945102
+  type: 'test'
+  ...
+# Subtest: the inventory reports uncollected, dynamic and untranslated copy, and nothing else
+ok 140 - the inventory reports uncollected, dynamic and untranslated copy, and nothing else
+  ---
+  duration_ms: 11.783663
+  type: 'test'
+  ...
+# Subtest: plural categories are written in CLDR order whatever order the engine reports
+ok 141 - plural categories are written in CLDR order whatever order the engine reports
+  ---
+  duration_ms: 0.628183
+  type: 'test'
+  ...
+# Subtest: Android resource locales retain script and region rather than collapsing Chinese
+ok 142 - Android resource locales retain script and region rather than collapsing Chinese
+  ---
+  duration_ms: 1.90405
+  type: 'test'
+  ...
+# Subtest: Android string resources escape both XML and Android's quoted string syntax
+ok 143 - Android string resources escape both XML and Android's quoted string syntax
+  ---
+  duration_ms: 0.11907
+  type: 'test'
+  ...
+# Subtest: translation placeholders are opaque URLs, not locale-formatted bare numbers
+ok 144 - translation placeholders are opaque URLs, not locale-formatted bare numbers
+  ---
+  duration_ms: 0.197481
+  type: 'test'
+  ...
+# Subtest: Apple fuzzy comments bind to one assignment across context comments
+ok 145 - Apple fuzzy comments bind to one assignment across context comments
+  ---
+  duration_ms: 0.773659
+  type: 'test'
+  ...
+# Subtest: Android fuzzy attributes do not bleed into neighbors or plural items
+ok 146 - Android fuzzy attributes do not bleed into neighbors or plural items
+  ---
+  duration_ms: 0.411933
+  type: 'test'
+  ...
+# Subtest: default generation removes only the exact fuzzy pinned value and origin
+ok 147 - default generation removes only the exact fuzzy pinned value and origin
+  ---
+  duration_ms: 0.18925
+  type: 'test'
+  ...
+# Subtest: review authority requires exact locale/source/text/context and public attributable evidence
+ok 148 - review authority requires exact locale/source/text/context and public attributable evidence
+  ---
+  duration_ms: 0.235612
+  type: 'test'
+  ...
+# Subtest: explicit review survives lower-confidence refresh inputs without granting authority to a flag
+ok 149 - explicit review survives lower-confidence refresh inputs without granting authority to a flag
+  ---
+  duration_ms: 0.170678
+  type: 'test'
+  ...
+# Subtest: review evidence binds exact plural forms without rewriting placeholders or categories
+ok 150 - review evidence binds exact plural forms without rewriting placeholders or categories
+  ---
+  duration_ms: 0.298775
+  type: 'test'
+  ...
+# Subtest: pinned Android candidates retain explicit fuzzy metadata without gaining review authority
+ok 151 - pinned Android candidates retain explicit fuzzy metadata without gaining review authority
+  ---
+  duration_ms: 11.92854
+  type: 'test'
+  ...
+# Subtest: frozen request hashes exact bytes before JSON parsing, not equivalent JSON
+ok 152 - frozen request hashes exact bytes before JSON parsing, not equivalent JSON
+  ---
+  duration_ms: 1.581381
+  type: 'test'
+  ...
+# Subtest: request rejects scope expansion, identity/path tricks and unbounded lifetimes
+ok 153 - request rejects scope expansion, identity/path tricks and unbounded lifetimes
+  ---
+  duration_ms: 0.582095
+  type: 'test'
+  ...
+# Subtest: mobile identity cutover admits real Android serials without loosening iOS or retaining schema1 aliases
+ok 154 - mobile identity cutover admits real Android serials without loosening iOS or retaining schema1 aliases
+  ---
+  duration_ms: 0.287185
+  type: 'test'
+  ...
+# Subtest: controls accept only nonce-bound one-shot source binding and strict stop boolean
+ok 155 - controls accept only nonce-bound one-shot source binding and strict stop boolean
+  ---
+  duration_ms: 0.20972
+  type: 'test'
+  ...
+# Subtest: observe authority is frozen, mode-specific and one-shot without granting receive
+ok 156 - observe authority is frozen, mode-specific and one-shot without granting receive
+  ---
+  duration_ms: 3.982049
+  type: 'test'
+  ...
+# Subtest: discovery requires unique exact source generation, never a display label
+ok 157 - discovery requires unique exact source generation, never a display label
+  ---
+  duration_ms: 0.207202
+  type: 'test'
+  ...
+# Subtest: receipt binds observed session, opaque publication and every fixture metadata field
+ok 158 - receipt binds observed session, opaque publication and every fixture metadata field
+  ---
+  duration_ms: 0.376073
+  type: 'test'
+  ...
+# Subtest: observation binds a real browse to the unique discovery session and fails on lost or replaced source
+ok 159 - observation binds a real browse to the unique discovery session and fails on lost or replaced source
+  ---
+  duration_ms: 0.224008
+  type: 'test'
+  ...
+# Subtest: observer preservation forbids local intake, reader changes, downloads or publication
+ok 160 - observer preservation forbids local intake, reader changes, downloads or publication
+  ---
+  duration_ms: 0.361421
+  type: 'test'
+  ...
+# Subtest: preservation retains exact existing installation, settings and tabs while allowing additions
+ok 161 - preservation retains exact existing installation, settings and tabs while allowing additions
+  ---
+  duration_ms: 0.412217
+  type: 'test'
+  ...
+# Subtest: readiness admits only exact authenticated loopback shell line with a real bound port
+ok 162 - readiness admits only exact authenticated loopback shell line with a real bound port
+  ---
+  duration_ms: 0.261771
+  type: 'test'
+  ...
+# Subtest: keeps the reader for audible background media
+ok 163 - keeps the reader for audible background media
+  ---
+  duration_ms: 1.120526
+  type: 'test'
+  ...
+# Subtest: keeps the reader for an active Picture-in-Picture presentation
+ok 164 - keeps the reader for an active Picture-in-Picture presentation
+  ---
+  duration_ms: 0.078667
+  type: 'test'
+  ...
+# Subtest: does not keep the reader without active media
+ok 165 - does not keep the reader without active media
+  ---
+  duration_ms: 0.066244
+  type: 'test'
+  ...
+# Subtest: privacy and read-only revocation always retire
+ok 166 - privacy and read-only revocation always retire
+  ---
+  duration_ms: 0.058416
+  type: 'test'
+  ...
+# Subtest: explicit retirement and shutdown always retire
+ok 167 - explicit retirement and shutdown always retire
+  ---
+  duration_ms: 0.098982
+  type: 'test'
+  ...
+# Subtest: delayed recognition does not block lifecycle wakes/checkpoints and is consumed once after foreground
+ok 168 - delayed recognition does not block lifecycle wakes/checkpoints and is consumed once after foreground
+  ---
+  duration_ms: 11.239265
+  type: 'test'
+  ...
+# Subtest: a privacy-policy cutover discards a delayed transcript instead of borrowing foreground authority
+ok 169 - a privacy-policy cutover discards a delayed transcript instead of borrowing foreground authority
+  ---
+  duration_ms: 1.26279
+  type: 'test'
+  ...
+# Subtest: a recognizer failure is reported once after return, but a retired shell never consumes its continuation
+ok 170 - a recognizer failure is reported once after return, but a retired shell never consumes its continuation
+  ---
+  duration_ms: 1.67219
+  type: 'test'
+  ...
+# Subtest: valid audible/PiP retention keeps the same reader document, session and playback position across foreground
+ok 171 - valid audible/PiP retention keeps the same reader document, session and playback position across foreground
+  ---
+  duration_ms: 1.93402
+  type: 'test'
+  ...
+# Subtest: non-media, privacy/read-only changes and native retirement cannot reuse retained document authority
+ok 172 - non-media, privacy/read-only changes and native retirement cannot reuse retained document authority
+  ---
+  duration_ms: 3.746049
+  type: 'test'
+  ...
+# Subtest: retirement or privacy changes beat delayed retained-session activation and retire its late native owner
+ok 173 - retirement or privacy changes beat delayed retained-session activation and retire its late native owner
+  ---
+  duration_ms: 1.847677
+  type: 'test'
+  ...
+# Subtest: Android retained read-aloud restores its exact native reader owner without stopping or replacing speech
+ok 174 - Android retained read-aloud restores its exact native reader owner without stopping or replacing speech
+  ---
+  duration_ms: 1.084958
+  type: 'test'
+  ...
+# Subtest: Android archive audible/PiP retention without TTS restores only the existing reader owner
+ok 175 - Android archive audible/PiP retention without TTS restores only the existing reader owner
+  ---
+  duration_ms: 2.564166
+  type: 'test'
+  ...
+# Subtest: another Android background transition beats delayed frontend confirmation without retiring retained speech
+ok 176 - another Android background transition beats delayed frontend confirmation without retiring retained speech
+  ---
+  duration_ms: 1.258869
+  type: 'test'
+  ...
+# Subtest: a successful retained restore reply after another background keeps read-aloud
+ok 177 - a successful retained restore reply after another background keeps read-aloud
+  ---
+  duration_ms: 1.234184
+  type: 'test'
+  ...
+# Subtest: native speech waits for the window listener and retires pending registration on unmount
+ok 178 - native speech waits for the window listener and retires pending registration on unmount
+  ---
+  duration_ms: 33.809746
+  type: 'test'
+  ...
+# Subtest: OS per-app locale overrides stale WebView system language without replacing preference
+ok 179 - OS per-app locale overrides stale WebView system language without replacing preference
+  ---
+  duration_ms: 136.442606
+  type: 'test'
+  ...
+# Subtest: clearing native per-app locale restores navigator matching and respects Chinese script
+ok 180 - clearing native per-app locale restores navigator matching and respects Chinese script
+  ---
+  duration_ms: 47.569997
+  type: 'test'
+  ...
+# Subtest: byte sizes never print 1000 of the smaller unit
+ok 181 - byte sizes never print 1000 of the smaller unit
+  ---
+  duration_ms: 80.292359
+  type: 'test'
+  ...
+# Subtest: web sharing shows the addresses the device has now, not the ones at start
+ok 182 - web sharing shows the addresses the device has now, not the ones at start
+  ---
+  duration_ms: 33544.053218
+  type: 'test'
+  ...
+# Subtest: Nearby says when Bluetooth or sharing stopped, and closing a pending join abandons it
+ok 183 - Nearby says when Bluetooth or sharing stopped, and closing a pending join abandons it
+  ---
+  duration_ms: 12672.943143
+  type: 'test'
+  ...
+# Subtest: a pairing invitation that ends by itself is explained; cancelling it is not
+ok 184 - a pairing invitation that ends by itself is explained; cancelling it is not
+  ---
+  duration_ms: 13539.537956
+  type: 'test'
+  ...
+# Subtest: the official catalog's RFC 3339 date matches the installed edition of the same flavour only
+ok 185 - the official catalog's RFC 3339 date matches the installed edition of the same flavour only
+  ---
+  duration_ms: 114.254632
+  type: 'test'
+  ...
+# Subtest: sharing a large archive waits for its torrent instead of failing after three minutes
+ok 186 - sharing a large archive waits for its torrent instead of failing after three minutes
+  ---
+  duration_ms: 74.36469
+  type: 'test'
+  ...
+# Subtest: a torrent that stops without a magnet link says so and the dialog stops waiting
+ok 187 - a torrent that stops without a magnet link says so and the dialog stops waiting
+  ---
+  duration_ms: 22.947475
+  type: 'test'
+  ...
+# Subtest: a failed status read inside the share dialog is shown once, in the dialog
+ok 188 - a failed status read inside the share dialog is shown once, in the dialog
+  ---
+  duration_ms: 22.191693
+  type: 'test'
+  ...
+# Subtest: Enter before the suggestion debounce elapses keeps the submitted search running
+ok 189 - Enter before the suggestion debounce elapses keeps the submitted search running
+  ---
+  duration_ms: 35.54319
+  type: 'test'
+  ...
+# Subtest: a provider-backed selection is copied, never moved, even if Move was chosen
+ok 190 - a provider-backed selection is copied, never moved, even if Move was chosen
+  ---
+  duration_ms: 3.82815
+  type: 'test'
+  ...
+# Subtest: a search that fails does not pop the suggestion list over its error
+ok 191 - a search that fails does not pop the suggestion list over its error
+  ---
+  duration_ms: 35.578234
+  type: 'test'
+  ...
+# Subtest: a spelling correction keeps focus on the query on desktop and moves it to the results on a phone
+ok 192 - a spelling correction keeps focus on the query on desktop and moves it to the results on a phone
+  ---
+  duration_ms: 67.036423
+  type: 'test'
+  ...
+# Subtest: on iOS a kept map file's path is hidden without swallowing the reason beside it
+ok 193 - on iOS a kept map file's path is hidden without swallowing the reason beside it
+  ---
+  duration_ms: 26.66937
+  type: 'test'
+  ...
+# Subtest: a card failure far down Discover or Maps is shown where it can be seen
+ok 194 - a card failure far down Discover or Maps is shown where it can be seen
+  ---
+  duration_ms: 12548.358736
+  type: 'test'
+  ...
+# Subtest: Library removal, search and spelling suggestions each have one visible outcome
+ok 195 - Library removal, search and spelling suggestions each have one visible outcome
+  ---
+  duration_ms: 8417.226597
+  type: 'test'
+  ...
+# Subtest: Downloads shows kept progress, retained originals and one owner per failure
+ok 196 - Downloads shows kept progress, retained originals and one owner per failure
+  ---
+  duration_ms: 8659.687831
+  type: 'test'
+  ...
+# Subtest: the detector recognizes each required-reason family and ignores comments
+ok 197 - the detector recognizes each required-reason family and ignores comments
+  ---
+  duration_ms: 2.909844
+  type: 'test'
+  ...
+# Subtest: the application privacy manifest declares every required-reason API its native code uses
+ok 198 - the application privacy manifest declares every required-reason API its native code uses
+  ---
+  duration_ms: 13.29775
+  type: 'test'
+  ...
+# Subtest: the categories that unscanned code relies on stay declared
+ok 199 - the categories that unscanned code relies on stay declared
+  ---
+  duration_ms: 0.258807
+  type: 'test'
+  ...
+# Subtest: every declared category carries reasons Apple accepts from an application
+ok 200 - every declared category carries reasons Apple accepts from an application
+  ---
+  duration_ms: 0.189156
+  type: 'test'
+  ...
+# Subtest: the manifest is bundled with the application and the widget extension needs none
+ok 201 - the manifest is bundled with the application and the widget extension needs none
+  ---
+  duration_ms: 0.882538
+  type: 'test'
+  ...
+# Subtest: a target-independent Android bundle captures both document identities once
+ok 202 - a target-independent Android bundle captures both document identities once
+  ---
+  duration_ms: 42.184859
+  type: 'test'
+  ...
+# Subtest: trusted unavailable acquisition becomes a source-scoped actionable reader notice, then clears only on matching read success
+ok 203 - trusted unavailable acquisition becomes a source-scoped actionable reader notice, then clears only on matching read success
+  ---
+  duration_ms: 9.332231
+  type: 'test'
+  ...
+# Subtest: uppercase persisted iOS references retain exact source-scoped recovery authority
+ok 204 - uppercase persisted iOS references retain exact source-scoped recovery authority
+  ---
+  duration_ms: 8.131559
+  type: 'test'
+  ...
+# Subtest: a provider lease conflict is retryable only for its exact book, installation, and source
+ok 205 - a provider lease conflict is retryable only for its exact book, installation, and source
+  ---
+  duration_ms: 10.709965
+  type: 'test'
+  ...
+# Subtest: revoked grants and other failures stay visible and are not cleared by a successful unrelated provider read
+ok 206 - revoked grants and other failures stay visible and are not cleared by a successful unrelated provider read
+  ---
+  duration_ms: 15.557591
+  type: 'test'
+  ...
+# Subtest: unscoped or mismatched envelopes never acquire local-retry authority
+ok 207 - unscoped or mismatched envelopes never acquire local-retry authority
+  ---
+  duration_ms: 43.499852
+  type: 'test'
+  ...
+# Subtest: missing-entry recovery keeps live document identity while removing only the persisted marker
+ok 208 - missing-entry recovery keeps live document identity while removing only the persisted marker
+  ---
+  duration_ms: 0.577613
+  type: 'test'
+  ...
+# Subtest: ordinary archive URL query spelling remains byte-identical
+ok 209 - ordinary archive URL query spelling remains byte-identical
+  ---
+  duration_ms: 0.172196
+  type: 'test'
+  ...
+# Subtest: an open confirmation reacts to another window blocking external links
+ok 210 - an open confirmation reacts to another window blocking external links
+  ---
+  duration_ms: 1.594618
+  type: 'test'
+  ...
+# Subtest: confirmed current-policy links still reach the native boundary
+ok 211 - confirmed current-policy links still reach the native boundary
+  ---
+  duration_ms: 0.545702
+  type: 'test'
+  ...
+# Subtest: busy and unsafe handoffs cannot issue another native request
+ok 212 - busy and unsafe handoffs cannot issue another native request
+  ---
+  duration_ms: 0.395403
+  type: 'test'
+  ...
+# Subtest: load initializes an announced archive document without publishing readiness before its authenticated reply
+ok 213 - load initializes an announced archive document without publishing readiness before its authenticated reply
+  ---
+  duration_ms: 4.502517
+  type: 'test'
+  ...
+# Subtest: reader-init is never posted to a document no bridge has vouched for
+ok 214 - reader-init is never posted to a document no bridge has vouched for
+  ---
+  duration_ms: 1.163708
+  type: 'test'
+  ...
+# Subtest: a withheld initialisation is not released to a retired frame
+ok 215 - a withheld initialisation is not released to a retired frame
+  ---
+  duration_ms: 2.276881
+  type: 'test'
+  ...
+# Subtest: child navigation withholds readiness until the replacement session authenticates its changed document
+ok 216 - child navigation withholds readiness until the replacement session authenticates its changed document
+  ---
+  duration_ms: 6.489069
+  type: 'test'
+  ...
+# Subtest: retired privacy or storage admission cannot reopen a pending document
+ok 217 - retired privacy or storage admission cannot reopen a pending document
+  ---
+  duration_ms: 3.010303
+  type: 'test'
+  ...
+# Subtest: a stale activation is deactivated without publishing readiness or initializing the archive
+ok 218 - a stale activation is deactivated without publishing readiness or initializing the archive
+  ---
+  duration_ms: 1.164618
+  type: 'test'
+  ...
+# Subtest: a frame load no document announced keeps the session once its own bridge proves it
+ok 219 - a frame load no document announced keeps the session once its own bridge proves it
+  ---
+  duration_ms: 1.08494
+  type: 'test'
+  ...
+# Subtest: an unannounced load nobody proves loses its session, is hidden, and is handed nothing
+ok 220 - an unannounced load nobody proves loses its session, is hidden, and is handed nothing
+  ---
+  duration_ms: 0.891232
+  type: 'test'
+  ...
+# Subtest: a late proof cannot bring the session back; it only lets the bridge be handed the replacement
+ok 221 - a late proof cannot bring the session back; it only lets the bridge be handed the replacement
+  ---
+  duration_ms: 1.859054
+  type: 'test'
+  ...
+# Subtest: only the bridge that holds the session can prove an unannounced load
+ok 222 - only the bridge that holds the session can prove an unannounced load
+  ---
+  duration_ms: 4.534409
+  type: 'test'
+  ...
+# Subtest: the proof of an earlier load cannot settle a later one
+ok 223 - the proof of an earlier load cannot settle a later one
+  ---
+  duration_ms: 0.774381
+  type: 'test'
+  ...
+# Subtest: a document that announces itself after its load is re-sessioned at once, and no proof can undo it
+ok 224 - a document that announces itself after its load is re-sessioned at once, and no proof can undo it
+  ---
+  duration_ms: 0.842632
+  type: 'test'
+  ...
+# Subtest: a forged announcement only costs the page a re-session
+ok 225 - a forged announcement only costs the page a re-session
+  ---
+  duration_ms: 1.263969
+  type: 'test'
+  ...
+# Subtest: the session's own announcement may follow its load without costing a re-session
+ok 226 - the session's own announcement may follow its load without costing a re-session
+  ---
+  duration_ms: 0.7923
+  type: 'test'
+  ...
+# Subtest: a navigation whose load precedes its announcement is still re-sessioned without waiting
+ok 227 - a navigation whose load precedes its announcement is still re-sessioned without waiting
+  ---
+  duration_ms: 0.773093
+  type: 'test'
+  ...
+# Subtest: a session no bridge has bound yet is never named in a probe
+ok 228 - a session no bridge has bound yet is never named in a probe
+  ---
+  duration_ms: 1.113329
+  type: 'test'
+  ...
+# Subtest: an archive-authored binding that wins the race is not trusted once the bridge's own arrives
+ok 229 - an archive-authored binding that wins the race is not trusted once the bridge's own arrives
+  ---
+  duration_ms: 2.566731
+  type: 'test'
+  ...
+# Subtest: a same-document reopen is initialised once the bridge already in the frame proves it is listening
+ok 230 - a same-document reopen is initialised once the bridge already in the frame proves it is listening
+  ---
+  duration_ms: 2.76519
+  type: 'test'
+  ...
+# Subtest: an announcement made while a re-session is in flight is answered by that re-session's initialisation
+ok 231 - an announcement made while a re-session is in flight is answered by that re-session's initialisation
+  ---
+  duration_ms: 12.649938
+  type: 'test'
+  ...
+# Subtest: a document restored from the back-forward cache cannot reuse the session or the token it once held
+ok 232 - a document restored from the back-forward cache cannot reuse the session or the token it once held
+  ---
+  duration_ms: 1.470029
+  type: 'test'
+  ...
+# Subtest: a proof window does not outlive the session it was opened for
+ok 233 - a proof window does not outlive the session it was opened for
+  ---
+  duration_ms: 2.227291
+  type: 'test'
+  ...
+# Subtest: a child navigation keeps the page painted while it re-sessions, and hides it if that fails
+ok 234 - a child navigation keeps the page painted while it re-sessions, and hides it if that fails
+  ---
+  duration_ms: 4.919324
+  type: 'test'
+  ...
+# Subtest: a tab's history keeps only its nearest entries
+ok 235 - a tab's history keeps only its nearest entries
+  ---
+  duration_ms: 4.170917
+  type: 'test'
+  ...
+# Subtest: only the session being initialised keeps a photo secret
+ok 236 - only the session being initialised keeps a photo secret
+  ---
+  duration_ms: 1.123982
+  type: 'test'
+  ...
+# Subtest: no photo secret is issued where the photo chooser is not offered
+ok 237 - no photo secret is issued where the photo chooser is not offered
+  ---
+  duration_ms: 1.496292
+  type: 'test'
+  ...
+# Subtest: a photo request is honoured only where the photo chooser is offered
+ok 238 - a photo request is honoured only where the photo chooser is offered
+  ---
+  duration_ms: 1.673815
+  type: 'test'
+  ...
+# Subtest: blank section titles never become contents entries
+ok 239 - blank section titles never become contents entries
+  ---
+  duration_ms: 0.64746
+  type: 'test'
+  ...
+# Subtest: a preview request for the page on screen is dropped, whatever its fragment
+ok 240 - a preview request for the page on screen is dropped, whatever its fragment
+  ---
+  duration_ms: 0.604729
+  type: 'test'
+  ...
+# Subtest: a link the app cannot open is answered with a quiet notice, never an error band
+ok 241 - a link the app cannot open is answered with a quiet notice, never an error band
+  ---
+  duration_ms: 0.673996
+  type: 'test'
+  ...
+# Subtest: owned multi-step traversal commits the selected occurrence once without reopening the live document
+ok 242 - owned multi-step traversal commits the selected occurrence once without reopening the live document
+  ---
+  duration_ms: 0.966151
+  type: 'test'
+  ...
+# Subtest: unrelated navigation cancels an owned traversal and makes its later acknowledgment inert
+ok 243 - unrelated navigation cancels an owned traversal and makes its later acknowledgment inert
+  ---
+  duration_ms: 1.061706
+  type: 'test'
+  ...
+# Subtest: an explicit live-segment refusal uses the ordinary reopen path once
+ok 244 - an explicit live-segment refusal uses the ordinary reopen path once
+  ---
+  duration_ms: 0.724413
+  type: 'test'
+  ...
+# Subtest: a changed privacy generation prevents timeout fallback from reviving the old history source
+ok 245 - a changed privacy generation prevents timeout fallback from reviving the old history source
+  ---
+  duration_ms: 3.257307
+  type: 'test'
+  ...
+# Subtest: timeout fallback waits for genuine retirement and rejects a source changed during that wait
+ok 246 - timeout fallback waits for genuine retirement and rejects a source changed during that wait
+  ---
+  duration_ms: 1.922294
+  type: 'test'
+  ...
+# Subtest: same-entry router replacement commits the owned history move with its final safe location
+ok 247 - same-entry router replacement commits the owned history move with its final safe location
+  ---
+  duration_ms: 0.835186
+  type: 'test'
+  ...
+# Subtest: resource context accepts only the live archive document and interaction owner
+ok 248 - resource context accepts only the live archive document and interaction owner
+  ---
+  duration_ms: 4.331469
+  type: 'test'
+  ...
+# Subtest: location without the app's provider is answered at once, without a consent prompt
+ok 249 - location without the app's provider is answered at once, without a consent prompt
+  ---
+  duration_ms: 1.600463
+  type: 'test'
+  ...
+# Subtest: wherever the app has a location provider, it asks first, and cameras are unaffected
+ok 250 - wherever the app has a location provider, it asks first, and cameras are unaffected
+  ---
+  duration_ms: 1.997834
+  type: 'test'
+  ...
+# Subtest: the bridge only intercepts single-file inputs whose accept list is supported photos
+ok 251 - the bridge only intercepts single-file inputs whose accept list is supported photos
+  ---
+  duration_ms: 2.111722
+  type: 'test'
+  ...
+# Subtest: toggling restricted mode retires the document and reopens it in a new frame
+ok 252 - toggling restricted mode retires the document and reopens it in a new frame
+  ---
+  duration_ms: 4.442223
+  type: 'test'
+  ...
+# Subtest: Reload article retires the document and reopens it in a new frame
+ok 253 - Reload article retires the document and reopens it in a new frame
+  ---
+  duration_ms: 1.436903
+  type: 'test'
+  ...
+# Subtest: an unconfirmed retirement removes the frame instead of presenting the old document as reloaded
+ok 254 - an unconfirmed retirement removes the frame instead of presenting the old document as reloaded
+  ---
+  duration_ms: 1.593906
+  type: 'test'
+  ...
+# Subtest: a reopen that was overtaken does not replace the newer document
+ok 255 - a reopen that was overtaken does not replace the newer document
+  ---
+  duration_ms: 2.575525
+  type: 'test'
+  ...
+# Subtest: live history retains native entry distances when consecutive entries share a URL
+ok 256 - live history retains native entry distances when consecutive entries share a URL
+  ---
+  duration_ms: 0.693573
+  type: 'test'
+  ...
+# Subtest: multi-step traversal distinguishes repeated non-adjacent destinations
+ok 257 - multi-step traversal distinguishes repeated non-adjacent destinations
+  ---
+  duration_ms: 0.164321
+  type: 'test'
+  ...
+# Subtest: a new branch discards retired forward entries and unknown navigation loses traversal authority
+ok 258 - a new branch discards retired forward entries and unknown navigation loses traversal authority
+  ---
+  duration_ms: 0.120036
+  type: 'test'
+  ...
+# Subtest: replaceState changes the current entry without adding a traversal and a mismatching pop cannot commit
+ok 259 - replaceState changes the current entry without adding a traversal and a mismatching pop cannot commit
+  ---
+  duration_ms: 0.091366
+  type: 'test'
+  ...
+# Subtest: canonical shell punctuation matches the original native URL without rewriting it
+ok 260 - canonical shell punctuation matches the original native URL without rewriting it
+  ---
+  duration_ms: 0.232188
+  type: 'test'
+  ...
+# Subtest: encoded path delimiters, literal percent escapes and query spelling remain distinct
+ok 261 - encoded path delimiters, literal percent escapes and query spelling remain distinct
+  ---
+  duration_ms: 0.220212
+  type: 'test'
+  ...
+# Subtest: synchronous History API mutations report their captured locations in native order
+ok 262 - synchronous History API mutations report their captured locations in native order
+  ---
+  duration_ms: 4.499541
+  type: 'test'
+  ...
+# Subtest: popstate replaceState handlers preserve the owned acknowledgment and native state
+ok 263 - popstate replaceState handlers preserve the owned acknowledgment and native state
+  ---
+  duration_ms: 1.030727
+  type: 'test'
+  ...
+# Subtest: a router push during popstate follows the owned history move rather than replacing it
+ok 264 - a router push during popstate follows the owned history move rather than replacing it
+  ---
+  duration_ms: 1.017
+  type: 'test'
+  ...
+# Subtest: a known hash push with both native events creates one navigable entry
+ok 265 - a known hash push with both native events creates one navigable entry
+  ---
+  duration_ms: 1.093385
+  type: 'test'
+  ...
+# Subtest: hidden audio is omitted and a visible player exports only an inert current-state representation
+ok 266 - hidden audio is omitted and a visible player exports only an inert current-state representation
+  ---
+  duration_ms: 3.940582
+  type: 'test'
+  ...
+# Subtest: live export captures current form/details/canvas state and self-contained image/computed styling
+ok 267 - live export captures current form/details/canvas state and self-contained image/computed styling
+  ---
+  duration_ms: 13.139102
+  type: 'test'
+  ...
+# Subtest: live export refuses inaccessible external resources and frame documents without original-content fallback
+ok 268 - live export refuses inaccessible external resources and frame documents without original-content fallback
+  ---
+  duration_ms: 1.56117
+  type: 'test'
+  ...
+# Subtest: live export rejects obsolete request identity and drops results after navigation
+ok 269 - live export rejects obsolete request identity and drops results after navigation
+  ---
+  duration_ms: 0.927032
+  type: 'test'
+  ...
+# Subtest: live export cancels a resource stream before it exceeds the capture budget
+ok 270 - live export cancels a resource stream before it exceeds the capture budget
+  ---
+  duration_ms: 0.734142
+  type: 'test'
+  ...
+# Subtest: long articles retain every paragraph within the unchanged capture budget when computed declarations repeat
+ok 271 - long articles retain every paragraph within the unchanged capture budget when computed declarations repeat
+  ---
+  duration_ms: 76.682186
+  type: 'test'
+  ...
+# Subtest: unique computed content still cannot bypass the 16 MiB capture limit
+ok 272 - unique computed content still cannot bypass the 16 MiB capture limit
+  ---
+  duration_ms: 40.360372
+  type: 'test'
+  ...
+# Subtest: same-origin nested documents are flattened with live state, viewport geometry and local resource bases
+ok 273 - same-origin nested documents are flattened with live state, viewport geometry and local resource bases
+  ---
+  duration_ms: 1.481639
+  type: 'test'
+  ...
+# Subtest: nested documents cannot collide with the parent's font faces or local SVG references
+ok 274 - nested documents cannot collide with the parent's font faces or local SVG references
+  ---
+  duration_ms: 1.630662
+  type: 'test'
+  ...
+# Subtest: a same-origin stylesheet the engine refused to load is skipped, not fatal
+ok 275 - a same-origin stylesheet the engine refused to load is skipped, not fatal
+  ---
+  duration_ms: 1.051347
+  type: 'test'
+  ...
+# Subtest: an unreadable cross-origin or non-security stylesheet still fails the export
+ok 276 - an unreadable cross-origin or non-security stylesheet still fails the export
+  ---
+  duration_ms: 0.741251
+  type: 'test'
+  ...
+# Subtest: nested document navigation during asynchronous capture invalidates the entire snapshot
+ok 277 - nested document navigation during asynchronous capture invalidates the entire snapshot
+  ---
+  duration_ms: 1.103515
+  type: 'test'
+  ...
+# Subtest: fixed and bottom-anchored elements are captured once at document coordinates, not the export viewport
+ok 278 - fixed and bottom-anchored elements are captured once at document coordinates, not the export viewport
+  ---
+  duration_ms: 0.656225
+  type: 'test'
+  ...
+# Subtest: sticky content keeps its layout slot and is frozen relative to its scrolled containing block
+ok 279 - sticky content keeps its layout slot and is frozen relative to its scrolled containing block
+  ---
+  duration_ms: 0.734956
+  type: 'test'
+  ...
+# Subtest: centered fixed transforms are not applied twice when freezing current geometry
+ok 280 - centered fixed transforms are not applied twice when freezing current geometry
+  ---
+  duration_ms: 0.680523
+  type: 'test'
+  ...
+# Subtest: fixed content inside a child document freezes in child scroll coordinates before viewport clipping
+ok 281 - fixed content inside a child document freezes in child scroll coordinates before viewport clipping
+  ---
+  duration_ms: 0.573641
+  type: 'test'
+  ...
+# Subtest: frozen viewport content retains local coordinates inside scaled containing blocks
+ok 282 - frozen viewport content retains local coordinates inside scaled containing blocks
+  ---
+  duration_ms: 0.672246
+  type: 'test'
+  ...
+# Subtest: open shadow DOM exports its composed live content, assigned slots and fallback slots, not unslotted light DOM
+ok 283 - open shadow DOM exports its composed live content, assigned slots and fallback slots, not unslotted light DOM
+  ---
+  duration_ms: 0.744443
+  type: 'test'
+  ...
+# Subtest: open shadow adopted font sheets are self-contained and scoped separately from document fonts
+ok 284 - open shadow adopted font sheets are self-contained and scoped separately from document fonts
+  ---
+  duration_ms: 1.072511
+  type: 'test'
+  ...
+# Subtest: custom surfaces without readable shadow DOM fail explicitly rather than claiming empty live-page completeness
+ok 285 - custom surfaces without readable shadow DOM fail explicitly rather than claiming empty live-page completeness
+  ---
+  duration_ms: 0.505019
+  type: 'test'
+  ...
+# Subtest: a never-defined, empty, unrendered custom element is left out instead of failing the export
+ok 286 - a never-defined, empty, unrendered custom element is left out instead of failing the export
+  ---
+  duration_ms: 3.541712
+  type: 'test'
+  ...
+# Subtest: replaced shadow roots invalidate a capture rather than mixing rendered surface identities
+ok 287 - replaced shadow roots invalidate a capture rather than mixing rendered surface identities
+  ---
+  duration_ms: 0.765016
+  type: 'test'
+  ...
+# Subtest: the shell's reader commands and the bridge's command handlers are the same set
+ok 288 - the shell's reader commands and the bridge's command handlers are the same set
+  ---
+  duration_ms: 339.773722
+  type: 'test'
+  ...
+# Subtest: every storage message a side handles is posted by its counterpart
+ok 289 - every storage message a side handles is posted by its counterpart
+  ---
+  duration_ms: 0.491436
+  type: 'test'
+  ...
+# Subtest: Escape during the last millisecond of the dwell cancels the future request
+ok 290 - Escape during the last millisecond of the dwell cancels the future request
+  ---
+  duration_ms: 79.197757
+  type: 'test'
+  ...
+# Subtest: Escape cancellation permits a later deliberate intent on the same anchor
+ok 291 - Escape cancellation permits a later deliberate intent on the same anchor
+  ---
+  duration_ms: 61.720919
+  type: 'test'
+  ...
+# Subtest: untrusted Escape and other trusted keys do not cancel the dwell
+ok 292 - untrusted Escape and other trusted keys do not cancel the dwell
+  ---
+  duration_ms: 38.935377
+  type: 'test'
+  ...
+# Subtest: Escape after dispatch invalidates an in-flight result without blocking recovery
+ok 293 - Escape after dispatch invalidates an in-flight result without blocking recovery
+  ---
+  duration_ms: 35.425138
+  type: 'test'
+  ...
+# Subtest: opt-out still cancels a dwell and opt-in requires a new intent
+ok 294 - opt-out still cancels a dwell and opt-in requires a new intent
+  ---
+  duration_ms: 18.410622
+  type: 'test'
+  ...
+# Subtest: departure still cancels a dwell
+ok 295 - departure still cancels a dwell
+  ---
+  duration_ms: 31.138483
+  type: 'test'
+  ...
+# Subtest: a foreign source cannot dismiss an active preview
+ok 296 - a foreign source cannot dismiss an active preview
+  ---
+  duration_ms: 24.15871
+  type: 'test'
+  ...
+# Subtest: a foreign origin cannot dismiss an active preview
+ok 297 - a foreign origin cannot dismiss an active preview
+  ---
+  duration_ms: 25.059038
+  type: 'test'
+  ...
+# Subtest: a foreign session cannot dismiss an active preview
+ok 298 - a foreign session cannot dismiss an active preview
+  ---
+  duration_ms: 17.932438
+  type: 'test'
+  ...
+# Subtest: session replacement still invalidates the prior session's in-flight result
+ok 299 - session replacement still invalidates the prior session's in-flight result
+  ---
+  duration_ms: 21.174895
+  type: 'test'
+  ...
+# Subtest: moving focus to a second article immediately after a preview does not lose its preview
+ok 300 - moving focus to a second article immediately after a preview does not lose its preview
+  ---
+  duration_ms: 1.761584
+  type: 'test'
+  ...
+# Subtest: departed, disconnected, untrusted and external links cannot emit preview requests
+ok 301 - departed, disconnected, untrusted and external links cannot emit preview requests
+  ---
+  duration_ms: 0.490927
+  type: 'test'
+  ...
+# Subtest: footnote, section and back links of the page on screen never ask for a preview
+ok 302 - footnote, section and back links of the page on screen never ask for a preview
+  ---
+  duration_ms: 0.513909
+  type: 'test'
+  ...
+# Subtest: disabling cancels an imminent preview and re-enabling permits the same anchor
+ok 303 - disabling cancels an imminent preview and re-enabling permits the same anchor
+  ---
+  duration_ms: 0.460577
+  type: 'test'
+  ...
+# Subtest: off then on cannot resurrect an earlier response and a new request recovers
+ok 304 - off then on cannot resurrect an earlier response and a new request recovers
+  ---
+  duration_ms: 27.172891
+  type: 'test'
+  ...
+# Subtest: disabling cancels the root's queued timer without blocking a later preview
+ok 305 - disabling cancels the root's queued timer without blocking a later preview
+  ---
+  duration_ms: 7.157332
+  type: 'test'
+  ...
+# Subtest: while one preview is pending only the newest queued article dispatches
+ok 306 - while one preview is pending only the newest queued article dispatches
+  ---
+  duration_ms: 8.930975
+  type: 'test'
+  ...
+# Subtest: a deferred preview cannot publish after disabled authority changes
+ok 307 - a deferred preview cannot publish after disabled authority changes
+  ---
+  duration_ms: 8.051781
+  type: 'test'
+  ...
+# Subtest: a deferred preview cannot publish after suspended authority changes
+ok 308 - a deferred preview cannot publish after suspended authority changes
+  ---
+  duration_ms: 8.174988
+  type: 'test'
+  ...
+# Subtest: a deferred preview cannot publish after noninteractive authority changes
+ok 309 - a deferred preview cannot publish after noninteractive authority changes
+  ---
+  duration_ms: 9.965439
+  type: 'test'
+  ...
+# Subtest: a deferred preview cannot publish after privacy authority changes
+ok 310 - a deferred preview cannot publish after privacy authority changes
+  ---
+  duration_ms: 11.125442
+  type: 'test'
+  ...
+# Subtest: a deferred preview cannot publish after replacement authority changes
+ok 311 - a deferred preview cannot publish after replacement authority changes
+  ---
+  duration_ms: 10.400855
+  type: 'test'
+  ...
+# Subtest: Android prints through its system print dialog, never the frame's window.print()
+ok 312 - Android prints through its system print dialog, never the frame's window.print()
+  ---
+  duration_ms: 30.016557
+  type: 'test'
+  ...
+# Subtest: iOS says that printing is unavailable instead of doing nothing
+ok 313 - iOS says that printing is unavailable instead of doing nothing
+  ---
+  duration_ms: 4.340988
+  type: 'test'
+  ...
+# Subtest: desktop keeps the native print panel and the browser preview keeps window.print()
+ok 314 - desktop keeps the native print panel and the browser preview keeps window.print()
+  ---
+  duration_ms: 7.097793
+  type: 'test'
+  ...
+# Subtest: native printing still needs an exportable article and write permission
+ok 315 - native printing still needs an exportable article and write permission
+  ---
+  duration_ms: 29.792775
+  type: 'test'
+  ...
+# Subtest: the separate print row is not offered on mobile
+ok 316 - the separate print row is not offered on mobile
+  ---
+  duration_ms: 0.373103
+  type: 'test'
+  ...
+# Subtest: mobile extraction is deterministic and highlights the spoken sentence
+ok 317 - mobile extraction is deterministic and highlights the spoken sentence
+  ---
+  duration_ms: 10.439065
+  type: 'test'
+  ...
+# Subtest: real DOM childNodes drive title and section checks
+ok 318 - real DOM childNodes drive title and section checks
+  ---
+  duration_ms: 5.85256
+  type: 'test'
+  ...
+# Subtest: article extraction skips site chrome, duplicate title and trailing reference sections
+ok 319 - article extraction skips site chrome, duplicate title and trailing reference sections
+  ---
+  duration_ms: 3.392143
+  type: 'test'
+  ...
+# Subtest: a sentence spanning inline nodes paints one continuous range
+ok 320 - a sentence spanning inline nodes paints one continuous range
+  ---
+  duration_ms: 3.314196
+  type: 'test'
+  ...
+# Subtest: CJK word highlighting stops at the sentence terminator
+ok 321 - CJK word highlighting stops at the sentence terminator
+  ---
+  duration_ms: 3.879873
+  type: 'test'
+  ...
+# Subtest: normalization matches the previous regex pipeline
+ok 322 - normalization matches the previous regex pipeline
+  ---
+  duration_ms: 26.873779
+  type: 'test'
+  ...
+# Subtest: whitespace normalization keeps offsets aligned with the live text
+ok 323 - whitespace normalization keeps offsets aligned with the live text
+  ---
+  duration_ms: 3.403176
+  type: 'test'
+  ...
+# Subtest: a new extraction clears previous paint and offsets use the current document
+ok 324 - a new extraction clears previous paint and offsets use the current document
+  ---
+  duration_ms: 5.002916
+  type: 'test'
+  ...
+# Subtest: desktop speech follows boundary offsets and clears on stop
+ok 325 - desktop speech follows boundary offsets and clears on stop
+  ---
+  duration_ms: 3.734621
+  type: 'test'
+  ...
+# Subtest: desktop selection speech uses the selection anchor and never rewrites text
+ok 326 - desktop selection speech uses the selection anchor and never rewrites text
+  ---
+  duration_ms: 3.649558
+  type: 'test'
+  ...
+# Subtest: live selection mapping is a fallback when anchor offsets are absent
+ok 327 - live selection mapping is a fallback when anchor offsets are absent
+  ---
+  duration_ms: 4.697851
+  type: 'test'
+  ...
+# Subtest: a unique spoken passage can still be mapped after selection collapse
+ok 328 - a unique spoken passage can still be mapped after selection collapse
+  ---
+  duration_ms: 3.625679
+  type: 'test'
+  ...
+# Subtest: an out-of-view sentence scrolls into place without touching text
+ok 329 - an out-of-view sentence scrolls into place without touching text
+  ---
+  duration_ms: 3.330465
+  type: 'test'
+  ...
+# Subtest: background visibility clears paint but keeps the mapping for return
+ok 330 - background visibility clears paint but keeps the mapping for return
+  ---
+  duration_ms: 3.567786
+  type: 'test'
+  ...
+# Subtest: a hidden window keeps desktop read-aloud going and only drops its paint
+ok 331 - a hidden window keeps desktop read-aloud going and only drops its paint
+  ---
+  duration_ms: 3.638971
+  type: 'test'
+  ...
+# Subtest: the contents list names every entry and skips blank or hidden headings
+ok 332 - the contents list names every entry and skips blank or hidden headings
+  ---
+  duration_ms: 3.275865
+  type: 'test'
+  ...
+# Subtest: the bridge proves an unchanged document only for the session it holds, with its private token
+ok 333 - the bridge proves an unchanged document only for the session it holds, with its private token
+  ---
+  duration_ms: 7.634517
+  type: 'test'
+  ...
+# Subtest: an archive script that replaces the message accessors learns neither the session nor the photo secret
+ok 334 - an archive script that replaces the message accessors learns neither the session nor the photo secret
+  ---
+  duration_ms: 3.663856
+  type: 'test'
+  ...
+# Subtest: the bridge binds its token to a new session before anything an archive script can reach
+ok 335 - the bridge binds its token to a new session before anything an archive script can reach
+  ---
+  duration_ms: 3.209701
+  type: 'test'
+  ...
+# Subtest: replaced accessors cannot make the bridge accept a message that is not from the shell
+ok 336 - replaced accessors cannot make the bridge accept a message that is not from the shell
+  ---
+  duration_ms: 3.330667
+  type: 'test'
+  ...
+# Subtest: a document restored from the back-forward cache announces itself again
+ok 337 - a document restored from the back-forward cache announces itself again
+  ---
+  duration_ms: 2.996696
+  type: 'test'
+  ...
+# Subtest: links the app cannot open stay blocked and are answered with a notice request, not an external-link
+ok 338 - links the app cannot open stay blocked and are answered with a notice request, not an external-link
+  ---
+  duration_ms: 3.346997
+  type: 'test'
+  ...
+# Subtest: navigation and pagehide clear the highlight
+ok 339 - navigation and pagehide clear the highlight
+  ---
+  duration_ms: 3.630812
+  type: 'test'
+  ...
+# Subtest: saved passage highlights survive read-aloud start and stop
+ok 340 - saved passage highlights survive read-aloud start and stop
+  ---
+  duration_ms: 3.71516
+  type: 'test'
+  ...
+# Subtest: a WebView without CSS highlights paints an aria-hidden overlay
+ok 341 - a WebView without CSS highlights paints an aria-hidden overlay
+  ---
+  duration_ms: 4.002189
+  type: 'test'
+  ...
+# Subtest: the selected video, audio or image resource wins over an enclosing article link
+ok 342 - the selected video, audio or image resource wins over an enclosing article link
+  ---
+  duration_ms: 3.173535
+  type: 'test'
+  ...
+# Subtest: resource context cannot authorize an untrusted or external resource
+ok 343 - resource context cannot authorize an untrusted or external resource
+  ---
+  duration_ms: 0.507686
+  type: 'test'
+  ...
+# Subtest: an empty source must not save the containing article through reflected src
+ok 344 - an empty source must not save the containing article through reflected src
+  ---
+  duration_ms: 0.377754
+  type: 'test'
+  ...
+# Subtest: an active search announces that it is searching
+ok 345 - an active search announces that it is searching
+  ---
+  duration_ms: 0.927107
+  type: 'test'
+  ...
+# Subtest: a completed search announces its total without page-local counts
+ok 346 - a completed search announces its total without page-local counts
+  ---
+  duration_ms: 0.087325
+  type: 'test'
+  ...
+# Subtest: a search with no matches announces no results
+ok 347 - a search with no matches announces no results
+  ---
+  duration_ms: 0.068977
+  type: 'test'
+  ...
+# Subtest: an empty query announces validation rather than a request failure
+ok 348 - an empty query announces validation rather than a request failure
+  ---
+  duration_ms: 0.088349
+  type: 'test'
+  ...
+# Subtest: a failed search announces the failure instead of stale results
+ok 349 - a failed search announces the failure instead of stale results
+  ---
+  duration_ms: 0.293105
+  type: 'test'
+  ...
+# Subtest: pagination announces the visible row range, and the range changes per page
+ok 350 - pagination announces the visible row range, and the range changes per page
+  ---
+  duration_ms: 1.449243
+  type: 'test'
+  ...
+# Subtest: the result count alone changes the announcement while the total is stable
+ok 351 - the result count alone changes the announcement while the total is stable
+  ---
+  duration_ms: 0.30732
+  type: 'test'
+  ...
+# Subtest: another result page adds a more-results hint
+ok 352 - another result page adds a more-results hint
+  ---
+  duration_ms: 0.100005
+  type: 'test'
+  ...
+# Subtest: a page with no rendered rows keeps the known total announceable
+ok 353 - a page with no rendered rows keeps the known total announceable
+  ---
+  duration_ms: 0.161492
+  type: 'test'
+  ...
+# Subtest: an untouched search panel has nothing to announce
+ok 354 - an untouched search panel has nothing to announce
+  ---
+  duration_ms: 0.438659
+  type: 'test'
+  ...
+# Subtest: every announced key exists in the English catalog
+ok 355 - every announced key exists in the English catalog
+  ---
+  duration_ms: 0.532389
+  type: 'test'
+  ...
+# Subtest: native map permission probe remains usable before consent without inheriting browser denial
+ok 356 - native map permission probe remains usable before consent without inheriting browser denial
+  ---
+  duration_ms: 5.483087
+  type: 'test'
+  ...
+# Subtest: remembered archive consent alone does not claim OS permission or a fresh fix
+ok 357 - remembered archive consent alone does not claim OS permission or a fresh fix
+  ---
+  duration_ms: 1.326588
+  type: 'test'
+  ...
+# Subtest: OS denial and explicit archive block/revoke are denied; reset and replacement return to prompt
+ok 358 - OS denial and explicit archive block/revoke are denied; reset and replacement return to prompt
+  ---
+  duration_ms: 1.085176
+  type: 'test'
+  ...
+# Subtest: permission change consumers receive independent handlers and cannot forge authority
+ok 359 - permission change consumers receive independent handlers and cannot forge authority
+  ---
+  duration_ms: 3.33905
+  type: 'test'
+  ...
+# Subtest: lifecycle cancellation and late fixes cannot become permission decisions
+ok 360 - lifecycle cancellation and late fixes cannot become permission decisions
+  ---
+  duration_ms: 1.62673
+  type: 'test'
+  ...
+# Subtest: native retirement before shell background is cancellation, not denial, and terminates its watch
+ok 361 - native retirement before shell background is cancellation, not denial, and terminates its watch
+  ---
+  duration_ms: 1103.715625
+  type: 'test'
+  ...
+# Subtest: a platform without the app's provider reports unavailable once and does not keep polling
+ok 362 - a platform without the app's provider reports unavailable once and does not keep polling
+  ---
+  duration_ms: 1102.417309
+  type: 'test'
+  ...
+# Subtest: browser provider and unrelated permissions retain the genuine Permissions API
+ok 363 - browser provider and unrelated permissions retain the genuine Permissions API
+  ---
+  duration_ms: 1.15669
+  type: 'test'
+  ...
+# Subtest: native provider exposes a truthful probe even when WebKit exposes no Permissions API
+ok 364 - native provider exposes a truthful probe even when WebKit exposes no Permissions API
+  ---
+  duration_ms: 0.991492
+  type: 'test'
+  ...
+# Subtest: navigation waits for genuine in-flight document retirement
+ok 365 - navigation waits for genuine in-flight document retirement
+  ---
+  duration_ms: 3.620543
+  type: 'test'
+  ...
+# Subtest: overlapping freezes retain admission until the last owner resumes
+ok 366 - overlapping freezes retain admission until the last owner resumes
+  ---
+  duration_ms: 3.47892
+  type: 'test'
+  ...
+# Subtest: cancelled navigation cannot cancel another owner's checkpoint
+ok 367 - cancelled navigation cannot cancel another owner's checkpoint
+  ---
+  duration_ms: 1.553751
+  type: 'test'
+  ...
+# Subtest: a retired freeze cannot release a replacement generation's freeze
+ok 368 - a retired freeze cannot release a replacement generation's freeze
+  ---
+  duration_ms: 0.874963
+  type: 'test'
+  ...
+# Subtest: unproved security detach rejects waiting navigation rather than bypassing storage
+ok 369 - unproved security detach rejects waiting navigation rather than bypassing storage
+  ---
+  duration_ms: 0.84031
+  type: 'test'
+  ...
+# Subtest: idle static frames spend no shared credit and never block later frames
+ok 370 - idle static frames spend no shared credit and never block later frames
+  ---
+  duration_ms: 3.115318
+  type: 'test'
+  ...
+# Subtest: root capacity backpressure retries an accepted write instead of losing it
+ok 371 - root capacity backpressure retries an accepted write instead of losing it
+  ---
+  duration_ms: 64.982998
+  type: 'test'
+  ...
+# Subtest: a navigation closes the outgoing document's stream through its successor, not by self-report
+ok 372 - a navigation closes the outgoing document's stream through its successor, not by self-report
+  ---
+  duration_ms: 1.203161
+  type: 'test'
+  ...
+# Subtest: a BFCache restore reopens a stream that navigation closed, with its queued batch charged
+ok 373 - a BFCache restore reopens a stream that navigation closed, with its queued batch charged
+  ---
+  duration_ms: 1.327001
+  type: 'test'
+  ...
+# Subtest: a BFCache resume without a close keeps the outstanding batch charged
+ok 374 - a BFCache resume without a close keeps the outstanding batch charged
+  ---
+  duration_ms: 1.074639
+  type: 'test'
+  ...
+# Subtest: a removed frame's idle stream is released on registration dispose
+ok 375 - a removed frame's idle stream is released on registration dispose
+  ---
+  duration_ms: 0.813337
+  type: 'test'
+  ...
+# Subtest: generation retirement fails blocked retries instead of committing them
+ok 376 - generation retirement fails blocked retries instead of committing them
+  ---
+  duration_ms: 38.293512
+  type: 'test'
+  ...
+# Subtest: freeze completes immediately without waiting 5s on a registered pre-ready iframe
+ok 377 - freeze completes immediately without waiting 5s on a registered pre-ready iframe
+  ---
+  duration_ms: 1.321461
+  type: 'test'
+  ...
+# Subtest: a reader message passing through the storage listener is never handed to replaceable code
+ok 378 - a reader message passing through the storage listener is never handed to replaceable code
+  ---
+  duration_ms: 3.576551
+  type: 'test'
+  ...
+# Subtest: credit from the shell is still accepted after the listener's hardening
+ok 379 - credit from the shell is still accepted after the listener's hardening
+  ---
+  duration_ms: 1.164698
+  type: 'test'
+  ...
+# Subtest: synchronous writes coalesce into one bounded IPC batch
+ok 380 - synchronous writes coalesce into one bounded IPC batch
+  ---
+  duration_ms: 4.623877
+  type: 'test'
+  ...
+# Subtest: quota failures stay synchronous and preserve already-admitted writes
+ok 381 - quota failures stay synchronous and preserve already-admitted writes
+  ---
+  duration_ms: 5.792342
+  type: 'test'
+  ...
+# Subtest: a BFCache pageshow keeps credit for synchronous writes and reconciles the snapshot
+ok 382 - a BFCache pageshow keeps credit for synchronous writes and reconciles the snapshot
+  ---
+  duration_ms: 1.307934
+  type: 'test'
+  ...
+# Subtest: a deferred post failure restores the mirror and surfaces the error
+ok 383 - a deferred post failure restores the mirror and surfaces the error
+  ---
+  duration_ms: 1.15371
+  type: 'test'
+  ...
+# Subtest: a served dark theme is applied while the body is still unparsed
+ok 384 - a served dark theme is applied while the body is still unparsed
+  ---
+  duration_ms: 7.072507
+  type: 'test'
+  ...
+# Subtest: the boot stylesheet stays theme-scoped and never restyles archive colours
+ok 385 - the boot stylesheet stays theme-scoped and never restyles archive colours
+  ---
+  duration_ms: 4.588135
+  type: 'test'
+  ...
+# Subtest: an original theme leaves the archive's own colours untouched
+ok 386 - an original theme leaves the archive's own colours untouched
+  ---
+  duration_ms: 3.288218
+  type: 'test'
+  ...
+# Subtest: served type is applied before the body paints and out-of-range sizes are ignored
+ok 387 - served type is applied before the body paints and out-of-range sizes are ignored
+  ---
+  duration_ms: 6.361344
+  type: 'test'
+  ...
+# Subtest: fresh original-color serif boot restores archive font (stylesheet)
+ok 388 - fresh original-color serif boot restores archive font (stylesheet)
+  ---
+  duration_ms: 4.070468
+  type: 'test'
+  ...
+# Subtest: fresh original-color serif boot restores archive font Georgia, serif
+ok 389 - fresh original-color serif boot restores archive font Georgia, serif
+  ---
+  duration_ms: 3.358412
+  type: 'test'
+  ...
+# Subtest: fresh original-color sans boot restores archive font (stylesheet)
+ok 390 - fresh original-color sans boot restores archive font (stylesheet)
+  ---
+  duration_ms: 3.317481
+  type: 'test'
+  ...
+# Subtest: fresh original-color sans boot restores archive font Georgia, serif
+ok 391 - fresh original-color sans boot restores archive font Georgia, serif
+  ---
+  duration_ms: 4.036468
+  type: 'test'
+  ...
+# Subtest: font-only prepaint does not capture unparsed body colours as archive originals
+ok 392 - font-only prepaint does not capture unparsed body colours as archive originals
+  ---
+  duration_ms: 3.462781
+  type: 'test'
+  ...
+# Subtest: comfortable and full widths update one scoped measure stylesheet
+ok 393 - comfortable and full widths update one scoped measure stylesheet
+  ---
+  duration_ms: 3.698927
+  type: 'test'
+  ...
+# Subtest: original width removes the attribute and its stylesheet
+ok 394 - original width removes the attribute and its stylesheet
+  ---
+  duration_ms: 8.284976
+  type: 'test'
+  ...
+# Subtest: media-only documents never receive the reading-column stylesheet
+ok 395 - media-only documents never receive the reading-column stylesheet
+  ---
+  duration_ms: 3.353869
+  type: 'test'
+  ...
+# Subtest: application/xhtml+xml documents receive the reading-column stylesheet
+ok 396 - application/xhtml+xml documents receive the reading-column stylesheet
+  ---
+  duration_ms: 3.367174
+  type: 'test'
+  ...
+# Subtest: text/plain documents receive the reading-column stylesheet
+ok 397 - text/plain documents receive the reading-column stylesheet
+  ---
+  duration_ms: 3.304021
+  type: 'test'
+  ...
+# Subtest: application/json documents receive the reading-column stylesheet
+ok 398 - application/json documents receive the reading-column stylesheet
+  ---
+  duration_ms: 3.295174
+  type: 'test'
+  ...
+# Subtest: application/xml documents receive the reading-column stylesheet
+ok 399 - application/xml documents receive the reading-column stylesheet
+  ---
+  duration_ms: 3.274861
+  type: 'test'
+  ...
+# Subtest: application/pdf documents stay as authored
+ok 400 - application/pdf documents stay as authored
+  ---
+  duration_ms: 3.321776
+  type: 'test'
+  ...
+# Subtest: image/svg+xml documents stay as authored
+ok 401 - image/svg+xml documents stay as authored
+  ---
+  duration_ms: 3.331006
+  type: 'test'
+  ...
+# Subtest: served width is applied before the body paints, with no appearance message
+ok 402 - served width is applied before the body paints, with no appearance message
+  ---
+  duration_ms: 9.595622
+  type: 'test'
+  ...
+# Subtest: served width covers xhtml and text documents before first paint
+ok 403 - served width covers xhtml and text documents before first paint
+  ---
+  duration_ms: 7.752347
+  type: 'test'
+  ...
+# Subtest: nested same-origin archive frames never receive the reading-width stylesheet
+ok 404 - nested same-origin archive frames never receive the reading-width stylesheet
+  ---
+  duration_ms: 0.468896
+  type: 'test'
+  ...
+# Subtest: an empty document highlight stream allocates no annotation observers or paint
+ok 405 - an empty document highlight stream allocates no annotation observers or paint
+  ---
+  duration_ms: 3.788219
+  type: 'test'
+  ...
+# Subtest: accepted highlights retain mutation revalidation and clear stale paint immediately
+ok 406 - accepted highlights retain mutation revalidation and clear stale paint immediately
+  ---
+  duration_ms: 3.919421
+  type: 'test'
+  ...
+# Subtest: annotation replacement assembles chunks before observing and empty replacement releases paint
+ok 407 - annotation replacement assembles chunks before observing and empty replacement releases paint
+  ---
+  duration_ms: 3.566196
+  type: 'test'
+  ...
+# Subtest: unavailable accepted quotes observe later content but invalid streams do not
+ok 408 - unavailable accepted quotes observe later content but invalid streams do not
+  ---
+  duration_ms: 3.469905
+  type: 'test'
+  ...
+# Subtest: pagehide suspends annotation observation and ready reconnects only retained annotations
+ok 409 - pagehide suspends annotation observation and ready reconnects only retained annotations
+  ---
+  duration_ms: 4.000495
+  type: 'test'
+  ...
+# Subtest: unsupported WebM shows one dismissible quiet notice
+ok 410 - unsupported WebM shows one dismissible quiet notice
+  ---
+  duration_ms: 69.518409
+  type: 'test'
+  ...
+# Subtest: an H.264 MP4 on the same WebKit keeps native playback untouched
+ok 411 - an H.264 MP4 on the same WebKit keeps native playback untouched
+  ---
+  duration_ms: 21.009229
+  type: 'test'
+  ...
+# Subtest: an unsupported source error still shows the notice without a declared type
+ok 412 - an unsupported source error still shows the notice without a declared type
+  ---
+  duration_ms: 21.735164
+  type: 'test'
+  ...
+# Subtest: a network error or an unknown blob source never claims a codec problem
+ok 413 - a network error or an unknown blob source never claims a codec problem
+  ---
+  duration_ms: 20.413357
+  type: 'test'
+  ...
+# Subtest: gesture-started media pauses when the reader hides
+ok 414 - gesture-started media pauses when the reader hides
+  ---
+  duration_ms: 22.474407
+  type: 'test'
+  ...
+# Subtest: the theme pass never visits the player's decoder nodes
+ok 415 - the theme pass never visits the player's decoder nodes
+  ---
+  duration_ms: 62.015226
+  type: 'test'
+  ...
+# Subtest: the theme scan batches style reads instead of alternating per element
+ok 416 - the theme scan batches style reads instead of alternating per element
+  ---
+  duration_ms: 102.121414
+  type: 'test'
+  ...
+# Subtest: an inverted mutation rescan classifies an ancestor before its descendant
+ok 417 - an inverted mutation rescan classifies an ancestor before its descendant
+  ---
+  duration_ms: 80.833841
+  type: 'test'
+  ...
+# Subtest: descendant media requires the actual child source, origin and current document session
+ok 418 - descendant media requires the actual child source, origin and current document session
+  ---
+  duration_ms: 5.435905
+  type: 'test'
+  ...
+# Subtest: finishing an unchanged child document load preserves its audible media session
+ok 419 - finishing an unchanged child document load preserves its audible media session
+  ---
+  duration_ms: 2.515992
+  type: 'test'
+  ...
+# Subtest: child removal, document navigation, retirement and shell-session replacement clear ownership
+ok 420 - child removal, document navigation, retirement and shell-session replacement clear ownership
+  ---
+  duration_ms: 3.697396
+  type: 'test'
+  ...
+# Subtest: an embedded archive aggregates grandchildren only on its media channel and retires on teardown
+ok 421 - an embedded archive aggregates grandchildren only on its media channel and retires on teardown
+  ---
+  duration_ms: 0.61748
+  type: 'test'
+  ...
+# Subtest: native WebKit PiP survives background video policy and reports ownership without the standard PiP API
+ok 422 - native WebKit PiP survives background video policy and reports ownership without the standard PiP API
+  ---
+  duration_ms: 1.340604
+  type: 'test'
+  ...
+# Subtest: native WebKit PiP does not survive explicit document/media retirement
+ok 423 - native WebKit PiP does not survive explicit document/media retirement
+  ---
+  duration_ms: 4.550219
+  type: 'test'
+  ...
+# Subtest: embedded inline playback checkpoints survive either background admission ordering and restore paused in a fresh authenticated reader
+ok 424 - embedded inline playback checkpoints survive either background admission ordering and restore paused in a fresh authenticated reader
+  ---
+  duration_ms: 11.929828
+  type: 'test'
+  ...
+# Subtest: checkpoint messages cannot borrow a replacement frame, source, tab or policy owner
+ok 425 - checkpoint messages cannot borrow a replacement frame, source, tab or policy owner
+  ---
+  duration_ms: 1.556823
+  type: 'test'
+  ...
+# Subtest: explicit retirement and policy/source/article/tab changes invalidate the single bounded root checkpoint
+ok 426 - explicit retirement and policy/source/article/tab changes invalidate the single bounded root checkpoint
+  ---
+  duration_ms: 1.596162
+  type: 'test'
+  ...
+# Subtest: malformed/external/internal-authority cursors are dropped and root data remains bounded and detached
+ok 427 - malformed/external/internal-authority cursors are dropped and root data remains bounded and detached
+  ---
+  duration_ms: 0.372562
+  type: 'test'
+  ...
+# Subtest: metadata callbacks cannot seek a replaced element or a retired document and mismatched duration never seeks
+ok 428 - metadata callbacks cannot seek a replaced element or a retired document and mismatched duration never seeks
+  ---
+  duration_ms: 6.31871
+  type: 'test'
+  ...
+# Subtest: a player refusing pause never receives a cursor seek or a later stale retry
+ok 429 - a player refusing pause never receives a cursor seek or a later stale retry
+  ---
+  duration_ms: 0.908654
+  type: 'test'
+  ...
+# Subtest: identical embedded player occurrences retain distinct cursors and independent metadata acknowledgments
+ok 430 - identical embedded player occurrences retain distinct cursors and independent metadata acknowledgments
+  ---
+  duration_ms: 10.751811
+  type: 'test'
+  ...
+# Subtest: live, closed and pending references preserve unsaved locations and selection identity
+ok 431 - live, closed and pending references preserve unsaved locations and selection identity
+  ---
+  duration_ms: 1.964019
+  type: 'test'
+  ...
+# Subtest: ordered replay handles multiple cutovers and explicit rollback without stale-ID resurrection
+ok 432 - ordered replay handles multiple cutovers and explicit rollback without stale-ID resurrection
+  ---
+  duration_ms: 0.149407
+  type: 'test'
+  ...
+# Subtest: acknowledged revisions do not replay older transitions over fresh navigation
+ok 433 - acknowledged revisions do not replay older transitions over fresh navigation
+  ---
+  duration_ms: 0.076065
+  type: 'test'
+  ...
+# Subtest: empty library tabs and unrelated archives remain intact
+ok 434 - empty library tabs and unrelated archives remain intact
+  ---
+  duration_ms: 0.087329
+  type: 'test'
+  ...
+# Subtest: unsaved bookmark draft keys follow cutover and rollback without changing draft text
+ok 435 - unsaved bookmark draft keys follow cutover and rollback without changing draft text
+  ---
+  duration_ms: 0.1759
+  type: 'test'
+  ...
+# Subtest: every source the Rust core localizes is an English catalog source
+ok 436 - every source the Rust core localizes is an English catalog source
+  ---
+  duration_ms: 89.732837
+  type: 'test'
+  ...
+# Subtest: a failed sensor decision is a blocking error and does not reload
+ok 437 - a failed sensor decision is a blocking error and does not reload
+  ---
+  duration_ms: 0.899529
+  type: 'test'
+  ...
+# Subtest: a saved sensor decision reloads without a blocking error
+ok 438 - a saved sensor decision reloads without a blocking error
+  ---
+  duration_ms: 0.083822
+  type: 'test'
+  ...
+# Subtest: a stale granted status cannot auto-allow after the user blocked
+ok 439 - a stale granted status cannot auto-allow after the user blocked
+  ---
+  duration_ms: 0.069935
+  type: 'test'
+  ...
+# Subtest: the successful path still auto-grants a previously allowed installation
+ok 440 - the successful path still auto-grants a previously allowed installation
+  ---
+  duration_ms: 0.084993
+  type: 'test'
+  ...
+# Subtest: a pause while typing a download directory neither saves nor opens the confirmation
+ok 441 - a pause while typing a download directory neither saves nor opens the confirmation
+  ---
+  duration_ms: 174.359235
+  type: 'test'
+  ...
+# Subtest: a typed download directory is shown as not saved, never as being saved
+ok 442 - a typed download directory is shown as not saved, never as being saved
+  ---
+  duration_ms: 58.741395
+  type: 'test'
+  ...
+# Subtest: Enter in the download directory field opens the review, and only there
+ok 443 - Enter in the download directory field opens the review, and only there
+  ---
+  duration_ms: 45.8344
+  type: 'test'
+  ...
+# Subtest: Quit or close with an unreviewed download directory neither applies nor discards it
+ok 444 - Quit or close with an unreviewed download directory neither applies nor discards it
+  ---
+  duration_ms: 126.005759
+  type: 'test'
+  ...
+# Subtest: hiding the shell for Quit blurs the field, and the typed directory survives a cancelled Quit
+ok 445 - hiding the shell for Quit blurs the field, and the typed directory survives a cancelled Quit
+  ---
+  duration_ms: 90.516536
+  type: 'test'
+  ...
+# Subtest: a review prompt that Quit or close withdraws puts typed text back in its field
+ok 446 - a review prompt that Quit or close withdraws puts typed text back in its field
+  ---
+  duration_ms: 24.188486
+  type: 'test'
+  ...
+# Subtest: a withdrawn prompt for a switch still reverts the switch
+ok 447 - a withdrawn prompt for a switch still reverts the switch
+  ---
+  duration_ms: 42.916299
+  type: 'test'
+  ...
+# Subtest: submitting the form commits a typed download directory through the same confirmation
+ok 448 - submitting the form commits a typed download directory through the same confirmation
+  ---
+  duration_ms: 52.644034
+  type: 'test'
+  ...
+# Subtest: fields that need no confirmation still save after the typing pause
+ok 449 - fields that need no confirmation still save after the typing pause
+  ---
+  duration_ms: 33.34746
+  type: 'test'
+  ...
+# Subtest: Settings and Help describe windows, the File menu and New window only on desktop
+ok 450 - Settings and Help describe windows, the File menu and New window only on desktop
+  ---
+  duration_ms: 30.53179
+  type: 'test'
+  ...
+# Subtest: mixed inventory classifies installed, unavailable, exact active, duplicate, and retryable rows
+ok 451 - mixed inventory classifies installed, unavailable, exact active, duplicate, and retryable rows
+  ---
+  duration_ms: 4.227304
+  type: 'test'
+  ...
+# Subtest: UUID skips require archiveId, not the offered route, title, or filename
+ok 452 - UUID skips require archiveId, not the offered route, title, or filename
+  ---
+  duration_ms: 0.254003
+  type: 'test'
+  ...
+# Subtest: active dedup compares the authoritative inventory identity exactly, including escaped fixtures
+ok 453 - active dedup compares the authoritative inventory identity exactly, including escaped fixtures
+  ---
+  duration_ms: 0.406835
+  type: 'test'
+  ...
+# Subtest: equal book and session never merge plaintext or different TLS pins; an exact secure identity skips active
+ok 454 - equal book and session never merge plaintext or different TLS pins; an exact secure identity skips active
+  ---
+  duration_ms: 0.241734
+  type: 'test'
+  ...
+# Subtest: admission is strictly sequential and each accepted job is tracked before the next starts
+ok 455 - admission is strictly sequential and each accepted job is tracked before the next starts
+  ---
+  duration_ms: 0.193061
+  type: 'test'
+  ...
+# Subtest: the first admission error returns a coherent partial result without retrying or advancing
+ok 456 - the first admission error returns a coherent partial result without retrying or advancing
+  ---
+  duration_ms: 0.358095
+  type: 'test'
+  ...
+# Subtest: retiring the owner during admission never orphans an accepted job or starts another
+ok 457 - retiring the owner during admission never orphans an accepted job or starts another
+  ---
+  duration_ms: 0.299683
+  type: 'test'
+  ...
+# Subtest: a failure arriving after owner retirement stays a failure and admits no later item
+ok 458 - a failure arriving after owner retirement stays a failure and admits no later item
+  ---
+  duration_ms: 0.144292
+  type: 'test'
+  ...
+# Subtest: cancellation after a classified skip stops before any later admission
+ok 459 - cancellation after a classified skip stops before any later admission
+  ---
+  duration_ms: 0.206528
+  type: 'test'
+  ...
+# Subtest: ownership is checked both before an item and immediately before asynchronous admission
+ok 460 - ownership is checked both before an item and immediately before asynchronous admission
+  ---
+  duration_ms: 0.362818
+  type: 'test'
+  ...
+# Subtest: an already retired owner neither admits nor tracks existing active jobs
+ok 461 - an already retired owner neither admits nor tracks existing active jobs
+  ---
+  duration_ms: 0.124246
+  type: 'test'
+  ...
+# Subtest: retirement with no unprocessed items does not report a partial stop
+ok 462 - retirement with no unprocessed items does not report a partial stop
+  ---
+  duration_ms: 0.125554
+  type: 'test'
+  ...
+# Subtest: inventory membership, route session, and book metadata are fixed before the first await
+ok 463 - inventory membership, route session, and book metadata are fixed before the first await
+  ---
+  duration_ms: 0.119623
+  type: 'test'
+  ...
+# Subtest: each progress notification and the result are detached immutable snapshots
+ok 464 - each progress notification and the result are detached immutable snapshots
+  ---
+  duration_ms: 0.429088
+  type: 'test'
+  ...
+# Subtest: sharing names use the native UTF-8 byte bound, not input character count
+ok 465 - sharing names use the native UTF-8 byte bound, not input character count
+  ---
+  duration_ms: 0.682593
+  type: 'test'
+  ...
+# Subtest: unsafe names cannot enter the preference queue
+ok 466 - unsafe names cannot enter the preference queue
+  ---
+  duration_ms: 0.120355
+  type: 'test'
+  ...
+# Subtest: late typeahead responses cannot replace newer suggestions or revive an invalidated scope
+ok 467 - late typeahead responses cannot replace newer suggestions or revive an invalidated scope
+  ---
+  duration_ms: 3.701084
+  type: 'test'
+  ...
+# Subtest: search renders real rows, uses the displayed offset for continuation, and preserves plain-text snippets
+ok 468 - search renders real rows, uses the displayed offset for continuation, and preserves plain-text snippets
+  ---
+  duration_ms: 1.20096
+  type: 'test'
+  ...
+# Subtest: typing retires an in-flight search and its busy state before stale results arrive
+ok 469 - typing retires an in-flight search and its busy state before stale results arrive
+  ---
+  duration_ms: 1.037308
+  type: 'test'
+  ...
+# Subtest: Android Back dismisses the top-most surface before it navigates, and leaves only from the library
+ok 470 - Android Back dismisses the top-most surface before it navigates, and leaves only from the library
+  ---
+  duration_ms: 1.033889
+  type: 'test'
+  ...
+# Subtest: every surface eventually leads Back to the system, one step at a time
+ok 471 - every surface eventually leads Back to the system, one step at a time
+  ---
+  duration_ms: 0.478629
+  type: 'test'
+  ...
+# Subtest: a hardware Escape closes a dialog or the tab sheet, otherwise goes to the focused shell control
+ok 472 - a hardware Escape closes a dialog or the tab sheet, otherwise goes to the focused shell control
+  ---
+  duration_ms: 0.131668
+  type: 'test'
+  ...
+# Subtest: open popovers are found in the shell first, and a docked reader panel is not one
+ok 473 - open popovers are found in the shell first, and a docked reader panel is not one
+  ---
+  duration_ms: 0.304593
+  type: 'test'
+  ...
+# Subtest: Back belongs to the system until the shell has something to dismiss
+ok 474 - Back belongs to the system until the shell has something to dismiss
+  ---
+  duration_ms: 3.844013
+  type: 'test'
+  ...
+# Subtest: a burst of changes and an effect replay never leave two listeners or a stale one
+ok 475 - a burst of changes and an effect replay never leave two listeners or a stale one
+  ---
+  duration_ms: 3.303194
+  type: 'test'
+  ...
+# Subtest: a listener left by a replaced document is removed before Back can become a dead key
+ok 476 - a listener left by a replaced document is removed before Back can become a dead key
+  ---
+  duration_ms: 1.178629
+  type: 'test'
+  ...
+# Subtest: a recovery that fails is reported and does not cost this document its listener
+ok 477 - a recovery that fails is reported and does not cost this document its listener
+  ---
+  duration_ms: 0.536345
+  type: 'test'
+  ...
+# Subtest: a failed registration or removal is reported and retried, never assumed
+ok 478 - a failed registration or removal is reported and retried, never assumed
+  ---
+  duration_ms: 2.535945
+  type: 'test'
+  ...
+# Subtest: a registration works without storage, and a broken one cannot stop it
+ok 479 - a registration works without storage, and a broken one cannot stop it
+  ---
+  duration_ms: 1.044244
+  type: 'test'
+  ...
+# Subtest: the shell registers Back only on Android and never asks Tauri to exit
+ok 480 - the shell registers Back only on Android and never asks Tauri to exit
+  ---
+  duration_ms: 448.156692
+  type: 'test'
+  ...
+# Subtest: a failure inside a modal is shown, announced and dismissed above it, with one owner
+ok 481 - a failure inside a modal is shown, announced and dismissed above it, with one owner
+  ---
+  duration_ms: 9900.754356
+  type: 'test'
+  ...
+# Subtest: Settings hides desktop-only copy without windows, and a typed download directory waits for review
+ok 482 - Settings hides desktop-only copy without windows, and a typed download directory waits for review
+  ---
+  duration_ms: 13211.006878
+  type: 'test'
+  ...
+# Subtest: a hardware Escape consumed by the native layer closes shell popovers outside the reader
+ok 483 - a hardware Escape consumed by the native layer closes shell popovers outside the reader
+  ---
+  duration_ms: 7936.219582
+  type: 'test'
+  ...
+# Subtest: the native Escape closes the phone's tab sheet wherever focus is
+ok 484 - the native Escape closes the phone's tab sheet wherever focus is
+  ---
+  duration_ms: 7030.712295
+  type: 'test'
+  ...
+# Subtest: Android Back closes the top-most surface, returns to the library, and only then leaves to the system
+ok 485 - Android Back closes the top-most surface, returns to the library, and only then leaves to the system
+  ---
+  duration_ms: 8695.29786
+  type: 'test'
+  ...
+# Subtest: exact language outranks a higher-quality regional voice
+ok 486 - exact language outranks a higher-quality regional voice
+  ---
+  duration_ms: 1.296403
+  type: 'test'
+  ...
+# Subtest: quality ranks above the fabricated default flag
+ok 487 - quality ranks above the fabricated default flag
+  ---
+  duration_ms: 0.120575
+  type: 'test'
+  ...
+# Subtest: default and name break remaining ties deterministically
+ok 488 - default and name break remaining ties deterministically
+  ---
+  duration_ms: 7.626082
+  type: 'test'
+  ...
+# Subtest: an English-only neural voice never becomes the fallback for another language
+ok 489 - an English-only neural voice never becomes the fallback for another language
+  ---
+  duration_ms: 0.532612
+  type: 'test'
+  ...
+# Subtest: legacy Junior is removed and an installed Kokoro voice becomes the English default
+ok 490 - legacy Junior is removed and an installed Kokoro voice becomes the English default
+  ---
+  duration_ms: 0.129229
+  type: 'test'
+  ...
+# Subtest: interactive shell navigation survives the first delayed snapshot
+    # Subtest: Settings wins over saved Library
+    ok 1 - Settings wins over saved Library
+      ---
+      duration_ms: 680.762789
+      type: 'test'
+      ...
+    # Subtest: retry preserves the early choice
+    ok 2 - retry preserves the early choice
+      ---
+      duration_ms: 762.417162
+      type: 'test'
+      ...
+    # Subtest: the last choice, including Library, wins
+    ok 3 - the last choice, including Library, wins
+      ---
+      duration_ms: 345.823219
+      type: 'test'
+      ...
+    # Subtest: no click restores the saved pane
+    ok 4 - no click restores the saved pane
+      ---
+      duration_ms: 568.231586
+      type: 'test'
+      ...
+    # Subtest: external search still wins
+    ok 5 - external search still wins
+      ---
+      duration_ms: 289.886618
+      type: 'test'
+      ...
+    1..5
+ok 491 - interactive shell navigation survives the first delayed snapshot
+  ---
+  duration_ms: 3275.277595
+  type: 'test'
+  ...
+# Subtest: a closed startup band stays closed for the notices it showed
+ok 492 - a closed startup band stays closed for the notices it showed
+  ---
+  duration_ms: 5.668849
+  type: 'test'
+  ...
+# Subtest: a later notice reopens the band with only the notices not yet closed
+ok 493 - a later notice reopens the band with only the notices not yet closed
+  ---
+  duration_ms: 0.111681
+  type: 'test'
+  ...
+# Subtest: a withdrawn notice that is noted again is shown again
+ok 494 - a withdrawn notice that is noted again is shown again
+  ---
+  duration_ms: 0.078529
+  type: 'test'
+  ...
+# Subtest: a suspended command retries exactly once when the foreground resumes
+ok 495 - a suspended command retries exactly once when the foreground resumes
+  ---
+  duration_ms: 0.757099
+  type: 'test'
+  ...
+# Subtest: a second suspension propagates without a third attempt
+ok 496 - a second suspension propagates without a third attempt
+  ---
+  duration_ms: 0.361769
+  type: 'test'
+  ...
+# Subtest: a genuine failure is never retried
+ok 497 - a genuine failure is never retried
+  ---
+  duration_ms: 0.13719
+  type: 'test'
+  ...
+# Subtest: a request whose context moved on is dropped quietly
+ok 498 - a request whose context moved on is dropped quietly
+  ---
+  duration_ms: 0.105775
+  type: 'test'
+  ...
+# Subtest: desktop never waits for a foreground gate
+ok 499 - desktop never waits for a foreground gate
+  ---
+  duration_ms: 0.128705
+  type: 'test'
+  ...
+# Subtest: an ended checkpoint settles without queuing or replaying on foreground
+ok 500 - an ended checkpoint settles without queuing or replaying on foreground
+  ---
+  duration_ms: 0.152029
+  type: 'test'
+  ...
+# Subtest: a speculative fallback wake does not spend the command's retry
+ok 501 - a speculative fallback wake does not spend the command's retry
+  ---
+  duration_ms: 4.260098
+  type: 'test'
+  ...
+# Subtest: fallback guesses are bounded so a missing native event cannot poll forever
+ok 502 - fallback guesses are bounded so a missing native event cannot poll forever
+  ---
+  duration_ms: 11.882342
+  type: 'test'
+  ...
+# Subtest: a fallback wake still drops a request whose context moved on
+ok 503 - a fallback wake still drops a request whose context moved on
+  ---
+  duration_ms: 6.742784
+  type: 'test'
+  ...
+# Subtest: accessibility Dynamic Type is not capped or persisted as article size
+ok 504 - accessibility Dynamic Type is not capped or persisted as article size
+  ---
+  duration_ms: 0.614322
+  type: 'test'
+  ...
+# Subtest: a live change back to ordinary text restores the ordinary layout
+ok 505 - a live change back to ordinary text restores the ordinary layout
+  ---
+  duration_ms: 0.092902
+  type: 'test'
+  ...
+# Subtest: reset and malformed native scales cannot leave chrome unusable
+ok 506 - reset and malformed native scales cannot leave chrome unusable
+  ---
+  duration_ms: 0.172417
+  type: 'test'
+  ...
+# Subtest: Android font scale selects the large-text layout without scaling text twice
+ok 507 - Android font scale selects the large-text layout without scaling text twice
+  ---
+  duration_ms: 0.110666
+  type: 'test'
+  ...
+# Subtest: the Android plugin reports the category that suppresses double scaling
+ok 508 - the Android plugin reports the category that suppresses double scaling
+  ---
+  duration_ms: 11.707409
+  type: 'test'
+  ...
+# Subtest: large-text reflow rules cover Android as well as iOS
+ok 509 - large-text reflow rules cover Android as well as iOS
+  ---
+  duration_ms: 0.93787
+  type: 'test'
+  ...
+# Subtest: a font-scale change still recreates the Android Activity
+ok 510 - a font-scale change still recreates the Android Activity
+  ---
+  duration_ms: 0.690555
+  type: 'test'
+  ...
+# Subtest: a foreground tab is appended and a background tab follows the active one
+ok 511 - a foreground tab is appended and a background tab follows the active one
+  ---
+  duration_ms: 1.901357
+  type: 'test'
+  ...
+# Subtest: reopening a closed tab twice before a re-render cannot duplicate its identity
+ok 512 - reopening a closed tab twice before a re-render cannot duplicate its identity
+  ---
+  duration_ms: 0.155618
+  type: 'test'
+  ...
+# Subtest: removing a reopened tab only removes that tab
+ok 513 - removing a reopened tab only removes that tab
+  ---
+  duration_ms: 0.116214
+  type: 'test'
+  ...
+# Subtest: the standard Linux commands retain the requested packages and trailing Cargo options
+ok 514 - the standard Linux commands retain the requested packages and trailing Cargo options
+  ---
+  duration_ms: 1.586832
+  type: 'test'
+  ...
+# Subtest: configuration overlays merge active state and target selection separately
+ok 515 - configuration overlays merge active state and target selection separately
+  ---
+  duration_ms: 1.121094
+  type: 'test'
+  ...
+# Subtest: versions are semantic and targets use Tauri names
+ok 516 - versions are semantic and targets use Tauri names
+  ---
+  duration_ms: 5.795954
+  type: 'test'
+  ...
+# Subtest: release versions match Rust semver syntax and u64 core bounds without normalization
+ok 517 - release versions match Rust semver syntax and u64 core bounds without normalization
+  ---
+  duration_ms: 1.41139
+  type: 'test'
+  ...
+# Subtest: invalid versions fail generation before reading artifacts or publishing files
+ok 518 - invalid versions fail generation before reading artifacts or publishing files
+  ---
+  duration_ms: 5.61365
+  type: 'test'
+  ...
+# Subtest: the endpoint must be HTTPS except for an explicit loopback proof
+ok 519 - the endpoint must be HTTPS except for an explicit loopback proof
+  ---
+  duration_ms: 0.237869
+  type: 'test'
+  ...
+# Subtest: a manifest carries every platform signature and a joined URL
+ok 520 - a manifest carries every platform signature and a joined URL
+  ---
+  duration_ms: 0.343089
+  type: 'test'
+  ...
+# Subtest: duplicate targets and missing signatures are rejected
+ok 521 - duplicate targets and missing signatures are rejected
+  ---
+  duration_ms: 0.19072
+  type: 'test'
+  ...
+# Subtest: generation copies an artifact, reads its .sig and writes the manifest
+ok 522 - generation copies an artifact, reads its .sig and writes the manifest
+  ---
+  duration_ms: 37.512624
+  type: 'test'
+  ...
+# Subtest: a late publication collision preserves other outputs and permits a clean retry
+ok 523 - a late publication collision preserves other outputs and permits a clean retry
+  ---
+  duration_ms: 25.981806
+  type: 'test'
+  ...
+# Subtest: source signatures authenticate exact bytes, trusted version and key
+ok 524 - source signatures authenticate exact bytes, trusted version and key
+  ---
+  duration_ms: 1.955715
+  type: 'test'
+  ...
+# Subtest: rollback preserves replacements that arrive while a staged entry is being captured
+ok 525 - rollback preserves replacements that arrive while a staged entry is being captured
+  ---
+  duration_ms: 26.148965
+  type: 'test'
+  ...
+# Subtest: duplicate targets and output/input collisions fail before publishing
+ok 526 - duplicate targets and output/input collisions fail before publishing
+  ---
+  duration_ms: 17.564466
+  type: 'test'
+  ...
+# Subtest: Node-invoked Tauri signs and stages an installer with spaces and binds its prerelease and build version
+ok 527 - Node-invoked Tauri signs and stages an installer with spaces and binds its prerelease and build version
+  ---
+  duration_ms: 797.602162
+  type: 'test'
+  ...
+# Subtest: same basename architectures retain independent immutable payloads and signatures
+ok 528 - same basename architectures retain independent immutable payloads and signatures
+  ---
+  duration_ms: 678.255055
+  type: 'test'
+  ...
+# Subtest: a stale staged signature cannot authorize changed source bytes
+ok 529 - a stale staged signature cannot authorize changed source bytes
+  ---
+  duration_ms: 7.397614
+  type: 'test'
+  ...
+# Subtest: release configuration requires the real trust key and derives the repository channel
+ok 530 - release configuration requires the real trust key and derives the repository channel
+  ---
+  duration_ms: 0.836153
+  type: 'test'
+  ...
+# Subtest: artifact URLs preserve filename bytes rather than URL query or fragment syntax
+ok 531 - artifact URLs preserve filename bytes rather than URL query or fragment syntax
+  ---
+  duration_ms: 0.184914
+  type: 'test'
+  ...
+# Subtest: downloaded package bytes are authenticated before inspection and inspected in private staging
+ok 532 - downloaded package bytes are authenticated before inspection and inspected in private staging
+  ---
+  duration_ms: 23.385185
+  type: 'test'
+  ...
+# Subtest: cancelling the update download the user started is not reported as a failure
+ok 533 - cancelling the update download the user started is not reported as a failure
+  ---
+  duration_ms: 27.616596
+  type: 'test'
+  ...
+# Subtest: the install rejection can arrive before the updater confirms the cancel
+ok 534 - the install rejection can arrive before the updater confirms the cancel
+  ---
+  duration_ms: 14.286868
+  type: 'test'
+  ...
+# Subtest: an update that stops for any other reason is still a visible failure
+ok 535 - an update that stops for any other reason is still a visible failure
+  ---
+  duration_ms: 42.994357
+  type: 'test'
+  ...
+# Subtest: a completed install re-enables the button when the app keeps running
+ok 536 - a completed install re-enables the button when the app keeps running
+  ---
+  duration_ms: 8.327847
+  type: 'test'
+  ...
+# Subtest: update listeners registered after cleanup are removed, not leaked
+ok 537 - update listeners registered after cleanup are removed, not leaked
+  ---
+  duration_ms: 28.311798
+  type: 'test'
+  ...
+# Subtest: a stale installation event, an old status reply and an old error cannot undo removal
+ok 538 - a stale installation event, an old status reply and an old error cannot undo removal
+  ---
+  duration_ms: 11.414876
+  type: 'test'
+  ...
+# Subtest: disabling the surface discards outstanding status and queued listener notifications
+ok 539 - disabling the surface discards outstanding status and queued listener notifications
+  ---
+  duration_ms: 1.999477
+  type: 'test'
+  ...
+# Subtest: reopening a disabled surface starts without the prior installation or lookup error
+ok 540 - reopening a disabled surface starts without the prior installation or lookup error
+  ---
+  duration_ms: 2.494948
+  type: 'test'
+  ...
+1..540
+# tests 545
+# suites 0
+# pass 544
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 74842.916426

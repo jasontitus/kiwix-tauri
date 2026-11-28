@@ -4,10 +4,10 @@
 |---|---|
 | **Review base** | `d98cac2` (clean tree) |
 | **Branch** | `claude/stoic-dirac-rs0ol3` |
-| **Tree this record describes** | the final commit on the branch that adds this file. Its Rust sources are those verified in [§5.4](#54-final-tree-integration-verification). |
+| **Tree this record describes** | the reviewed state named in [§7](#7-how-the-work-is-recorded): the commit that removes `working/`. Its Rust sources are those verified in [§5.4](#54-final-tree-integration-verification). |
 | **Scope** | maintainability, reliability and usability across macOS, Windows, Linux, iOS and Android |
 | **Method** | 11 independent read-only area reviews, then 15 lanes (14 implementation lanes and the owner's integration work) plus two crash-redaction port lanes, each followed by independent adversarial review and re-review until the reviewer closed it |
-| **Replaces** | `docs/reviews/2026-11-27/working/` (ledger, briefs, area reports, implementer and adversarial reports), removed in the commit that adds this file; see [§7](#7-how-the-work-is-recorded) |
+| **Replaces** | `docs/reviews/2026-11-27/working/` (ledger, briefs, area reports, implementer and adversarial reports, final logs), kept in the evidence commit and removed in the reviewed state; see [§7](#7-how-the-work-is-recorded) |
 
 This file is written only from the working record: the findings ledger, the 11 area reports, the implementer reports and the adversarial reports. Where those sources disagree or leave a gap, this record says so (see [§8](#8-source-conflicts-and-gaps-in-the-record)). Apart from §5.4, which records the integration owner's final runs, nothing in this file was re-measured while writing it.
 
@@ -25,7 +25,10 @@ This file is written only from the working record: the findings ledger, the 11 a
 
 - Every one of the 113 area findings, OWN-1 and the R8 note has a recorded disposition in [§3](#3-findings-and-dispositions). None was rejected outright. Most are fixed; some are fixed differently from the reviewer's proposal, some are partial, and some are accepted residuals by owner decision.
 - The adversarial rounds raised six **Blocking** findings (FEATURES-R1, APPLE-R1, TRANSFERS-R1 after the owner raised it, FILES-R1, SERVICE-R1, CIDOCS-R1). All six were fixed and closed by their reviewers.
-- All fifteen lanes and both crash ports closed under adversarial review. The owner lane's last open item, OWNER-R4 (the `docs/RELIABILITY.md` 2026-11-27 section citing this record's verification), closes with the independent review of this record.
+- Thirteen lanes and both crash ports closed in their reviewers' final reports. Two closed on a recorded condition:
+  - **apple:** the reviewer's last round raised no blocking item but kept APPLE-1 and APPLE-4 short of "fully done" until the device check APPLE-R7 runs; the owner closed the lane on that basis (LEDGER), with APPLE-R7 open as a device gate.
+  - **buildhygiene:** the reviewer closed it once `DEPENDENCIES.md:3` was reworded; the owner applied the reviewer's text, and this record's review confirmed it.
+- **owner:** R1–R3 and R5–R9 closed in owner review r2. OWNER-R4 (the `docs/RELIABILITY.md` section citing this record) and the generated outputs were checked in this record's review, whose findings were applied and re-checked.
 - The final-tree integration verification is recorded in [§5.4](#54-final-tree-integration-verification): Rust library tests 1493 passed / 0 failed, clippy clean on Linux, Windows and Android, 544 of 545 Node tests passing with 1 skipped, Kotlin 79/79, Swift crash redaction 238/238.
 
 ### Limits of this record
@@ -64,7 +67,7 @@ Rounds are counted as implementer reports / adversarial reports. "Closed" means 
 
 ### 2.2 Changed paths
 
-`git diff --name-status d98cac2 08528ee`, excluding `docs/reviews/2026-11-27/working/` (125 files), lists 273 paths: 236 modified, 35 added, 2 deleted. 71 of the modified paths are `src/locales/messages/*.json` from the localization generation.
+`git diff --name-status d98cac2 08528ee`, excluding `docs/reviews/2026-11-27/working/` (124 files at that commit), lists 273 paths: 236 modified, 35 added, 2 deleted. 71 of the modified paths are `src/locales/messages/*.json` from the localization generation.
 
 - **Deleted:** `src-tauri/native/desktop_sdk.rs`, `src-tauri/native/mobile_sdk.rs`.
 - **Added:** `src/android-back.ts`, `src/shell-dismiss.ts`, `src/startup-notice.ts`, `src/locales/extra-en-rust.json`; `src-tauri/tests/fixtures/crash-redaction-cases.json` and `crash-redaction-spec.md`; `src-tauri/fuzz/extract-index-seeds.py`, `src-tauri/fuzz/fuzz_targets/search_index.rs`; Kotlin `CrashRedaction.kt`, `WindowTheme.kt` and tests `CrashRedactionTest`, `DeviceScanPolicyTest`, `NetworkPrefixTest`, `StagingCleanupTest`, `TransferStartDecisionTest`, `WindowThemeTest`; Swift `CrashRedaction.swift`; 18 new Node tests (`test-android-manifest`, `-build-hygiene`, `-camera-window`, `-error-docs`, `-localization-inventory`, `-nearby-sharing-surfaces`, `-pane-actions`, `-pane-surfaces`, `-privacy-manifest`, `-reader-fresh-document`, `-reader-message-contract`, `-reader-print`, `-rust-localized-strings`, `-settings-surface`, `-shell-dismiss`, `-shell-surfaces`, `-startup-notice`, `-updates-settings`).
@@ -117,7 +120,7 @@ None of these dispositions has been checked on a device, a Mac, Windows or a sim
 | SERVE-3 | Med | Spelling cache directory never garbage-collected | **Fixed**: hourly no-follow sweep of exact cache names; skipped while any book is unavailable | service | adv service r1 |
 | SERVE-4 | Low | Non-404 document failures return uninstrumented `text/plain` | **Fixed** (escaped static HTML page with the bridge) | service | adv service r1 |
 | SERVE-5 | Low | Library search never shows spelling corrections | **Fixed** (corrections only) | panes | adv panes r1 |
-| SERVE-6 | Low | Dead libzim SDK glue; docs still say the app links libzim | **Fixed**: both SDK files and the `cc` dev-dependency deleted, docs corrected | buildhygiene | adv buildhygiene r1. Round-2/3 doc follow-ups not re-reviewed |
+| SERVE-6 | Low | Dead libzim SDK glue; docs still say the app links libzim | **Fixed**: both SDK files and the `cc` dev-dependency deleted, docs corrected | buildhygiene | adv buildhygiene r1; doc follow-ups closed in adv buildhygiene r2 |
 | SERVE-7 | Low | Fuzz target never decodes a cluster; no search-index target | **Fixed**, type-checked only (`cargo check` of the fuzz crate). No fuzzing was run | cidocs | adv cidocs r1 |
 
 ### 3.4 ACQ (downloads and acquisition)
@@ -176,7 +179,7 @@ None of these dispositions has been checked on a device, a Mac, Windows or a sim
 | FEAT-3 | Med | Article-PDF scratch never swept after a crash | **Fixed**: export-time sweep plus a once-per-process startup sweep from `library_maintenance`, `STALE_AFTER` 1 h. Desktop read-only mode relies on the export-time sweep | features, service | adv service r1 |
 | FEAT-4 | Med | One unpronounceable chunk ends Kokoro read-aloud | **Fixed** (forward and backward skip). The real Kokoro `run` loop with a model was not exercised | features | adv features r1 |
 | FEAT-5 | Med | = SHELL-1 | Fixed with SHELL-1 | shell | adv shell r1 |
-| FEAT-6 | Med | `map_forget_recovery` has no frontend caller; Delete always fails | **Fixed** (Rust: features; Dismiss control: panes) | features, panes | adv features r4; adv panes r1 |
+| FEAT-6 | Med | `map_forget_recovery` has no frontend caller; Delete always fails | **Fixed** (Rust: features; Dismiss control: panes) | features, panes | adv features r1 (backend), r2 (Delete); adv panes r1 |
 | FEAT-7 | Low | `MapJob.speed`/`etaSeconds` never shown; ETA dishonest | **Fixed differently**: ETA dropped; rate shown in the UI | features, panes | adv features r1; adv panes r1 |
 | FEAT-8 | Low | Map composition holds no macOS idle-sleep assertion | **Fixed in source, never compiled, no test** (the test that could not fail was deleted, FEATURES-R6) | features | adv features r2 |
 | FEAT-9 | Low | Cancelling the voice-model download shown as a red error | **Fixed** (`kokoro.rs` and two lines in `service.rs`) | features | adv features r4 |
@@ -220,7 +223,7 @@ None of these dispositions has been checked on a device, a Mac, Windows or a sim
 |---|---|---|---|---|---|
 | READER-1 | High | Restricted mode / Reload do not reload with a fragment URL | **Fixed** | reader | adv reader r1 |
 | READER-2 | High | WebKit fragment navigation re-sessions the reader per anchor click | **Fixed differently**: per-document proof with the bridge bootstrap token; a hello is required before any `reader-init`; hostile-script hardening (READER-R1) | reader | adv reader r2 |
-| READER-3 | Med | Blink on child navigation; clicks before `load` swallowed | **Partial**: paint decoupling only; the handshake-before-load follow-up is not done, and external-link clicks before `load` are still swallowed | reader | adv reader r1 |
+| READER-3 | Med | Blink on child navigation; clicks before `load` swallowed | **Partial**: paint decoupling only; the handshake-before-load follow-up is not done, and external-link clicks before `load` are still swallowed | reader | adv reader r2 (READER-R2 against this fix closed there) |
 | READER-4 | Med | Desktop system-voice read-aloud cancelled when hidden | **Fixed** | reader | adv reader r1 |
 | READER-5 | Low | Link preview fires for same-page anchors | **Fixed** | reader | adv reader r1 |
 | READER-6 | Low | Per-tab history stacks unbounded; `photoSecrets` never pruned | **Fixed** | reader | adv reader r1 |
@@ -286,7 +289,8 @@ No other adversarial finding was graded Blocking.
 | ANDROID-R8 | android | `stopOwned` called `stopService` while a foreground start was queued (pre-existing) | `queuedForegroundStarts` count (adv android r3) |
 | ANDROID-R10 | android | Kotlin redacted secrets before paths, so a spaced path tail survived | Superseded by the canonical pipeline port (adv android-crash) |
 | ANDROID-R11 | android-crash | No CI job runs the plugin's JVM tests | **Open process residual** (see [§6.9](#69-process-residuals)) |
-| BUILDHYGIENE-R1 | buildhygiene | `FORKS.md` still described the zimru migration as a future plan | Implementer fixed in round 2; **not re-reviewed** |
+| BUILDHYGIENE-R1 | buildhygiene | `FORKS.md` still described the zimru migration as a future plan | Fixed in round 2; closed (adv buildhygiene r2) |
+| BUILDHYGIENE-R2 (unnumbered should-fix) | buildhygiene | `DEPENDENCIES.md:3` described the 2026-11-28 remeasurement as the post-reduction snapshot | Owner applied the reviewer's three-column table and replacement sentence; checked in this record's review |
 | CIDOCS-R2, R3, R4 | cidocs | Plural order depends on the Node version; error-docs gate depends on the path separator; §1.2 wrong about `map_recipe_metadata` | Fixed (adv cidocs r2) |
 | DESKTOP-R1, R2, R4, R5 | desktop | Hook replaced `cleanup_before_exit`; recorded version cleared too early; mobile reset rewrote a newer profile; read-only → writable dropped skipped records | Fixed (adv desktop r2) |
 | DESKTOP-R3 | desktop | APPLE-2 not revived from the availability pass | Service lane added the `sandbox::revive()` call; owner verified it present (`dispatch.rs`) |
@@ -471,7 +475,7 @@ The lines below are the final-round results each lane's implementer (I) or adver
 - A r1: `cargo tree` for zbus on nine targets → none by default; opt-in builds receive `--cfg native_location`; `permissions mobile_policy` 27 passed; with the opt-in, `location_linux permissions` 15 passed; base checkout fails the new checks.
 - I r2: `test-build-hygiene.mjs` 5/5; host clippy default and opt-in exit 0; `test-linux-appimage.py` OK. Android and Windows-gnu not re-run.
 - I r3 (docs only): `test-build-hygiene.mjs` 5/5.
-- **No adversarial run for rounds 2 and 3.**
+- A r2 (rounds 2 and 3): `test-build-hygiene.mjs` 5/5; `cargo tree` remeasurement of macOS, iOS and Windows counts; `Cargo.lock` 739 entries now and at base.
 
 **owner**
 - A r2: `node --test scripts/test-rust-localized-strings.mjs` → pass 1; a scratch copy with three entries removed fails naming exactly those three.
@@ -486,7 +490,7 @@ The lines below are the final-round results each lane's implementer (I) or adver
 
 ### 5.4 Final-tree integration verification
 
-All of the following ran on the integrated tree after the last code change of every lane had been made. The Rust sources, `build.rs`, `Cargo.toml` and `Cargo.lock` were identical from the start of the Rust run (checkpoint `fbcb420` plus the regenerated locales in the working tree) to the final commit; later changes were documentation only. Commands are run from the repository root unless noted; `SHERPA_ONNX_ARCHIVE_DIR` pointed at locally downloaded sherpa-onnx v2.0.1 archives because the speech library's build script cannot download through this container's proxy.
+All of the following ran on the integrated tree after the last code change of every lane had been made. The Rust sources, `build.rs`, `Cargo.toml` and `Cargo.lock` are identical from checkpoint `fbcb420` to the final commit. After the first runs, the record review found two uncollected plural sources (§6.9); the catalogs were regenerated, and the Rust library tests, Node, Python, build, localization and error checks were run again on that final data. The rows below give the final run. Clippy, the unsafe census, Kotlin and Swift do not read the catalogs and were not re-run. Every log, with the command it ran, is kept as `verification/*.log` in the evidence commit named in §7. Commands are run from the repository root unless noted; `SHERPA_ONNX_ARCHIVE_DIR` pointed at locally downloaded sherpa-onnx v2.0.1 archives because the speech library's build script cannot download through this container's proxy.
 
 | Check | Command | Result |
 |---|---|---|
@@ -500,9 +504,9 @@ All of the following ran on the integrated tree after the last code change of ev
 | Error inventory | `npm run docs:errors`, then `npm run check:errors` | `docs/ERRORS.md matches the current sources.` |
 | Localization inventory | `node scripts/localization.mjs generate`, then `npm run check:localization` | `"failures": []`; English sources 1552 → 1669 |
 | Frontend build | `npm run build` | succeeded (existing chunk-size and dynamic-import warnings only) |
-| Node tests, with a real headless Chromium | `KIWIX_TEST_CHROME=<no-sandbox wrapper> node --test scripts/test-*.mjs` | 545 tests: 544 pass, 0 fail, 1 skipped (a macOS-only finalizer test) |
+| Node tests, with a real headless Chromium | `KIWIX_TEST_CHROME=<no-sandbox wrapper> node --test scripts/test-*.mjs` | 545 tests: 544 pass, 0 fail, 1 skipped (a macOS-only finalizer test); the same result before and after the catalog fix |
 | Python tests | `python3 -m unittest discover -s scripts -p 'test_*.py'`; `python3 scripts/test-linux-appimage.py` | 182 OK (2 skipped); 1 OK |
-| Kotlin JVM unit tests | from `src-tauri/gen/android`: `gradle --offline … :tauri-plugin-kiwix-mobile:testDebugUnitTest --rerun` (hand-written, git-ignored `tauri.settings.gradle`) | 79 tests, 0 failures, 0 errors, 0 skipped |
+| Kotlin JVM unit tests | from `src-tauri/gen/android`, with `ANDROID_HOME`, `JAVA_HOME` (JDK 21) and `GRADLE_USER_HOME` set: `gradle --no-daemon --offline --max-workers=2 --console=plain :tauri-plugin-kiwix-mobile:testDebugUnitTest --rerun` (Gradle 9.6.1; `src-tauri/gen/android/tauri.settings.gradle` is generated and git-ignored, and was hand-written here to point at the Tauri and plugin Android projects). Results are the JUnit XML files under `src-tauri/plugins/tauri-plugin-kiwix-mobile/android/build/test-results/testDebugUnitTest/` | 79 tests, 0 failures, 0 errors, 0 skipped |
 | Swift crash redaction | Linux Swift 6.0.3 harness over `CrashRedaction.swift` and a `rustc` build of `crash.rs`'s redaction functions | fixture 238/238; bound checks all passed; 1,600,500 differential cases, 0 mismatches |
 | Swift syntax | `swiftc -parse` over `ios/Sources/*.swift` and `ios/Tests/*.swift` | clean |
 
@@ -511,6 +515,7 @@ Not run on the final tree: anything listed in §5.5, `cargo deny`, `npm audit`, 
 ### 5.5 Not run anywhere
 
 - Any physical device, Mac, Windows machine, iPhone simulator or Android emulator; any Apple SDK build or XCTest run; any macOS or iOS Rust compile.
+- **The app itself was not launched on any platform, Linux included.** Only library-level tests, the Node and Python suites, and headless-Chromium tests of the built frontend (`dist/`) ran; no Tauri window, WebKitGTK, WebView2 or WKWebView ever loaded it.
 - Any GitHub Actions run of the changed workflows, the path filter, the artifact hand-off, the CI Chrome step or the Windows test step.
 - Real NFS/FUSE, removable media, mount/unmount, USB replug, the real Trash, real sleep/wake address changes, a host with IPv6, a middlebox truncating a response, the real 60 s / 128 KiB pace window, the 120 s stall limit and 15 s connect timeout.
 - The real failed-Quit dialog and zenity/kdialog exit codes, the Windows installer hook, IME `keyCode 229` in WKWebView/WebKitGTK, a real updater download, real Kokoro playback with a model, and fuzzing.
@@ -552,12 +557,15 @@ From each lane's final adversarial report and the LEDGER. None of these blocks c
 - LIB-7: entries in a folder never seen with its archives in this run, and on Windows, are kept as unavailable; a file imported from under an unmounted mount point is retired once the volume covers it again.
 - LIB-9: cross-device copy into the home Trash still not prevented. LIB-1 on Android: refusal, not a working move.
 - An interruption between capture and unlink still needs the person to delete the hidden `.kiwix-renamed-…` file (the message points at it). Discard can report `missing` if a leftover mount point is not empty. A device number that changes between mounts keeps the record open.
-- After FILES-R5, a same-volume move that Windows startup recovery cannot finish (archive open at launch) is cancelled, not retried; the comment at `dispatch.rs:1701` was reported stale (the ledger assigned it to service round 3; no report confirms the edit).
+- After FILES-R5, a same-volume move that Windows startup recovery cannot finish (archive open at launch) is cancelled, not retried; the comment above it in `dispatch.rs` was corrected in service round 3. The person has to move the archive again.
 - Provider-backed books get no rename-over detection (by design).
 - A cancelled staged copy that cannot be proved is kept (accepted leak). After Android kills the process in the background, an incoming share's permission may be gone once the copy was discarded.
 - Mobile imports are cancelled on background or screen lock (owner decision).
 - Startup band heading "Some saved items need attention." does not fit import cancellations (Nit). A notice withdrawn and re-noted before the next snapshot stays hidden (Nit).
 - `mobile_policy.rs:566`: the service lane left it; the buildhygiene lane removed the stale entry (round 1, reviewed).
+
+- The FILES-R2 orphan rule is a stand-in ("the library lists at least one other book"), so a library whose only book was removed mid-move keeps showing its move warning at each launch.
+- The startup notice band (SERVICE-R3-1) was exercised only in a Node test of its rule, never seen rendered in a real shell.
 
 ### 6.5 Maps, read-aloud and PDF
 
@@ -590,23 +598,36 @@ From each lane's final adversarial report and the LEDGER. None of these blocks c
 - **Shell:** real desktop Quit, window close, Dock quit, logoff and the native failed-Quit dialog are untested; IME and blur timing in WKWebView/WebKitGTK unverified; `test-frontend-surfaces.mjs` keeps puppeteer's 30 s defaults. SHELL-7: a declined low-storage prompt is still shown once inline.
 - **Panes:** iOS display redaction (exports keep raw text) still shows a tail for nested parentheses in a folder name and a stray `)`; an upper-case or unlisted extension before ". Capital" eats the sentence tail (nothing revealed). Two empty languages match `exact` in the frontend where Rust refuses. Suggestions return only on the next keystroke. A successful rollback drops focus to the page body. The share poll has no cap while open. Android rendering and TalkBack, the iOS display and the phone keyboard, the edition-original outcomes "trashed", "missing" and "external", and a real failing map Delete were not rendered; the Rust handlers for these were traced by reading.
 
+- **Panes, further:** a Get map started from a card is dropped silently if another area's dialog opens while it is being prepared (base behaviour, caused by the person's own navigation); test 9 does not cover a reason sentence that itself contains a path; a real long torrent hash was never rendered.
+
 ### 6.9 Process residuals
 
-- **ANDROID-R11:** no CI job runs the Kotlin plugin unit tests (pre-existing). The crash-redaction fixture check for Kotlin, and all the new Kotlin tests, run only when someone runs Gradle locally. A CI job needs the generated `tauri.settings.gradle`, which could not be verified here. The owner decided to keep this as a residual and document the local command; the record does not show that the command was documented.
+- **ANDROID-R11:** no CI job runs the Kotlin plugin unit tests (pre-existing). The crash-redaction fixture check for Kotlin, and all the new Kotlin tests, run only when someone runs Gradle locally. A CI job needs the generated `tauri.settings.gradle`, which could not be verified here. The owner decided to keep this as a residual; the local command is in [§5.4](#54-final-tree-integration-verification).
 - **Integrity test flake not reproduced:** `integrity::tests::real_valid_and_checksum_corrupt_results_survive_restart` failed once under load during service round 2 and passed 3 of 3 in isolation; 12 loaded runs in service round 3 passed. No panic line was kept, and `integrity.rs` is unchanged since base. A suspected (unconfirmed) cause is the store instance lock still held when it reopens after `drop(store)`.
-- **New strings untranslated:** the localization generation collected the new strings (sources 1552 → 1669), so non-English locales show English for them; coverage fell from about 0.80 to about 0.74. Machine translation (`localization.mjs translate`) was deliberately not run. The generated catalogs were not adversarially reviewed.
+- **New strings untranslated:** the localization generation collected the new strings (sources 1552 → 1669), so non-English locales show English for them; coverage fell from about 0.80 to about 0.74. Machine translation (`localization.mjs translate`) was deliberately not run. The generated catalogs were checked in this record's review: `generate` reproduces them byte for byte, and each sampled locale lost only keys whose English source was removed.
 - **CI not run on GitHub:** the `paths` filter (simulated against GitHub's documented ordered-pattern semantics), the `frontend-build` split and artifact hand-off, the `linux-tests` job, the CI Chrome step, the opt-in location type-checks and the Windows test step in `build.yml` have not run on GitHub. If branch protection requires checks by name, the new "Frontend type-check and build" check is not in that list; the protection settings could not be read.
-- **Host clippy across all lanes on the final tree** is not in the record; the last clean host, Android and Windows-gnu clippy runs recorded are adv net r3 at `618b809` and later per-lane runs. See [§5.4](#54-final-tree-integration-verification).
-- **buildhygiene rounds 2–3 and the owner's generated outputs** need independent review before this work is called complete (see [§8](#8-source-conflicts-and-gaps-in-the-record)).
-- **This record** is a documentation change and, with OWNER-R4, needs adversarial re-review once the final-tree verification is filled in.
+- **This record** was adversarially reviewed (record review r1: no blocking findings; all generated catalogs and `docs/ERRORS.md` regenerate byte for byte; no translation lost). Its should-fix items were applied and re-checked in record review r2.
+- **Rust localization test limits:** `scripts/test-rust-localized-strings.mjs` finds literal call shapes itself, but call sites whose source is a variable are a hand-kept list (`VARIABLE_SOURCES`); a new variable-source call site is not found automatically.
+- **Shared-library plurals fixed late:** the record review found that `{count} articles` and `Serving {count} archives…` were plural sources but not collected, so the Rust Localizer fell back to the raw English template ("1 articles") in every locale; this predates the work. Both are now collected (`extra-en-rust.json`), present in `messages/en.json` with their forms, and the test now requires every Rust plural source to be in the shipped catalog. The other locales show English for them until translated.
+- **Unused plural sources:** five entries in `src/locales/plural-sources.json` (`{size} · {count} sources`, `{size} · {count} files`, `{count} connected peers · {size} uploaded`, `Another app sent {count} documents…`, `{count} bytes copied`) are used nowhere in the code; they predate this work and ship nothing.
+- **Error inventory heuristic:** `docs/ERRORS.md` has no row for some user-facing Rust strings, for example the `IMPORT_CANCELLED` text and "Kiwix could not start.", because `error-inventory.mjs` collects strings by marker context. This is the extractor's existing behaviour, not a regeneration defect.
+
+### 6.10 Build hygiene and location providers
+
+- The Android opt-in location type-check covers aarch64 only; armv7 never type-checked the provider.
+- Neither unreleased location provider (GeoClue on Linux, LocationManager on Android) has had a runtime test.
+- A docs-only pull request that edits Markdown other than `docs/FORKS.md` skips the libzim-claim check in `test-build-hygiene.mjs` until the next pull request that is not docs-only (stated in the test's header).
+- The historical "31 packages" figure for `tauri-plugin-single-instance` cannot be verified because the earlier history is squashed.
 
 ---
 
 ## 7. How the work is recorded
 
-- **This file replaces `docs/reviews/2026-11-27/working/`.** That folder held the LEDGER, the review, implementation and adversarial briefs, `RESUME.md`, the 11 area reports (`findings/`), and every implementer report (`implementation/`) and adversarial report (`adversarial/`). It is removed in the commit that adds this file. Its complete final state is in commit `EVIDENCE_COMMIT`, so any report cited here as `adv <lane> r<n>` or `impl <lane> r<n>` can be read with `git show EVIDENCE_COMMIT:docs/reviews/2026-11-27/working/<folder>/<file>`.
-- **The branch's `wip:` commits are unreviewed snapshots.** Every commit after `d98cac2` and before the one that adds this file is titled "wip: checkpoint in-progress review remediation (unreviewed)". They exist so in-flight work survived the session container, and they were kept in history rather than rewritten, so the evidence commit above stays reachable. None of them is a reviewed state, and none should be released, bisected to as known-good, or cited as evidence for behaviour. The ledger notes one (`08f3094`) that captured a Kotlin file while it was mutated for a test. The reviewed state is the commit that adds this file.
-- **Scratch evidence is not durable.** The harnesses, differential corpora, attack scripts and logs that reviewers cite live in the session scratch directory, not in the repository, and may no longer exist. The results quoted here are as the reports state them.
+- **Reviewed state.** The reviewed state is the commit that removes `docs/reviews/2026-11-27/working/` and fills in `EVIDENCE_COMMIT` below. It is the child of the evidence commit and the first commit after `d98cac2` whose title does not start with `wip:`.
+- **Evidence commit `EVIDENCE_COMMIT`.** The last `wip:` checkpoint. It holds `docs/reviews/2026-11-27/working/` complete: the LEDGER, the review, implementation and adversarial briefs, `RESUME.md`, the 11 area reports (`findings/`), every implementer report (`implementation/`) and adversarial report (`adversarial/`, including this record's own reviews), and the final-tree logs with their commands (`verification/`). Read any report cited here as `adv <lane> r<n>` or `impl <lane> r<n>` with `git show EVIDENCE_COMMIT:docs/reviews/2026-11-27/working/<folder>/<file>`.
+- **Keep the history.** The evidence commit stays reachable only while this branch's history is kept. Merge without squashing or rebasing, or, if a squash merge is required, first tag `EVIDENCE_COMMIT` or copy `working/` somewhere durable.
+- **The `wip:` commits are unreviewed snapshots.** Every commit from `d98cac2` up to and including the evidence commit is titled "wip: checkpoint in-progress review remediation (unreviewed)". They exist so in-flight work survived the session container. Apart from the evidence commit's role as an archive of the record, none of them is a reviewed state, and none should be released, bisected to as known-good, or cited as evidence for behaviour. The ledger notes one (`08f3094`) that captured a Kotlin file while it was mutated for a test.
+- **Scratch evidence is not durable.** The harnesses, differential corpora and attack scripts that reviewers cite live in the session scratch directory, not in the repository, and may no longer exist; only the final-tree logs were copied into the evidence commit. The results quoted here are as the reports state them.
 - **Base and changed paths.** The base is `d98cac2`; the changed paths are summarized in [§2.2](#22-changed-paths). `git diff --name-status d98cac2 <final revision>` gives the exact list, including files that were untracked during the work and committed by the checkpoints.
 
 ---

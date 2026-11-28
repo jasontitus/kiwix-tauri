@@ -1230,6 +1230,10 @@
   "Serif": "Serif",
   "Serve your archives to a browser using an access link. Sharing is always opt-in.": "Serve your archives to a browser using an access link. Sharing is always opt-in.",
   "Services": "Services",
+  "Serving {count} archives from this device. Read-only; no application controls are exposed.": {
+    "one": "Serving {count} archive from this device. Read-only; no application controls are exposed.",
+    "other": "Serving {count} archives from this device. Read-only; no application controls are exposed."
+  },
   "Serving {count} available archives.": "Serving {count} available archives.",
   "Several passages match. This highlight was not placed.": "Several passages match. This highlight was not placed.",
   "Share PIN": "Share PIN",
@@ -1665,6 +1669,10 @@
     "other": "{count} archives on this page"
   },
   "{count} archives · {peers} connected devices · {size} sent": "{count} archives · {peers} connected devices · {size} sent",
+  "{count} articles": {
+    "one": "{count} article",
+    "other": "{count} articles"
+  },
   "{count} available": {
     "one": "{count} available",
     "other": "{count} available"

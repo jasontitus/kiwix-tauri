@@ -17,61 +17,61 @@
     {
       "code": "ar",
       "name": "العربية",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "bik",
       "name": "Bikol",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "bn",
       "name": "বাংলা",
-      "coverage": 0.7399640503295386,
+      "coverage": 0.7390783961699581,
       "machineTranslated": true
     },
     {
       "code": "br",
       "name": "Brezhoneg",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "ca",
       "name": "Català",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "cs",
       "name": "Čeština",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "da",
       "name": "Dansk",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "dag",
       "name": "Dagbanli",
-      "coverage": 0.039544637507489516,
+      "coverage": 0.03949730700179533,
       "machineTranslated": false
     },
     {
       "code": "de",
       "name": "Deutsch",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "el",
       "name": "Ελληνικά",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
@@ -83,379 +83,379 @@
     {
       "code": "eo",
       "name": "Esperanto",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "es",
       "name": "Español",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "fa",
       "name": "فارسی",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "fi",
       "name": "suomi",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "fr",
       "name": "Français",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "gsw",
       "name": "Schwiizerdütsch",
-      "coverage": 0.5200718993409227,
+      "coverage": 0.5194494314781568,
       "machineTranslated": true
     },
     {
       "code": "ha",
       "name": "Hausa",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "he",
       "name": "עברית",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "hi",
       "name": "हिन्दी",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "hy",
       "name": "Հայերեն",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "ia",
       "name": "Interlingua",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "id",
       "name": "Bahasa Indonesia",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "ie",
       "name": "Interlingue",
-      "coverage": 0.013181545835829839,
+      "coverage": 0.013165769000598444,
       "machineTranslated": false
     },
     {
       "code": "ig",
       "name": "Igbo",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "igl",
       "name": "Igala",
-      "coverage": 0.02816057519472738,
+      "coverage": 0.028126870137642132,
       "machineTranslated": false
     },
     {
       "code": "io",
       "name": "Ido",
-      "coverage": 0.005991611743559017,
+      "coverage": 0.005984440454817474,
       "machineTranslated": false
     },
     {
       "code": "it",
       "name": "italiano",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "ja",
       "name": "日本語",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "kab",
       "name": "Taqbaylit",
-      "coverage": 0.0341521869382864,
+      "coverage": 0.03411131059245961,
       "machineTranslated": false
     },
     {
       "code": "ko",
       "name": "한국어",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "ku-Latn",
       "name": "Kurdî",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "lb",
       "name": "Lëtzebuergesch",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "ln",
       "name": "lingála",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "mk",
       "name": "македонски",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "ms",
       "name": "Bahasa Melayu",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "my",
       "name": "မြန်မာဘာသာ",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "nb",
       "name": "norsk bokmål",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "nl",
       "name": "Nederlands",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "nqo",
       "name": "ߒߞߏ",
-      "coverage": 0.026363091671659677,
+      "coverage": 0.026331538001196888,
       "machineTranslated": false
     },
     {
       "code": "or",
       "name": "ଓଡି଼ଆ",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "pa",
       "name": "ਪੰਜਾਬੀ",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "pl",
       "name": "Polski",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "ps",
       "name": "پښتو",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "pt",
       "name": "português",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "pt-BR",
       "name": "Português do Brasil",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "ro",
       "name": "Română",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "roa-Tara",
       "name": "Tarandíne",
-      "coverage": 0.014979029358897543,
+      "coverage": 0.014961101137043686,
       "machineTranslated": false
     },
     {
       "code": "ru",
       "name": "русский",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "sc",
       "name": "Sardu",
-      "coverage": 0.029358897543439184,
+      "coverage": 0.029323758228605626,
       "machineTranslated": false
     },
     {
       "code": "scn",
       "name": "Sicilianu",
-      "coverage": 0.7405632115038946,
+      "coverage": 0.7396768402154399,
       "machineTranslated": true
     },
     {
       "code": "sdc",
       "name": "Sassaresu",
-      "coverage": 0.007789095266626723,
+      "coverage": 0.007779772591262717,
       "machineTranslated": false
     },
     {
       "code": "se",
       "name": "davvisámegillii",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "sk",
       "name": "Slovenčina",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "skr-Arab",
       "name": "سرائیکی",
-      "coverage": 0.04134212103055722,
+      "coverage": 0.04129263913824058,
       "machineTranslated": false
     },
     {
       "code": "sl",
       "name": "slovenščina",
-      "coverage": 0.7435590173756741,
+      "coverage": 0.7426690604428486,
       "machineTranslated": true
     },
     {
       "code": "sms",
       "name": "sääʹmǩiõll",
-      "coverage": 0.012582384661473937,
+      "coverage": 0.012567324955116697,
       "machineTranslated": false
     },
     {
       "code": "sq",
       "name": "Shqip",
-      "coverage": 0.7423606950269622,
+      "coverage": 0.7414721723518851,
       "machineTranslated": true
     },
     {
       "code": "sr-Cyrl",
       "name": "српски",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "sro",
       "name": "Sardu campidanesu",
-      "coverage": 0.007789095266626723,
+      "coverage": 0.007779772591262717,
       "machineTranslated": false
     },
     {
       "code": "sv",
       "name": "Svenska",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "sw",
       "name": "Kiswahili",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "ta",
       "name": "தமிழ்",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "te",
       "name": "తెలుగు",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "th",
       "name": "ภาษาไทย",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "tn",
       "name": "Setswana",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "tr",
       "name": "Türkçe",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "uk",
       "name": "Українська",
-      "coverage": 0.7429598562013181,
+      "coverage": 0.7420706163973668,
       "machineTranslated": true
     },
     {
       "code": "yi",
       "name": "ייִדיש",
-      "coverage": 0.7411623726782505,
+      "coverage": 0.7402752842609216,
       "machineTranslated": true
     },
     {
       "code": "yo",
       "name": "Èdè Yorùbá",
-      "coverage": 0.7417615338526063,
+      "coverage": 0.7408737283064033,
       "machineTranslated": true
     },
     {
       "code": "zgh",
       "name": "ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ",
-      "coverage": 0.015578190533253445,
+      "coverage": 0.015559545182525433,
       "machineTranslated": false
     },
     {
       "code": "zh-Hans",
       "name": "简体中文",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "zh-Hant",
       "name": "繁體中文",
-      "coverage": 0.74415817855003,
+      "coverage": 0.7432675044883303,
       "machineTranslated": true
     },
     {
       "code": "zza",
       "name": "Zazaki",
-      "coverage": 0.02756141402037148,
+      "coverage": 0.02752842609216038,
       "machineTranslated": false
     }
   ]

@@ -3,7 +3,9 @@
 // in every language with no inventory noticing. Covered call shapes:
 //   - `.text("…")` literals;
 //   - `t("…")` where a file defines `let t = |…| … locale.text(…)`;
-//   - `.counted("…")` literals (plural sources, see plural-sources.json);
+//   - `.counted("…")` literals: plural sources, which must be in
+//     plural-sources.json AND in the generated messages/en.json (a source is
+//     shipped only if it is collected, e.g. listed in extra-en-rust.json);
 //   - `mobile_labels(…)` literal arguments;
 //   - `live_activity.rs` `label()` arms;
 //   - VARIABLE_SOURCES below: call sites whose source is a variable, listed by
@@ -59,7 +61,15 @@ async function catalog() {
   const flat = new Set(Object.keys(await read("messages/en.json")));
   for (const file of await readdir(dir))
     if (/^extra-en-.*\.json$/.test(file)) for (const key of Object.keys(await read(file))) flat.add(key);
-  const plural = new Set(Object.keys(await read("plural-sources.json")));
+  // A plural source ships only when it is also a collected source, so it must
+  // be in the generated runtime catalog with its plural forms, not merely in
+  // plural-sources.json.
+  const english = await read("messages/en.json");
+  const plural = new Set(
+    Object.keys(await read("plural-sources.json")).filter(
+      (key) => english[key] && typeof english[key] === "object" && "other" in english[key],
+    ),
+  );
   return { flat, plural };
 }
 
@@ -105,5 +115,5 @@ test("every source the Rust core localizes is an English catalog source", async 
   assert.ok(seen.labels >= 8, `found only ${seen.labels} mobile_labels() literals`);
   assert.ok(seen.label >= 10, `found only ${seen.label} live_activity label() arms`);
   assert.deepEqual(missing, [],
-    "Add flat sources to src/locales/extra-en-rust.json and plural ones to plural-sources.json, then run `node scripts/localization.mjs generate`");
+    "Add sources to src/locales/extra-en-rust.json (plural ones also to plural-sources.json), then run `node scripts/localization.mjs generate`");
 });

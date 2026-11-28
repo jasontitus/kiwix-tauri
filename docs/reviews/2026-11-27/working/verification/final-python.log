@@ -1,0 +1,8 @@
+CMD python3 -m unittest discover -s scripts -p 'test_*.py' && python3 scripts/test-linux-appimage.py
+Ran 182 tests in 22.187s
+
+OK (skipped=2)
+Ran 1 test in 0.046s
+
+OK
+EXIT 0

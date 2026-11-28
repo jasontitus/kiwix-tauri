@@ -1,0 +1,2 @@
+CMD (from src-tauri/gen/android) gradle --no-daemon --offline --max-workers=2 --console=plain :tauri-plugin-kiwix-mobile:testDebugUnitTest --rerun
+JUnit XML totals: tests 79 skipped 0 failures 0 errors 0

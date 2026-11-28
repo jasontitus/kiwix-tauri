@@ -350,3 +350,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
   Swift: Linux toolchain harness fixture 238/238, bound ALL PASSED, differential 1.6M+ 0 mismatches; swiftc -parse Sources+Tests OK.
   NOT RUN: Apple compilers, iOS/macOS Rust, devices, simulator, Windows runtime, GitHub Actions, cargo deny/npm audit (network).
 - RECORD drafted (a454b…), owner filled §5.4, updated §1/§2/§7/§8 (no history rewrite: evidence commit + removal commit). -> final record reviewer
+- RECORD review r1 (adv/record.md): no blocking; R1-R7 + nits. Owner applied all (R6 real fix: 2 plural sources collected + test requires shipped catalog; reran cargo test 1493/0, node 544/0/1, python, build, checks). Logs -> working/verification. -> record review r2

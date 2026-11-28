@@ -1,0 +1,43 @@
+uses url crate: False | percent_encoding: False
+built without external crates
+fixture: 238 cases, 238 match, 0 differ
+ok   one run four times the bound leaves nothing
+ok   one million colons after a slash
+ok   1.2 million scalars of file: URL on one line
+ok   1.8 million scalars of spaced path on one line
+ok   text past the bound is dropped, not passed through
+ok   a URL cut by the bound is dropped whole
+ok   the same URL whole is a reader URL
+ok   a path cut by the bound keeps none of its parts
+ok   cut right after a space
+ok   cut right before a space
+ok   a field exactly at the bound is untouched
+ok   bound counts scalars (2-byte UTF-8)
+ok   bound never splits a surrogate pair
+ok   bound counts scalars inside a grapheme cluster
+ok   a cut between the scalars of one Character leaves valid text
+ok   CR LF are two scalars and both are whitespace
+ok   CR LF ends a path
+ok   case folding is ASCII only
+ok   whitespace is the White_Space list
+ok   message cut is 2,000 scalars ending in an ellipsis
+ok   a 1,999-character message is not cut
+ok   frame cut is 240 scalars
+ok   a short frame is untouched
+ok   slowest full-length input takes 8.3 ms
+bound: ALL PASSED
+timing: 61 units; max growth x4.2 for 4x input; slowest 8.31 ms at 32,768 scalars ("@")
+ok   testReportTextRedactsReaderLocationsAndNonHTTPURLs
+ok   testReportTextKeepsNoPartOfAPathOrFileURLThatContainsSpaces
+ok   testRedactionMatchesTheCanonicalCasesSharedWithRust
+ok   testRedactionInputIsBoundedBeforeAnyStepRunsAndCountsScalars
+ok   testEveryRedactionStepIsLinearInItsInput
+ok   testStackFrameLineKeepsSpacingAndLongSymbols
+ALL PASSED
+cases: 250000 mismatches: 0
+cases: 250000 mismatches: 0
+cases: 250000 mismatches: 0
+cases: 250000 mismatches: 0
+cases: 300000 mismatches: 0
+cases: 300000 mismatches: 0
+cases: 500 mismatches: 0

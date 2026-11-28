@@ -1,0 +1,6 @@
+Final-tree verification logs for docs/reviews/2026-11-27/PROJECT-REVIEW-REMEDIATION.md §5.4.
+final-cargo-test2.log, final-node2.log, final-python.log, final-build.log: run after the catalog fix (final data).
+final-cargo-test.log, final-node.log: earlier runs on the same Rust sources before the catalog fix.
+final-clippy-{host,win,android,optin}.log, final-unsafe.log, final-kotlin*.log, final-swift*.log: do not read the catalogs.
+final-rev.txt: HEAD at the first Rust run, then the count of uncommitted paths (regenerated locales).
+Commands: see each log's CMD line, or §5.4 for logs without one.

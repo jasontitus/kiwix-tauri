@@ -12,14 +12,16 @@ changed code on this loop's path: startup and quit dialogs, profile loading
 (unreadable records are kept in a sibling copy), archive handles that change or
 vanish while open, imports cancelled by Quit, a privacy switch or mobile
 backgrounding, Android system Back, and crash-record redaction. That record
-lists the verification actually run on the final tree: host unit, integration
-and headless-browser tests on Linux, Clippy type checks for Windows (MinGW
+lists the verification actually run on the final tree: Rust library tests,
+the Node and Python script suites and headless-Chromium tests of the built
+frontend on Linux, Clippy type checks for Windows (MinGW
 target) and Android, JVM unit tests for the Android plugin, and a Linux Swift
 toolchain for the iOS crash-redaction code. Rust code for macOS and iOS was not
 compiled at all, and the other Swift changes were only syntax-checked
-(`swiftc -parse`). **None of these changes has been run on a phone, a Mac,
-Windows or an iPhone simulator**, so the 2026-11-17 device evidence below
-predates them and does not cover them.
+(`swiftc -parse`). **The app itself was not launched on any platform, Linux
+included, and none of these changes has been run on a phone, a Mac, Windows or
+an iPhone simulator**, so the 2026-11-17 device evidence below predates them
+and does not cover them.
 
 ## Mobile verification — 2026-11-17
 
