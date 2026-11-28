@@ -140,7 +140,7 @@ internal object SpeechPlayback {
                 return false
             }
         }
-        try { ensureChannel(app) }
+        try { ensureChannel(app, rename = true) }
         catch (_: Exception) { stop(app, id); return false }
         if (!running) {
             running = true
@@ -205,7 +205,7 @@ internal object SpeechPlayback {
     /** Called by the service when it becomes foreground. */
     internal fun foreground(service: Service): Boolean {
         try {
-            ensureChannel(service)
+            ensureChannel(service, rename = false)
             if (!running) {
                 // A stale transport intent can still arrive through
                 // startForegroundService. The platform contract requires one
@@ -355,12 +355,17 @@ internal object SpeechPlayback {
         session = null
     }
 
-    private fun ensureChannel(context: Context) {
+    /**
+     * [rename] is set only by [start], whose labels came from the shell in the
+     * current language: creating an existing channel again is how Android
+     * updates its name, and the importance a person chose in system settings is
+     * left untouched. The service path may run in a fresh process that still
+     * holds the built-in fallback labels, so it only creates a missing channel.
+     */
+    private fun ensureChannel(context: Context, rename: Boolean) {
         if (Build.VERSION.SDK_INT < 26) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        // Creating an existing channel again is how Android updates its name, so
-        // the channel follows the current language like the transfer channels do.
-        // The importance a person chose in system settings is left untouched.
+        if (!rename && manager.getNotificationChannel(CHANNEL) != null) return
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, labels.title, NotificationManager.IMPORTANCE_LOW)
                 .apply { setShowBadge(false) },

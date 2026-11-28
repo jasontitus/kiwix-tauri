@@ -1318,18 +1318,20 @@ fn clear_unpublished_copy(journal: &Journal) -> Result<bool, String> {
         // before the journal write that would have recorded it failed.
         None => {}
     }
+    // Empty-only removal: an entry the move did not write keeps the folder.
     #[cfg(windows)]
-    remove_owned_directory(&destination, &mut Some(staging), &staging_name)?;
+    let removed = remove_owned_directory(&destination, &mut Some(staging), &staging_name);
     #[cfg(not(windows))]
-    {
+    let removed = {
         drop(staging);
-        destination.dir.remove_dir(&staging_name).map_err(|error| {
-            format!(
-                "Unexpected files were preserved at {}: {error}",
-                crate::storage::display_path(&destination.path.join(&staging_name))
-            )
-        })?;
-    }
+        destination.dir.remove_dir(&staging_name).map_err(err)
+    };
+    removed.map_err(|error| {
+        format!(
+            "The staging folder could not be removed and was preserved at {}: {error}",
+            crate::storage::display_path(&destination.path.join(&staging_name))
+        )
+    })?;
     destination.sync()?;
     Ok(true)
 }

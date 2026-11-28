@@ -147,7 +147,7 @@ internal class DeviceZimScan(private val context: Context, private val externalD
                     cancellation.throwIfCanceled()
                     if (out.size >= cap) return
                     val name = cursor.getString(nameIndex) ?: continue
-                    if (!archiveName.matches(name) || name.startsWith('.')) continue
+                    if (!archiveName.matches(name) || hiddenScanName(name)) continue
                     if (trashedIndex >= 0 && cursor.getInt(trashedIndex) != 0) continue
                     val data = if (dataIndex >= 0) cursor.getString(dataIndex) else null
                     if (data != null && (isOwnedPath(canonicalStoragePath(data), owned) ||
@@ -222,7 +222,7 @@ internal class DeviceZimScan(private val context: Context, private val externalD
             cancellation.throwIfCanceled()
             if (++visited[0] > 20000 || out.size >= cap) return
             val name = child.name
-            if (name.startsWith('.')) continue
+            if (hiddenScanName(name)) continue
             val lstat = runCatching { Os.lstat(child.path) }.getOrNull()
             // Only a symlink needs resolution; every other child is exactly one
             // component below a directory that was already proven canonical.

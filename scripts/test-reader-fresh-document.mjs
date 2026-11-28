@@ -135,7 +135,10 @@ test("an unconfirmed retirement removes the frame instead of presenting the old 
     assert.deepEqual(r.events.filter((event) => event[0] === "frame"), [["frame", null]]);
     assert.equal(r.context.frame, null, "no frame is left to carry a restricted banner or a stale page");
     assert.deepEqual(r.events.filter((event) => event[0] === "loading").at(-1), ["loading", false]);
-    assert.match(r.events.find((event) => event[0] === "error")[1], /could not confirm that the article finished saving/);
+    const shown = r.events.find((event) => event[0] === "error")[1];
+    assert.match(shown, /could not confirm that this page finished saving/);
+    assert.match(shown, /Choose Reload article to open it again/, "the advice matches the button beside it");
+    assert.doesNotMatch(shown, /Close and reopen this window/);
     assert.equal(r.errors.length, 1);
     assert.match(r.errors[0].cause.message, /could not finish closing/);
   }

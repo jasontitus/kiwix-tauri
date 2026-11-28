@@ -29,11 +29,24 @@ torrent has no peers to make progress.
    path confinement, no-follow checks, ownership journaling and backup
    exclusion remain in force.
 4. The adapter downloads into those files, updating progress at most every
-   250 ms. Partial files resume with a Range request; a server that ignores
-   Range restarts that file from zero.
-5. Every torrent piece is SHA-1 verified. A verification failure discards the
-   staged bytes and retries one from-scratch acquisition. Transport failures
-   keep partial files and retry with Range.
+   250 ms. A file shorter than the torrent says was written front to back by
+   this adapter and resumes with a Range request from its length; a server
+   that ignores that Range restarts the file from zero. When one mirror drops
+   the connection, the next mirror continues from the bytes already on disk.
+5. Every torrent piece is SHA-1 verified. Nothing found on disk is discarded
+   for failing: a file already at its full length (sized by the engine or by
+   partial reuse) can hold valid pieces among unwritten ones, so only the byte
+   ranges of failing pieces are fetched again, in place, mirror by mirror, and
+   only those pieces are hashed again. Bytes of a piece that verified are never
+   rewritten. A mirror without Range support is read once from the start and
+   only the missing ranges are kept from its answer.
+   Connection loss, timeouts, HTTP 408/429/5xx and short bodies are retried
+   after 1, 2, 4 and 8 seconds; any other answer ends the stage at once. The
+   stage ends after five consecutive passes that add less than one piece, after
+   two minutes of such passes waiting on mirrors, or after 32 passes in all,
+   whichever comes first. Connecting to a mirror may take 15 seconds and a
+   connected mirror may stay silent for 90. A pause or cancel ends any wait
+   immediately. On every failure the staged files are left as they are.
 6. The normal librqbit engine then opens/hashes the same files and publishes
    through the existing no-replace publication path. The adapter is an
    acquisition shortcut, not a replacement verifier.
@@ -43,7 +56,10 @@ torrent has no peers to make progress.
 - Host tests cover parsing, URL construction, unsafe metadata, single-file
   download, corrupt full-length staging recovery, multi-file download and an
   end-to-end local HTTP torrent that completes through the engine and
-  publication path.
+  publication path. They also cover, for a single-file torrent: repairing only
+  the missing pieces of a full-length file, a failing mirror leaving that file
+  untouched, a mirror without Range support, the hand-over between mirrors,
+  the stall and pass limits, and a stop during the wait between passes.
 - The real StreetZim Bahrain map torrent (`50,781,499` bytes) was downloaded
   from its real HTTPS `url-list` and SHA-1 verified in 6.7 s in a host test.
 - The network test was temporary; the committed tests are deterministic and
@@ -54,9 +70,20 @@ torrent has no peers to make progress.
 - If a web seed is unavailable, the failure is logged and the normal engine
   peer path continues. A peerless torrent can therefore remain without
   progress instead of immediately reporting that the seed is dead.
-- Whole-file acquisition means a full-length but corrupt staging file is
-  re-downloaded from zero after verification fails; it is never trusted by
-  length alone.
+- Peers are not contacted until this stage ends. Mirrors that refuse the
+  connection, or a device that is offline, cost about 15 seconds of retries.
+  Mirrors that silently drop the connection attempt cost about 1.5 minutes for
+  one mirror and about 2.3 minutes for three. Mirrors that connect and then
+  never answer cost about 3 minutes for one and 4.5 minutes for three. These
+  figures follow from the timeouts above and were not measured against real
+  hosts.
+- A mirror that keeps sending data slowly without ever closing the connection
+  is not limited by the pass and stall bounds: they apply between passes.
+- A full-length staging file is never trusted by length alone. It is hashed in
+  full on every start before any missing range is requested, and again by the
+  engine. No progress is shown during that pass.
+- The repair path for multi-file torrents and BEP 47 padding entries is
+  covered by reading the code, not by a host test.
 - No physical device/UI acceptance is claimed for this adapter. It is a
   torrent-transport change; existing Downloads/UI state and publication
   contracts are unchanged.

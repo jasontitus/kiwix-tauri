@@ -933,8 +933,10 @@
     };
   } catch (_) { return null; } })();
   let photoChooser = false;
-  // Per-document secret from reader-init (hidden from archive scripts): the
-  // shell accepts a photo request only with it.
+  // Per-session secret from reader-init: the shell accepts a photo request only
+  // with it. The shell listener below takes it out of the message before any
+  // archive script can run, and it leaves this closure only in the pre-bound
+  // post of a photo request.
   let photoSecret = "";
   let photoPending = null;
   function clearPhotoPending() {

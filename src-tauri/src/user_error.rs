@@ -102,15 +102,19 @@ struct AndroidFailure {
     bracketed: bool,
 }
 
-/// Android status codes are upper-case words joined by underscores. One
-/// upper-case word in a sentence ("ZIM", "HTTP") is not a code.
+/// Android status codes are upper-case words joined by single underscores,
+/// the same grammar the shell recognises as a native code. One upper-case word
+/// in a sentence ("ZIM", "HTTP") is not a code.
 fn is_android_code(text: &str) -> bool {
-    (3..=96).contains(&text.len())
+    text.len() <= 96
         && text.starts_with(|c: char| c.is_ascii_uppercase())
         && text.contains('_')
-        && text
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && text.split('_').all(|word| {
+            !word.is_empty()
+                && word
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        })
 }
 
 /// `java.lang.IllegalStateException`, `org.kiwix.mobile.NativeDocumentError`.
@@ -300,8 +304,11 @@ fn android_message(code: &str, detail: &str) -> Option<&'static str> {
     })
 }
 
-/// One sentence for an Android failure. No code, JSON or Java class name
-/// survives, except a bare code of the families the shell localizes itself.
+/// What the shell is given for an Android failure: an instruction where this
+/// boundary has one, otherwise the bare status code. The shell localizes bare
+/// codes itself, with its own instruction for the Nearby families and a
+/// generic one that keeps any other code for a support request. JSON, brackets
+/// around a payload and Java class names never survive.
 fn android_plain(failure: &AndroidFailure, original: &str) -> String {
     let Some(code) = failure.code.as_deref() else {
         // Java exception text with no status code is never copy for a person.
@@ -323,10 +330,9 @@ fn android_plain(failure: &AndroidFailure, original: &str) -> String {
             code.to_owned()
         };
     }
-    // The code names the failure for a local log; the payload may name a
-    // person's file and is not logged.
+    // The payload may name a person's file: only the code is logged or shown.
     eprintln!("KIWIX_NATIVE_ERROR {code}");
-    TRY_AGAIN.to_owned()
+    code.to_owned()
 }
 
 /// JSON envelopes from the iOS plugin carry a code and recovery details.
@@ -633,7 +639,6 @@ mod tests {
             for raw in [android_rejection(code, code), android_relayed(code, code)] {
                 let shown = plain(&raw);
                 assert_copy_for_a_person(&shown);
-                assert_ne!(shown, TRY_AGAIN, "{code} has no instruction of its own");
             }
         }
     }
@@ -683,18 +688,18 @@ mod tests {
             assert_eq!(plain(&android_rejection(code, detail)), space);
             assert_eq!(plain(&android_relayed(code, detail)), space);
         }
-        // Without that cause the generic code has no better advice.
+        // Without that cause the generic code is left to the shell's fallback.
         assert_eq!(
             plain(&android_rejection(
                 "NATIVE_DOCUMENT_ERROR",
                 "NATIVE_DOCUMENT_ERROR"
             )),
-            TRY_AGAIN
+            "NATIVE_DOCUMENT_ERROR"
         );
     }
 
     #[test]
-    fn unknown_android_failures_never_show_codes_json_or_paths() {
+    fn unmapped_android_codes_reach_the_shell_bare_for_its_localized_fallback() {
         for raw in [
             android_rejection(
                 "SOME_FUTURE_FAILURE",
@@ -702,12 +707,22 @@ mod tests {
             ),
             android_relayed("SOME_FUTURE_FAILURE", "SOME_FUTURE_FAILURE"),
             "[SOME_FUTURE_FAILURE] - SOME_FUTURE_FAILURE".to_owned(),
+            "[SOME_FUTURE_FAILURE] - A sentence the plugin wrote".to_owned(),
             "[SOME_FUTURE_FAILURE]".to_owned(),
-            r#"java.lang.IllegalStateException: {"message":"org.json.JSONException: No value for uris"}"#.to_owned(),
-            "java.lang.SecurityException: Permission Denial: reading content://media/external/file/12".to_owned(),
             "org.kiwix.mobile.NativeDocumentError: SOME_FUTURE_FAILURE".to_owned(),
         ] {
-            assert_eq!(plain(&raw), TRY_AGAIN, "{raw}");
+            assert_eq!(plain(&raw), "SOME_FUTURE_FAILURE", "{raw}");
+        }
+    }
+
+    #[test]
+    fn android_failures_without_a_code_never_show_java_text_or_paths() {
+        for raw in [
+            r#"java.lang.IllegalStateException: {"message":"org.json.JSONException: No value for uris"}"#,
+            "java.lang.SecurityException: Permission Denial: reading content://media/external/file/12",
+            "java.io.FileNotFoundException: /storage/emulated/0/Download/private.zim: open failed: ENOENT",
+        ] {
+            assert_eq!(plain(raw), TRY_AGAIN, "{raw}");
         }
     }
 
@@ -778,6 +793,8 @@ mod tests {
             "HTTP",
             "Not_A_Code",
             "_LEADING",
+            "TRAILING_",
+            "DOUBLE__UNDERSCORE",
             "FILE NAME",
             "",
             "A_",

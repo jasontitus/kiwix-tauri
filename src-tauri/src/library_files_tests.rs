@@ -1249,6 +1249,7 @@ fn permanent_split_delete_leaves_no_staging_directory() {
     assert_eq!(std::fs::read_dir(&root.0).unwrap().count(), 0, "parts and staging are gone");
 }
 
+#[cfg(any(all(unix, desktop), target_os = "linux"))]
 fn single_fixture(root: &Temp, name: &str) -> Book {
     let path = root.0.join(name);
     std::fs::copy(
@@ -1420,7 +1421,7 @@ fn abandoning_removes_only_staging_entries_that_are_still_the_recorded_ones() {
     journal.parts[0].target = Some(Directory::open(&staging).unwrap().stamp("download.zimaa").unwrap());
     std::fs::write(staging.join("notes.txt"), b"not written by the move").unwrap();
     let error = abandon_unpublished_copy(&store, &journals, &journal).unwrap_err();
-    assert!(error.contains("Unexpected files were preserved"), "{error}");
+    assert!(error.contains("could not be removed and was preserved"), "{error}");
     assert_eq!(directory_names(&staging), ["notes.txt"]);
     assert_eq!(journal_files(&journals).len(), 1);
 

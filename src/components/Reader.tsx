@@ -562,8 +562,11 @@ function boundedHistory(stack: TabLocation[]): TabLocation[] {
   return stack.length > MAX_TAB_HISTORY ? stack.slice(-MAX_TAB_HISTORY) : stack;
 }
 // How long the bridge of an unchanged document may take to prove itself after
-// a frame load that no new document announced. Unproven loads re-session.
+// a frame load that no new document announced. Unproven loads lose the session.
 const DOCUMENT_PROOF_TIMEOUT = 1000;
+// How long a page stays painted while its replacement re-sessions. A real
+// bridge answers within the handshake; anything slower is hidden again.
+const HELD_PAINT_LIMIT = 3000;
 function validExternal(value: string): boolean {
   try {
     return ["http:", "https:", "mailto:"].includes(new URL(value).protocol);
@@ -950,7 +953,16 @@ export default function Reader(props: ReaderProps) {
   );
   const [controlsOpen, setControlsOpen] = useState(false);
   const [panHidden, setPanHidden] = useState(false);
-  const panAuthority = useRef<{ sessionId: string; token: string; sequence: number } | null>(null);
+  // The token a session's bridge bound while answering reader-init, and the
+  // frame it was bound in. An empty token means two different tokens were
+  // claimed for the session: neither is trusted.
+  const panAuthority = useRef<{
+    sessionId: string;
+    token: string;
+    sequence: number;
+    contextId: string;
+    origin: string;
+  } | null>(null);
   // The bridge announces its private token before archive code runs. Only that
   // first announcement of a document may authorize gestures.
   const gestureHello = useRef<{ frameId: string; token: string } | null>(null);
@@ -964,8 +976,11 @@ export default function Reader(props: ReaderProps) {
   const [cameraSupported, setCameraSupported] = useState(false);
   const cameraAvailable = cameraSupported && photoRequest !== null && cameraAccepts(photoRequest.accept);
   const photoCancelButton = useRef<HTMLButtonElement>(null);
-  // One secret per reader session, sent only in reader-init (which the bridge
-  // hides from archive scripts); a photo request must carry it.
+  // One secret per reader session, sent only in reader-init; a photo request
+  // must carry it. The bridge reads reader-init through natives captured before
+  // archive scripts ran, removes the secret from the message and stops the
+  // event, so archive script cannot read it while the bridge's listener exists.
+  // reader-init is therefore only posted to a document a bridge vouched for.
   const photoSecrets = useRef(new Map<string, string>());
   const photoSecretFor = useCallback((sessionId: string) => {
     // Only the session being initialised can still ask; earlier ones are gone.
@@ -986,16 +1001,34 @@ export default function Reader(props: ReaderProps) {
   // newest document: when it is not the session's own, the session's document
   // was replaced. Announcement and load arrive in either order, so a load that
   // no other document has announced keeps the session only once the bridge
-  // holding it proves, with that token, that it is still the live document.
+  // holding it proves, with that token, that it is still listening.
+  //
+  // What this does and does not establish: it tells a same-document load from
+  // a replaced document for pages whose bridge is intact. It is not an
+  // authority boundary against archive script. Script in the frame can forge
+  // an announcement, and a page that destroys its own bridge listener and then
+  // announces itself is indistinguishable from a new document.
   const documentAnnounced = useRef<string | null>(null);
+  // A bridge has vouched for the frame's document since reader-init was last
+  // posted: it announced itself, or the bridge already initialised in this
+  // frame proved it is still listening. reader-init, which carries the session
+  // id and the photo secret, is never posted without it.
+  const bridgeVouched = useRef(false);
+  // The session whose reader-init is withheld until a bridge vouches.
+  const pendingInit = useRef("");
+  // `nonce` null: the session has no bound token yet, so nothing is asked until
+  // its bridge binds one. `kept` false: the probed session already lost
+  // admission (or belongs to an earlier open); its proof only vouches.
   const documentProbe = useRef<{
-    nonce: string;
+    nonce: string | null;
     sessionId: string;
     frameId: string;
     node: HTMLIFrameElement;
     painted: boolean;
-    timer: number;
+    kept: boolean;
+    timer?: number;
   } | null>(null);
+  const heldPaintTimer = useRef<number | undefined>(undefined);
   // The frame whose paint is kept while a child navigation re-sessions: the
   // page was already on screen under the previous session, so hiding it for
   // the handshake would only blink. Admission and controls stay withheld.
@@ -1934,8 +1967,12 @@ export default function Reader(props: ReaderProps) {
       api("sensor_deactivate", { sessionId: session.sessionId }),
     ).then(() => undefined);
   }, [cancelSensors, clearDocumentProbe, clearHistoryTraversal, resetFind, send]);
-  // The one place a session and its photo secret are handed to the frame.
+  // The one place a session and its photo secret are handed to the frame. The
+  // bridge keeps both from archive scripts for as long as its listener exists;
+  // callers therefore reach this only through admitDocument.
   const initializeDocument = useCallback((session: FrameSession) => {
+    bridgeVouched.current = false;
+    pendingInit.current = "";
     frameRef.current?.contentWindow?.postMessage(
       {
         channel: "kiwix-reader",
@@ -1956,9 +1993,35 @@ export default function Reader(props: ReaderProps) {
       session.location.origin,
     );
   }, [photoSecretFor]);
+  // A document that no bridge has vouched for is never initialised: a page
+  // without a bridge, or one whose bridge listener is gone, would read the
+  // session id and the photo secret directly. It stays unadmitted and hidden
+  // until a bridge vouches, and otherwise ends in the connection watchdog.
+  const admitDocument = useCallback((session: FrameSession) => {
+    if (bridgeVouched.current) initializeDocument(session);
+    else pendingInit.current = session.sessionId;
+  }, [initializeDocument]);
+  const settlePendingInit = useCallback(() => {
+    const active = activeFrame.current;
+    const node = frameRef.current;
+    if (
+      !alive.current ||
+      !bridgeVouched.current ||
+      !active ||
+      !node ||
+      pendingInit.current !== active.sessionId ||
+      displayedFrame.current?.frameId !== active.frameId ||
+      !canNavigateReaderStorage() ||
+      active.privacyGeneration !== latest.current.privacyGeneration ||
+      frameNavigation.current?.node !== node ||
+      frameNavigation.current.frameId !== active.frameId
+    )
+      return;
+    initializeDocument(active);
+  }, [initializeDocument]);
   // Another document's bridge announced itself after the one this session is
-  // bound to. Archive code can forge that (it only costs a re-session) but can
-  // neither suppress a genuine announcement nor learn the bound token.
+  // bound to (or the binding is contested). Archive code can forge that, which
+  // only costs it a re-session, but cannot learn the bound token.
   const documentReplaced = useCallback((session: FrameSession) => {
     const authority = panAuthority.current;
     return (
@@ -1967,24 +2030,28 @@ export default function Reader(props: ReaderProps) {
       authority.token !== documentAnnounced.current
     );
   }, []);
-  // A document replaced the one this session was handed to (or nothing proved
-  // otherwise): retire that session and give the frame's document a new one.
+  // The session's document was replaced, or nothing proved otherwise: retire
+  // that session and prepare a new one for whichever document vouches.
   const resessionFrame = useCallback(
     (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
-      clearDocumentProbe();
       setLinkContext(null);
       latest.current.clearMediaCheckpoint();
       retainedActivation.current = null;
       cancelSensors(active.sessionId);
       const sequence = ++openSequence.current;
       activeFrame.current = null;
-      // The outgoing page was on screen and usable until now. Keep it painted
-      // through the handshake; anything short of a new session hides it again.
+      // The outgoing page was on screen and usable until now. When a bridge in
+      // this frame announced the replacement, keep it painted through the
+      // handshake, for a bounded time; anything else hides it again.
       setHeldPaint(painted ? active.frameId : "");
       const releasePaint = () => {
         if (alive.current)
           setHeldPaint((held) => (held === active.frameId ? "" : held));
       };
+      clearTimeout(heldPaintTimer.current);
+      heldPaintTimer.current = painted
+        ? window.setTimeout(releasePaint, HELD_PAINT_LIMIT)
+        : undefined;
       setFrameReady(false);
       setLoading(true);
       void lifecycle(async () => {
@@ -2039,7 +2106,7 @@ export default function Reader(props: ReaderProps) {
         const updated = { ...active, sessionId, status };
         activeFrame.current = updated;
         setFrame(updated);
-        initializeDocument(updated);
+        admitDocument(updated);
       }).catch((value) => {
         releasePaint();
         if (alive.current && openSequence.current === sequence) {
@@ -2048,12 +2115,12 @@ export default function Reader(props: ReaderProps) {
         }
       });
     },
-    [cancelSensors, clearDocumentProbe, initializeDocument, report],
+    [admitDocument, cancelSensors, report],
   );
-  // A frame load nothing proved, or a document that announced itself while the
-  // proof was awaited. The frame must still be the one that was probed.
+  // The session a probe was opened for loses admission, provided the frame is
+  // still the one that was probed.
   const resessionUnproven = useCallback(
-    (probe: NonNullable<typeof documentProbe.current>) => {
+    (probe: NonNullable<typeof documentProbe.current>, painted: boolean) => {
       const active = activeFrame.current;
       if (
         !alive.current ||
@@ -2068,47 +2135,96 @@ export default function Reader(props: ReaderProps) {
         frameNavigation.current.frameId !== active.frameId
       )
         return;
-      resessionFrame(probe.node, active, probe.painted);
+      resessionFrame(probe.node, active, painted);
     },
     [resessionFrame],
   );
-  const probeDocument = useCallback(
-    (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
-      clearDocumentProbe();
-      // Only a session a bridge has already bound its token to can be proved.
-      // An unbound one is never named to the frame: whichever document reads
-      // the probe must not be able to claim that session as the first to bind.
-      if (panAuthority.current?.sessionId !== active.sessionId) {
-        resessionFrame(node, active, painted);
-        return;
-      }
+  // Ask the bridge bound to `sessionId` to prove it is still listening. Only a
+  // session that already has a bound token is ever named to the frame.
+  const postDocumentProbe = useCallback(
+    (probe: NonNullable<typeof documentProbe.current>, origin: string) => {
       const nonce = crypto.randomUUID();
-      const timer = window.setTimeout(() => {
-        const probe = documentProbe.current;
-        if (probe?.nonce !== nonce) return;
-        documentProbe.current = null;
-        resessionUnproven(probe);
-      }, DOCUMENT_PROOF_TIMEOUT);
-      documentProbe.current = {
-        nonce,
-        sessionId: active.sessionId,
-        frameId: active.frameId,
-        node,
-        painted,
-        timer,
-      };
-      node.contentWindow?.postMessage(
+      probe.nonce = nonce;
+      if (probe.kept)
+        probe.timer = window.setTimeout(() => {
+          const current = documentProbe.current;
+          if (current !== probe || current.nonce !== nonce) return;
+          // Unproven: the session loses admission, and the page is hidden
+          // because nothing shows it is still the document that was admitted.
+          // A late answer no longer keeps the session; it can only vouch that
+          // the bridge is alive, so the replacement session reaches it.
+          probe.kept = false;
+          probe.timer = undefined;
+          resessionUnproven(probe, false);
+        }, DOCUMENT_PROOF_TIMEOUT);
+      probe.node.contentWindow?.postMessage(
         {
           channel: "kiwix-reader",
           version: 1,
           type: "document-probe",
-          sessionId: active.sessionId,
+          sessionId: probe.sessionId,
           nonce,
         },
-        active.location.origin,
+        origin,
       );
     },
-    [clearDocumentProbe, resessionFrame, resessionUnproven],
+    [resessionUnproven],
+  );
+  const probeDocument = useCallback(
+    (node: HTMLIFrameElement, active: FrameSession, painted: boolean) => {
+      clearDocumentProbe();
+      const probe: NonNullable<typeof documentProbe.current> = {
+        nonce: null,
+        sessionId: active.sessionId,
+        frameId: active.frameId,
+        node,
+        painted,
+        kept: true,
+      };
+      if (panAuthority.current?.sessionId === active.sessionId) {
+        documentProbe.current = probe;
+        postDocumentProbe(probe, active.location.origin);
+        return;
+      }
+      // No bridge has bound a token to this session yet, so there is nothing
+      // to prove it with, and its id is not disclosed to whichever document
+      // reads the probe. A document that announced itself since reader-init
+      // went out gets a new session; otherwise wait for the binding.
+      if (bridgeVouched.current) resessionFrame(node, active, painted);
+      else documentProbe.current = probe;
+    },
+    [clearDocumentProbe, postDocumentProbe, resessionFrame],
+  );
+  // The first load of a frame the shell navigated. Initialisation waits for a
+  // bridge to vouch for the document. A same-document reopen makes no new
+  // announcement, so the bridge initialised earlier in this frame is asked to
+  // prove that it is still the one listening.
+  const admitLoadedDocument = useCallback(
+    (node: HTMLIFrameElement, active: FrameSession) => {
+      clearDocumentProbe();
+      admitDocument(active);
+      const authority = panAuthority.current;
+      if (
+        pendingInit.current !== active.sessionId ||
+        !authority ||
+        !authority.token ||
+        authority.sessionId === active.sessionId ||
+        authority.contextId !== active.contextId ||
+        authority.origin !== active.location.origin
+      )
+        return;
+      const probe: NonNullable<typeof documentProbe.current> = {
+        nonce: null,
+        sessionId: authority.sessionId,
+        frameId: active.frameId,
+        node,
+        painted: false,
+        kept: false,
+      };
+      documentProbe.current = probe;
+      postDocumentProbe(probe, active.location.origin);
+    },
+    [admitDocument, clearDocumentProbe, postDocumentProbe],
   );
   const restoreFrame = useCallback(
     (url: string) => {
@@ -2222,6 +2338,8 @@ export default function Reader(props: ReaderProps) {
         privacyGeneration: session.privacyGeneration,
         url: session.location.url,
       });
+      // Whatever vouched before this navigation vouched for another document.
+      bridgeVouched.current = false;
       // Reusing the context still runs the outgoing document's real pagehide.
       node.src = session.location.url;
     }).catch((value) => {
@@ -3391,36 +3509,82 @@ export default function Reader(props: ReaderProps) {
   useLayoutEffect(() => {
     gestureHello.current = null;
     awaitingGestureHello.current = true;
+    documentAnnounced.current = null;
+    bridgeVouched.current = false;
   }, [frame?.contextId]);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
       const session = activeFrame.current;
       const source = frameRef.current?.contentWindow;
-      // Every archive document's bridge announces itself at bootstrap, before
-      // archive scripts. Record the newest announcement even while no session
-      // is admitted, so a re-session in flight cannot hide a further navigation.
-      if (
+      // The frame's own window at the displayed origin. Announcements and
+      // proofs are taken here, before the session gate: they matter while a
+      // re-session is in flight and for sessions that are no longer admitted.
+      const framed =
         source &&
         event.source === source &&
         event.isTrusted &&
         event.origin === displayedFrame.current?.location.origin &&
         object(event.data) &&
         event.data.channel === "kiwix-reader" &&
-        event.data.version === 1 &&
-        event.data.type === "reading-gesture-hello" &&
-        text(event.data.token, 36) &&
-        /^[0-9a-f-]{36}$/.test(event.data.token)
+        event.data.version === 1
+          ? event.data
+          : null;
+      if (
+        framed?.type === "reading-gesture-hello" &&
+        text(framed.token, 36) &&
+        /^[0-9a-f-]{36}$/.test(framed.token)
       ) {
-        documentAnnounced.current = event.data.token;
-        // The load being proved belonged to this other document (its
-        // announcement can follow its load). The session's own late
-        // announcement leaves the proof window to decide.
+        // Every archive document's bridge announces itself at bootstrap,
+        // before archive scripts, and again when restored from the
+        // back-forward cache.
+        const authority = panAuthority.current;
+        const own =
+          session !== null &&
+          authority?.sessionId === session.sessionId &&
+          authority.token === framed.token;
+        documentAnnounced.current = framed.token;
+        // The admitted session's own bridge repeating itself vouches for
+        // nothing new: that document already has its session.
+        if (!own) bridgeVouched.current = true;
         const probe = documentProbe.current;
-        if (probe && session && probe.sessionId === session.sessionId && documentReplaced(session)) {
+        if (
+          probe?.kept &&
+          session &&
+          probe.sessionId === session.sessionId &&
+          (probe.nonce === null || documentReplaced(session))
+        ) {
+          // The load being proved belonged to this other document: its
+          // announcement can follow its load.
           clearDocumentProbe();
-          resessionUnproven(probe);
+          resessionUnproven(probe, probe.painted);
+        } else settlePendingInit();
+      } else if (framed?.type === "document-proof") {
+        // Only the bridge that answered a session's reader-init holds the token
+        // bound to it, and it answers with the nonce of the latest probe. For
+        // an admitted session the proof settles that one load. For a session
+        // that already lost admission it only vouches that this bridge is
+        // still listening, so the replacement session may be handed to it.
+        const probe = documentProbe.current;
+        const authority = panAuthority.current;
+        if (
+          probe &&
+          probe.nonce !== null &&
+          text(framed.nonce, 36) &&
+          framed.nonce === probe.nonce &&
+          framed.sessionId === probe.sessionId &&
+          authority?.sessionId === probe.sessionId &&
+          authority.token !== "" &&
+          text(framed.token, 36) &&
+          framed.token === authority.token
+        ) {
+          if (!probe.kept) {
+            clearDocumentProbe();
+            bridgeVouched.current = true;
+            settlePendingInit();
+          } else if (session?.sessionId === probe.sessionId) clearDocumentProbe();
         }
+        return;
       }
       if (
         !session ||
@@ -3455,28 +3619,6 @@ export default function Reader(props: ReaderProps) {
         return;
       }
       if (data.sessionId !== session.sessionId) return;
-      if (data.type === "document-proof") {
-        // Only the bridge that answered this session's reader-init holds the
-        // token bound to it, and it answers with the nonce of the latest probe.
-        // The proof settles that one load and grants nothing else.
-        const probe = documentProbe.current;
-        const authority = panAuthority.current;
-        if (
-          event.isTrusted &&
-          probe &&
-          probe.sessionId === session.sessionId &&
-          text(data.nonce, 36) &&
-          data.nonce === probe.nonce &&
-          authority?.sessionId === session.sessionId &&
-          text(data.token, 36) &&
-          data.token === authority.token
-        ) {
-          clearDocumentProbe();
-          // Proven live: an older document's announcement is no longer news.
-          documentAnnounced.current = authority.token;
-        }
-        return;
-      }
       if (session.privacyGeneration !== latest.current.privacyGeneration) {
         clearHistoryTraversal();
         // The mounted document predates this window's generation: it cannot
@@ -3528,7 +3670,7 @@ export default function Reader(props: ReaderProps) {
             session.location.origin,
           );
         // Only the bridge can ask: it proves itself with this session's secret,
-        // which archive scripts never see. One request at a time. Any refusal
+        // which it keeps from archive scripts. One request at a time. Any refusal
         // is answered, so the bridge never leaves the input dead.
         if (
           !event.isTrusted ||
@@ -3562,13 +3704,31 @@ export default function Reader(props: ReaderProps) {
         if (
           event.isTrusted &&
           text(data.token, 36) &&
-          /^[0-9a-f-]{36}$/.test(data.token) &&
-          panAuthority.current?.sessionId !== session.sessionId
+          /^[0-9a-f-]{36}$/.test(data.token)
         ) {
-          panAuthority.current = { sessionId: session.sessionId, token: data.token, sequence: 0 };
-          // The bridge that answered reader-init is the frame's document as of
-          // that answer; whatever announced itself earlier has been replaced.
-          documentAnnounced.current = data.token;
+          const authority = panAuthority.current;
+          if (authority?.sessionId !== session.sessionId) {
+            panAuthority.current = {
+              sessionId: session.sessionId,
+              token: data.token,
+              sequence: 0,
+              contextId: session.contextId,
+              origin: session.location.origin,
+            };
+            // This document's own announcement has now been answered; it does
+            // not vouch for whatever the frame holds next.
+            if (documentAnnounced.current === data.token) bridgeVouched.current = false;
+            // A load that arrived before this binding can be put to proof now.
+            const probe = documentProbe.current;
+            if (probe?.kept && probe.nonce === null && probe.sessionId === session.sessionId)
+              postDocumentProbe(probe, session.location.origin);
+          } else if (authority.token !== data.token) {
+            // The bridge binds exactly once per session, before any archive
+            // script can know the session. A second, different claim means one
+            // of the two was not the bridge: trust neither, so no proof and no
+            // gesture is accepted for this session and its next load re-sessions.
+            authority.token = "";
+          }
         }
         return;
       }
@@ -4213,7 +4373,9 @@ export default function Reader(props: ReaderProps) {
     stepZoom,
     clearDocumentProbe,
     documentReplaced,
+    postDocumentProbe,
     resessionUnproven,
+    settlePendingInit,
   ]);
 
   const changeSensorDecision = async (sensor: Sensor, reset = false) => {
@@ -4802,7 +4964,9 @@ export default function Reader(props: ReaderProps) {
     }
     if (retirementFailure !== null) {
       if (source) quarantineReaderStorage(source);
-      const message = t("Kiwix could not confirm that the article finished saving. Reading is paused to protect it. Close and reopen this window to continue.");
+      // The band this message appears in carries "Reload article", which
+      // discards the quarantine this just created and reopens the page.
+      const message = t("Kiwix could not confirm that this page finished saving, so it was closed. Choose Reload article to open it again. Anything the page had not finished saving is lost.");
       // Still the frame this started with (or still none): never show the
       // unretired document as reloaded, and never leave a spinner behind.
       if (alive.current && frameRef.current?.contentWindow === source) {
@@ -6917,16 +7081,19 @@ export default function Reader(props: ReaderProps) {
                 resetFind();
                 if (initializedFrame.current !== frame.frameId) {
                   initializedFrame.current = frame.frameId;
-                  clearDocumentProbe();
-                  initializeDocument(active);
+                  admitLoadedDocument(node, active);
                   return;
                 }
+                // Still waiting for a bridge to vouch: nothing was handed out,
+                // so there is nothing to prove or retire.
+                if (pendingInit.current === active.sessionId) return;
                 // A later load of an initialised frame is a child navigation
                 // when another document has announced itself. Otherwise the
                 // session survives solely on its own bridge's proof.
-                if (documentReplaced(active))
+                if (documentReplaced(active)) {
+                  clearDocumentProbe();
                   resessionFrame(node, active, frameReady);
-                else probeDocument(node, active, frameReady);
+                } else probeDocument(node, active, frameReady);
               }}
               data-frame-id={frame.frameId}
             />

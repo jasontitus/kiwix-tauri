@@ -538,11 +538,13 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         if (hotspotOwner?.release() == true) trigger("hotspot-stopped", JSObject())
         readerLocation.retire()
         operation?.let { op ->
-            if (replaced) op.replaced = true
+            // An operation that was already cancelled keeps that outcome: closing
+            // Kiwix and reopening it must not relabel it as a restart.
+            if (replaced && !op.cancellation.isCanceled) op.replaced = true
             op.cancellation.cancel()
             op.dialog?.dismiss()
             op.dialog = null
-            when (retirementOutcome(op.copying, op.kind == "open" && op.exportScratch.isNotEmpty(), op.replaced)) {
+            when (retirementOutcome(op.kind, op.copying, op.kind == "open" && op.exportScratch.isNotEmpty(), op.replaced)) {
                 // The worker unwinds, removes what it staged and settles the operation itself.
                 RetirementOutcome.AWAIT_WORKER -> Unit
                 // Teardown is not proof of chooser cancellation: a viewer may already hold its grant.
@@ -1355,7 +1357,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             providerCleanupFailure?.let { fail(op, it); return@post }
             if (retained.isNotEmpty()) fail(op, NativeDocumentError("CANCELLATION_CLEANUP_FAILED"))
             else if (op.exportUri != null) fail(op, NativeDocumentError("EXPORT_CANCELLED_PARTIAL"))
-            else if (op.replaced) fail(op, NativeDocumentError(ACTIVITY_RECREATED))
+            else if (op.replaced && replacementFails(op.kind)) fail(op, NativeDocumentError(ACTIVITY_RECREATED))
             else complete(op, cancelledResult(op.kind))
         }
     }
@@ -1725,7 +1727,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
                 // Android permits an explicitly started foreground service even
                 // when notification permission is denied. Keep its required
                 // notification; completion-notification consent is separate.
-                startTransferService(invoke, source, generation)
+                startTransferService(invoke)
             } catch (error: Exception) {
                 if (activityScreenCallbackCurrent(source, generation, activityReference.get(),
                         activityGeneration, currentActivity.get()) &&
@@ -1757,7 +1759,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         transferScreen = null
     }
 
-    private fun startTransferService(invoke: Invoke, source: Activity?, generation: Long) {
+    private fun startTransferService(invoke: Invoke) {
         if (foregroundInvoke != null) throw NativeDocumentError("TRANSFER_START_PENDING")
         val args = invoke.getArgs()
         val intent = KiwixTransferService.prepareUpdate(
@@ -1776,6 +1778,14 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
             return
         }
         requireVisible()
+        // The service refuses to run while a pause, timeout or error signal is
+        // still waiting for the shell, and a service started with
+        // startForegroundService that stops at once is a start Android
+        // punishes. Refuse before asking Android for it, with the same check on
+        // the same thread as KiwixTransferService.onStartCommand, and before the
+        // start is reserved or its confirmation timeout is armed.
+        if (TransferEvents.peek(applicationContext).length() != 0)
+            throw NativeDocumentError("TRANSFER_CONTROL_PENDING")
         foregroundInvoke = invoke
         intent.putExtra("confirmation", object : ResultReceiver(main) {
             override fun onReceiveResult(resultCode: Int, data: Bundle?) {
@@ -1791,36 +1801,12 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         }
         foregroundTimeout = timeout
         main.postDelayed(timeout, 4000)
-        // The service refuses to run while a pause, timeout or error signal is
-        // still waiting for the shell. Refuse here instead: a service started
-        // with startForegroundService that stops at once is a start Android
-        // punishes. The signal store is disk-backed, so it is read off main.
-        worker.execute {
-            val pending: Any = try { TransferEvents.peek(applicationContext).length() != 0 }
-                catch (error: Exception) { error }
-            main.post {
-                // Cancelled, timed out or retired while the signals were read.
-                if (foregroundInvoke !== invoke) return@post
-                val refusal = when {
-                    pending is NativeDocumentError -> pending.code
-                    pending is Exception -> "TRANSFER_FOREGROUND_START_FAILED"
-                    pending == true -> "TRANSFER_CONTROL_PENDING"
-                    else -> null
-                }
-                if (refusal != null) { finishForegroundStart(invoke, refusal); return@post }
-                try {
-                    requireVisible()
-                    ContextCompat.startForegroundService(applicationContext, intent)
-                } catch (error: Exception) {
-                    foregroundInvoke = null
-                    foregroundTimeout = null
-                    main.removeCallbacks(timeout)
-                    if (activityScreenCallbackCurrent(source, generation, activityReference.get(),
-                            activityGeneration, currentActivity.get()) && !KiwixTransferService.running)
-                        releaseTransferScreen()
-                    reject(invoke, error)
-                }
-            }
+        try { ContextCompat.startForegroundService(applicationContext, intent) }
+        catch (error: Exception) {
+            foregroundInvoke = null
+            foregroundTimeout = null
+            main.removeCallbacks(timeout)
+            throw error
         }
     }
 
@@ -2528,14 +2514,27 @@ internal fun launchIntentConsumable(
 internal enum class RetirementOutcome { AWAIT_WORKER, FAIL_DESTROYED, FAIL_RECREATED, CANCELLED }
 
 /**
+ * Whether an operation of [kind] that ends because its Activity was replaced
+ * reports the ACTIVITY_RECREATED failure. A save ("export") with nothing
+ * written yet is the exception: Rust deletes the file it prepared for the save
+ * only when the save is reported as cancelled, and keeps it after any failure.
+ * A save that already wrote to its destination fails as EXPORT_CANCELLED_PARTIAL
+ * before this is consulted.
+ */
+internal fun replacementFails(kind: String): Boolean = kind != "export"
+
+/**
  * How a pending document operation settles when its window is retired. A
  * running worker settles it after its own cleanup. A replaced Activity is not
- * the person cancelling: that ends as a failure the shell can report.
+ * the person cancelling: that ends as a failure the shell can report, unless
+ * [replacementFails] says the kind relies on the cancelled outcome.
  */
-internal fun retirementOutcome(copying: Boolean, viewerScratch: Boolean, replaced: Boolean): RetirementOutcome = when {
+internal fun retirementOutcome(
+    kind: String, copying: Boolean, viewerScratch: Boolean, replaced: Boolean,
+): RetirementOutcome = when {
     copying -> RetirementOutcome.AWAIT_WORKER
     viewerScratch -> RetirementOutcome.FAIL_DESTROYED
-    replaced -> RetirementOutcome.FAIL_RECREATED
+    replaced && replacementFails(kind) -> RetirementOutcome.FAIL_RECREATED
     else -> RetirementOutcome.CANCELLED
 }
 

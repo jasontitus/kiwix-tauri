@@ -119,17 +119,30 @@ class MobileIntakePolicyTest {
 
     @Test
     fun replacedActivityFailsAPendingOperationInsteadOfCancellingIt() {
-        assertEquals(RetirementOutcome.FAIL_RECREATED,
-            retirementOutcome(copying = false, viewerScratch = false, replaced = true))
-        // Only the person closing the app still reads as their own cancellation.
-        assertEquals(RetirementOutcome.CANCELLED,
-            retirementOutcome(copying = false, viewerScratch = false, replaced = false))
+        for (kind in listOf("archives", "directory", "external", "externalBatch", "text", "scanFolder", "open")) {
+            assertEquals(kind, RetirementOutcome.FAIL_RECREATED,
+                retirementOutcome(kind, copying = false, viewerScratch = false, replaced = true))
+            // Only the person closing the app still reads as their own cancellation.
+            assertEquals(kind, RetirementOutcome.CANCELLED,
+                retirementOutcome(kind, copying = false, viewerScratch = false, replaced = false))
+        }
         // A viewer may already hold its grant: retained and reported either way.
         for (replaced in listOf(false, true)) assertEquals(RetirementOutcome.FAIL_DESTROYED,
-            retirementOutcome(copying = false, viewerScratch = true, replaced = replaced))
+            retirementOutcome("open", copying = false, viewerScratch = true, replaced = replaced))
         // A running worker removes what it staged before the operation settles.
         for (replaced in listOf(false, true)) for (viewer in listOf(false, true))
             assertEquals(RetirementOutcome.AWAIT_WORKER,
-                retirementOutcome(copying = true, viewerScratch = viewer, replaced = replaced))
+                retirementOutcome("archives", copying = true, viewerScratch = viewer, replaced = replaced))
+    }
+
+    @Test
+    fun replacedActivityStillCancelsASaveThatWroteNothing() {
+        // Rust deletes the file it prepared for a save only when the save is
+        // reported as cancelled; a failure would leave that file behind.
+        assertEquals(RetirementOutcome.CANCELLED,
+            retirementOutcome("export", copying = false, viewerScratch = false, replaced = true))
+        assertFalse(replacementFails("export"))
+        for (kind in listOf("archives", "directory", "external", "externalBatch", "text", "scanFolder", "open"))
+            assertTrue(kind, replacementFails(kind))
     }
 }

@@ -436,7 +436,8 @@ function checkpointHost() {
     panAuthority: ref(null),
     // The receiver's document-identity bookkeeping; no frame is displayed here.
     displayedFrame: ref(null), documentAnnounced: ref(false), documentProbe: ref(null),
-    clearDocumentProbe() {}, resessionUnproven() {},
+    bridgeVouched: ref(false), pendingInit: ref(""),
+    clearDocumentProbe() {}, resessionUnproven() {}, settlePendingInit() {}, postDocumentProbe() {},
     reestablishAuthority() {},
     isMobile: true, nativeSpeechStop: ref(null), props: { suspended: false },
     setTimeout: (operation) => { timers.push(operation); return timers.length; },

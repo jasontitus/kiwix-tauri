@@ -167,6 +167,8 @@ class KiwixTransferService : Service() {
     private var admittedGeneration: Long? = null
     /** This instance is in the foreground state Android requires of it. */
     private var foreground = false
+    /** The newest start Android has delivered; 0 until the first one arrives. */
+    private var deliveredStartId = 0
     private val destroyed = CountDownLatch(1)
 
     override fun onCreate() {
@@ -177,6 +179,9 @@ class KiwixTransferService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // updateRunning calls this directly with startId 0; only Android's own
+        // deliveries carry an id that stopSelf can be bounded by.
+        if (startId > 0) deliveredStartId = startId
         if (intent?.action == ACTION_PAUSE) {
             TransferEvents.emit(this, "transfers-pause")
             finish()
@@ -315,7 +320,12 @@ class KiwixTransferService : Service() {
         wakeLock = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         foreground = false
-        stopSelf()
+        // Stop only up to the newest delivered start. A start Android has queued
+        // but not delivered yet (a foreground start racing a Pause tap) keeps
+        // the service alive; it then arrives with a retired admission, enters
+        // the foreground once and stops itself. An unbounded stopSelf() would
+        // stop the service under that queued foreground start.
+        if (deliveredStartId > 0) stopSelf(deliveredStartId) else stopSelf()
     }
 
     override fun onDestroy() {
