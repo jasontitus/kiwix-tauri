@@ -274,7 +274,7 @@ test("the shell registers Back only on Android and never asks Tauri to exit", as
   const effects = [];
   (function visit(node) {
     if (ts.isCallExpression(node) && node.expression.getText(tree) === "useEffect" &&
-        /createBackRegistration|new MutationObserver\(readAndroidSurfaces\)/.test(node.getText(tree)))
+        /createBackRegistration|readAndroidSurfaces\(\);\s*\}\);\s*\}\);/.test(node.getText(tree)))
       effects.push(node.arguments[0].getText(tree));
     ts.forEachChild(node, visit);
   })(tree);

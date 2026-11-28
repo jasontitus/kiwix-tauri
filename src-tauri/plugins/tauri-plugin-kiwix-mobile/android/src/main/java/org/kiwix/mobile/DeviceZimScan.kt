@@ -501,4 +501,4 @@ internal class DeviceZimScan(private val context: Context, private val externalD
 }
 
 /** Dot-named files and folders are never device-scan candidates or walked. */
-internal fun hiddenScanName(name: String): Boolean = false
+internal fun hiddenScanName(name: String): Boolean = name.startsWith('.')

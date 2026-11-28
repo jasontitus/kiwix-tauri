@@ -2522,7 +2522,8 @@ internal fun intakeColdStartNotice(transientMarker: Boolean, inMemoryBatches: In
  */
 internal fun launchIntentConsumable(
     restored: Boolean, flags: Int, unofferedByPredecessor: Boolean = false,
-): Boolean = true
+): Boolean = flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0 &&
+    (!restored || unofferedByPredecessor)
 
 internal enum class RetirementOutcome { AWAIT_WORKER, FAIL_DESTROYED, FAIL_RECREATED, CANCELLED }
 
@@ -2534,7 +2535,7 @@ internal enum class RetirementOutcome { AWAIT_WORKER, FAIL_DESTROYED, FAIL_RECRE
 internal fun retirementOutcome(copying: Boolean, viewerScratch: Boolean, replaced: Boolean): RetirementOutcome = when {
     copying -> RetirementOutcome.AWAIT_WORKER
     viewerScratch -> RetirementOutcome.FAIL_DESTROYED
-    replaced -> RetirementOutcome.CANCELLED
+    replaced -> RetirementOutcome.FAIL_RECREATED
     else -> RetirementOutcome.CANCELLED
 }
 
@@ -2543,4 +2544,4 @@ internal fun retirementOutcome(copying: Boolean, viewerScratch: Boolean, replace
  * its staged files are unreferenced and must not outlive the attempt. Exports
  * and viewer copies keep their own recovery rules.
  */
-internal fun stagingFailureRemovesCopies(kind: String): Boolean = false
+internal fun stagingFailureRemovesCopies(kind: String): Boolean = kind == "archives" || kind == "directory"

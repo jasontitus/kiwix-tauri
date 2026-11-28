@@ -85,7 +85,7 @@ impl<S> MaybeDualstackSocket<S> {
 
 impl MaybeDualstackSocket<Socket> {
     fn bind(addr: SocketAddr, opts: BindOpts, is_udp: bool) -> crate::Result<Self> {
-        let socket = Socket::new(
+        let socket = match Socket::new(
             if addr.is_ipv6() {
                 Domain::IPV6
             } else {
@@ -101,8 +101,26 @@ impl MaybeDualstackSocket<Socket> {
             } else {
                 socket2::Protocol::TCP
             }),
-        )
-        .map_err(Error::SocketNew)?;
+        ) {
+            Ok(socket) => socket,
+            // A host without IPv6 cannot create the socket at all. A dual-stack
+            // wildcard bind asks for every address the host has, and there that
+            // is the IPv4 wildcard. Callers that hard-code `[::]` (the UDP
+            // tracker client) would otherwise fail outright.
+            Err(error) => {
+                return match addr {
+                    SocketAddr::V6(v6) if opts.request_dualstack && v6.ip().is_unspecified() => {
+                        debug!(?addr, "IPv6 socket unavailable ({error}); binding the IPv4 wildcard");
+                        Self::bind(
+                            SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, v6.port())),
+                            opts,
+                            is_udp,
+                        )
+                    }
+                    _ => Err(Error::SocketNew(error)),
+                };
+            }
+        };
 
         let mut set_dualstack = false;
 

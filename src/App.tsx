@@ -2994,8 +2994,15 @@ export default function App() {
   useEffect(() => {
     if (!isAndroid) return;
     // Dialogs and pickers belong to many components; their open state is in
-    // the DOM, not in this component.
-    const observer = new MutationObserver(readAndroidSurfaces);
+    // the DOM, not in this component. Read it at most once per frame: list
+    // and progress updates mutate the tree far more often than a surface opens.
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      frame ||= requestAnimationFrame(() => {
+        frame = 0;
+        readAndroidSurfaces();
+      });
+    });
     observer.observe(document.body, {
       subtree: true,
       childList: true,
@@ -3003,7 +3010,10 @@ export default function App() {
       attributeFilter: SURFACE_ATTRIBUTES,
     });
     readAndroidSurfaces();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [readAndroidSurfaces]);
   const focusMainAfterBack = useRef(false);
   const androidBackPress = useRef(() => {});

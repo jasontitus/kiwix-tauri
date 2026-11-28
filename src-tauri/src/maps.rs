@@ -30,8 +30,10 @@
 //! checkpoints are reclaimable; unresolved records follow later jobs as visible
 //! recovery warnings rather than blocking unrelated compositions. Delete and
 //! cancel demote a partial they cannot prove and reclaim to such a record, so a
-//! retained checkpoint never outlives the last way to resume or remove it; the
-//! warning is dismissed explicitly and dismissal never touches the file. Fresh publication
+//! retained checkpoint never outlives the last way to resume or remove it. An
+//! explicit Delete says so, and a later Delete retries the same ownership-proven
+//! reclaim on every such record; a warning is otherwise dismissed explicitly,
+//! and dismissal never touches the file. Fresh publication
 //! also holds the library reservation guard, so even a missing installed book's
 //! path cannot be filled with another acquisition's bytes.
 //! Low-space admission runs after recipe metadata and cache accounting, before
@@ -88,6 +90,8 @@ const MAX_CHUNK: u64 = 16 * 1024 * 1024;
 // within MAX_JSON (Germany/nl, 33,390,256 bytes) uses 2,871.
 const MAX_ESTIMATE_CHUNK_READS: u64 = 100_000;
 const CANCELLED: &str = "Map composition cancelled";
+/// Why a partial was kept when the entry at its name is not the journaled inode.
+const NOT_OUR_FILE: &str = "The file there is not the one this download wrote, so Kiwix left it alone";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
@@ -388,14 +392,36 @@ impl MapJob {
         Ok(false)
     }
 
-    /// The one reported location of a preserved recovery entry: the warning
-    /// text, `recovery_paths` and `forget_recovery` must all name the same path.
+    /// The one reported location of a preserved recovery entry, used by the
+    /// warning text, `recovery_paths` and `forget_recovery` alike.
+    ///
+    /// A cleanup that captured the entry and then could neither finish nor put
+    /// it back leaves it inside its private capability directory. That is the
+    /// only case probed here, so the report names where the bytes really are;
+    /// the probe informs a message and never authorizes anything.
     fn recovery_path(record: &OwnedPartial) -> PathBuf {
+        match Self::captured_path(record) {
+            Some(captured) if fs::symlink_metadata(&captured).is_ok() => captured,
+            _ => Self::journaled_path(record),
+        }
+    }
+
+    fn journaled_path(record: &OwnedPartial) -> PathBuf {
         let name = record
             .publication
             .as_ref()
             .map_or(record.name.as_str(), |saved| saved.name.as_str());
         record.destination.join(name)
+    }
+
+    fn captured_path(record: &OwnedPartial) -> Option<PathBuf> {
+        record.capture.as_ref().map(|capture| record.destination.join(&capture.name).join(&record.name))
+    }
+
+    /// Either location names the record, so a dismissal still finds it when
+    /// the entry moved between the status that reported it and the request.
+    fn recovery_path_matches(record: &OwnedPartial, path: &Path) -> bool {
+        Self::journaled_path(record) == path || Self::captured_path(record).is_some_and(|captured| captured == path)
     }
 
     /// Remove only the recovery sentence from the visible error, keeping any
@@ -425,6 +451,12 @@ impl MapJob {
     }
 
     fn append_recovery_warning(&mut self) {
+        self.append_recovery_warning_because(None);
+    }
+
+    /// `reason` is why the latest attempt to remove one of the files failed. It
+    /// is part of the recovery sentence, so it leaves with it.
+    fn append_recovery_warning_because(&mut self, reason: Option<&str>) {
         use std::fmt::Write;
         if self.recovery_records.is_empty() {
             return;
@@ -437,6 +469,9 @@ impl MapJob {
                 warning.push_str(", ");
             }
             let _ = write!(warning, "{}", Self::recovery_path(record).display());
+        }
+        if let Some(reason) = reason {
+            let _ = write!(warning, ". {reason}");
         }
         self.error = Some(
             if let Some(mut value) = error
@@ -598,6 +633,12 @@ struct Inner {
     before_publish_commit: BeforePublish,
     #[cfg(test)]
     before_worker: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    /// Make the exclusive capture step of explicit cleanup fail.
+    #[cfg(test)]
+    fail_capture: std::sync::atomic::AtomicBool,
+    /// Make syncing an output checkpoint at or beyond this many bytes fail.
+    #[cfg(test)]
+    fail_sync_from: Mutex<Option<u64>>,
 }
 
 impl Inner {

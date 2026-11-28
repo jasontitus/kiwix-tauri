@@ -181,6 +181,10 @@ impl MapManager {
                 before_publish_commit: Mutex::new(None),
                 #[cfg(test)]
                 before_worker: Mutex::new(None),
+                #[cfg(test)]
+                fail_capture: std::sync::atomic::AtomicBool::new(false),
+                #[cfg(test)]
+                fail_sync_from: Mutex::new(None),
             }),
         })
     }
@@ -697,6 +701,13 @@ impl MapManager {
         if let Some(job) = state.job.as_mut() {
             if job.status != "complete" {
                 if let Some(decision) = &mut job.decision { decision.session.clear(); }
+                // A partial that had to be kept is recorded on the job with its
+                // path and the reason, but it is not a failed cancellation: the
+                // worker has retired and its authorization is revoked. Mobile
+                // network retirement and the switch to private or read-only
+                // mode run this unattended and treat an error as "still
+                // closing", which would refuse every Internet transfer until
+                // the next network change over a file that is merely kept.
                 self.reclaim_job_partial(job)?;
                 if job.status == "paused" { job.status = "cancelled".into(); }
                 persist(&self.inner.state_path, job)?;
@@ -712,9 +723,12 @@ impl MapManager {
     /// moved or recreated, the entry is no longer our inode, or cleanup failed
     /// part-way) the record moves into `recovery_records` untouched: the file
     /// stays where it is and stays reported, while the checkpoint nobody can
-    /// resume or delete any more stops vetoing every later map.
-    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob) -> Result<(), String> {
-        let Some(mut record) = job.owned_partial.clone() else { return Ok(()) };
+    /// resume or delete any more stops vetoing every later map. A later
+    /// explicit Delete retries the reclaim (`retry_recovery_records`).
+    ///
+    /// Returns where the partial was kept and why, when it was.
+    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob) -> Result<Option<(PathBuf, String)>, String> {
+        let Some(mut record) = job.owned_partial.clone() else { return Ok(None) };
         let mut paths = vec![record.destination.join(&record.name)];
         if let Some(publication) = &record.publication { paths.push(record.destination.join(&publication.name)); }
         // The library guard's own refusal (read-only mode, a name reserved by an
@@ -722,39 +736,103 @@ impl MapManager {
         // still fails with the checkpoint intact. Only the outcome of the
         // ownership-checked reclaim itself can demote the record.
         let recovery = self.inner.store.with_acquisition_destinations(&paths, || {
-            Ok(reclaim_partial(&mut record, |updated| {
+            Ok(self.reclaim_record(&mut record, |updated| {
                 job.owned_partial = Some(updated.clone());
                 persist(&self.inner.state_path, job)
             }))
         })?;
-        match recovery {
-            Ok(PartialRecovery::Reclaimed) => { job.owned_partial = None; }
-            Ok(PartialRecovery::Published(path)) => {
-                let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
-                record.name = publication.name;
-                job.published = Some(PublishedMap { record, size: publication.size, sha256: publication.sha256 });
+        let reason = match recovery {
+            Ok(PartialRecovery::Preserved) => NOT_OUR_FILE.to_owned(),
+            Err(reason) => reason,
+            Ok(resolved) => {
+                if let PartialRecovery::Published(path) = resolved {
+                    let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
+                    record.name = publication.name;
+                    job.published = Some(PublishedMap { record, size: publication.size, sha256: publication.sha256 });
+                    job.path = Some(path.to_string_lossy().into_owned());
+                    if job.status != "cancelled" { job.status = "complete".into(); }
+                }
                 job.owned_partial = None;
-                job.path = Some(path.to_string_lossy().into_owned());
-                if job.status != "cancelled" { job.status = "complete".into(); }
+                job.resume = None;
+                job.resumable = false;
+                persist(&self.inner.state_path, job)?;
+                return Ok(None);
             }
-            Ok(PartialRecovery::Preserved) | Err(_) => {
-                // One durable step; if it cannot be saved the checkpoint and its
-                // ownership record stay exactly as they were for a later retry.
-                let mut checkpoint = job.clone();
-                checkpoint.owned_partial = None;
-                checkpoint.recovery_records.push(record);
-                checkpoint.resume = None;
-                checkpoint.resumable = false;
-                checkpoint.clear_recovery_warning();
-                checkpoint.append_recovery_warning();
-                persist(&self.inner.state_path, &checkpoint)?;
-                *job = checkpoint;
-                return Ok(());
+        };
+        // One durable step; if it cannot be saved the checkpoint and its
+        // ownership record stay exactly as they were for a later retry.
+        let kept = MapJob::recovery_path(&record);
+        let mut checkpoint = job.clone();
+        checkpoint.owned_partial = None;
+        checkpoint.recovery_records.push(record);
+        checkpoint.resume = None;
+        checkpoint.resumable = false;
+        checkpoint.clear_recovery_warning();
+        checkpoint.append_recovery_warning_because(Some(&reason));
+        persist(&self.inner.state_path, &checkpoint)?;
+        *job = checkpoint;
+        Ok(Some((kept, reason)))
+    }
+
+    /// The ownership-checked reclaim used by explicit cleanup.
+    fn reclaim_record(
+        &self, record: &mut OwnedPartial, checkpoint: impl FnMut(&OwnedPartial) -> Result<(), String>,
+    ) -> Result<PartialRecovery, String> {
+        #[cfg(test)]
+        if self.inner.fail_capture.load(std::sync::atomic::Ordering::SeqCst) {
+            return reclaim_partial_with_capture(record, checkpoint,
+                |_, _, _, _| Err("injected capture failure".into()));
+        }
+        reclaim_partial(record, checkpoint)
+    }
+
+    /// Explicit Delete only: try again to remove what an earlier Delete or
+    /// cancel had to keep, so a drive that came back or a handle that was
+    /// released lets the user finish the job from the same button.
+    ///
+    /// Each record with a journaled inode goes through the same reclaim as an
+    /// owned partial: directory identity, inode identity and exclusive capture
+    /// are proven again before anything is unlinked, and each step is
+    /// journaled. A record is also dropped, without touching anything, once its
+    /// destination holds none of the entries it names. Records that were never
+    /// proven, and files that turn out not to be ours, are only ever reported.
+    ///
+    /// Returns the first record whose proven reclaim failed, with the reason.
+    fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> Option<(PathBuf, String)> {
+        let mut failed = None;
+        let mut remaining = job.recovery_records.len() - usize::from(skip_last);
+        let mut index = 0;
+        while index < remaining {
+            let mut record = job.recovery_records[index].clone();
+            let outcome = if record.identity.is_some() {
+                let mut paths = vec![record.destination.join(&record.name)];
+                if let Some(publication) = &record.publication { paths.push(record.destination.join(&publication.name)); }
+                // A refusal by the library guard means no attempt was made.
+                self.inner.store.with_acquisition_destinations(&paths, || {
+                    Ok(self.reclaim_record(&mut record, |updated| {
+                        job.recovery_records[index] = updated.clone();
+                        persist(&self.inner.state_path, job)
+                    }))
+                }).ok()
+            } else { None };
+            let gone = match outcome {
+                Some(Ok(PartialRecovery::Reclaimed)) => true,
+                Some(Err(reason)) => {
+                    let vanished = record_vanished(&record);
+                    if !vanished && failed.is_none() { failed = Some((MapJob::recovery_path(&record), reason)); }
+                    vanished
+                }
+                Some(Ok(_)) | None => record_vanished(&record),
+            };
+            if gone {
+                job.recovery_records.remove(index);
+                remaining -= 1;
+            } else {
+                job.recovery_records[index] = record;
+                index += 1;
             }
         }
-        job.resume = None;
-        job.resumable = false;
-        persist(&self.inner.state_path, job)
+        failed
     }
 
     /// Retained predecessors (and a dismissed current output) are cleanup-only.
@@ -875,7 +953,7 @@ impl MapManager {
         job.resumable = false;
         if let Some(decision) = &mut job.decision { decision.session.clear(); }
         persist(&self.inner.state_path, job)?;
-        self.reclaim_job_partial(job)?;
+        let demoted = self.reclaim_job_partial(job)?;
         if let Some(mut published) = job.published.clone() {
             let (size, sha256) = (published.size, published.sha256);
             reclaim_published_map(&mut published, self.inner.store.as_ref(), |updated| {
@@ -896,16 +974,29 @@ impl MapManager {
         // must not resurrect an already-reclaimed publication.
         job.path = None;
         persist(&self.inner.state_path, job)?;
+        // The record demoted a moment ago was just tried; retry the others.
+        let retried = self.retry_recovery_records(job, demoted.is_some());
+        let kept = demoted.or(retried);
         if !job.recovery_records.is_empty() {
-            // Everything this download owned is gone, so Delete succeeded. What
-            // could not be proven ours was kept: the job stays listed, carrying
-            // only that warning and its `recovery_paths`, until each entry is
-            // dismissed with `forget_recovery`. No unproven file was deleted.
+            // Something was kept, so the job stays listed, carrying only that
+            // warning and its `recovery_paths`, until each entry is reclaimed
+            // by a later Delete or dismissed with `forget_recovery`. No
+            // unproven file was deleted.
             job.error = None;
-            job.append_recovery_warning();
+            job.append_recovery_warning_because(kept.as_ref().map(|(_, reason)| reason.as_str()));
             persist(&self.inner.state_path, job)?;
             state.retirement_error = None;
-            return Ok(());
+            // A removal this call attempted and could not complete is a
+            // failure the user can act on (reconnect the drive, press Delete
+            // again). Files that were never ours to remove are not: Delete
+            // removed everything it owns and the warning stays on the job.
+            return match kept {
+                Some((path, reason)) => Err(format!(
+                    "Kiwix could not remove a partial map download, so it was kept at {}. {reason}",
+                    path.display()
+                )),
+                None => Ok(()),
+            };
         }
         // Keep exclusion/recovery evidence; never clear the shared source cache.
         job.history_dismissed = true;
@@ -947,7 +1038,7 @@ impl MapManager {
         let index = job
             .recovery_records
             .iter()
-            .position(|record| MapJob::recovery_path(record) == path)
+            .position(|record| MapJob::recovery_path_matches(record, path))
             .ok_or("This map recovery entry is no longer in the current download. Refresh and try again")?;
         job.recovery_records.remove(index);
         job.clear_recovery_warning();
@@ -1091,17 +1182,26 @@ impl MapManager {
     pub(super) async fn checkpoint_output(
         &self, id: &str, output: &mut tokio::fs::File, recipe: &str, written: u64,
         prefix: &Sha256, blocks: &BlockProgress<'_>,
-    ) -> Result<(), String> {
+    ) -> Result<(), CompositionFailure> {
+        // Bytes whose flush or sync failed must never be journaled, here or by
+        // the failure path afterwards: the kernel reports a writeback error to
+        // a descriptor once, so a second sync can succeed over dropped pages.
+        // Such a failure keeps the previous durable checkpoint.
+        let not_durable = |message: String| CompositionFailure { message, retain: true, checkpoint_current: false };
         // `sync_all` joins an in-flight write but discards its error. Observe it
         // here so a checkpoint can never claim bytes the file did not accept.
-        output.flush().await.map_err(|error| format!("Map write failed: {error}"))?;
-        output.sync_all().await.map_err(|error| format!("Cannot sync map prefix: {error}"))?;
-        self.checkpoint_resume(id, MapResume {
+        output.flush().await.map_err(|error| not_durable(format!("Map write failed: {error}")))?;
+        #[cfg(test)]
+        if self.inner.fail_sync_from.lock().map_err(|_| "Map test hook poisoned")?.is_some_and(|from| written >= from) {
+            return Err(not_durable("Cannot sync map prefix: injected failure".into()));
+        }
+        output.sync_all().await.map_err(|error| not_durable(format!("Cannot sync map prefix: {error}")))?;
+        Ok(self.checkpoint_resume(id, MapResume {
             recipe: recipe.into(), written,
             prefix_sha256: hex::encode(prefix.clone().finalize()),
             blocks: blocks.states.clone(),
             invalid: false,
-        })
+        })?)
     }
 
     pub(super) fn complete_publication(&self, id: &str, path: &Path) -> Result<(), String> {
@@ -1393,7 +1493,8 @@ impl MapManager {
         };
         let mut output = tokio::fs::File::from_std(file);
         if resume.is_none() {
-            self.checkpoint_output(id, &mut output, &fingerprint, 0, &prefix_sha256, &blocks).await?;
+            self.checkpoint_output(id, &mut output, &fingerprint, 0, &prefix_sha256, &blocks).await
+                .map_err(|failure| failure.message)?;
         }
         cleanup.armed = false;
         let mut last_checkpoint = resume_written;

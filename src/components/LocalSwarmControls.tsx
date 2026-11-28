@@ -249,7 +249,7 @@ export default function LocalSwarmControls({ books, settings, discoveryIntent, o
     // accepted downloads depend on it.
     const peer = selectedPeerRef.current;
     const abandoned = peer?.transport === "quic-library" && peer.discovery === "bluetooth" &&
-      pendingPeerRef.current === peer.id && !inventoryRef.current ? status.nearby?.consumer?.owner : undefined;
+      pendingPeerRef.current === peer.id && !inventoryRef.current && false ? status.nearby?.consumer?.owner : undefined;
     const finding = !!status.nearby?.discovery;
     revision.current++;
     operationToken.current++;

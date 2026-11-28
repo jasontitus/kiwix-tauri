@@ -582,6 +582,19 @@ pub(super) fn reclaim_published_map(
     Ok(())
 }
 
+/// True when the record's destination can be opened and holds none of the
+/// entries the record names: its partial, its publication name and its cleanup
+/// capability. Nothing is left there to report; an unreachable destination or
+/// any other error proves nothing and is not "vanished".
+pub(super) fn record_vanished(record: &OwnedPartial) -> bool {
+    let Ok(directory) = MapDirectory::open(&record.destination) else { return false };
+    std::iter::once(record.name.as_str())
+        .chain(record.publication.as_ref().map(|publication| publication.name.as_str()))
+        .chain(record.capture.as_ref().map(|capture| capture.name.as_str()))
+        .all(|name| matches!(directory.directory.symlink_metadata(name),
+            Err(error) if error.kind() == io::ErrorKind::NotFound))
+}
+
 pub(super) fn map_entry_exists(directory: &Dir, name: &str) -> Result<bool, String> {
     match directory.symlink_metadata(name) {
         Ok(_) => Ok(true),

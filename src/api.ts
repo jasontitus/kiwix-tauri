@@ -1170,7 +1170,7 @@ async function request<T>(
     const decision = await decideDiskSpaceWarning(warning);
     checkAdmission();
     // Declining the prompt is the user's own choice, not a failed download:
-    // callers neither paint nor record it. Every other refusal stays an error.
+    // no caller paints it. Every other refusal stays an ordinary error.
     if (decision === "declined")
       throw new UserCancelledError(t("Download cancelled."));
     if (decision !== "accepted" || !isPrivacyContextCurrent(context))

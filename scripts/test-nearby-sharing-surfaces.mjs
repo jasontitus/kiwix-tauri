@@ -120,8 +120,9 @@ async function open(t, initial = {}) {
   };
   const disclose = async (label) => {
     const handle = await page.waitForFunction((value) => [...document.querySelectorAll("details > summary")]
-      .find((node) => node.textContent.trim().startsWith(value) && !node.parentElement.open), {}, label);
-    await handle.asElement().click();
+      .find((node) => node.textContent.trim().startsWith(value)), {}, label);
+    // Some sections open themselves, for example while sharing is on.
+    if (!(await handle.evaluate((node) => node.parentElement.open))) await handle.asElement().click();
     await handle.dispose();
   };
   const calls = (command) => page.evaluate((name) => window.calls.filter((call) => call.command === name), command);
