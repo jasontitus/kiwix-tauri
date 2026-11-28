@@ -104,21 +104,34 @@ struct LocalSwarmAdmission {
 #[cfg(test)]
 type ImportHook = Arc<dyn Fn(&tokio_util::sync::CancellationToken) + Send + Sync>;
 
-/// Cancels manual and monitored imports for a policy cutover. Dropped once the
-/// privacy writer is held (or the cutover ends early), it installs a fresh
-/// token, unless Quit has begun: Quit's cancellation must stay in force.
+/// The import cancellation token and how many cutovers are holding it
+/// cancelled.
+struct ImportCancel {
+    token: tokio_util::sync::CancellationToken,
+    cutovers: usize,
+}
+
+/// Cancels manual and monitored imports for a cutover (a policy change, or a
+/// mobile background retirement). Dropped once its privacy writer is held (or
+/// the cutover ends early). The last cutover to end installs a fresh token,
+/// unless Quit has begun: Quit's cancellation must stay in force, and an
+/// overlapping cutover still waiting for its writer must not see imports
+/// admitted under a fresh token.
 struct ImportCutover<'a>(&'a Service);
 impl<'a> ImportCutover<'a> {
     fn begin(service: &'a Service) -> Self {
-        service.cancel_imports();
+        let mut state = service.import_cancel.lock().unwrap_or_else(|error| error.into_inner());
+        state.cutovers += 1;
+        state.token.cancel();
         Self(service)
     }
 }
 impl Drop for ImportCutover<'_> {
     fn drop(&mut self) {
-        let mut token = self.0.import_cancel.lock().unwrap_or_else(|error| error.into_inner());
-        if !self.0.stopping.load(Ordering::SeqCst) {
-            *token = tokio_util::sync::CancellationToken::new();
+        let mut state = self.0.import_cancel.lock().unwrap_or_else(|error| error.into_inner());
+        state.cutovers = state.cutovers.saturating_sub(1);
+        if state.cutovers == 0 && !self.0.stopping.load(Ordering::SeqCst) {
+            state.token = tokio_util::sync::CancellationToken::new();
         }
     }
 }
