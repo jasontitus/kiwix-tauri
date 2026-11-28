@@ -847,9 +847,10 @@ pub struct SharingServer {
     // The same host set every listener of this session checks `Host` against.
     // Status reads it so the links shown are the ones the server answers on.
     hosts: SessionHosts,
-    // Last observation of whether an interface binding's address is still on
-    // this device, so a status poll does not enumerate interfaces every time.
-    address_lost: Mutex<(Option<Instant>, bool)>,
+    // When an interface binding's address was last looked for on this device,
+    // and how many consecutive looks did not find it. A status poll does not
+    // enumerate interfaces every time, and one miss is not yet a loss.
+    address_lost: Mutex<(Option<Instant>, u8)>,
 }
 impl Drop for SharingServer {
     fn drop(&mut self) {
@@ -1745,7 +1746,7 @@ impl SharingServer {
             archives,
             library: Some(library),
             hosts: session_hosts,
-            address_lost: Mutex::new((None, false)),
+            address_lost: Mutex::new((None, 0)),
         })
     }
 
@@ -1843,7 +1844,7 @@ impl SharingServer {
             archives: Vec::new(),
             library: Some(library),
             hosts: session_hosts,
-            address_lost: Mutex::new((None, false)),
+            address_lost: Mutex::new((None, 0)),
         })
     }
 
@@ -1876,6 +1877,10 @@ impl SharingServer {
             SharingBinding::Ipv4All {} | SharingBinding::Ipv6All {} | SharingBinding::DualStackAll {} => {
                 // A wildcard listener already answers on the refreshed set.
                 let hosts = self.hosts.current();
+                // Still running, but with no network: only this device can
+                // open the links. Nothing needs restarting; say so instead of
+                // presenting loopback links as a share others can use.
+                status["localOnly"] = json!(loopback_only(&hosts));
                 if !hosts.is_empty() {
                     let links = |port: u16, path: &str| -> Vec<String> {
                         hosts.iter().map(|host| access_url(*host, port, path)).collect()
@@ -1905,7 +1910,9 @@ impl SharingServer {
 
     /// An interface binding names one literal address. When that address is
     /// no longer on any local interface the listener cannot be reached, and
-    /// only stopping and starting again can bind the new one.
+    /// only stopping and starting again can bind the new one. The address
+    /// briefly disappears while a lease is renewed after sleep, so it counts
+    /// as lost only when two looks in a row, a refresh interval apart, miss it.
     fn interface_address_lost(&self, address: &str) -> bool {
         let mut seen = self.address_lost.lock().unwrap_or_else(|error| error.into_inner());
         let now = Instant::now();
@@ -1913,11 +1920,15 @@ impl SharingServer {
             seen.0 = Some(now);
             // An enumeration failure proves nothing; keep the last answer.
             if let Ok(current) = interfaces() {
-                seen.1 = address_absent(address, &current);
+                seen.1 = if address_absent(address, &current) { seen.1.saturating_add(1) } else { 0 };
             }
         }
-        seen.1
+        seen.1 >= ADDRESS_LOST_AFTER
     }
+}
+const ADDRESS_LOST_AFTER: u8 = 2;
+fn loopback_only(hosts: &[IpAddr]) -> bool {
+    hosts.iter().all(IpAddr::is_loopback)
 }
 fn address_absent(address: &str, current: &[SharingInterface]) -> bool {
     let bound = address.parse::<IpAddr>().ok();

@@ -521,7 +521,7 @@ async fn dropping_server_closes_active_responses_and_every_listener() {
         archives: Vec::new(),
         library: None,
         hosts: SessionHosts::new(&[], &SharingBinding::Loopback {}),
-        address_lost: Mutex::new((None, false)),
+        address_lost: Mutex::new((None, 0)),
     };
     drop(server);
     for mut response in responses {
@@ -1046,7 +1046,7 @@ fn status_fixture(binding: SharingBinding, hosts: SessionHosts, scope: SharingSc
         archives: Vec::new(),
         library: None,
         hosts,
-        address_lost: Mutex::new((None, false)),
+        address_lost: Mutex::new((None, 0)),
     }
 }
 
@@ -1058,8 +1058,21 @@ async fn status_reports_an_interface_binding_whose_address_left_this_device() {
     let gone: IpAddr = "198.51.100.9".parse().unwrap();
     let binding = SharingBinding::Interface { address: gone.to_string() };
     let server = status_fixture(binding.clone(), SessionHosts::new(&[gone], &binding), SharingScope::Library);
+    // One look that misses the address is a lease being renewed, not a loss;
+    // asking again inside the same refresh interval is not a second look.
+    assert_eq!(server.status()["addressLost"], false);
+    assert_eq!(server.status()["addressLost"], false);
+    // A second look, a refresh interval later, still misses it.
+    server.address_lost.lock().unwrap().0 = None;
     let status = server.status();
     assert_eq!(status["addressLost"], true);
+    assert!(status.get("localOnly").is_none());
+    // Seen again (loopback is always on this device): one sighting clears it.
+    let present = SharingBinding::Interface { address: "127.0.0.1".into() };
+    let back = status_fixture(present.clone(), SessionHosts::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &present), SharingScope::Library);
+    *back.address_lost.lock().unwrap() = (None, 7);
+    assert_eq!(back.status()["addressLost"], false);
+    assert_eq!(back.address_lost.lock().unwrap().1, 0);
     // The address is reported, never silently replaced: an interface binding
     // answers only on the address it was started with.
     assert_eq!(status["urls"], json!(["http://198.51.100.9:8080/nearby/session"]));
@@ -1077,6 +1090,7 @@ async fn status_reports_an_interface_binding_whose_address_left_this_device() {
     let loopback = status_fixture(SharingBinding::Loopback {},
         SessionHosts::new(&[IpAddr::V4(Ipv4Addr::LOCALHOST)], &SharingBinding::Loopback {}), SharingScope::Library);
     assert!(loopback.status().get("addressLost").is_none());
+    assert!(loopback.status().get("localOnly").is_none());
 }
 
 /// A wildcard listener already answers on the device's current addresses, so
@@ -1097,6 +1111,9 @@ async fn status_links_of_a_wildcard_binding_follow_the_addresses_the_server_acce
         let accepted = server.hosts.current();
         let expected: Vec<String> = accepted.iter().map(|host| access_url(*host, 8080, "/nearby/session")).collect();
         assert_eq!(urls, expected);
+        // With no network left a wildcard share answers on loopback only,
+        // and says so; this machine's real answer follows its interfaces.
+        assert_eq!(status["localOnly"], json!(accepted.iter().all(IpAddr::is_loopback)));
         if scope == SharingScope::Library {
             let catalogs: Vec<String> = serde_json::from_value(status["catalogUrls"].clone()).unwrap();
             assert_eq!(catalogs.len(), urls.len());
@@ -1109,6 +1126,16 @@ async fn status_links_of_a_wildcard_binding_follow_the_addresses_the_server_acce
             assert!(book.iter().all(|url| !url.contains("198.51.100.9")), "{book:?}");
         }
     }
+}
+
+#[test]
+fn a_share_with_only_loopback_addresses_is_local_only() {
+    let v4 = IpAddr::V4(Ipv4Addr::LOCALHOST);
+    let v6 = IpAddr::V6(Ipv6Addr::LOCALHOST);
+    assert!(loopback_only(&[v4, v6]));
+    assert!(loopback_only(&[v4]));
+    assert!(!loopback_only(&["192.168.1.50".parse().unwrap(), v4, v6]));
+    assert!(!loopback_only(&["2001:db8::5".parse().unwrap(), v6]));
 }
 
 #[test]

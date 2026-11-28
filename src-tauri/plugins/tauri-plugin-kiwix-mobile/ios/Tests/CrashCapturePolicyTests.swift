@@ -41,8 +41,8 @@ final class CrashCapturePolicyTests: XCTestCase {
       // An apostrophe is part of a name, not the end of the path.
       ("missing '/Volumes/Jane's Backup/Private Notes/a.zim' on disk", "missing '[path]"),
       ("at ~/My Documents/Private Notes.txt now", "at [path]"),
-      ("see </var/mobile/My Books/a.zim> and `/var/mobile/Other Books/b.zim` next",
-       "see <[path]> and `[path]` next"),
+      ("see /var/mobile/My Books/a.zim<end> and `/var/mobile/Other Books/b.zim` next",
+       "see [path]<end> and `[path]` next"),
       ("open /var/mobile/My Books/a.zim\nthen retry", "open [path] then retry"),
       // A file URL is a path and may carry unencoded spaces.
       ("open file:///var/mobile/Jane Doe/Private Notes.txt now", "open [url]"),

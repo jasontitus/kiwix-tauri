@@ -42,4 +42,21 @@ class TransferStartDecisionTest {
             assertEquals(TransferStartDecision(TransferStartStep.ADMIT, false),
                 transferStartDecision(admitted = true, foreground = foreground) { false })
     }
+
+    @Test
+    fun queuedForegroundStartIsNeverStoppedFromOutside() {
+        // Stopping the service under a start Android has not delivered yet
+        // kills the process; the start is left to arrive stale and stop itself.
+        assertEquals(TransferStop.LEAVE_TO_QUEUED_START, transferStopDecision(queuedForegroundStarts = 1))
+        assertEquals(TransferStop.LEAVE_TO_QUEUED_START, transferStopDecision(queuedForegroundStarts = 2))
+        assertEquals(TransferStop.STOP_SERVICE, transferStopDecision(queuedForegroundStarts = 0))
+    }
+
+    @Test
+    fun serviceStopsItselfOnlyUpToAStartAndroidDelivered() {
+        // No start delivered yet: the start that created the instance is queued.
+        assertEquals(null, transferSelfStopId(deliveredStartId = 0))
+        assertEquals(1, transferSelfStopId(deliveredStartId = 1))
+        assertEquals(7, transferSelfStopId(deliveredStartId = 7))
+    }
 }

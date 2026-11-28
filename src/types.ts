@@ -230,6 +230,12 @@ export interface SharingStatus {
    * Absent for other bindings, whose links follow the live addresses.
    */
   addressLost?: boolean;
+  /**
+   * A share on all interfaces while this device has no network address: it
+   * is still running, but only this device can open its links. It serves the
+   * next network the device joins without being restarted.
+   */
+  localOnly?: boolean;
 }
 export interface Snapshot {
   books: Book[];

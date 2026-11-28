@@ -248,3 +248,5 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   Handoffs: panes lane: LIB-6 UI + api.ts privacyGeneration auto-inject; maps partials.rs comment (inherit fallback). Doubt: LIB-1 crash leaves .kiwix-renamed-<uuid> second name.
   -> adversarial reviewer launching. Launching service lane + panes lane now.
 - launched service lane (a8261…) and panes lane (af2c7…). files adv review (a3e6f…).
+- adv-features round 2 (adv/features-round2.md): R1,R4,R5,R6 closed; R2->service lane, R3->panes lane, R7 docs owner. New R8 (record_vanished lacks dir identity; owner: STRICT rule, mismatch report-only), R9 (plain sentences), R10 nits (test + NOT_OUR_FILE wording). -> features round 3
+- reader round 2 DONE (impl/reader-round2.md): R1 hardened (native accessors, scrub secret, storage-bridge too), vouch gate, R2 (+3s cap), R3 reword, ⌃⌘F. STILL OPEN: forged hello + document.open() still receives reader-init+photoSecret (needs server-attested per-document identity). -> adv-reader re-review (assess severity/what photo secret authorises; feasible Rust fix?)

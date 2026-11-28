@@ -177,12 +177,20 @@ impl Service {
         }).await.map_err(|_|"The public Nearby information exchange timed out")?
     }
     async fn nearby_stop_owner(&self, id: Option<&str>) -> Result<(), String> {
-        crate::nearby_log!("[nearby] stop owner id={id:?}");
+        self.nearby_stop_owner_if(id, false).await
+    }
+    /// `pending_only` stops an owner only while its connection is still being
+    /// made. The decision and the removal happen under one state lock, so a
+    /// connection that completes concurrently is either kept or was never
+    /// established; it cannot be judged pending and then stopped as accepted.
+    async fn nearby_stop_owner_if(&self, id: Option<&str>, pending_only: bool) -> Result<(), String> {
+        crate::nearby_log!("[nearby] stop owner id={id:?} pending_only={pending_only}");
         let owners = {
             let mut state = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?;
+            let chosen = |owner: &Owner| id.is_none_or(|id| id == owner.work.id) && (!pending_only || owner.descriptor.is_none());
             let mut owners = Vec::new();
-            if state.publisher.as_ref().is_some_and(|owner| id.is_none_or(|id| id == owner.work.id)) { owners.push(state.publisher.take().unwrap()); }
-            if state.consumer.as_ref().is_some_and(|owner| id.is_none_or(|id| id == owner.work.id)) { owners.push(state.consumer.take().unwrap()); }
+            if state.publisher.as_ref().is_some_and(chosen) { owners.push(state.publisher.take().unwrap()); }
+            if state.consumer.as_ref().is_some_and(chosen) { owners.push(state.consumer.take().unwrap()); }
             for owner in &owners { owner.work.cancel.cancel(); }
             owners
         };
@@ -404,7 +412,7 @@ impl Service {
     /// For a dispatch arm that already holds the privacy read lease. Taking it
     /// again would nest two read guards: a writer queued between them blocks
     /// the second read while it waits for the first, and nothing ever runs.
-    #[cfg_attr(not(mobile), expect(dead_code, reason = "Only the mobile localswarm_discovery arm also starts Bluetooth finding"))]
+    #[cfg_attr(not(any(mobile, test)), expect(dead_code, reason = "Only the mobile localswarm_discovery arm also starts Bluetooth finding"))]
     pub(super) async fn nearby_discover_leased(self: Arc<Self>, args: Value) -> Result<Value, String> {
         self.nearby_command_with("nearby_discover", args, true).await
     }
@@ -414,15 +422,13 @@ impl Service {
         if command == "nearby_stop" {
             let _gate = self.nearby.gate.lock().await;
             let owner = args.get("owner").and_then(Value::as_str);
-            if args.get("pendingOnly").and_then(Value::as_bool) == Some(true) {
-                // The person closed a connection that was still being made.
-                // Never end one that already carries accepted downloads: its
-                // route is theirs until Stop all or another connection.
-                let state = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?;
-                let pending = owner.and_then(|id| state.owner(id)).is_some_and(|owner| owner.descriptor.is_none());
-                if !pending { return Ok(Value::Null); }
-            }
-            self.nearby_stop_owner(owner).await?;
+            let pending_only = args.get("pendingOnly").and_then(Value::as_bool) == Some(true);
+            // `pendingOnly`: the person closed a connection that was still
+            // being made. Never end one that already carries accepted
+            // downloads: its route is theirs until Stop all or another
+            // connection. It always names one owner; without one it stops nothing.
+            if pending_only && owner.is_none() { return Ok(Value::Null); }
+            self.nearby_stop_owner_if(owner, pending_only).await?;
             return Ok(Value::Null);
         }
         #[cfg(mobile)]
@@ -466,10 +472,24 @@ impl Service {
                 return self.nearby_status();
             }
         }
-        if !enabled { return self.nearby_status(); }
+        if !enabled {
+            // Turning finding off also dismisses a finder that already ended
+            // by itself; otherwise its failure stays on screen with nothing
+            // running. It has no radio or route left, so a native complaint
+            // while reaping it is not the person's problem.
+            let ended = self.nearby.inner.lock().map_err(|_|"Nearby state unavailable")?.consumer.as_ref()
+                .filter(|owner|owner.work.label==label && owner.work.cancel.is_cancelled()).map(|owner|owner.work.id.clone());
+            if let Some(id) = ended {
+                let _gate = self.nearby.gate.lock().await;
+                let _ = self.nearby_stop_owner(Some(&id)).await;
+            }
+            return self.nearby_status();
+        }
+        // Decided before anything platform-specific, so "exactly one privacy
+        // lease on every path" is the same code everywhere.
+        let _mode = if leased { None } else { Some(self.privacy_gate.read().await) };
         if !cfg!(mobile) { return self.nearby_status(); }
         if !self.nearby.native_ready.load(Ordering::SeqCst) { return Err("Native Nearby listeners are not ready yet. Try again.".into()); }
-        let _mode = if leased { None } else { Some(self.privacy_gate.read().await) };
         self.nearby_discover_start(label).await
     }
     /// Replace a stopped or failed finder with a new one. The caller holds the
@@ -1132,6 +1152,55 @@ mod tests {
         assert!(!writer.is_finished(), "the lease was released early");
         drop(held);
         tokio::time::timeout(Duration::from_secs(3), writer).await.unwrap().unwrap();
+        let _ = service.nearby_retire().await;
+    }
+
+    /// The two entries themselves, as far as this platform runs them: the
+    /// leased one must return under a held lease with a writer queued, and the
+    /// public one must take its own lease (so it waits for that writer).
+    #[tokio::test]
+    async fn the_leased_entry_takes_no_second_lease_and_the_public_entry_takes_exactly_one() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        let args = json!({"enabled": true, "privacyGeneration": service.launch_generation()});
+        let gate = service.privacy_gate.clone();
+        let held = gate.read().await;
+        let queued = gate.clone();
+        let writer = tokio::spawn(async move { drop(queued.write().await); });
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while gate.try_read().is_ok() { tokio::task::yield_now().await; }
+        }).await.expect("the writer never queued");
+        tokio::time::timeout(Duration::from_secs(5), service.clone().nearby_discover_leased(args.clone())).await
+            .expect("the leased entry waited for the privacy lease its caller holds").unwrap();
+        let public = tokio::spawn(service.clone().nearby_command("nearby_discover", args));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!public.is_finished(), "the public entry must take the privacy lease itself");
+        assert!(!writer.is_finished());
+        drop(held);
+        tokio::time::timeout(Duration::from_secs(3), writer).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(3), public).await.unwrap().unwrap().unwrap();
+        let _ = service.nearby_retire().await;
+    }
+
+    /// Turning Find nearby off dismisses a finder that had already failed.
+    #[tokio::test]
+    async fn turning_finding_off_dismisses_a_finder_that_already_failed() {
+        let profile = Profile::new();
+        let service = Service::new(profile.0.clone(), false, false).unwrap();
+        let (finder, _events, _actions) = service.nearby_insert("main".into(), false).unwrap();
+        service.nearby_status_update(&finder, "failed", Some("BLE_POWERED_OFF".into()));
+        finder.cancel.cancel();
+        assert_eq!(service.nearby_status().unwrap()["error"], "BLE_POWERED_OFF");
+        let off = json!({"enabled": false, "privacyGeneration": service.launch_generation()});
+        let status = service.clone().nearby_command("nearby_discover", off.clone()).await.unwrap();
+        assert!(status["error"].is_null());
+        assert!(status["consumer"].is_null());
+        // A finder that is still running is not removed by this path.
+        let (running, _events, _actions) = service.nearby_insert("main".into(), false).unwrap();
+        service.nearby_status_update(&running, "connected", None);
+        let status = service.clone().nearby_command("nearby_discover", off).await.unwrap();
+        assert_eq!(status["consumer"]["owner"], running.id.as_str());
+        assert!(!running.cancel.is_cancelled());
         let _ = service.nearby_retire().await;
     }
 

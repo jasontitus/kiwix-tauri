@@ -34,7 +34,8 @@ object CrashIntake {
     private val secretPattern = Regex(
         """(?i)\b(authorization|access_token|refresh_token|api_key|apikey|password|passwd|cookie|token|secret|pin)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;&)\]}]+)"""
     )
-    private val pathPattern = Regex("""(?<![^\s=(\[{"',;:`])(?:/(?!/)|[a-zA-Z]:[\\/]|~/|\\\\)[^\s"<>`]+""")
+    /** Characters a path may directly follow; mirrors `path_at` in src-tauri/src/crash.rs. */
+    private const val PATH_BOUNDARY = "=([{\"',;:`"
     private val opaquePattern = Regex("""\b[A-Za-z0-9_+/=-]{40,}\b""")
     private val whitespacePattern = Regex("""\s+""")
     /** SimpleDateFormat is not thread-safe; one formatter per crashing thread. */
@@ -126,15 +127,101 @@ object CrashIntake {
     private fun timestamp(): String = timestampFormat.get().format(Date())
 
     internal fun redact(value: String): String {
-        var text = urlPattern.replace(value) { match -> safeUrl(match.value) }
+        var text = replaceUrls(value)
         text = bearerPattern.replace(text) { "bearer [redacted]" }
         text = secretPattern.replace(text) { match ->
             val key = match.value.takeWhile { it != '=' && it != ':' }.trim()
             "$key=[redacted]"
         }
-        text = pathPattern.replace(text) { "[path]" }
+        text = redactPaths(text)
         text = opaquePattern.replace(text) { "[redacted]" }
         return whitespacePattern.replace(text, " ").trim()
+    }
+
+    /**
+     * Where the redaction of a path that starts at [start] stops. The same rule
+     * as `path_end` in src-tauri/src/crash.rs.
+     *
+     * Folder and file names contain spaces (`/storage/emulated/0/My Books/…`),
+     * so whitespace cannot end a path: stopping there kept every later
+     * component. Only text that cannot continue the path ends it: a closing
+     * double quote, an angle bracket, a backtick, a line break, or the `: `
+     * that introduces an error's cause. Prose between the path and that
+     * delimiter is dropped with it; losing those words is the accepted price of
+     * never keeping part of a path. An apostrophe does not end a path, because
+     * names such as `Jane's Backup` contain one.
+     */
+    internal fun pathEnd(text: String, start: Int): Int {
+        var end = start
+        while (end < text.length) {
+            val stop = when (text[end]) {
+                '\n', '\r', '<', '>', '`' -> true
+                // A path printed inside a quoted string escapes an embedded quote as `\"`.
+                '"' -> {
+                    var escapes = 0
+                    var index = end - 1
+                    while (index >= start && text[index] == '\\') { escapes++; index-- }
+                    escapes % 2 == 0
+                }
+                ':' -> end + 1 < text.length && text[end + 1].isWhitespace()
+                else -> false
+            }
+            if (stop) break
+            end++
+        }
+        // The separator before the delimiter is not part of the path.
+        while (end > start && text[end - 1].isWhitespace()) end--
+        return end
+    }
+
+    /** The end of the path that starts at [index], or null when none starts there. */
+    private fun pathAt(text: String, index: Int): Int? {
+        if (index > 0 && !text[index - 1].isWhitespace() && text[index - 1] !in PATH_BOUNDARY) return null
+        val current = text[index]
+        val next = text.getOrNull(index + 1)
+        val drive = (current in 'a'..'z' || current in 'A'..'Z') && next == ':' &&
+            text.getOrNull(index + 2).let { it == '\\' || it == '/' }
+        val rooted = current == '/' && next != null && next != '/' && !next.isWhitespace()
+        val home = current == '~' && next == '/'
+        val share = current == '\\' && next == '\\'
+        return if (drive || rooted || home || share) pathEnd(text, index) else null
+    }
+
+    private fun redactPaths(value: String): String {
+        val output = StringBuilder(value.length)
+        var index = 0
+        while (index < value.length) {
+            val end = pathAt(value, index)
+            if (end != null) {
+                output.append("[path]")
+                index = end
+            } else {
+                output.append(value[index])
+                index++
+            }
+        }
+        return output.toString()
+    }
+
+    /**
+     * A URL ends at whitespace, except a `file:` URL: it is a path, may be
+     * written with unencoded spaces, and is redacted to the end of that path.
+     */
+    private fun replaceUrls(value: String): String {
+        val output = StringBuilder(value.length)
+        var cursor = 0
+        while (cursor <= value.length) {
+            val match = urlPattern.find(value, cursor) ?: break
+            val start = match.range.first
+            val file = value.regionMatches(start, "file:/", 0, 6, ignoreCase = true)
+            // The path of a file URL starts right after its colon.
+            val end = if (file) pathEnd(value, start + 5) else match.range.last + 1
+            output.append(value, cursor, start)
+            output.append(if (file) "[url]" else safeUrl(value.substring(start, end)))
+            cursor = end
+        }
+        output.append(value, cursor, value.length)
+        return output.toString()
     }
 
     private fun safeUrl(raw: String): String {

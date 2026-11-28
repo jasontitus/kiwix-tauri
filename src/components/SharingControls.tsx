@@ -102,9 +102,12 @@ export default function SharingControls({
     if (!sharing.running) return;
     let active = true;
     let reported = false;
+    let asking = false;
     let timer: number | undefined;
     async function poll() {
-      if (!active || document.hidden) return;
+      // One chain only: a request in flight schedules the next one itself.
+      if (!active || asking || document.hidden) return;
+      asking = true;
       try {
         const value = await api<SharingStatus>("sharing_status");
         if (!active) return;
@@ -117,7 +120,10 @@ export default function SharingControls({
         }
       } catch {
         // The page's own status stays on screen; the next poll asks again.
+      } finally {
+        asking = false;
       }
+      window.clearTimeout(timer);
       if (active && !document.hidden) timer = window.setTimeout(() => void poll(), 4000);
     }
     function visibility() {
@@ -387,6 +393,13 @@ export default function SharingControls({
         <p className="inline-error" role="alert">
           {t(
             "This device is no longer connected at the address this share uses, so its link and QR code will not open. Reconnect to that network, or stop web sharing and enable it again to share on the current one.",
+          )}
+        </p>
+      )}
+      {sharing.running && shown.localOnly && (
+        <p className="inline-error" role="alert">
+          {t(
+            "This device has no network connection, so only this device can open the links below. Connect to a trusted Wi-Fi or Ethernet network; sharing continues there without restarting.",
           )}
         </p>
       )}
