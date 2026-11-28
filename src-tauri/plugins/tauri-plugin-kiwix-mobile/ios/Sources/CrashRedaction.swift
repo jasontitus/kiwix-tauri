@@ -27,6 +27,7 @@ enum CrashRedaction {
   private static let urlMark = Text("[url]".unicodeScalars)
   private static let readerURLMark = Text("[reader-url]".unicodeScalars)
   private static let emailMark = Text("[email]".unicodeScalars)
+  private static let punycodePrefix = Text("xn--".unicodeScalars)
 
   /// Full redaction for one text field: steps 1 to 8.
   static func redact(_ value: String) -> String {
@@ -177,27 +178,35 @@ enum CrashRedaction {
   private static let secretKeys: [(name: String, scalars: Text)] = [
     "authorization", "access_token", "refresh_token", "api_key", "api-key", "apikey",
     "password", "passwd", "passphrase", "pass", "pwd", "private_key", "private-key", "privatekey",
-    "client_secret", "secret", "session_id", "sessionid", "jsessionid", "credentials", "credential",
+    "client_secret", "secret_access_key", "secret_key", "secret-key", "secretkey",
+    "access_key", "access-key", "accesskey", "secret", "session_id", "sessionid", "jsessionid", "credentials", "credential",
     "signature", "cookie", "bearer", "token", "auth", "pin",
   ].map { (name: $0, scalars: Text($0.unicodeScalars)) }
 
-  /// Line ends and the last apostrophe of each line, computed once so that no
-  /// secret value rescans its line.
+  /// Line ends, the last apostrophe of each line and word ends, computed once
+  /// so that no secret candidate rescans its line or its word.
   private struct Lines {
     /// For each index, and for the text length: the first line break at or
     /// after it, or the text length.
     var end: [Int]
     /// For each index: the last `'` on its line, or -1.
     var lastApostrophe: [Int]
+    /// For each index: the first index at or after it whose scalar is not an
+    /// ASCII letter, an ASCII digit or `_`.
+    var wordEnd: [Int]
 
     init(_ chars: Text) {
       end = [Int](repeating: chars.count, count: chars.count + 1)
       lastApostrophe = [Int](repeating: -1, count: chars.count + 1)
+      wordEnd = [Int](repeating: chars.count, count: chars.count + 1)
       var lineEnd = chars.count
       var apostrophe = -1
+      var runEnd = chars.count
       var index = chars.count
       while index > 0 {
         index -= 1
+        if !(isASCIIAlphanumeric(chars[index]) || chars[index] == "_") { runEnd = index }
+        wordEnd[index] = runEnd
         if isLineBreak(chars[index]) {
           lineEnd = index
           apostrophe = -1
@@ -240,15 +249,22 @@ enum CrashRedaction {
       guard !isASCIIAlphanumeric(previous) || hump else { return nil }
     }
     for key in secretKeys {
-      let afterKey = at + key.scalars.count
-      if afterKey > chars.count { continue }
+      let keyEnd = at + key.scalars.count
+      if keyEnd > chars.count { continue }
       var matches = true
       for offset in 0..<key.scalars.count where lowercasedASCII(chars[at + offset]) != key.scalars[offset] {
         matches = false
         break
       }
       if !matches { continue }
-      if afterKey < chars.count, isASCIIAlphanumeric(chars[afterKey]) || chars[afterKey] == "_" { continue }
+      // Right side: the keyword ends the word, or a camelCase suffix follows
+      // it (`accessTokenValue`, `passwordHash`), which is skipped.
+      var suffix = false
+      if keyEnd < chars.count {
+        suffix = isASCIIUppercase(chars[keyEnd]) && isASCIILowercase(chars[keyEnd - 1])
+        if !suffix, isASCIIAlphanumeric(chars[keyEnd]) || chars[keyEnd] == "_" { continue }
+      }
+      let afterKey = suffix ? lines.wordEnd[keyEnd] : keyEnd
       // A quoted key ends with its quote, which an outer string may have
       // escaped: `"password":`, `\"password\":`, `("authorization", …)`.
       var next = afterKey
@@ -272,7 +288,7 @@ enum CrashRedaction {
       }
       if separator > 0 {
         next = skipWhitespace(chars, from: next + separator)
-      } else if quotedKey || next == gap || !(key.name == "authorization" || key.name == "bearer") {
+      } else if suffix || quotedKey || next == gap || !(key.name == "authorization" || key.name == "bearer") {
         continue
       }
       let value = secretValue(chars, lines, next, key: key.name)
@@ -538,10 +554,12 @@ enum CrashRedaction {
       while end < chars.count, isHost(chars[end]) { end += 1 }
       // A dot or hyphen at the very end is sentence punctuation.
       while end > at + 1, chars[end - 1] == "." || chars[end - 1] == "-" { end -= 1 }
-      // At least two labels, none empty; the last is two or more letters.
+      // At least two labels, none empty; the last is two or more letters,
+      // or a punycode label (`xn--p1ai`).
       let labels = chars[(at + 1)..<end].split(separator: ".", omittingEmptySubsequences: false)
-      guard start < at, labels.count >= 2, let last = labels.last, last.count >= 2,
-            last.allSatisfy(isASCIILetter), labels.allSatisfy({ !$0.isEmpty }) else {
+      guard start < at, labels.count >= 2, let last = labels.last, labels.allSatisfy({ !$0.isEmpty }),
+            (last.count >= 2 && last.allSatisfy(isASCIILetter))
+              || (last.count > 4 && last.prefix(4).map(lowercasedASCII) == punycodePrefix) else {
         at += 1
         continue
       }
@@ -573,7 +591,8 @@ enum CrashRedaction {
   }
 
   /// A drive (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`,
-  /// `~\`), a share (`\\`, `//host`) or a rooted Windows path (`\Users\…`).
+  /// `~\`, `~jane/`), a share (`\\`, `//host`) or a rooted Windows path
+  /// (`\Users\…`).
   private static func isPathStart(_ chars: Text, _ index: Int) -> Bool {
     func isName(_ scalar: Unicode.Scalar?) -> Bool {
       guard let scalar = scalar else { return false }
@@ -584,7 +603,16 @@ enum CrashRedaction {
     let third = scalar(chars, index + 2)
     if isASCIILetter(current), next == ":", third == "\\" || third == "/" { return true }
     if current == "/", isName(next) { return true }
-    if current == "~", next == "/" || next == "\\" { return true }
+    if current == "~" {
+      // `~/…`, and another account's home, `~jane/…`. The name scan ends
+      // before the next `~`, so it never passes the next candidate.
+      var nameEnd = index + 1
+      while nameEnd < chars.count,
+            isASCIIAlphanumeric(chars[nameEnd]) || chars[nameEnd] == "." || chars[nameEnd] == "_" || chars[nameEnd] == "-" {
+        nameEnd += 1
+      }
+      if scalar(chars, nameEnd) == "/" || scalar(chars, nameEnd) == "\\" { return true }
+    }
     if current == "\\", next == "\\" { return true }
     if current == "/", next == "/", isName(third) { return true }
     // One backslash and a name is a path only if another backslash follows
@@ -608,11 +636,17 @@ enum CrashRedaction {
       return nil
     }
     guard isPathStart(chars, index) else { return nil }
-    // Neither slash of `://` starts a path: what follows is the host of a URL
-    // that step 3 kept (`https://example.org`).
+    // Neither slash of a `://` that follows a letter starts a path: what
+    // comes after it is the host of a URL that step 3 kept
+    // (`https://example.org`). Without a scheme letter (`1://home/…`) step 3
+    // kept nothing, and the path must go.
     if chars[index] == "/" {
-      let first = previous == ":" && scalar(chars, index + 1) == "/"
-      let second = previous == "/" && scalar(chars, index - 2) == ":"
+      func schemeBefore(_ colon: Int) -> Bool {
+        guard let letter = scalar(chars, colon - 1) else { return false }
+        return isASCIILetter(letter)
+      }
+      let first = previous == ":" && scalar(chars, index + 1) == "/" && schemeBefore(index - 1)
+      let second = previous == "/" && scalar(chars, index - 2) == ":" && schemeBefore(index - 2)
       if first || second { return nil }
     }
     return pathEnd(chars, index)

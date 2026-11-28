@@ -69,6 +69,7 @@ import { translateBookmarkDrafts, translateLocation, translateTabs } from "./ref
 import { privateSyncRequest } from "./private-sync-api";
 import { diagnostics, reportError } from "./diagnostics";
 import { reportBootPhase, reportFrontendReady } from "./startup-ready";
+import { dismissStartupNotice, startupNoticeVisible } from "./startup-notice";
 import {
   errorSurface,
   isProviderUnavailableFor,
@@ -500,7 +501,8 @@ export default function App() {
     )?.focus({ preventScroll: true });
   }, [error]);
   const [initialError, setInitialError] = useState("");
-  const [startupNoticeDismissed, setStartupNoticeDismissed] = useState(false);
+  // The notices the person closed; a new one brings the band back.
+  const [startupNoticeDismissed, setStartupNoticeDismissed] = useState<string[]>([]);
   const [pageVisible, setPageVisible] = useState(document.visibilityState === "visible");
   useEffect(() => {
     const update = () => setPageVisible(document.visibilityState === "visible");
@@ -3717,7 +3719,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {!!snapshot?.startupWarnings?.length && !startupNoticeDismissed && (
+          {!!snapshot?.startupWarnings?.length && startupNoticeVisible(snapshot.startupWarnings, startupNoticeDismissed) && (
             <div className="startup-notice" role="status">
               <div>
                 <strong>{t("Some saved items need attention.")}</strong>
@@ -3725,7 +3727,7 @@ export default function App() {
               </div>
               <button
                 className="icon-button"
-                onClick={() => setStartupNoticeDismissed(true)}
+                onClick={() => setStartupNoticeDismissed((dismissed) => dismissStartupNotice(snapshot.startupWarnings, dismissed))}
                 aria-label={t("Dismiss")}
               >
                 <X size={17} />

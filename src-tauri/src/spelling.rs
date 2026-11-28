@@ -1422,15 +1422,19 @@ mod tests {
         Mutex::new(inner)
     }
 
+    /// Wait for a released loader. A loader that already finished removed its
+    /// own handle in the same locked step that published its result, so a
+    /// missing handle means there is nothing left to wait for.
     fn finish_load(manager: &SpellingManager, identity: &Identity) {
         let handle = manager
             .inner
             .lock()
             .unwrap()
             .loads
-            .remove(&identity.key())
-            .unwrap();
-        handle.join().unwrap();
+            .remove(&identity.key());
+        if let Some(handle) = handle {
+            handle.join().unwrap();
+        }
     }
 
     fn fixture(directory: &Path) -> Dictionary {

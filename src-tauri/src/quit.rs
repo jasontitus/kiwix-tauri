@@ -361,6 +361,23 @@ pub(crate) fn unshown_dialog_retry_delay(unshown: u32) -> Duration {
     }
 }
 
+/// How long to wait before the Quit attempt that follows the failed-Quit
+/// dialog.
+///
+/// Nobody pressed Retry when the answer is `Stay` and Quit is retried only
+/// because no window is left to stay in. Such automatic retries are at least
+/// one second apart, however the dialog was classified: a dialog that could
+/// not be shown but took longer than the 50 ms floor to say so (a busy main
+/// thread) would otherwise retry many times a second.
+pub(crate) fn failed_quit_retry_delay(answer: &FailedQuitAction, shell_window_remains: bool, unshown: u32) -> Duration {
+    let backoff = unshown_dialog_retry_delay(unshown);
+    if matches!(answer, FailedQuitAction::Stay { .. }) && !shell_window_remains {
+        backoff.max(Duration::from_secs(1))
+    } else {
+        backoff
+    }
+}
+
 /// The failed-Quit dialog text: what could not be done, the cause, how to fix
 /// it, and exactly what quitting without saving gives up.
 pub(crate) fn failed_quit_message(
@@ -601,6 +618,26 @@ mod tests {
         // An unshown dialog with no window left is retried, never turned into
         // quitting without saving.
         assert_eq!(settle_failed_quit(stay, false, false), FailedQuitAction::Retry);
+    }
+
+    #[test]
+    fn automatic_retries_without_a_window_are_at_least_a_second_apart() {
+        let cancel = FailedQuitAction::Stay { clear_relaunch: false };
+        // No window left, so Cancel retries by itself: never sooner than 1 s,
+        // also when the dialog was (rightly or wrongly) counted as shown.
+        let delays: Vec<u64> = (0..=8)
+            .map(|unshown| failed_quit_retry_delay(&cancel, false, unshown).as_secs())
+            .collect();
+        assert_eq!(delays, [1, 1, 2, 4, 8, 16, 32, 60, 60]);
+        // A person pressed Retry: at once, window or not.
+        for window in [true, false] {
+            assert_eq!(failed_quit_retry_delay(&FailedQuitAction::Retry, window, 0), Duration::ZERO);
+        }
+        // A window remains and Quit was chosen again while the dialog was
+        // open: that is a person's request too.
+        assert_eq!(failed_quit_retry_delay(&cancel, true, 0), Duration::ZERO);
+        // The backoff for unshown dialogs still applies with a window.
+        assert_eq!(failed_quit_retry_delay(&cancel, true, 3), Duration::from_secs(4));
     }
 
     #[test]

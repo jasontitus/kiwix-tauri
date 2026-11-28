@@ -183,38 +183,48 @@ internal object CrashRedaction {
     /** Tried in this order at every position. */
     private val secretKeys = arrayOf(
         "authorization", "access_token", "refresh_token", "api_key", "api-key", "apikey", "password", "passwd",
-        "passphrase", "pass", "pwd", "private_key", "private-key", "privatekey", "client_secret", "secret",
-        "session_id", "sessionid", "jsessionid", "credentials", "credential", "signature", "cookie", "bearer",
-        "token", "auth", "pin",
+        "passphrase", "pass", "pwd", "private_key", "private-key", "privatekey", "client_secret",
+        "secret_access_key", "secret_key", "secret-key", "secretkey", "access_key", "access-key", "accesskey",
+        "secret", "session_id", "sessionid", "jsessionid", "credentials", "credential", "signature", "cookie",
+        "bearer", "token", "auth", "pin",
     )
 
     /** A half-open range of scalars. */
     private class Span(val start: Int, val end: Int)
 
     /**
-     * Line ends and the last apostrophe of each line, computed once so that
-     * no secret value rescans its line.
+     * Line ends, the last apostrophe of each line and word ends, computed once
+     * so that no secret candidate rescans its line or its word.
      */
     private class Lines(points: IntArray) {
         /** For each index and the text length: the first line break at or after it. */
         val end = IntArray(points.size + 1)
         /** For each index: the last `'` on its line, or -1. */
         val lastApostrophe = IntArray(points.size + 1)
+        /** For each index and the text length: the first scalar at or after it that is not an ASCII letter, digit or `_`. */
+        val wordEnd = IntArray(points.size + 1)
 
         init {
             var lineEnd = points.size
             var apostrophe = -1
+            var word = points.size
             end[points.size] = points.size
             lastApostrophe[points.size] = -1
+            wordEnd[points.size] = points.size
             for (index in points.indices.reversed()) {
-                if (points[index] == '\n'.code || points[index] == '\r'.code) {
+                val point = points[index]
+                if (point == '\n'.code || point == '\r'.code) {
                     lineEnd = index
                     apostrophe = -1
-                } else if (points[index] == '\''.code && apostrophe == -1) {
+                } else if (point == '\''.code && apostrophe == -1) {
                     apostrophe = index
                 }
+                val inWord = point in 'a'.code..'z'.code || point in 'A'.code..'Z'.code ||
+                    point in '0'.code..'9'.code || point == '_'.code
+                if (!inWord) word = index
                 end[index] = lineEnd
                 lastApostrophe[index] = apostrophe
+                wordEnd[index] = if (inWord) word else index
             }
         }
     }
@@ -249,11 +259,14 @@ internal object CrashRedaction {
         val hump = isAsciiUpper(first) && (isAsciiLower(previous) || isAsciiDigit(previous))
         if (!apart && !hump) return null
         for (key in secretKeys) {
-            val afterKey = at + key.length
-            if (!asciiEquals(points, at, afterKey, key)) continue
-            // Right side: the keyword is not the start of a longer word.
+            val keyEnd = at + key.length
+            if (!asciiEquals(points, at, keyEnd, key)) continue
+            // Right side: the keyword ends the word, or a camelCase suffix
+            // follows it (`accessTokenValue`, `passwordHash`), which is skipped.
+            val suffix = isAsciiUpper(points.at(keyEnd)) && isAsciiLower(points[keyEnd - 1])
+            if (!suffix && (isAsciiAlphanumeric(points.at(keyEnd)) || points.at(keyEnd) == '_'.code)) continue
+            val afterKey = if (suffix) lines.wordEnd[keyEnd] else keyEnd
             val following = points.at(afterKey)
-            if (isAsciiAlphanumeric(following) || following == '_'.code) continue
             // 4.1 The closing quote of a quoted key, which an outer string may
             // have escaped: `"password":`, `\"password\":`.
             var next = afterKey
@@ -274,7 +287,7 @@ internal object CrashRedaction {
             }
             if (separator > 0) {
                 next = skipWhitespace(points, next + separator)
-            } else if (quotedKey || next == gap || (key != "authorization" && key != "bearer")) {
+            } else if (suffix || quotedKey || next == gap || (key != "authorization" && key != "bearer")) {
                 continue
             }
             val value = secretValue(points, lines, next, key)
@@ -528,7 +541,8 @@ internal object CrashRedaction {
 
     /**
      * Whether `points[from, to)` is the host of an address: at least two
-     * labels, none empty, the last one two or more ASCII letters.
+     * labels, none empty, the last one two or more ASCII letters or a punycode
+     * label (`xn--p1ai`).
      */
     private fun emailHost(points: IntArray, from: Int, to: Int): Boolean {
         var labels = 1
@@ -539,7 +553,9 @@ internal object CrashRedaction {
             labels++
             labelStart = index + 1
         }
-        if (labels < 2 || to - labelStart < 2) return false
+        if (labels < 2) return false
+        if (to - labelStart > 4 && asciiEquals(points, labelStart, labelStart + 4, "xn--")) return true
+        if (to - labelStart < 2) return false
         for (index in labelStart until to) if (!isAsciiLetter(points[index])) return false
         return true
     }
@@ -577,7 +593,10 @@ internal object CrashRedaction {
         val drive = isAsciiLetter(current) && next == ':'.code &&
             (points.at(index + 2) == '\\'.code || points.at(index + 2) == '/'.code)
         val absolute = current == '/'.code && name(next)
-        val home = current == '~'.code && (next == '/'.code || next == '\\'.code)
+        // `~/…`, and another account's home, `~jane/…`.
+        var homeName = index + 1
+        if (current == '~'.code) while (homeName < points.size && (isAsciiAlphanumeric(points[homeName]) || isOneOf(points[homeName], "._-"))) homeName++
+        val home = current == '~'.code && (points.at(homeName) == '/'.code || points.at(homeName) == '\\'.code)
         val share = (current == '\\'.code && next == '\\'.code) ||
             (current == '/'.code && next == '/'.code && name(points.at(index + 2)))
         // One backslash and a name is a path only if another backslash follows
@@ -589,11 +608,13 @@ internal object CrashRedaction {
     private fun pathAt(points: IntArray, backslashAhead: BooleanArray, index: Int): Int {
         val previous = points.at(index - 1)
         if (!pathBoundary(previous) || !pathStart(points, backslashAhead, index)) return -1
-        // Neither slash of `://` starts a path: what follows is the authority
-        // of a URL that step 3 kept (`https://example.org`).
+        // Neither slash of a `://` that follows a letter starts a path: what
+        // comes after it is the authority of a URL that step 3 kept
+        // (`https://example.org`). Without a scheme letter (`1://home/…`,
+        // ` ://Users/…`) step 3 kept nothing, and the path must go.
         if (points[index] == '/'.code) {
-            val first = previous == ':'.code && points.at(index + 1) == '/'.code
-            val second = previous == '/'.code && points.at(index - 2) == ':'.code
+            val first = previous == ':'.code && points.at(index + 1) == '/'.code && isAsciiLetter(points.at(index - 2))
+            val second = previous == '/'.code && points.at(index - 2) == ':'.code && isAsciiLetter(points.at(index - 3))
             if (first || second) return -1
         }
         return pathEnd(points, index)

@@ -110,7 +110,7 @@ class CrashRedactionTest {
         val units = listOf(
             "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
             "token='x ", "C:\\a\" ", "pin='' ", "token=\\\"\\\" ", "\\a<", "Some(Some(", "https://example.org/a ",
-            "a@b.c ", "a.b@", "@a.b-", "x@y.zz@",
+            "a@b.c ", "a.b@", "@a.b-", "x@y.zz@", "TokenA", "passwordHash ", "~jane ", "~a~",
         )
         fun repeated(unit: String, length: Int) = unit.repeat(length / unit.length)
         fun fastest(text: String): Long {

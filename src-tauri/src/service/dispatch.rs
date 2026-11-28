@@ -225,8 +225,12 @@ impl Service {
                     .unwrap_or(false);
                 #[cfg(not(desktop))]
                 let session_restored = false;
+                // The store's skipped-records notice as it stands now: leaving
+                // read-only mode can have kept the copy it asked for.
+                let mut startup_warnings = self.startup_warnings.lock().map_err(|_| "Startup warning state unavailable")?.clone();
+                startup_warnings.extend(self.store.current_load_notice()?);
                 Ok(
-                    json!({"books":books,"bookmarks":state.bookmarks,"history":state.history,"recentSearches":state.recent_searches,"tabs":state.tabs,"activeTab":state.active_tab,"activeSurface":active_surface,"sessionRestored":session_restored,"settings":state.settings,"sharing":sharing,"launchLocations":launch,"launchSearch":launch_search,"notifications":notifications,"privacyGeneration":generation,"privacyPolicyGeneration":self.privacy_policy_generation.load(Ordering::SeqCst),"referenceRevision":state.reference_revision,"referenceTransitions":state.reference_transitions,"startupWarnings":self.startup_warnings.lock().map_err(|_| "Startup warning state unavailable")?.clone()}),
+                    json!({"books":books,"bookmarks":state.bookmarks,"history":state.history,"recentSearches":state.recent_searches,"tabs":state.tabs,"activeTab":state.active_tab,"activeSurface":active_surface,"sessionRestored":session_restored,"settings":state.settings,"sharing":sharing,"launchLocations":launch,"launchSearch":launch_search,"notifications":notifications,"privacyGeneration":generation,"privacyPolicyGeneration":self.privacy_policy_generation.load(Ordering::SeqCst),"referenceRevision":state.reference_revision,"referenceTransitions":state.reference_transitions,"startupWarnings":startup_warnings}),
                 )
             }
             #[cfg(any(desktop, test))]
@@ -1698,8 +1702,11 @@ impl Service {
                 // and cached handle, and make `archive()` refuse new opens
                 // until the files are moved; they reopen on demand afterwards.
                 // Startup recovery skips this: it runs alongside launch-time
-                // opens, and a pinned book only leaves a journaled warning.
-                // The retirement below still runs.
+                // opens. A book pinned by one fails its rename: on the same
+                // volume that move is cancelled (the warning says it was not
+                // moved and is still in its folder) rather than retried at the
+                // next launch; a destination collision keeps its journal. The
+                // retirement below still runs.
                 #[cfg(windows)]
                 let moving = if recovery {
                     None
@@ -1835,6 +1842,9 @@ impl Service {
                     // A cached handle survives a rename over its path with its
                     // own size and mtime, so the path stays a file and nothing
                     // flips. Compare the handle with what the path names now.
+                    // Filesystem books only: a document provider has no path to
+                    // rename over, re-acquiring one is a native call, and its
+                    // descriptors need not keep one identity between opens.
                     let mut stale: Vec<(String, String, bool)> = service
                         .cached_archives()
                         .into_iter()
@@ -1842,6 +1852,9 @@ impl Service {
                             let book = state.books.iter().find(|book| {
                                 book.metadata.id == id && book.installation_id == installation && book.path == path
                             })?;
+                            if book.source_reference.is_some() {
+                                return None;
+                            }
                             if availability.get(&id) != Some(&true) {
                                 return None;
                             }

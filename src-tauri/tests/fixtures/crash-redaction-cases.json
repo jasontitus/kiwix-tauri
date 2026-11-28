@@ -858,5 +858,57 @@
   {
     "input": "@jane and jane@ and a@.org and a@b..org stay",
     "expected": "@jane and jane@ and a@.org and a@b..org stay"
+  },
+  {
+    "input": "1://home/jane doe/a.zim failed",
+    "expected": "1:[path]"
+  },
+  {
+    "input": "relative URL ://Users/Jane Doe/Private",
+    "expected": "relative URL :[path]"
+  },
+  {
+    "input": "_://Users/Jane Doe/Private",
+    "expected": "_:[path]"
+  },
+  {
+    "input": "AWS_SECRET_ACCESS_KEY=abcd1234 secret_key=hunter2 SECRET_KEY=hunter2 access_key=AKIA1 secretKey=x accessKey=y",
+    "expected": "AWS_SECRET_ACCESS_KEY=[redacted] secret_key=[redacted] SECRET_KEY=[redacted] access_key=[redacted] secretKey=[redacted] accessKey=[redacted]"
+  },
+  {
+    "input": "secret-key: s1 access-key: a2 secretkey=s3 accesskey=a4",
+    "expected": "secret-key: [redacted] access-key: [redacted] secretkey=[redacted] accesskey=[redacted]"
+  },
+  {
+    "input": "accessTokenValue=abc authTokenString=def passwordHash=ghi",
+    "expected": "accessTokenValue=[redacted] authTokenString=[redacted] passwordHash=[redacted]"
+  },
+  {
+    "input": "{\"passwordHash\":\"h1\",\"pinCode\": 1234}",
+    "expected": "{\"passwordHash\":\"[redacted]\",\"pinCode\": [redacted]}"
+  },
+  {
+    "input": "author=jane and the Tokenizer: fast, TOKENValue=1, TokenStream::new() and PinBox<T> stay",
+    "expected": "author=jane and the Tokenizer: fast, TOKENValue=1, TokenStream::new() and PinBox<T> stay"
+  },
+  {
+    "input": "~jane/Documents/Private Notes/a.zim",
+    "expected": "[path]"
+  },
+  {
+    "input": "open ~jane.doe\\Documents\\Private Notes\\a.zim now",
+    "expected": "open [path]"
+  },
+  {
+    "input": "a~b/c and ~ alone and ~jane stay",
+    "expected": "a~b/c and ~ alone and ~jane stay"
+  },
+  {
+    "input": "jane@example.xn--p1ai",
+    "expected": "[email]"
+  },
+  {
+    "input": "jane@example.XN--P1AI and bob@example.x1 stays",
+    "expected": "[email] and bob@example.x1 stays"
   }
 ]

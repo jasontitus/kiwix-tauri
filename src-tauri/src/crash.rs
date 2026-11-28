@@ -555,7 +555,7 @@ fn path_boundary(previous: Option<char>) -> bool {
 }
 
 /// Whether the text at `index` has the shape of a path start: a drive
-/// (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`), a share
+/// (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`, `~jane/`), a share
 /// (`\\`, `//host`), or a rooted Windows path (`\Users\…`, `\Device\…`).
 fn path_start(scalars: &[char], index: usize) -> bool {
     let Some(&current) = scalars.get(index) else {
@@ -567,7 +567,13 @@ fn path_start(scalars: &[char], index: usize) -> bool {
         && next == Some(':')
         && matches!(scalars.get(index + 2), Some('\\' | '/'));
     let absolute = current == '/' && name(next);
-    let home = current == '~' && matches!(next, Some('/' | '\\'));
+    // `~/…`, and another account's home, `~jane/…`.
+    let home = current == '~' && {
+        let name_end = find_from(scalars, index + 1, |scalar| {
+            !(scalar.is_ascii_alphanumeric() || matches!(scalar, '.' | '_' | '-'))
+        });
+        matches!(scalars.get(name_end), Some('/' | '\\'))
+    };
     let share = (current == '\\' && next == Some('\\'))
         || (current == '/' && next == Some('/') && name(scalars.get(index + 2).copied()));
     // One backslash and a name is a path only if another backslash follows
@@ -586,11 +592,15 @@ fn path_at(scalars: &[char], index: usize) -> Option<usize> {
     if !path_boundary(previous) || !path_start(scalars, index) {
         return None;
     }
-    // Neither slash of `://` starts a path: what follows is the authority of
-    // a URL that step 3 kept (`https://example.org`).
+    // Neither slash of a `://` that follows a letter starts a path: what
+    // comes after it is the authority of a URL that step 3 kept
+    // (`https://example.org`). Without a scheme letter (`1://home/…`,
+    // ` ://Users/…`) step 3 kept nothing, and the path must go.
     if scalars[index] == '/' {
-        let first = previous == Some(':') && scalars.get(index + 1) == Some(&'/');
-        let second = previous == Some('/') && index >= 2 && scalars[index - 2] == ':';
+        let scheme_before = |colon: usize| colon >= 1 && scalars[colon - 1].is_ascii_alphabetic();
+        let first = previous == Some(':') && scalars.get(index + 1) == Some(&'/') && scheme_before(index - 1);
+        let second =
+            previous == Some('/') && index >= 2 && scalars[index - 2] == ':' && scheme_before(index - 2);
         if first || second {
             return None;
         }
@@ -616,7 +626,7 @@ fn redact_paths(scalars: &[char]) -> Vec<char> {
 
 // --- Step 2: secrets ---------------------------------------------------------
 
-const SECRET_KEYS: [&str; 27] = [
+const SECRET_KEYS: [&str; 34] = [
     "authorization",
     "access_token",
     "refresh_token",
@@ -632,6 +642,13 @@ const SECRET_KEYS: [&str; 27] = [
     "private-key",
     "privatekey",
     "client_secret",
+    "secret_access_key",
+    "secret_key",
+    "secret-key",
+    "secretkey",
+    "access_key",
+    "access-key",
+    "accesskey",
     "secret",
     "session_id",
     "sessionid",
@@ -653,15 +670,24 @@ struct Lines {
     end: Vec<usize>,
     /// For each index: the last `'` on its line, if the line has one.
     last_apostrophe: Vec<Option<usize>>,
+    /// For each index: the first index at or after it that is not an ASCII
+    /// letter, an ASCII digit or `_`.
+    word_end: Vec<usize>,
 }
 
 impl Lines {
     fn new(scalars: &[char]) -> Self {
         let mut end = vec![scalars.len(); scalars.len() + 1];
         let mut last_apostrophe = vec![None; scalars.len() + 1];
+        let mut word_end = vec![scalars.len(); scalars.len() + 1];
         let mut line_end = scalars.len();
         let mut apostrophe = None;
+        let mut run_end = scalars.len();
         for index in (0..scalars.len()).rev() {
+            if !(scalars[index].is_ascii_alphanumeric() || scalars[index] == '_') {
+                run_end = index;
+            }
+            word_end[index] = run_end;
             if is_line_break(scalars[index]) {
                 line_end = index;
                 apostrophe = None;
@@ -671,7 +697,7 @@ impl Lines {
             end[index] = line_end;
             last_apostrophe[index] = apostrophe;
         }
-        Self { end, last_apostrophe }
+        Self { end, last_apostrophe, word_end }
     }
 }
 
@@ -710,13 +736,21 @@ fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize
     }
     for key in SECRET_KEYS {
         let after_key = at + key.len();
-        if !matches_ascii_word(scalars, at, key)
-            || scalars
+        if !matches_ascii_word(scalars, at, key) {
+            continue;
+        }
+        // Right boundary: the keyword ends the word, or a camelCase suffix
+        // follows it (`accessTokenValue`, `passwordHash`), which is skipped.
+        let suffix = scalars.get(after_key).is_some_and(char::is_ascii_uppercase)
+            && scalars[after_key - 1].is_ascii_lowercase();
+        if !suffix
+            && scalars
                 .get(after_key)
                 .is_some_and(|next| next.is_ascii_alphanumeric() || *next == '_')
         {
             continue;
         }
+        let after_key = if suffix { lines.word_end[after_key] } else { after_key };
         // A quoted key ends with its quote, which an outer string may have
         // escaped: `"password":`, `\"password\":`, `("authorization", …)`.
         let mut next = after_key;
@@ -738,7 +772,7 @@ fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize
         };
         if separator > 0 {
             next = find_from(scalars, next + separator, |scalar| !scalar.is_whitespace());
-        } else if quoted_key || next == gap || !matches!(key, "authorization" | "bearer") {
+        } else if suffix || quoted_key || next == gap || !matches!(key, "authorization" | "bearer") {
             continue;
         }
         let (start, end) = secret_value(scalars, lines, next, key);
@@ -1022,7 +1056,10 @@ fn redact_emails(scalars: &[char]) -> Vec<char> {
         let mut labels = scalars[at + 1..end].split(|scalar| *scalar == '.');
         let last = labels.next_back().unwrap_or_default();
         let dotted = labels.clone().next().is_some() && labels.all(|label| !label.is_empty());
-        if start == at || !dotted || last.len() < 2 || !last.iter().all(char::is_ascii_alphabetic) {
+        // The last label is letters, or a punycode label (`xn--p1ai`).
+        let top_level = (last.len() >= 2 && last.iter().all(char::is_ascii_alphabetic))
+            || (last.len() > 4 && matches_ascii_word(last, 0, "xn--"));
+        if start == at || !dotted || !top_level {
             at += 1;
             continue;
         }
@@ -1187,7 +1224,7 @@ mod tests {
         }
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../tests/fixtures/crash-redaction-cases.json")).unwrap();
-        assert!(cases.len() >= 215, "the shared fixture lost cases: {}", cases.len());
+        assert!(cases.len() >= 228, "the shared fixture lost cases: {}", cases.len());
         let differing: Vec<String> = cases
             .iter()
             .filter_map(|case| {
@@ -1320,7 +1357,7 @@ mod tests {
                 .unwrap()
         };
         for unit in [
-            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ", "a@b-", "a.b@",
+            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ", "a@b-", "a.b@", "Pin", "~a",
         ] {
             let small = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS));
             let large = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS * 4));

@@ -5023,8 +5023,8 @@ async fn unreadable_book_record_does_not_block_startup_or_snapshot() {
         .unwrap();
     assert_eq!(snapshot["books"].as_array().unwrap().len(), 1);
     assert_eq!(snapshot["activeSurface"], "library");
-    // Recoverable record skips stay out of the blocking migration band.
-    // The skipped record is preserved in a sibling copy, and the person is told where.
+    // The skipped record is preserved in a sibling copy, and the one notice
+    // (the store's current one, carried by the snapshot) names that copy.
     let warnings = snapshot["startupWarnings"].as_array().unwrap();
     assert_eq!(warnings.len(), 1);
     assert!(warnings[0].as_str().unwrap().contains("state.skipped-"));
@@ -6294,12 +6294,18 @@ async fn a_cancelled_monitored_import_is_retried_not_remembered_as_damaged() {
 }
 
 #[tokio::test]
-async fn a_cancelled_intake_stays_pending_and_keeps_its_copy() {
+async fn a_cancelled_intake_stays_pending_and_does_not_orphan_its_copy() {
     let profile = Profile::new();
     let service = Service::new(profile.0.clone(), false, false).unwrap();
-    let copy = profile.0.join("incoming/small.zim");
-    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
-    std::fs::copy(fixture(), &copy).unwrap();
+    // As `mobile_staging` lays it out: one fresh folder per native copy.
+    let staged = |name: &str| {
+        let attempt = profile.0.join("archives/mobile-imports-v1").join(Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&attempt).unwrap();
+        let copy = attempt.join(name);
+        std::fs::copy(fixture(), &copy).unwrap();
+        (attempt, copy)
+    };
+    let (attempt, copy) = staged("small.zim");
     // The app went to the background during verification.
     let cutover = ImportCutover::begin(service.as_ref());
     let result = service
@@ -6309,17 +6315,94 @@ async fn a_cancelled_intake_stays_pending_and_keeps_its_copy() {
     drop(cutover);
     assert!(result["books"].as_array().unwrap().is_empty(), "{result}");
     assert_eq!(result["errors"][0]["error"], crate::imports::IMPORT_CANCELLED);
-    assert!(copy.is_file());
+    // Nothing admitted, the request still pending (receipt unconsumed), and
+    // this attempt's full-size copy gone rather than orphaned.
     assert!(service.store.read().unwrap().books.is_empty());
     assert!(!service.store.acquisition_consumed("native-incoming:suspended").unwrap());
-    // Offered again in the foreground, the same copy is admitted.
+    assert!(!copy.exists());
+    assert!(!attempt.exists());
+    // Offered again in the foreground, the native side copies afresh.
+    let (_, retry) = staged("small.zim");
     let result = service
-        .admit_intake_batch(vec![copy.to_string_lossy().into_owned()], Some("native-incoming:suspended".into()), "main")
+        .admit_intake_batch(vec![retry.to_string_lossy().into_owned()], Some("native-incoming:suspended".into()), "main")
         .await
         .unwrap();
     assert_eq!(result["books"].as_array().unwrap().len(), 1, "{result}");
     assert!(service.store.acquisition_consumed("native-incoming:suspended").unwrap());
+    assert!(retry.is_file());
     service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_cancelled_staged_copy_is_removed_only_where_the_app_owns_it_exclusively() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let attempt = profile.0.join("archives/mobile-imports-v1").join(Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&attempt).unwrap();
+    // One picked copy was admitted, the other's verification was cancelled.
+    let admitted = attempt.join("admitted.zim");
+    let cancelled = attempt.join("cancelled.zim");
+    fixture_with_new_uuid(&admitted);
+    std::fs::copy(fixture(), &cancelled).unwrap();
+    service.import_paths(vec![admitted.to_string_lossy().into_owned()], false).unwrap();
+
+    let entered = hold_import_until_cancelled(&service);
+    let importing = tokio::spawn({
+        let service = service.clone();
+        let cancelled = cancelled.clone();
+        async move {
+            service.dispatch("import_archives", json!({"paths":[cancelled.to_string_lossy()]})).await
+        }
+    });
+    tokio::task::spawn_blocking(move || entered.recv_timeout(std::time::Duration::from_secs(10)).unwrap())
+        .await
+        .unwrap();
+    service.clone().dispatch("save_settings", json!({"settings":{"privateMode":true}})).await.unwrap();
+    let result = importing.await.unwrap().unwrap();
+    assert_eq!(result["errors"][0]["error"], crate::imports::IMPORT_CANCELLED);
+    assert!(!cancelled.exists(), "the cancelled copy was orphaned");
+    // The admitted neighbour, and so the attempt folder, stay.
+    assert!(admitted.is_file());
+    assert!(attempt.is_dir());
+    *service.import_hook.lock().unwrap() = None;
+    service.clone().dispatch("save_settings", json!({"settings":{"privateMode":false}})).await.unwrap();
+
+    // Never a file an entry points at, never one outside the staging folders.
+    service.discard_cancelled_staged_copy(admitted.to_str().unwrap());
+    assert!(admitted.is_file());
+    let library = profile.0.join("library");
+    std::fs::create_dir_all(&library).unwrap();
+    let outside = library.join("outside.zim");
+    std::fs::copy(fixture(), &outside).unwrap();
+    service.discard_cancelled_staged_copy(outside.to_str().unwrap());
+    assert!(outside.is_file());
+    let foreign = profile.0.join("archives/mobile-imports-v1/not-a-uuid");
+    std::fs::create_dir_all(&foreign).unwrap();
+    std::fs::copy(fixture(), foreign.join("x.zim")).unwrap();
+    service.discard_cancelled_staged_copy(foreign.join("x.zim").to_str().unwrap());
+    assert!(foreign.join("x.zim").is_file());
+    service.shutdown().await.unwrap();
+}
+
+#[test]
+fn overlapping_cutovers_keep_imports_cancelled_until_the_last_one_ends() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let before = service.import_cancellation().unwrap();
+    let settings = ImportCutover::begin(service.as_ref());
+    let background = ImportCutover::begin(service.as_ref());
+    assert!(before.is_cancelled());
+    drop(settings);
+    // The background retirement still waits for its writer.
+    assert!(service.import_cancellation().unwrap().is_cancelled());
+    drop(background);
+    assert!(!service.import_cancellation().unwrap().is_cancelled());
+    // Quit's cancellation outlasts any cutover.
+    let late = ImportCutover::begin(service.as_ref());
+    service.stopping.store(true, Ordering::SeqCst);
+    service.cancel_imports();
+    drop(late);
+    assert!(service.import_cancellation().unwrap().is_cancelled());
 }
 
 #[tokio::test]
@@ -6422,6 +6505,10 @@ async fn a_privacy_switch_cancels_a_running_import_and_later_imports_still_work(
     service.clone().dispatch("save_settings", json!({"settings":{"privateMode":false}})).await.unwrap();
     let imported = service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
     assert_eq!(imported["books"].as_array().unwrap().len(), 1, "{imported}");
+    // Added again, so the advice to add it again is withdrawn.
+    let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+    assert!(!snapshot["startupWarnings"].as_array().unwrap().iter()
+        .any(|warning| warning == crate::imports::IMPORT_CANCELLED), "{snapshot}");
     service.shutdown().await.unwrap();
 }
 

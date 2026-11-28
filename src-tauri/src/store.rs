@@ -1426,6 +1426,7 @@ pub struct Store {
     load_warnings: Vec<String>,
     /// The one startup notice for a load that skipped records: where the
     /// original bytes were kept, or why they could not be.
+    #[cfg_attr(not(test), allow(dead_code))]
     load_notice: Option<String>,
     #[cfg(desktop)]
     portable_paths: Option<crate::portable::PortablePaths>,
@@ -2446,6 +2447,7 @@ impl Store {
 
     /// The startup notice for records skipped while opening the profile,
     /// naming the preserved copy of the original. `None` when nothing was skipped.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn load_notice(&self) -> Option<&str> {
         self.load_notice.as_deref()
     }
@@ -2453,9 +2455,7 @@ impl Store {
     /// The skipped-records notice as it stands now. It differs from
     /// `load_notice` once leaving read-only mode has kept the copy that the
     /// read-only notice asked the person to make, and then names that copy.
-    // The shell reads `load_notice` until the service lane switches its
-    // startup band to this accessor (see the desktop-lane handoff).
-    #[cfg_attr(not(test), allow(dead_code))]
+    // The snapshot's startup notices read this one, not `load_notice`.
     pub(crate) fn current_load_notice(&self) -> Result<Option<String>, String> {
         Ok(self.lock()?.notice.clone())
     }

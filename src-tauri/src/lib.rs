@@ -844,6 +844,7 @@ fn ask_after_failed_quit(
             .webview_windows()
             .keys()
             .any(|label| quit::shell_label(label));
+        let delay = quit::failed_quit_retry_delay(&answer, shell_window_remains, unshown);
         let action = quit::settle_failed_quit(
             answer,
             shell_window_remains,
@@ -851,17 +852,18 @@ fn ask_after_failed_quit(
         );
         match action {
             quit::FailedQuitAction::Retry => {
-                let delay = quit::unshown_dialog_retry_delay(unshown);
                 if delay.is_zero() {
                     flags.exiting.store(false, Ordering::SeqCst);
                     app.exit(code.unwrap_or(0));
                 } else {
-                    // No window and no dialog: keep trying, slowly, and never
+                    // No window, or no dialog: keep trying, slowly, and never
                     // give up unsaved state without being told to.
-                    eprintln!(
-                        "Application Quit: its question could not be shown ({unshown} in a row). Nothing was discarded; trying Quit again in {} s. Cause: {error}",
-                        delay.as_secs()
-                    );
+                    if unshown > 0 {
+                        eprintln!(
+                            "Application Quit: its question could not be shown ({unshown} in a row). Nothing was discarded; trying Quit again in {} s. Cause: {error}",
+                            delay.as_secs()
+                        );
+                    }
                     tauri::async_runtime::spawn(async move {
                         tokio::time::sleep(delay).await;
                         flags.exiting.store(false, Ordering::SeqCst);

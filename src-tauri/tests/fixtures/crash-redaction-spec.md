@@ -30,7 +30,7 @@ Nothing else is whitespace. `U+001C`–`U+001F` and `U+200B` are not. Do not use
 
 **Placeholders.** `[redacted]`, `[url]`, `[reader-url]`, `[email]`, `[path]`.
 
-**Linear time.** Each step must take time proportional to the length of its input, whatever the input. In particular, never rescan to the end of the line or of the text once per candidate: compute line ends once, and make every forward scan cover only text that the match then consumes.
+**Linear time.** Each step must take time proportional to the length of its input, whatever the input. In particular, never rescan to the end of the line or of the text once per candidate: compute line ends (and, for the camelCase suffix of step 2, the end of each run of ASCII letters, digits and `_`) once, and make every other forward scan cover only text that the match then consumes.
 
 ### 1.1 `path_end(start)`
 
@@ -60,20 +60,22 @@ Scan from left to right. At each position `p`, look for a keyword that starts th
 
 **Keywords**, tried in this order:
 
-`authorization`, `access_token`, `refresh_token`, `api_key`, `api-key`, `apikey`, `password`, `passwd`, `passphrase`, `pass`, `pwd`, `private_key`, `private-key`, `privatekey`, `client_secret`, `secret`, `session_id`, `sessionid`, `jsessionid`, `credentials`, `credential`, `signature`, `cookie`, `bearer`, `token`, `auth`, `pin`.
+`authorization`, `access_token`, `refresh_token`, `api_key`, `api-key`, `apikey`, `password`, `passwd`, `passphrase`, `pass`, `pwd`, `private_key`, `private-key`, `privatekey`, `client_secret`, `secret_access_key`, `secret_key`, `secret-key`, `secretkey`, `access_key`, `access-key`, `accesskey`, `secret`, `session_id`, `sessionid`, `jsessionid`, `credentials`, `credential`, `signature`, `cookie`, `bearer`, `token`, `auth`, `pin`.
 
 A keyword matches at `p` when all of these hold:
 
 1. The scalars at `p` equal the keyword, ignoring ASCII case.
 2. Left side: `p` is the start of the text; or the scalar before `p` is not an ASCII letter or digit; or the scalar at `p` is an ASCII uppercase letter and the scalar before it is an ASCII lowercase letter or an ASCII digit (a camelCase hump: `accessToken`, `oauth2Token`).
-3. Right side: the scalar after the keyword is not an ASCII letter, an ASCII digit or `_`.
-4. What follows the keyword is, in order:
+3. Right side, one of:
+   - the scalar after the keyword is not an ASCII letter, an ASCII digit or `_` (or the text ends there); or
+   - a **camelCase suffix** follows: the scalar after the keyword is an ASCII uppercase letter and the keyword's last scalar, as written in the text, is an ASCII lowercase letter (`accessTokenValue`, `passwordHash`). The suffix is that letter and every ASCII letter, ASCII digit and `_` after it. It is skipped, and item 4 starts after it.
+4. What follows the keyword (or its suffix) is, in order:
    1. optionally the closing quote of a quoted key: `"` or `'`, or one `\` followed by `"` or `'`;
    2. any number of whitespace scalars;
    3. a **separator**: `=>`; or `=`; or `:` that is not followed by another `:`; or `,`, but only if the key was quoted (4.1) or the keyword is `authorization`;
    4. any number of whitespace scalars.
 
-   Without a separator there is still a match if the keyword is `authorization` or `bearer`, the key was not quoted, and at least one whitespace scalar was skipped in 4.2.
+   Without a separator there is still a match if the keyword is `authorization` or `bearer`, it has no camelCase suffix, the key was not quoted, and at least one whitespace scalar was skipped in 4.2.
 5. The **value**, which begins at the position `v` reached in 4, is not empty.
 
 The first keyword in the list that matches wins. If none does, copy the scalar at `p` and go on at `p + 1`.
@@ -133,7 +135,7 @@ Nothing else of a kept URL survives. Its path, query and fragment are always dro
 Scan from left to right for `@`. A `@` inside a range that this step already replaced is skipped.
 
 - **Local part.** The longest run of ASCII letters, ASCII digits, `.`, `_`, `%`, `+` and `-` that ends directly before the `@`. It must not reach back into a range this step already replaced. It must not be empty.
-- **Host.** The longest run of ASCII letters, ASCII digits, `.` and `-` that starts directly after the `@`, with every `.` and `-` at its very end removed (those are sentence punctuation and stay in the text). Split it at `.`: there must be at least two labels, none empty, and the last label must be at least two scalars long and made of ASCII letters only.
+- **Host.** The longest run of ASCII letters, ASCII digits, `.` and `-` that starts directly after the `@`, with every `.` and `-` at its very end removed (those are sentence punctuation and stay in the text). Split it at `.`: there must be at least two labels, none empty, and the last label must be either at least two scalars long and made of ASCII letters only, or longer than four scalars and start with `xn--` (ignoring ASCII case; a punycode label such as `xn--p1ai`).
 
 If both hold, replace from the start of the local part to the end of the host with `[email]` and go on there. Otherwise go on after the `@`.
 
@@ -150,11 +152,11 @@ Scan from left to right. A path starts at index `i` when the boundary rule and o
 **Start shapes.**
 - Drive: an ASCII letter, then `:`, then `\` or `/`.
 - Absolute: `/` followed by a scalar that is neither `/` nor whitespace.
-- Home: `~` followed by `/` or `\`.
+- Home: `~`, then any number (possibly none) of ASCII letters, ASCII digits, `.`, `_` and `-`, then `/` or `\` (`~/…`, `~jane/…`).
 - Share: `\\`; or `//` followed by a scalar that is neither `/` nor whitespace.
 - Rooted: `\` followed by an ASCII letter or digit, where another `\` occurs after it and before the next whitespace scalar or the end of the text.
 
-**Exception.** Neither `/` of a `://` starts a path. (That is the kept `scheme://host` from step 3.)
+**Exception.** Neither `/` of a `://` starts a path when the scalar directly before that `:` is an ASCII letter. (That is the kept `scheme://host` from step 3. Without a letter there, as in `1://home/…` or ` ://Users/…`, step 3 kept nothing and the first `/` starts a share-shaped path.)
 
 Replace from `i` to `path_end(i)` with `[path]` and go on at that end. Otherwise copy the scalar and go on at `i + 1`.
 
@@ -186,10 +188,12 @@ Stack frames are formatted differently on each platform, so their handling is pe
 These are known and accepted. They are not in the vectors as expected output.
 
 - A file or folder name that contains `: `, `<`, `>`, `` ` `` or an unescaped `"`: redaction stops there, and the rest of the path stays.
-- A path that does not start with one of the start shapes: `My Books/a.zim`, `%USERPROFILE%\Jane Doe`.
+- A path that does not start with one of the start shapes: `My Books/a.zim`, `%USERPROFILE%\Jane Doe`. That includes a rooted Windows path whose first component contains a space (`\Program Files\Kiwix\a.zim`) and a drive-relative path (`D:Users\Jane Doe`).
+- The host of an external `http` or `https` URL. It is kept on purpose, and it can itself be personal: `https://jane-doe.github.io/a` becomes `https://jane-doe.github.io`, and `https://jane-private-medical.s3.amazonaws.com/x` becomes `https://jane-private-medical.s3.amazonaws.com`.
+- What follows the `:` of an address-shaped remote: `git@github.com:janedoe/private-notes.git` becomes `[email]:janedoe/private-notes.git`, which still names the account and the repository.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
 - A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator).
-- An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`).
+- An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`), or whose local part is quoted (`"jane doe"@example.org`).
 
 ## 5. What it removes that was harmless
 
@@ -198,5 +202,5 @@ Also known and accepted.
 - The words after a path, a `file:` URL, a placeholder URL or a URL with a path, up to the next stop of `path_end`.
 - A `/` after punctuation or a non-ASCII letter starts a path: `+/- 5` becomes `+[path]`, `café/menu` becomes `café[path]`, `</p>` becomes `<[path]>`. A `/` after an ASCII letter or digit does not: `and/or`, `1/2`, `I/O` stay.
 - Several escape sequences in a row look like a rooted path: `\d+\.\d+` becomes `[path]`.
-- A word after `pass:`, `auth:`, `pin:`, `signature:` and the other keywords, even in prose.
-- Anything shaped like an address: `git@github.com:org/repo.git` becomes `[email]:org/repo.git`.
+- A word after `pass:`, `auth:`, `pin:`, `signature:` and the other keywords, even in prose. With the camelCase suffix this includes type and field names: `TokenStream: empty` becomes `TokenStream: [redacted]`.
+- A `~` directly before a number or a word with a `/` after it looks like a home path: `~5/10 done` becomes `[path]`.

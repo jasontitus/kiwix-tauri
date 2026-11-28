@@ -798,18 +798,17 @@ impl Service {
         // A quarantined state file is a user-visible notice: the profile is
         // empty until the original is restored. Other skipped records stay in
         // Troubleshooting only.
-        let mut startup_warnings: Vec<String> = load_warnings.iter()
+        let startup_warnings: Vec<String> = load_warnings.iter()
             .filter(|warning| *warning == crate::mobile_rebase::STATE_QUARANTINED)
             .cloned()
             .collect();
         #[cfg(not(mobile))]
-        let mut startup_warnings: Vec<String> = Vec::new();
-        // The individual skips stay content-free in Troubleshooting; this one
-        // notice says where the original was kept before anything saved over it.
-        startup_warnings.extend(store.load_notice().map(str::to_owned));
+        let startup_warnings: Vec<String> = Vec::new();
         if !load_warnings.is_empty() {
-            // Recoverable record skips are recorded in Troubleshooting only.
-            // They must not paint the blocking migration band on every launch.
+            // Each skipped record is logged here without its content. The
+            // profile keeps a copy of the original, and the snapshot carries
+            // the store's current notice naming that copy (see "snapshot"),
+            // not the blocking migration band.
             crate::diagnostics::record(
                 &store,
                 "application_operation",
@@ -992,6 +991,13 @@ impl Service {
                 warnings.remove(0);
             }
             warnings.push(message);
+        }
+    }
+
+    /// Withdraw a notice that no longer applies.
+    fn forget_startup_warning(&self, message: &str) {
+        if let Ok(mut warnings) = self.startup_warnings.lock() {
+            warnings.retain(|warning| warning != message);
         }
     }
 
@@ -1785,7 +1791,8 @@ impl Service {
     }
     /// Stop every manual and monitored verification now. Readers of the
     /// privacy lease finish promptly, so a writer queued next is not held for
-    /// a whole-archive checksum.
+    /// a whole-archive checksum. (Quit's; Android has no terminal shutdown.)
+    #[cfg(any(desktop, target_os = "ios", test))]
     fn cancel_imports(&self) {
         self.import_cancel.lock().unwrap_or_else(|error| error.into_inner()).token.cancel();
     }
@@ -1864,9 +1871,19 @@ impl Service {
                     if error == crate::imports::IMPORT_CANCELLED && !self.stopping.load(Ordering::SeqCst) {
                         self.note_startup_warning(error.clone());
                     }
+                    // Its staged copy is not kept for a retry, which copies again.
+                    #[cfg(any(mobile, test))]
+                    if error == crate::imports::IMPORT_CANCELLED {
+                        self.discard_cancelled_staged_copy(&path);
+                    }
                     errors.push(json!({"path":path,"error":error}));
                 }
             }
+        }
+        // Once an import has gone through again, "Add the archive again" is
+        // no longer advice anyone needs.
+        if !books.is_empty() && !errors.iter().any(|error| error["error"] == crate::imports::IMPORT_CANCELLED) {
+            self.forget_startup_warning(crate::imports::IMPORT_CANCELLED);
         }
         #[cfg(mobile)]
         if !books.is_empty() { self.mobile_apply_archive_backup()?; }
@@ -2054,11 +2071,22 @@ impl Service {
                 // (else this may be the directory under an unmounted volume).
                 if let Some(parent) = path.parent() {
                     let device = watched_directory_device(parent);
-                    let missing = self.store.read()?.books.iter().any(|book| {
-                        book.source_reference.is_none()
-                            && crate::watch::is_direct_child(Path::new(&book.path), parent)
-                            && !Path::new(&book.path).exists()
-                    });
+                    let recorded = self.watched_devices.lock().ok()
+                        .and_then(|devices| devices.get(parent).copied());
+                    // Already on the noted device, or no devices (Windows):
+                    // the answer does not depend on missing books, so skip the
+                    // profile read and the stats.
+                    let missing = if !cfg!(unix) || (device.is_some() && recorded == device) {
+                        false
+                    } else {
+                        let service = self.clone();
+                        let directory = parent.to_path_buf();
+                        blocking(move || Ok(service.store.read()?.books.iter().any(|book| {
+                            book.source_reference.is_none()
+                                && crate::watch::is_direct_child(Path::new(&book.path), &directory)
+                                && !Path::new(&book.path).exists()
+                        }))).await?
+                    };
                     if self.watched_folder_evidence(parent, device, true, missing).0 {
                         self.remember_watched_device(parent, device);
                     }
@@ -2478,6 +2506,18 @@ impl Service {
             if errors.is_empty() && cancel.is_cancelled() {
                 errors.extend(books.iter().map(|book| json!({"path":book.path,"error":crate::imports::IMPORT_CANCELLED})));
             }
+            // Cancelled (the app went to the background, Quit, a privacy
+            // switch): nothing of this attempt was admitted or relinked, and
+            // the request stays pending, so a retry copies afresh. This
+            // attempt's copies would otherwise be orphaned at full size.
+            if errors.iter().any(|error| error["error"] == crate::imports::IMPORT_CANCELLED) {
+                let staged = errors.iter().filter_map(|error| error["path"].as_str().map(str::to_owned))
+                    .chain(books.iter().map(|book| book.path.clone()))
+                    .collect::<HashSet<_>>();
+                for path in staged {
+                    service.discard_cancelled_staged_copy(&path);
+                }
+            }
             if !errors.is_empty() {
                 return Ok(Err(errors));
             }
@@ -2521,6 +2561,41 @@ impl Service {
             }
             Ok(json!({"books":books.iter().map(Book::shell_value).collect::<Vec<_>>(),"errors":[]}))
         }).await
+    }
+    /// Remove the staged copy of one archive whose verification was cancelled,
+    /// and then its attempt folder if that is now empty. Only a copy inside
+    /// this app's own `archives/mobile-imports-v1/<uuid>/` is touched, never
+    /// one a library entry points at, and only the exact files of that
+    /// archive (`remove_duplicate_intake_copy` proves the cohort and its
+    /// identity). Anything that cannot be proved stays. Off the async runtime.
+    #[cfg(any(mobile, test))]
+    fn discard_cancelled_staged_copy(&self, path: &str) {
+        let Ok(path) = std::fs::canonicalize(path) else { return };
+        let Some(attempt) = path.parent() else { return };
+        let owned_attempt = attempt.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+            Uuid::parse_str(name).is_ok_and(|id| id.to_string() == name)
+        });
+        let staging = std::fs::canonicalize(self.store.data_dir().join("archives").join("mobile-imports-v1"));
+        if !owned_attempt || staging.ok().as_deref() != attempt.parent() {
+            return;
+        }
+        let Ok(state) = self.store.read() else { return };
+        if state.books.iter().any(|book| Path::new(&book.path) == path) {
+            return;
+        }
+        drop(state);
+        let Some(text) = path.to_str() else { return };
+        let uuid = match Archive::open(&path).and_then(|archive| archive.metadata()) {
+            Ok(metadata) => metadata.id,
+            Err(_) => return,
+        };
+        if let Err(error) = crate::library_files::remove_duplicate_intake_copy(text, &uuid) {
+            eprintln!("Kiwix import: removing a cancelled staged copy failed: {error}");
+            return;
+        }
+        // `remove_dir` removes only an empty directory: other copies of the
+        // same attempt (an admitted one, say) keep it in place.
+        let _ = std::fs::remove_dir(attempt);
     }
     /// Intake copies whose existing entry for the same archive cannot be
     /// opened any more (a removed card, a revoked provider grant, a file gone
