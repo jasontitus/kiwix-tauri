@@ -18,7 +18,7 @@ Native Windows 10/11 x64 only. WSL and Wine are not substitutes.
 - Evergreen WebView2 runtime.
 - Verified schema-2 Windows libzim **9.8.2** SDK at commit `26ec526f74e8342a40da5ab14e364546988e0e1a`, Xapian enabled, with `kiwix-split-ranges-v1` and `kiwix-retained-fd-v1` patches, all DLLs/headers/import lib and `kiwix-sdk.json` SHA-256 manifest.
 
-`docs/PACKAGING.md` owns the SDK manifest contract. Do not invent hashes or relax `src-tauri/native/desktop_sdk.rs`.
+This manifest contract was checked at build time by `src-tauri/native/desktop_sdk.rs`, which was removed once the app stopped linking libzim. No current app build step or workflow reads or verifies a Windows libzim SDK or its `kiwix-sdk.json`; `docs/windows-agent-tools/assemble-sdk.py` writes one for the native comparison tools only. Do not invent hashes.
 
 If the machine lacks the SDK, stop after the compile-only gate and report the exact missing prerequisite; do not substitute stock libzim.
 

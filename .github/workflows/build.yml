@@ -100,7 +100,7 @@ jobs:
           else
             npm run tauri -- build --bundles appimage
           fi
-      - name: Check packaged libraries and GeoClue desktop identity
+      - name: Check packaged libraries and desktop identity
         if: github.event_name != 'push'
         run: |
           for image in src-tauri/target/release/bundle/appimage/*.AppImage; do
@@ -112,7 +112,7 @@ jobs:
             node scripts/check-archive-libraries.mjs "$extracted/squashfs-root" --elf
             desktop="$extracted/squashfs-root/usr/share/applications/org.kiwix.workbench.desktop"
             if [ ! -f "$desktop" ]; then
-              printf '%s\n' 'Missing org.kiwix.workbench.desktop: Linux launcher basename must match the GeoClue runtime identifier.' >&2
+              printf '%s\n' 'Missing org.kiwix.workbench.desktop: Linux launcher basename must match the application identifier org.kiwix.workbench.' >&2
               exit 1
             fi
           done

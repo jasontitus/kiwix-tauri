@@ -62,12 +62,12 @@ The build needs an MSVC build of **libzim 9.8.2 at commit `26ec526f74e8342a40da5
 - all transitive DLLs (zstd, xz/lzma, ICU, Xapian, and so on);
 - a schema-2 `kiwix-sdk.json` manifest.
 
-The exact manifest contract is in `docs/PACKAGING.md`, section "Guarded Windows prerequisite and build". `src-tauri/native/desktop_sdk.rs` enforces it at build time. **There is no script for this in the repository.**
+No current document or build step defines or enforces this manifest: the app no longer links libzim, and `src-tauri/native/desktop_sdk.rs`, which checked it at build time, has been removed. `docs/windows-agent-tools/build-sdk.ps1` and `assemble-sdk.py` build and describe such an SDK for the native comparison tools only (see `docs/WINDOWS-TEST-REPORT.md`).
 
 - **If the machine already has such an SDK:** set `LIBZIM_SDK_ROOT` to it and continue.
 - **If not:** building one is the expensive, uncertain step. Expect hours: meson plus MSVC, and libzim's dependencies.
   - For a **local test build only**, it is fine to build it yourself. Write the manifest from SHA-256 hashes of the files you actually installed, and say in your report that it is self-built and not release provenance.
-  - Never invent hashes, and never relax the checks in `desktop_sdk.rs`.
+  - Never invent hashes.
   - If this would take more than a reasonable effort, **stop after Phase 1 and report back**. Phase 1 is still valuable on its own.
 
 ## Phase 3: Rust tests on Windows (needs the SDK)

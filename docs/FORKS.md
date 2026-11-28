@@ -27,7 +27,7 @@ Surveyed 2026-11-05 against libzim `main` at ad888b4 (2026-10-19, after 9.8.2), 
 
 ## libzim (C++)
 
-The app links a pinned libzim 9.8.2 built with five patches (`src-tauri/native/libzim-*.patch`). Every SDK applies split-ranges and retained-fd. Android also applies zstd-accounting and decoded-cluster-retirement, and ARMv7 also applies LP32 (`scripts/build-*-sdk.py`). POSIX SDKs add the Xapian patch; Windows does not.
+The app does not link libzim: it reads ZIM content with Zimru and searches embedded indexes with zimfile-xapian (`docs/PACKAGING.md`, `docs/DEPENDENCIES.md`). The five patches (`src-tauri/native/libzim-*.patch`) apply only to the pinned libzim 9.8.2 SDKs that the comparison and previous-release recipes build (`scripts/build-*-sdk.py`, `docs/windows-agent-tools/`). Every such SDK applies split-ranges and retained-fd. Android also applies zstd-accounting and decoded-cluster-retirement, and ARMv7 also applies LP32 (`scripts/build-*-sdk.py`). POSIX SDKs add the Xapian patch; Windows does not.
 
 ### retained-fd: opening archives from file descriptors
 
