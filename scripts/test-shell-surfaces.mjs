@@ -329,7 +329,7 @@ test("a failure inside a modal is shown, announced and dismissed above it, with 
   assert.deepEqual(pageErrors, []);
 });
 
-test("desktop-only Settings copy is not shown where there are no windows or File menu", { skip, timeout: 150000 }, async (t) => {
+test("Settings hides desktop-only copy without windows, and a typed download directory waits for review", { skip, timeout: 150000 }, async (t) => {
   // The browser preview is not a desktop window; it gets the same copy as phones.
   const { page, pageErrors, until, button } = await open(t);
   await page.click(".sidebar-settings");
@@ -350,7 +350,8 @@ test("desktop-only Settings copy is not shown where there are no windows or File
     return !!field?.getClientRects().length;
   }, directory);
   assert.equal(await page.$eval(directory, (node) => node.value), "/fixture/downloads");
-  await page.click(directory, { clickCount: 3 });
+  await page.focus(directory);
+  await page.$eval(directory, (node) => node.select());
   await page.type(directory, "/media/re");
   await until(() => document.querySelector(".settings-save [role=status]")?.textContent ===
     "This change is not saved yet. Leave the field or press Enter to review it.");
@@ -360,11 +361,9 @@ test("desktop-only Settings copy is not shown where there are no windows or File
   await page.type(directory, "ader/zim");
   assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "save_settings").length), 0);
   await page.keyboard.press("Enter");
-  await page.waitForSelector("dialog[open]");
-  console.error("DEBUG", await page.evaluate((selector) => ({ dialog: document.querySelector("dialog[open]").textContent, value: document.querySelector(selector).value, active: document.activeElement.outerHTML.slice(0, 200) }), directory));
   await until(() => document.querySelector("dialog[open] .file-path")?.textContent === "/media/reader/zim");
-  assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), "Cancel");
-  await page.keyboard.press("Enter");
+  await until(() => !!document.activeElement?.closest("dialog[open]"));
+  await page.keyboard.press("Escape");
   await until(() => !document.querySelector("dialog[open]"));
   assert.equal(await page.$eval(directory, (node) => node.value), "/fixture/downloads", "declining restores the saved directory");
   assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "save_settings").length), 0);

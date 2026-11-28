@@ -1455,11 +1455,14 @@ mod tests {
         assert_eq!(fs::read(&original_path).unwrap(), saved);
         fs::remove_file(&original_path).unwrap();
         fs::rename(library.join("aside.zim"), &original_path).unwrap();
-        // Renaming changed the inode's change time, so recorded and current
-        // identity now differ for good: the person deletes such a file, and
-        // the command then only closes the transaction.
-        assert!(discard(&transaction.id).await.unwrap_err().contains("changed since this update"));
-        assert!(original_path.exists());
+        // On Unix the rename moved the inode's change time, so the recorded
+        // and current identity now differ for good: the person deletes such a
+        // file, and the command then only closes the transaction.
+        #[cfg(unix)]
+        {
+            assert!(discard(&transaction.id).await.unwrap_err().contains("changed since this update"));
+            assert!(original_path.exists());
+        }
 
         // The ordinary case, on a second untouched transaction.
         let (second_original, second_replacement, second) = commit("second");

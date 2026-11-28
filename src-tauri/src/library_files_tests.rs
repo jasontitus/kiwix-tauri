@@ -1448,8 +1448,8 @@ fn recovery_drops_the_journal_of_a_book_that_left_the_library_and_names_it_once(
     let errors = result["errors"].as_array().unwrap();
     assert_eq!(errors.len(), 1, "{result}");
     assert_eq!(errors[0]["title"], book.metadata.title);
-    assert_eq!(errors[0]["from"], source.0.to_string_lossy().as_ref());
-    assert_eq!(errors[0]["to"], target.0.to_string_lossy().as_ref());
+    assert_eq!(errors[0]["from"], crate::storage::display_path(&source.0));
+    assert_eq!(errors[0]["to"], crate::storage::display_path(&target.0));
     assert!(errors[0]["error"].as_str().unwrap().contains("no longer in the library"), "{result}");
     // Archive files are never removed for a book that is gone; only the
     // move's own unfinished copy is.
@@ -1475,8 +1475,8 @@ fn a_failed_recovery_names_the_archive_and_both_folders() {
     assert_eq!(errors.len(), 1, "{result}");
     assert_eq!(errors[0]["id"], format!("{}.json", journal.id));
     assert_eq!(errors[0]["title"], book.metadata.title);
-    assert_eq!(errors[0]["from"], source.0.to_string_lossy().as_ref());
-    assert_eq!(errors[0]["to"], target.0.to_string_lossy().as_ref());
+    assert_eq!(errors[0]["from"], crate::storage::display_path(&source.0));
+    assert_eq!(errors[0]["to"], crate::storage::display_path(&target.0));
     assert_eq!(std::fs::read(target.0.join("download.zimaa")).unwrap(), b"unrelated collision");
 }
 

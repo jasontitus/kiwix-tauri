@@ -56,6 +56,7 @@ import {
   createSearchRequest,
   getReaderPreferences,
   isDesktop,
+  isMacos,
   isMobile,
   isNative,
   isWindows,
@@ -7582,7 +7583,8 @@ export default function Reader(props: ReaderProps) {
                 ? t("< / > in app controls; ⌘ / Ctrl Shift , / . in article")
                 : t("< / > in app controls")],
               [t("Back / forward"), t("Alt ← / →")],
-              [t("Fullscreen"), t("F11")],
+              // macOS reserves F11 for Show Desktop; its menu uses Control-Command-F.
+              [t("Fullscreen"), isMacos ? t("⌃⌘F") : t("F11")],
               [t("Close panel or find"), t("Esc")],
             ].map(([label, key]) => (
               <div key={label}>
