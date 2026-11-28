@@ -43,8 +43,9 @@ export function MapTransferRate({ job }: { job: MapJob }) {
   );
 }
 
-/** Files Kiwix kept because it could not prove they were its own to delete.
- * Dismissing one removes only its warning; the file is never touched. */
+/** Files a Delete kept. Delete retries those it can prove are its own; the
+ * others are only reported. Dismissing one removes only its warning; the file
+ * is never touched. */
 export function MapRecoveryPaths({ job, disabled, onDismiss }: {
   job: MapJob;
   disabled: boolean;
@@ -56,7 +57,7 @@ export function MapRecoveryPaths({ job, disabled, onDismiss }: {
   return (
     <div className="map-recovery">
       <p className="muted" id={`${id}-note`}>
-        {t("Kiwix kept these files because it could not prove they were its own to delete. Remove them yourself if you no longer need them. Dismissing a warning never deletes the file.")}
+        {t("Kiwix kept these files. Press Delete again to retry the ones it can prove are its own; remove any others yourself, then dismiss this warning.")}
       </p>
       <ul>
         {paths.map((path, index) => (

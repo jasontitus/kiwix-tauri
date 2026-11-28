@@ -294,3 +294,52 @@ test("a spelling correction keeps focus on the query on desktop and moves it to 
     assert.deepEqual(focused, mobile ? ["results"] : ["input"], mobile ? "no soft keyboard over the results" : "desktop");
   }
 });
+
+// `errorText` as shipped, with the module-level parts it uses, on iOS.
+async function iosErrorText() {
+  const parts = ["filesystemRoot", "quotedFilesystemPath", "bareFilesystemPath", "NATIVE_CODE", "nativeCodeOnly",
+    "nativeCodeForms", "nearbyCodeFamily", "senderVerificationFailure", "nearbyCodeText", "nativeCodeText", "errorText"];
+  const path = new URL("../src/components/UI.tsx", import.meta.url);
+  const tree = ts.createSourceFile("UI.tsx", await readFile(path, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = new Map();
+  for (const statement of tree.statements) {
+    const names = ts.isFunctionDeclaration(statement) ? [statement.name?.text]
+      : ts.isVariableStatement(statement) ? statement.declarationList.declarations.map((item) => item.name.getText(tree)) : [];
+    for (const name of names) if (parts.includes(name)) found.set(name, statement.getText(tree).replace(/^export /, ""));
+  }
+  for (const name of parts) assert.ok(found.has(name), `errorText part ${name} exists`);
+  const context = vm.createContext({
+    Error, isIOS: true, isSuspendedError: () => false, isUserCancelledError: () => false,
+    t: (text, values = {}) => text.replace(/\{(\w+)\}/g, (_, key) => String(values[key])),
+  });
+  vm.runInContext(ts.transpileModule(`${[...new Set(found.values())].join("\n")}\nglobalThis.errorText = errorText;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, context);
+  return context.errorText;
+}
+
+test("on iOS a kept map file's path is hidden without swallowing the reason beside it", async () => {
+  const errorText = await iosErrorText();
+  const root = "/private/var/mobile/Containers/Data/Application/0A1B/Documents/maps";
+  const reasons = [
+    // Current backend sentences (maps/partials.rs).
+    "Its folder is not available right now. Reconnect the drive that holds it, then press Delete again",
+    "It could not be removed just now; another program may be using it. Close anything that has it open, then press Delete again",
+    "Its folder was moved or replaced, so Kiwix left the file alone",
+    // Features round 4 wording.
+    "Its folder cannot be opened right now. If it is on a drive that is not connected, reconnect it and press Delete again. If the folder is gone, dismiss this warning.",
+    "It could not be removed just now. Press Delete again; if it keeps failing, free some space or close programs using that folder.",
+  ];
+  for (const reason of reasons) {
+    const warning = `Some earlier map downloads could not be cleaned up. The files were kept here: ${root}/.streetzim-a.part (${reason}), ${root}/.streetzim-b.part`;
+    assert.equal(errorText(warning),
+      `Some earlier map downloads could not be cleaned up. The files were kept here: [File] (${reason}), [File]`);
+    const kept = `Kiwix could not remove a partial map download, so it was kept at ${root}/.streetzim-cleanup-1/.streetzim-a.part. ${reason}`;
+    assert.equal(errorText(kept), `Kiwix could not remove a partial map download, so it was kept at [File]. ${reason}`);
+  }
+  // The forms redaction already handled are unchanged.
+  assert.equal(errorText(`Could not open ${root}/a.zim: permission denied`), "Could not open [File]: permission denied");
+  assert.equal(errorText(`${root}/My Maps/a b.zim is missing`), "[File] is missing");
+  assert.equal(errorText(`Archive at ${root}/a.zim.`), "Archive at [File].");
+  assert.equal(errorText(`Saved to "${root}/a (1).zim" earlier`), "Saved to [File] earlier");
+});
