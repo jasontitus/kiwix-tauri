@@ -1814,138 +1814,141 @@ impl Service {
                 self.commit_ready_imports()?;
                 self.reconcile_completed_map().await?;
                 let _sources = self.localswarm_sources.lock().await;
-                let result = async {
-                    let service = self.clone();
-                    let flipped = blocking(move || {
-                        // A security-scoped folder whose volume came back is usable
-                        // again before its books are judged missing.
-                        crate::sandbox::revive();
-                        let state = service.store.read()?;
-                        let availability: HashMap<_, _> = state
-                            .books
-                            .iter()
-                            .map(|book| {
-                                let available = if book.source_reference.is_some() {
-                                    crate::archive_source::retain(book).is_ok()
-                                } else {
-                                    Path::new(&book.path).is_file()
-                                };
-                                (book.metadata.id.clone(), available)
-                            })
-                            .collect();
-                        let changed = state
-                            .books
-                            .iter()
-                            .any(|book| availability.get(&book.metadata.id) != Some(&book.available));
-                        if !changed {
-                            return Ok(Vec::new());
+                let service = self.clone();
+                let flipped = blocking(move || {
+                    // A security-scoped folder whose volume came back is usable
+                    // again before its books are judged missing.
+                    crate::sandbox::revive();
+                    let state = service.store.read()?;
+                    let availability: HashMap<_, _> = state
+                        .books
+                        .iter()
+                        .map(|book| {
+                            let available = if book.source_reference.is_some() {
+                                crate::archive_source::retain(book).is_ok()
+                            } else {
+                                Path::new(&book.path).is_file()
+                            };
+                            (book.metadata.id.clone(), available)
+                        })
+                        .collect();
+                    let changed = state
+                        .books
+                        .iter()
+                        .any(|book| availability.get(&book.metadata.id) != Some(&book.available));
+                    if !changed {
+                        return Ok(Vec::new());
+                    }
+                    let flipped = service.store.update(|state| {
+                        let mut flipped = Vec::new();
+                        for book in &mut state.books {
+                            if let Some(available) = availability.get(&book.metadata.id) {
+                                if book.available != *available {
+                                    flipped.push((book.metadata.id.clone(), book.installation_id.clone()));
+                                }
+                                book.available = *available;
+                            }
                         }
-                        let flipped = service.store.update(|state| {
-                            let mut flipped = Vec::new();
-                            for book in &mut state.books {
-                                if let Some(available) = availability.get(&book.metadata.id) {
-                                    if book.available != *available {
-                                        flipped.push((book.metadata.id.clone(), book.installation_id.clone()));
-                                    }
-                                    book.available = *available;
+                        Ok(flipped)
+                    })?;
+                    service.notify_library_changed();
+                    Ok(flipped)
+                }).await;
+                // A file that went away or came back is no longer the file the
+                // cached handle and its readers hold: a removed volume's
+                // descriptors can only fail, and a deleted file's space is
+                // released only when its last descriptor closes. The next open
+                // reopens through the identity check.
+                let mut released = Ok(());
+                if let Some(flipped) = flipped.as_ref().ok().filter(|flipped| !flipped.is_empty()) {
+                    let mut readers = self.readers.lock().await;
+                    for (id, installation) in flipped {
+                        if let Err(error) = retire_readers(&mut readers, Some(installation)).await {
+                            released = released.and(Err(error));
+                        }
+                        self.invalidate(id);
+                    }
+                }
+                let proceed = flipped.and(released);
+                let service = self.clone();
+                let result = blocking(move || {
+                    proceed?;
+                    let state = service.store.read()?;
+                    service.sweep_spelling_cache(&state);
+                    if state.settings.monitor_directories.is_empty() {
+                        return Ok(Value::Null);
+                    }
+                    let known: HashSet<_> = state
+                        .books
+                        .iter()
+                        .map(|book| {
+                            std::fs::canonicalize(&book.path)
+                                .map(|path| path.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| book.path.clone())
+                        })
+                        .collect();
+                    let mut paths = Vec::new();
+                    for directory in &state.settings.monitor_directories {
+                        service.store.validate_portable_directory(Path::new(directory))?;
+                        let entries = match std::fs::read_dir(directory) {
+                            Ok(entries) => entries,
+                            Err(error) if service.store.portable_mode() => return Err(format!("Cannot monitor portable data directory {directory}: {error}")),
+                            Err(_) => continue,
+                        };
+                        for entry in entries {
+                            let entry = entry
+                                .map_err(|error| format!("Reading monitored directory: {error}"))?;
+                            if !entry
+                                .file_type()
+                                .map_err(|error| error.to_string())?
+                                .is_file()
+                            {
+                                continue;
+                            }
+                            let path = entry.path();
+                            let extension = path
+                                .extension()
+                                .and_then(|extension| extension.to_str())
+                                .unwrap_or("");
+                            if !(extension.eq_ignore_ascii_case("zim")
+                                || (!service.store.portable_mode() && extension.eq_ignore_ascii_case("zimaa")))
+                            {
+                                continue;
+                            }
+                            let canonical = path
+                                .canonicalize()
+                                .map_err(|error| error.to_string())?;
+                            let path = canonical.to_string_lossy().into_owned();
+                            if known.contains(&path) {
+                                continue;
+                            }
+                            // Skip unchanged corrupt archives recorded by live watch or a
+                            // previous maintenance scan; do not apply watch::is_settled here
+                            // so fallback scans still pick up future-mtime clock-skewed files
+                            // and immediate maintenance commands.
+                            #[cfg(desktop)]
+                            {
+                                let failures = service
+                                    .watch_failures
+                                    .lock()
+                                    .unwrap_or_else(|error| error.into_inner());
+                                if failures.should_skip(&canonical) {
+                                    continue;
                                 }
                             }
-                            Ok(flipped)
-                        })?;
-                        service.notify_library_changed();
-                        Ok(flipped)
-                    }).await?;
-                    if !flipped.is_empty() {
-                        // A file that went away or came back is no longer the file
-                        // the cached handle and its readers hold: a removed volume's
-                        // descriptors can only fail, and a deleted file's space is
-                        // released only when its last descriptor closes. The next
-                        // open reopens through the identity check.
-                        let mut readers = self.readers.lock().await;
-                        for (id, installation) in &flipped {
-                            retire_readers(&mut readers, Some(installation)).await?;
-                            self.invalidate(id);
+                            paths.push(path);
                         }
                     }
-                    let service = self.clone();
-                    blocking(move || {
-                        let state = service.store.read()?;
-                        service.sweep_spelling_cache(&state);
-                        if state.settings.monitor_directories.is_empty() {
-                            return Ok(Value::Null);
-                        }
-                        let known: HashSet<_> = state
-                            .books
-                            .iter()
-                            .map(|book| {
-                                std::fs::canonicalize(&book.path)
-                                    .map(|path| path.to_string_lossy().into_owned())
-                                    .unwrap_or_else(|_| book.path.clone())
-                            })
-                            .collect();
-                        let mut paths = Vec::new();
-                        for directory in &state.settings.monitor_directories {
-                            service.store.validate_portable_directory(Path::new(directory))?;
-                            let entries = match std::fs::read_dir(directory) {
-                                Ok(entries) => entries,
-                                Err(error) if service.store.portable_mode() => return Err(format!("Cannot monitor portable data directory {directory}: {error}")),
-                                Err(_) => continue,
-                            };
-                            for entry in entries {
-                                let entry = entry
-                                    .map_err(|error| format!("Reading monitored directory: {error}"))?;
-                                if !entry
-                                    .file_type()
-                                    .map_err(|error| error.to_string())?
-                                    .is_file()
-                                {
-                                    continue;
-                                }
-                                let path = entry.path();
-                                let extension = path
-                                    .extension()
-                                    .and_then(|extension| extension.to_str())
-                                    .unwrap_or("");
-                                if !(extension.eq_ignore_ascii_case("zim")
-                                    || (!service.store.portable_mode() && extension.eq_ignore_ascii_case("zimaa")))
-                                {
-                                    continue;
-                                }
-                                let canonical = path
-                                    .canonicalize()
-                                    .map_err(|error| error.to_string())?;
-                                let path = canonical.to_string_lossy().into_owned();
-                                if known.contains(&path) {
-                                    continue;
-                                }
-                                // Skip unchanged corrupt archives recorded by live watch or a
-                                // previous maintenance scan; do not apply watch::is_settled here
-                                // so fallback scans still pick up future-mtime clock-skewed files
-                                // and immediate maintenance commands.
-                                #[cfg(desktop)]
-                                {
-                                    let failures = service
-                                        .watch_failures
-                                        .lock()
-                                        .unwrap_or_else(|error| error.into_inner());
-                                    if failures.should_skip(&canonical) {
-                                        continue;
-                                    }
-                                }
-                                paths.push(path);
-                            }
-                        }
-                        if paths.is_empty() {
-                            Ok(Value::Null)
-                        } else {
-                            let imported = service.import_monitored_paths(paths)?;
-                            #[cfg(desktop)]
-                            service.record_watch_result(&imported)?;
-                            Ok(imported)
-                        }
-                    })
-                    .await
-                }.await;
+                    if paths.is_empty() {
+                        Ok(Value::Null)
+                    } else {
+                        let imported = service.import_monitored_paths(paths)?;
+                        #[cfg(desktop)]
+                        service.record_watch_result(&imported)?;
+                        Ok(imported)
+                    }
+                })
+                .await;
                 if let Some(manager) = self.localswarm.get() {
                     manager.revoke_invalid_sources().await?;
                 }

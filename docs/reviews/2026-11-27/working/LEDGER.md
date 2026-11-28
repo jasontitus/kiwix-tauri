@@ -271,3 +271,10 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - adv-panes DONE (adv/panes.md): no blocking. Owner: adopt R1 (exact only when flavours equal/both unknown + variants), R2, R3, R4, R5 (except double path listing = accepted nit), + rollback errors in transaction card. -> panes round 2
 - panes round 2 DONE (impl/panes-round2.md): R1-R5 + rollback errors in card. -> adv-panes re-review
 - features round 3 DONE (impl/features-round3.md): R8 strict, R9 plain sentences per path, R10 (status probe left). -> adv-features re-review (also check stderr raw text not reaching crash/diagnostics)
+- 01:50 auto-checkpoint loop hit 2h max limit (not restarted per harness rule); owner checkpoints manually after each report batch.
+- files round 2 (impl/files-round2.md): R1-R7 fixed (R2 proxy: >=1 non-session book; R4 heals EEXIST same-inode + deterministic capture; R5 cancels same-vol failed first rename). Handoffs: maps/partials.rs reclaim nlink2 twin; localswarm/cleanup.rs erase empty dir at cleanup name; store created_at_launch(); dispatch.rs comment stale. -> adv-files re-review (a3e6f…)
+- transfers round 3 (impl/transfers-round3.md): R7, R8, Pace 128KiB/60s (owner accepts provisionally). -> adv-transfers (a8f48…)
+- desktop round 2 (impl/desktop-round2.md): R1,R2 (local comparator, no semver dep),R4,R5,R6,R8, relaunch docs. -> adv-desktop (ad7cb…)
+- net round 2 (impl/net-round2.md): R1 narrowed to vEthernet, R2 age-conditioned, R3, R4 partial (Windows generic VPN preferred when routed - assess), R5, R6 (+localOnly string). -> adv-net (acf89…)
+- adv-panes round 2 (adv/panes-round2.md): R1-R5 closed; R6 (exact must match Rust series_compatible; owner ADOPTS split rule), R7 (mobile keyboard). -> panes round 3 (af2c7…)
+- startup round 2 (impl/startup-round2.md): R1-R7, canonical crash pipeline + fixture 110 cases. -> adv-startup (a42aa…) AND concurrently Swift port (a53fb…) + Kotlin port (afedc…) pinned to fixture.

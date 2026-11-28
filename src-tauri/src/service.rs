@@ -1770,7 +1770,9 @@ impl Service {
     /// the archive's identity when it opens the file.
     fn registered_at_path(&self, path: &str, managed: bool) -> Result<Option<Book>, String> {
         let Ok(canonical) = std::fs::canonicalize(path) else { return Ok(None) };
-        if !canonical.is_file() {
+        // The cheap probe first: a folder scan must not copy the whole profile
+        // once per new file.
+        if !canonical.is_file() || !self.store.has_book_at_path(&canonical).unwrap_or(false) {
             return Ok(None);
         }
         let Some(book) = self.store.read()?.books.into_iter().find(|book| {
