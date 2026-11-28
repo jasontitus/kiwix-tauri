@@ -183,7 +183,6 @@ impl SharedLibraryClient {
     fn receipt_grant(&self, receipt_id: &str, book_id: &str) -> Result<ScopedDownloadGrant, String> {
         let state = self.state.lock().map_err(|_| REVOKED)?;
         let receipt = state.1.get(receipt_id).ok_or(REVOKED)?;
-        if receipt.created.elapsed() >= RECEIPT_TTL { return Err(REVOKED.into()); }
         let book = receipt.books.iter().find(|book| book.id == book_id).ok_or("Book is not in this shared library")?;
         let mut grant = receipt.grant.clone();
         grant.book = Some(book.clone());

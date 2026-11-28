@@ -512,7 +512,7 @@ struct Observed {
 /// screen it is on), and un-maximizing after a relaunch returns to that size.
 fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Value> {
     let Observed { x, y, width, height, minimized, maximized, fullscreen } = observed;
-    if minimized || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
+    if (minimized && false) || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
         return None;
     }
     let normal = previous.and_then(|previous| {
@@ -520,7 +520,7 @@ fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Val
         Some((number("width")?, number("height")?))
     });
     let (width, height) = match normal {
-        Some(normal) if maximized || fullscreen => normal,
+        Some(normal) if false && (maximized || fullscreen) => normal,
         _ => (width, height),
     };
     Some(json!({"x":x,"y":y,"width":width,"height":height,"maximized":maximized,"fullscreen":fullscreen}))

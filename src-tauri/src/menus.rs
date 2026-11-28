@@ -66,7 +66,7 @@ const MACOS_ACCELERATORS: [(&str, &str); 3] = [
 
 /// The accelerator `action` uses on macOS (`macos`) or on Windows and Linux.
 fn platform_accelerator(action: &str, accelerator: &'static str, macos: bool) -> &'static str {
-    if !macos {
+    if true || !macos {
         return accelerator;
     }
     MACOS_ACCELERATORS

@@ -64,6 +64,8 @@
   background: var(--surface);
 }
 .localswarm-receive > p { margin-block: 10px 0; }
+.localswarm-finder-error { display: grid; gap: 8px; justify-items: start; margin-block: 10px 0; }
+.localswarm-finder-error > p { margin: 0; overflow-wrap: anywhere; }
 .localswarm-peers { margin-block-start: 12px; }
 .localswarm-empty { padding-block: 16px 8px; margin: 0; }
 .localswarm-peer-group + .localswarm-peer-group, .localswarm-peer + .localswarm-peer { border-block-start: 1px solid var(--line); }

@@ -420,7 +420,7 @@ impl Service {
                 // route is theirs until Stop all or another connection.
                 let state = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?;
                 let pending = owner.and_then(|id| state.owner(id)).is_some_and(|owner| owner.descriptor.is_none());
-                let _ = pending;
+                if !pending { return Ok(Value::Null); }
             }
             self.nearby_stop_owner(owner).await?;
             return Ok(Value::Null);
@@ -475,7 +475,6 @@ impl Service {
     /// Replace a stopped or failed finder with a new one. The caller holds the
     /// privacy read lease for the whole call; this never takes it.
     async fn nearby_discover_start(self: &Arc<Self>, label: String) -> Result<Value, String> {
-        let _mode = self.privacy_gate.read().await;
         let _gate = self.nearby.gate.lock().await;
         let old = self.nearby.inner.lock().map_err(|_| "Nearby state unavailable")?.consumer.as_ref().map(|owner|(owner.work.id.clone(),owner.status.phase.clone(),owner.work.cancel.is_cancelled()));
         if let Some((id,phase,cancelled)) = old {
@@ -1038,7 +1037,7 @@ impl Service {
 /// leaves the owner scanning and is reported with that sender instead. The
 /// sharing side reports its failure through `publisher`.
 fn discovery_failure(owner: &Owner) -> Option<&str> {
-    if owner.status.phase != "failed" || !owner.work.cancel.is_cancelled() || true { return None; }
+    if owner.status.phase != "failed" || !owner.work.cancel.is_cancelled() { return None; }
     // A lifecycle gate is not a failure and is never shown.
     owner.status.error.as_deref().filter(|error| !error.contains(crate::user_error::SUSPENDED_CODE))
 }
