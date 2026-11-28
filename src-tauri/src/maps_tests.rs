@@ -336,7 +336,7 @@ async fn deleting_a_map_whose_folder_is_unreachable_keeps_it_until_delete_can_fi
     // Delete could not remove the file: it says so, where it is, and why.
     let error = manager.delete_download(&paused.id).unwrap_err();
     assert!(error.contains("was kept at") && error.contains(partial.to_str().unwrap()), "{error}");
-    assert!(error.ends_with("Reconnect the drive that holds it, then press Delete again"), "{error}");
+    assert!(error.ends_with("Its folder cannot be opened right now. If it is on a drive that is not connected, reconnect it and press Delete again. If the folder is gone, dismiss this warning"), "{error}");
     assert!(!error.contains("os error") && !error.contains("FileIdentity"), "{error}");
     let kept = manager.status().unwrap().expect("a download with kept files stays listed");
     assert_eq!(kept.status, "cancelled");
@@ -344,7 +344,7 @@ async fn deleting_a_map_whose_folder_is_unreachable_keeps_it_until_delete_can_fi
     assert_eq!(kept.recovery_paths, vec![partial.to_string_lossy().into_owned()]);
     assert!(kept.error.as_deref().is_some_and(|text|
         text.contains("could not be cleaned up") && !text.contains("os error")
-            && text.contains(&format!("{} (Its folder is not available right now.", partial.display()))));
+            && text.contains(&format!("{} (Its folder cannot be opened right now.", partial.display()))));
     assert!(!kept.can_remove_from_list);
     assert_eq!(fs::read(&moved).unwrap(), prefix);
     // Still unreachable: the retry fails the same way and nothing is forgotten.
@@ -404,7 +404,7 @@ async fn a_recreated_mount_point_never_makes_delete_forget_the_partial_on_the_ab
     manager.cancel().await.unwrap();
     let cancelled = manager.status().unwrap().unwrap();
     assert!(cancelled.error.as_deref().is_some_and(|text|
-        text.contains("Reconnect the drive that holds it, then delete this download")), "{:?}", cancelled.error);
+        text.contains("reconnect it and delete this download. If the folder is gone, dismiss this warning")), "{:?}", cancelled.error);
     // Something recreates the mount point on the local disk, as starting
     // another map there would: same path, empty, a different directory.
     fs::create_dir_all(&output).unwrap();
@@ -500,19 +500,181 @@ async fn a_failed_cleanup_capture_does_not_strand_the_partial() {
     manager.inner.fail_capture.store(true, std::sync::atomic::Ordering::SeqCst);
     let error = manager.delete_download(&paused.id).unwrap_err();
     assert!(error.contains(partial.to_str().unwrap())
-        && error.ends_with("another program may be using it. Close anything that has it open, then press Delete again"), "{error}");
+        && error.ends_with("It could not be removed just now. Press Delete again; if it keeps failing, free some space or close programs using that folder"), "{error}");
     // The reclaim's own text and identities are for the log, not the card.
     assert!(!error.contains("injected capture failure") && !error.contains("FileIdentity"), "{error}");
     assert_eq!(fs::read(&partial).unwrap(), prefix, "the file never left its place");
     let kept = manager.status().unwrap().unwrap();
     assert_eq!(kept.recovery_paths, vec![partial.to_string_lossy().into_owned()]);
     assert!(kept.error.as_deref().is_some_and(|text|
-        text.contains("another program may be using it") && !text.contains("FileIdentity")));
+        text.contains("could not be removed just now") && !text.contains("FileIdentity")));
     assert!(kept.recovery_records[0].capture.is_some(), "the journaled capability is what the retry resumes");
     manager.inner.fail_capture.store(false, std::sync::atomic::Ordering::SeqCst);
     manager.delete_download(&paused.id).unwrap();
     assert!(entries(partial.parent().unwrap()).is_empty(), "{:?}", entries(partial.parent().unwrap()));
     assert!(manager.status().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn a_foreign_file_at_the_final_name_is_reported_once_and_never_called_a_partial_download() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let destination = fixture.root.join("output");
+    // Publication was journaled, then the partial left and another file took
+    // the map's final name: nothing there is provably this download's.
+    let record = fixture.publication_checkpoint(&manager, &destination);
+    let original = fixture.root.join("moved-original.part");
+    fs::rename(destination.join(&record.name), &original).unwrap();
+    let published = destination.join(&record.publication.as_ref().unwrap().name);
+    fs::write(&published, b"a map this download did not write").unwrap();
+    {
+        let mut state = manager.inner.state.lock().unwrap();
+        state.active = None;
+        let job = state.job.as_mut().unwrap();
+        job.status = "failed".into();
+        persist(&manager.inner.state_path, job).unwrap();
+    }
+    let error = manager.delete_download("offline-fixture").unwrap_err();
+    assert!(error.contains(published.to_str().unwrap())
+        && error.contains("could not be confirmed as the file this download wrote"), "{error}");
+    assert!(!error.contains("partial map download") && !error.contains("FileIdentity"), "{error}");
+    // No retry can change that, so Delete does not fail again or give advice
+    // that cannot work; the entry is only reported until it is dismissed.
+    for _ in 0..2 {
+        manager.delete_download("offline-fixture").unwrap();
+        let kept = manager.status().unwrap().expect("reported until dismissed");
+        assert_eq!(kept.recovery_paths, vec![published.to_string_lossy().into_owned()]);
+        assert!(kept.error.as_deref().is_some_and(|text| text.contains("could not be confirmed")
+            && !text.contains("free some space")), "{:?}", kept.error);
+    }
+    assert_eq!(fs::read(&published).unwrap(), b"a map this download did not write");
+    assert_eq!(fs::read(&original).unwrap(), fixture.bytes);
+    manager.forget_recovery(&published).unwrap();
+    manager.delete_download("offline-fixture").unwrap();
+    assert!(manager.status().unwrap().is_none());
+    assert_eq!(fs::read(&published).unwrap(), b"a map this download did not write");
+}
+
+#[tokio::test]
+async fn a_removed_cleanup_folder_is_reported_instead_of_failing_delete_forever() {
+    let fixture = Fixture::new();
+    let (manager, partial, paused) = paused_output(&fixture).await;
+    let prefix = fs::read(&partial).unwrap();
+    manager.inner.fail_capture.store(true, std::sync::atomic::Ordering::SeqCst);
+    manager.delete_download(&paused.id).unwrap_err();
+    manager.inner.fail_capture.store(false, std::sync::atomic::Ordering::SeqCst);
+    // The user tidies away the empty hidden folder the failed cleanup left.
+    let capability = manager.status().unwrap().unwrap().recovery_records[0].capture.clone().unwrap();
+    fs::remove_dir(partial.parent().unwrap().join(&capability.name)).unwrap();
+    for _ in 0..2 {
+        manager.delete_download(&paused.id).unwrap();
+        let kept = manager.status().unwrap().expect("reported until dismissed");
+        assert_eq!(kept.recovery_paths, vec![partial.to_string_lossy().into_owned()]);
+        assert!(kept.error.as_deref().is_some_and(|text| text.contains("could not be confirmed")
+            && !text.contains("free some space")), "{:?}", kept.error);
+    }
+    assert_eq!(fs::read(&partial).unwrap(), prefix);
+}
+
+/// A record whose cleanup already captured the partial into its capability.
+fn captured_partial(fixture: &Fixture, manager: &MapManager, destination: &Path) -> (OwnedPartial, PathBuf) {
+    let mut record = fixture.interrupted_partial(manager, destination);
+    let capability = format!(".streetzim-cleanup-{}", Uuid::new_v4());
+    fs::create_dir(destination.join(&capability)).unwrap();
+    let directory = MapDirectory::open(destination).unwrap();
+    record.capture = Some(PartialCapture {
+        name: capability.clone(),
+        identity: FileIdentity::of(&directory.directory.open_dir_nofollow(&capability).unwrap().dir_metadata().unwrap()),
+        size: fs::metadata(destination.join(&record.name)).unwrap().len(),
+    });
+    let captured = destination.join(&capability).join(&record.name);
+    fs::rename(destination.join(&record.name), &captured).unwrap();
+    (record, captured)
+}
+
+#[tokio::test]
+async fn an_interrupted_link_then_unlink_capture_never_leaks_the_partial_under_its_other_name() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let destination = fixture.root.join("output");
+    let (record, captured) = captured_partial(&fixture, &manager, &destination);
+    // Where a capture on a filesystem without an exclusive rename stops when
+    // it is interrupted after linking: the old name, renamed aside, still
+    // holds the same file.
+    let identity = record.identity.clone().unwrap();
+    let twin = destination.join(format!(".kiwix-renamed-{:x}-{:x}", identity.device, identity.inode));
+    fs::hard_link(&captured, &twin).unwrap();
+    let bystander = destination.join(".kiwix-renamed-0-0");
+    fs::write(&bystander, b"another file's leftover").unwrap();
+    {
+        let mut state = manager.inner.state.lock().unwrap();
+        state.active = None;
+        let job = state.job.as_mut().unwrap();
+        job.status = "failed".into();
+        job.owned_partial = None;
+        job.recovery_records.push(record);
+        persist(&manager.inner.state_path, job).unwrap();
+    }
+    manager.delete_download("offline-fixture").unwrap();
+    // Both names are gone, so the bytes are; nothing else was touched.
+    assert_eq!(entries(&destination), vec![".kiwix-renamed-0-0".to_owned()]);
+    assert_eq!(fs::read(&bystander).unwrap(), b"another file's leftover");
+    assert!(manager.status().unwrap().is_none());
+}
+
+#[test]
+fn a_capture_interrupted_before_the_old_name_was_retired_is_finished_by_the_same_move() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let destination = fixture.root.join("output");
+    let (mut record, captured) = captured_partial(&fixture, &manager, &destination);
+    // Interrupted right after linking: the public name is still this file.
+    let public = destination.join(&record.name);
+    fs::hard_link(&captured, &public).unwrap();
+    let mut finished = 0;
+    let result = reclaim_partial_with_capture(
+        &mut record,
+        |record| manager.checkpoint_partial("offline-fixture", Some(record.clone())),
+        // What the link-then-unlink move does when its destination already is
+        // the source file: it retires the source name. (This filesystem has an
+        // exclusive rename, so the real fallback is not reachable here.)
+        |from, name, to, target| {
+            let same = FileIdentity::of(&from.symlink_metadata(name).unwrap())
+                == FileIdentity::of(&to.symlink_metadata(target).unwrap());
+            assert!(same, "only asked to finish a move of the same file");
+            finished += 1;
+            from.remove_file(name).map_err(|error| error.to_string())
+        },
+    );
+    assert!(matches!(result, Ok(PartialRecovery::Reclaimed)), "{result:?}");
+    assert_eq!(finished, 1);
+    assert!(entries(&destination).is_empty(), "{:?}", entries(&destination));
+}
+
+#[test]
+fn a_partial_with_a_link_kiwix_did_not_make_is_never_unlinked_as_if_it_freed_the_bytes() {
+    for already_captured in [false, true] {
+        let fixture = Fixture::new();
+        let manager = fixture.manager();
+        let destination = fixture.root.join("output");
+        let elsewhere = fixture.root.join("someone-elses-link");
+        let mut record = if already_captured {
+            let (record, captured) = captured_partial(&fixture, &manager, &destination);
+            fs::hard_link(&captured, &elsewhere).unwrap();
+            record
+        } else {
+            let record = fixture.interrupted_partial(&manager, &destination);
+            fs::hard_link(destination.join(&record.name), &elsewhere).unwrap();
+            record
+        };
+        let result = reclaim_partial(&mut record,
+            |record| manager.checkpoint_partial("offline-fixture", Some(record.clone())));
+        // Kept either way: declined before any capture, or captured, found to
+        // have a second name, and put back where it was.
+        assert!(matches!(result, Ok(PartialRecovery::Preserved | PartialRecovery::Refused(_))), "{result:?}");
+        assert_eq!(fs::read(destination.join(&record.name)).unwrap(), b"unverified interrupted output", "{already_captured}");
+        assert_eq!(fs::read(&elsewhere).unwrap(), b"unverified interrupted output");
+    }
 }
 
 #[tokio::test]
@@ -2619,7 +2781,8 @@ fn cleanup_captures_replacements_and_preserves_exclusive_restoration_collisions(
                 Ok(())
             },
         );
-        assert!(result.is_err());
+        // Not the journaled inode: an ownership refusal, not a failure to retry.
+        assert!(matches!(result, Ok(PartialRecovery::Refused(_))), "{result:?}");
         assert!(captured);
         assert_eq!(
             fs::read(&original).unwrap(),

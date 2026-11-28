@@ -4,8 +4,30 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// Where explicit cleanup kept a partial, and the reason shown for it.
-type KeptAt = (PathBuf, String);
+/// What explicit cleanup kept, and the reason shown for it.
+struct KeptAt {
+    path: PathBuf,
+    reason: String,
+    /// False when `path` is the map's final name rather than a partial's.
+    partial: bool,
+}
+
+impl KeptAt {
+    fn of(record: &OwnedPartial, reason: String) -> Self {
+        Self { path: MapJob::recovery_path(record), reason, partial: record.publication.is_none() }
+    }
+
+    /// The Delete error for this entry. A file at the map's final name is
+    /// never called a partial download: it may be a good map that is not ours.
+    fn message(&self) -> String {
+        if self.partial {
+            format!("Kiwix could not remove a partial map download, so it was kept at {}. {}",
+                self.path.display(), self.reason)
+        } else {
+            format!("Kiwix did not remove {}. {}", self.path.display(), self.reason)
+        }
+    }
+}
 
 impl MapManager {
     /// Publication intent precedes visibility; complete_publication replaces it
@@ -136,7 +158,7 @@ impl MapManager {
                             record.destination.join(&record.name).display()
                         ))
                     }
-                    Err(_) => Some("Kiwix could not clean up a partial map download. Delete the download and start again".to_owned()),
+                    Ok(PartialRecovery::Refused(_)) | Err(_) => Some("Kiwix could not clean up a partial map download. Delete the download and start again".to_owned()),
                 }
             } else {
                 None
@@ -747,8 +769,9 @@ impl MapManager {
         })?;
         let kept = match recovery {
             Ok(PartialRecovery::Preserved) => Kept::of(&record, true),
-            Err(raw) => Self::log_kept(&raw, &record),
-            Ok(resolved) => {
+            Ok(PartialRecovery::Refused(raw)) => Self::log_kept(&raw, &record, true),
+            Err(raw) => Self::log_kept(&raw, &record, false),
+            Ok(resolved @ (PartialRecovery::Reclaimed | PartialRecovery::Published(_))) => {
                 if let PartialRecovery::Published(path) = resolved {
                     let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
                     record.name = publication.name;
@@ -765,27 +788,26 @@ impl MapManager {
         };
         // One durable step; if it cannot be saved the checkpoint and its
         // ownership record stay exactly as they were for a later retry.
-        let reason = kept.sentence(again);
-        let path = MapJob::recovery_path(&record);
+        let kept = KeptAt::of(&record, kept.sentence(again));
         let mut checkpoint = job.clone();
         checkpoint.owned_partial = None;
         checkpoint.recovery_records.push(record);
         checkpoint.resume = None;
         checkpoint.resumable = false;
         let mut reasons = vec![None; checkpoint.recovery_records.len()];
-        reasons[checkpoint.recovery_records.len() - 1] = Some(reason.clone());
+        reasons[checkpoint.recovery_records.len() - 1] = Some(kept.reason.clone());
         checkpoint.clear_recovery_warning();
         checkpoint.append_recovery_warning_because(&reasons);
         persist(&self.inner.state_path, &checkpoint)?;
         *job = checkpoint;
-        Ok(Some((path, reason)))
+        Ok(Some(kept))
     }
 
     /// The reclaim's own error is for whoever reads the log; the card gets the
     /// classified reason. The raw text names the download's files and identities.
-    fn log_kept(raw: &str, record: &OwnedPartial) -> Kept {
-        let kept = Kept::of(record, false);
-        eprintln!("Kiwix map cleanup kept a partial download ({kept:?}): {}", raw.trim_end());
+    fn log_kept(raw: &str, record: &OwnedPartial, declined: bool) -> Kept {
+        let kept = Kept::of(record, declined);
+        eprintln!("Kiwix map cleanup kept an entry ({kept:?}): {}", raw.trim_end());
         kept
     }
 
@@ -840,7 +862,8 @@ impl MapManager {
             let kept = match outcome {
                 Some(Ok(PartialRecovery::Reclaimed)) => { remaining -= 1; reasons.remove(index); job.recovery_records.remove(index); continue; }
                 Some(Ok(PartialRecovery::Preserved)) => Some(Kept::of(&record, true)),
-                Some(Err(raw)) => Some(Self::log_kept(&raw, &record)),
+                Some(Ok(PartialRecovery::Refused(raw))) => Some(Self::log_kept(&raw, &record, true)),
+                Some(Err(raw)) => Some(Self::log_kept(&raw, &record, false)),
                 // A finished map at its publication name, or no attempt.
                 Some(Ok(PartialRecovery::Published(_))) | None => None,
             };
@@ -853,7 +876,7 @@ impl MapManager {
             if let Some(kept) = kept {
                 let reason = kept.sentence(true);
                 if kept.retryable() && record.identity.is_some() && failed.is_none() {
-                    failed = Some((MapJob::recovery_path(&record), reason.clone()));
+                    failed = Some(KeptAt::of(&record, reason.clone()));
                 }
                 reasons[index] = Some(reason);
             }
@@ -1004,7 +1027,7 @@ impl MapManager {
         persist(&self.inner.state_path, job)?;
         // The record demoted a moment ago was just tried; retry the others.
         let (retried, mut reasons) = self.retry_recovery_records(job, demoted.is_some());
-        if let (Some((_, reason)), Some(last)) = (&demoted, reasons.last_mut()) { *last = Some(reason.clone()); }
+        if let (Some(kept), Some(last)) = (&demoted, reasons.last_mut()) { *last = Some(kept.reason.clone()); }
         let kept = demoted.or(retried);
         if !job.recovery_records.is_empty() {
             // Something was kept, so the job stays listed, carrying only that
@@ -1023,10 +1046,7 @@ impl MapManager {
             // the journaled folder) is not a failed Delete: everything it owns
             // is gone and the warning stays on the job.
             return match kept {
-                Some((path, reason)) => Err(format!(
-                    "Kiwix could not remove a partial map download, so it was kept at {}. {reason}",
-                    path.display()
-                )),
+                Some(kept) => Err(kept.message()),
                 None => Ok(()),
             };
         }

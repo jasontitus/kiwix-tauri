@@ -3723,7 +3723,8 @@ impl Service {
             if let Some(app) = app {
                 use tauri::Emitter;
                 let _ = app.emit("kiwix-speech-model", json!({
-                    "state": if success { "installed" } else { "error" },
+                    // A download stopped on request ends quietly, not as a fault.
+                    "state": if success { "installed" } else if control.cancelled() { "cancelled" } else { "error" },
                     "error": result.err(),
                     "voices": if success { kokoro::voice_entries() } else { Vec::<Value>::new() },
                 }));

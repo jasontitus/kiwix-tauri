@@ -186,6 +186,9 @@ impl DownloadControl {
         self.cancel.cancel();
         true
     }
+    /// The download was stopped on request (Cancel, or a privacy or read-only
+    /// cutover): its ending is not a fault to announce.
+    pub(crate) fn cancelled(&self) -> bool { self.cancel.is_cancelled() }
 }
 
 struct Download {
@@ -1276,13 +1279,17 @@ mod tests {
     fn stopping_a_voice_download_is_not_shown_as_an_error() {
         let profile = fixtures::profile().unwrap();
         let manager = KokoroManager::new(&profile.path().canonicalize().unwrap());
-        manager.begin_download().unwrap();
+        let control = manager.begin_download().unwrap();
+        assert!(!control.cancelled());
         assert!(manager.cancel_download());
         manager.finish_download(Err("The voice model download was cancelled".into())).unwrap_err();
+        // What the completion event reports as "cancelled" rather than "error".
+        assert!(control.cancelled());
         assert!(manager.status()["error"].is_null());
-        // A download that fails on its own still says why.
-        manager.begin_download().unwrap();
+        // A download that fails on its own still says why, and is an error.
+        let control = manager.begin_download().unwrap();
         manager.finish_download(Err("Downloading the voice model failed (HTTP 503)".into())).unwrap_err();
+        assert!(!control.cancelled());
         assert_eq!(manager.status()["error"], "Downloading the voice model failed (HTTP 503)");
     }
 

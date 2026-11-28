@@ -58,6 +58,45 @@ fn owned_directory(parent: &Directory, name: &str, saved: &StoredJob) -> Result<
     Ok(directory)
 }
 
+/// Whether an interrupted capture left only its placeholder, which is then
+/// removed so the capture can run again.
+///
+/// Where the storage has no exclusive rename, a directory is captured in two
+/// steps: an empty private directory is made at the cleanup name, then the
+/// source is renamed over it. Stopping between the two leaves that empty
+/// directory beside the untouched source, and every later attempt would end
+/// at "both names exist" although nothing was captured or lost.
+///
+/// Only exactly that state qualifies: the source is still the journaled
+/// directory, and the cleanup name is an empty, private directory of this
+/// user that is not the journaled one. `rmdir` removes it and refuses anything
+/// that gained an entry since it was inspected, so nothing with content can
+/// be removed here. Every other combination is left for the caller's error.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn discard_capture_placeholder(parent: &Directory, name: &str, source: &str, saved: &StoredJob) -> Result<bool, String> {
+    use cap_fs_ext::DirExt as _;
+    use std::os::unix::fs::MetadataExt as _;
+    parent.unchanged()?;
+    if !parent.child(source, false).is_ok_and(|directory| directory.identity == saved.owned.identity) { return Ok(false); }
+    // No-follow: a symbolic link or a file at the cleanup name is not ours.
+    let Ok(placeholder) = parent.dir.open_dir_nofollow(name) else { return Ok(false); };
+    let metadata = placeholder.try_clone().map_err(err)?.into_std_file().metadata().map_err(err)?;
+    if !metadata.is_dir() || metadata.uid() != crate::fs_ext::effective_uid() || metadata.mode() & 0o077 != 0
+        || storage::Identity::of(&placeholder.dir_metadata().map_err(err)?) == saved.owned.identity
+        || placeholder.entries().map_err(err)?.next().is_some()
+    { return Ok(false); }
+    drop(placeholder);
+    if parent.dir.remove_dir(name).is_err() { return Ok(false); }
+    parent.sync()?;
+    Ok(true)
+}
+
+/// The two-step capture exists only on Linux and Android.
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn discard_capture_placeholder(_parent: &Directory, _name: &str, _source: &str, _saved: &StoredJob) -> Result<bool, String> {
+    Ok(false)
+}
+
 fn known_entries(directory: &Directory, saved: &StoredJob) -> Result<(), String> {
     directory.unchanged()?;
     for entry in directory.dir.entries().map_err(err)? {
@@ -260,6 +299,9 @@ fn erase_with_hook(saved: &StoredJob, intent: &CleanupIntent, before_capture: im
     let parent = parent(saved)?;
     let name = cleanup_name(saved)?;
     let source = intent.source(saved);
+    if !parent.absent(&name)? && !parent.absent(source)? && !discard_capture_placeholder(&parent, &name, source, saved)? {
+        return Err("Both LocalSwarm cleanup and source names exist; all remaining files were preserved".into());
+    }
     if parent.absent(&name)? {
         if parent.absent(source)? { return Ok(()); }
         let directory = owned_directory(&parent, source, saved)?;
@@ -276,8 +318,6 @@ fn erase_with_hook(saved: &StoredJob, intent: &CleanupIntent, before_capture: im
         parent.capture_directory(source, &name, &saved.owned.identity)?;
         #[cfg(not(windows))]
         drop(files);
-    } else if !parent.absent(source)? {
-        return Err("Both LocalSwarm cleanup and source names exist; all remaining files were preserved".into());
     }
     let directory = owned_directory(&parent, &name, saved)?;
     // Check the entire remaining set before deleting any member, including retry
@@ -387,9 +427,13 @@ impl LocalSwarmManager {
             return Ok(Vec::new());
         }
         let source = intent.source(&saved);
-        let captured = !parent.absent(&cleanup)?;
+        let mut captured = !parent.absent(&cleanup)?;
         if captured && !parent.absent(source)? {
-            return Err("Both LocalSwarm cleanup and source names exist; cleanup ownership must be resolved first".into());
+            if !discard_capture_placeholder(&parent, &cleanup, source, &saved)? {
+                return Err("Both LocalSwarm cleanup and source names exist; cleanup ownership must be resolved first".into());
+            }
+            // Only the placeholder of an interrupted capture was there.
+            captured = false;
         }
         let name = if captured { cleanup.as_str() } else { source };
         if parent.absent(name)? { return Ok(Vec::new()); }
@@ -1111,6 +1155,95 @@ mod tests {
         assert_eq!(fs::read(staging.join("book.zim")).unwrap(), b"foreign!");
         assert!(retained.join("book.zim").exists());
         assert!(saved(&manager, &id).cleanup.is_some());
+    }
+
+    /// Where the storage has no exclusive rename, capture makes an empty
+    /// private directory at the cleanup name and then renames the source over
+    /// it. Stopping between the two used to leave cleanup, and the proof that
+    /// authorizes removing the archive from the library, failing for good.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[tokio::test]
+    async fn an_interrupted_capture_leaves_a_placeholder_that_cleanup_discards_and_nothing_else() {
+        use std::os::unix::fs::PermissionsExt;
+        fn private_dir(path: &Path) {
+            fs::create_dir(path).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        const BOTH: &str = "Both LocalSwarm cleanup and source names exist";
+        let root = Temp::new();
+        let (manager, id) = fixture(&root.0, 2, true, "complete");
+        let receipt = saved(&manager, &id);
+        let intent = prepare(&receipt, &manager.cancel_token(), None).unwrap();
+        manager.save_cleanup(&id, intent).unwrap();
+        let name = cleanup_name(&receipt).unwrap();
+        let placeholder = receipt.owned.parent.join(&name);
+        let source = receipt.owned.parent.join(&receipt.owned.destination);
+        let archive = source.join("book.zim");
+        let original = fs::read(&archive).unwrap();
+        let elsewhere = root.0.join("elsewhere");
+        private_dir(&elsewhere);
+
+        // Anything at the cleanup name that is not exactly that placeholder
+        // still stops both paths, and is left exactly as it was found.
+        let refused = |what: &str| {
+            let proof = manager.terminal_owned_publications(&id).err().unwrap_or_else(|| panic!("{what}: proof was granted"));
+            assert!(proof.starts_with(BOTH), "{what}: {proof}");
+            assert!(fs::symlink_metadata(&placeholder).is_ok(), "{what}: the entry was removed");
+            assert_eq!(fs::read(&archive).unwrap(), original, "{what}");
+        };
+        // A directory that has content.
+        private_dir(&placeholder);
+        fs::write(placeholder.join("kept"), b"someone's file").unwrap();
+        refused("non-empty");
+        let error = manager.delete_terminal(&id).await.unwrap_err();
+        assert!(error.starts_with(BOTH), "{error}");
+        assert_eq!(fs::read(placeholder.join("kept")).unwrap(), b"someone's file");
+        assert_eq!(fs::read(&archive).unwrap(), original);
+        fs::remove_file(placeholder.join("kept")).unwrap();
+        // An empty directory that is not private to this user.
+        fs::set_permissions(&placeholder, fs::Permissions::from_mode(0o755)).unwrap();
+        refused("not private");
+        if crate::fs_ext::effective_uid() == 0 {
+            fs::set_permissions(&placeholder, fs::Permissions::from_mode(0o700)).unwrap();
+            std::os::unix::fs::chown(&placeholder, Some(12345), None).unwrap();
+            refused("another user's");
+        }
+        fs::remove_dir(&placeholder).unwrap();
+        // A symbolic link to an empty private directory, and a plain file.
+        std::os::unix::fs::symlink(&elsewhere, &placeholder).unwrap();
+        refused("symbolic link");
+        assert!(elsewhere.exists());
+        fs::remove_file(&placeholder).unwrap();
+        fs::write(&placeholder, b"").unwrap();
+        refused("file");
+        fs::remove_file(&placeholder).unwrap();
+        // The right placeholder, but the source is no longer the journaled
+        // directory: nothing here is known to be an interrupted capture.
+        private_dir(&placeholder);
+        let moved = root.0.join("moved-source");
+        fs::rename(&source, &moved).unwrap();
+        private_dir(&source);
+        let proof = manager.terminal_owned_publications(&id).unwrap_err();
+        assert!(proof.starts_with(BOTH), "{proof}");
+        assert!(placeholder.exists());
+        fs::remove_dir(&source).unwrap();
+        fs::rename(&moved, &source).unwrap();
+
+        // The interrupted capture itself: the proof is granted again...
+        let publications = manager.terminal_owned_publications(&id).unwrap();
+        assert_eq!(publications.len(), 1);
+        assert_eq!(publications[0].0, archive);
+        assert!(!placeholder.exists(), "the placeholder was not discarded");
+        assert_eq!(fs::read(&archive).unwrap(), original);
+        drop(publications);
+        // ...and cleanup runs to completion from the same state.
+        private_dir(&placeholder);
+        manager.delete_terminal(&id).await.unwrap();
+        assert!(!placeholder.exists());
+        assert!(!source.exists());
+        assert!(saved(&manager, &id).cleanup.is_some_and(|intent| intent.complete));
+        assert!(elsewhere.exists());
+        assert_eq!(fs::read(root.0.join("downloads/user.zim")).unwrap(), b"unrelated user archive");
     }
 
     #[tokio::test]

@@ -485,23 +485,37 @@ pub(super) fn reclaim_owned_file(
                 capture(from, &record.name, to, &record.name)
             }
         };
-        // On a filesystem without an exclusive rename the move links the new
-        // name before it retires the old one. Interrupted in between, the
-        // captured entry is one of two names for the file: the public name, or
-        // a private name the move left beside it. Put it back through the same
-        // primitive, which finishes such a move, and capture it afresh below.
-        // That leaves one name, so the unlink further down frees the bytes
-        // instead of leaving them under the other name.
-        if captured_under_two_names(&staging, &directory.directory, &record.name)? {
-            directory.unchanged().map_err(|e| e.to_string())?;
-            exclusive_move(&staging, &directory.directory)?;
-        }
         if !map_entry_exists(&staging, &record.name)? {
             if !map_entry_exists(&directory.directory, &record.name)? {
                 return Ok(());
             }
             directory.unchanged().map_err(|e| e.to_string())?;
             exclusive_move(&directory.directory, &staging)?;
+        }
+        // On a filesystem without an exclusive rename the capture links the
+        // new name before it retires the old one (`publication.rs`,
+        // `exclusive_rename_fallback`). Interrupted in between, the captured
+        // entry is one of two names for the file. Retire the other one, or the
+        // unlink below would report the bytes reclaimed while they stay on disk.
+        let captured = staging.symlink_metadata(&record.name).map_err(|e| e.to_string())?;
+        if captured.is_file() && captured.nlink() == 2 {
+            let captured = FileIdentity::of(&captured);
+            let twin = |name: &str| match directory.directory.symlink_metadata(name) {
+                Ok(metadata) => Ok(metadata.is_file() && FileIdentity::of(&metadata) == captured),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+                Err(error) => Err(error.to_string()),
+            };
+            // The private name that move gives the old name before unlinking it.
+            let renamed = format!(".kiwix-renamed-{:x}-{:x}", captured.device, captured.inode);
+            if twin(&record.name)? {
+                // Still under its public name: asking for the same move again
+                // finishes it, because the destination already is this file.
+                directory.unchanged().map_err(|e| e.to_string())?;
+                exclusive_move(&directory.directory, &staging)?;
+            } else if twin(&renamed)? {
+                directory.directory.remove_file(&renamed).map_err(|e| e.to_string())?;
+                sync_map_directory(&directory.directory)?;
+            }
         }
         sync_map_directory(&staging)?;
         sync_map_directory(&directory.directory)?;
@@ -563,37 +577,17 @@ pub(super) fn reclaim_owned_file(
             let _ = sync_map_directory(staging);
         }
         let _ = sync_map_directory(&directory.directory);
-        // What was captured is not provably ours alone and is back at its
-        // name: an ownership refusal, which trying again does not change.
-        if refused && restoration.is_empty() {
-            return Ok(PartialRecovery::Refused(error));
-        }
-        return Err(format!(
+        let detail = format!(
             "{error}. Retained entries are recoverable at {} (directory {:?}). {restoration}",
             directory.path.join(&saved.name).display(),
             saved.identity
-        ));
+        );
+        // What was captured is not provably ours alone: an ownership refusal,
+        // which trying again does not change. It was put back above, or stays
+        // preserved in the capability when its name was taken meanwhile.
+        return if refused { Ok(PartialRecovery::Refused(detail)) } else { Err(detail) };
     }
     result
-}
-
-/// True when the captured entry has a second link and the public name is
-/// either free or already that same file: the two states an interrupted
-/// link-then-unlink move can leave, and the only ones a put-back can settle.
-fn captured_under_two_names(staging: &Dir, public: &Dir, name: &str) -> Result<bool, String> {
-    let captured = match staging.symlink_metadata(name) {
-        Ok(captured) => captured,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.to_string()),
-    };
-    if !captured.is_file() || captured.nlink() < 2 {
-        return Ok(false);
-    }
-    match public.symlink_metadata(name) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(true),
-        Ok(public) => Ok(FileIdentity::of(&public) == FileIdentity::of(&captured)),
-        Err(error) => Err(error.to_string()),
-    }
 }
 
 /// Reuse the exact owned-publication capture journal for current and retained
