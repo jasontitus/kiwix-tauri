@@ -39,7 +39,10 @@ export interface SurfaceProps {
 const filesystemRoot = String.raw`(?:file:(?:\\?\/){2,}|(?:\\?\/)(?:private|var|Users|home|tmp|Applications|Library|System|Volumes|storage|data|mnt|etc|opt|usr|root|run|dev|bin|sbin|cores)(?=\\?\/|[\s:;,"'\x60)\]]|$)|[A-Za-z]:[\\/])`;
 const quotedFilesystemPath = new RegExp(String.raw`(\\?["'\x60])${filesystemRoot}[^\r\n]*?\1`, "g");
 const bareFilesystemPath = new RegExp(
-  String.raw`(^|[\s(=:\[])${filesystemRoot}[^\r\n:;,"'\x60)\]]*?(?=[:;,"'\x60)\]\r\n]|[ \t]+(?:is|was|has|requires|exceeds|without|outside|does|cannot|could|failed)\b|$)`,
+  // A path ends at a delimiter, before a verb that starts the sentence's
+  // predicate, before a parenthesised reason ("x.part (Its folder …)"), or at
+  // a full stop that ends the sentence ("kept at x.part. Its folder …").
+  String.raw`(^|[\s(=:\[])${filesystemRoot}[^\r\n:;,"'\x60)\]]*?(?=[:;,"'\x60)\]\r\n]|[ \t]+(?:is|was|has|requires|exceeds|without|outside|does|cannot|could|failed)\b|[ \t]+\((?=[A-Z][a-z])|\.(?:[ \t]+(?=[A-Z])|$)|$)`,
   "g",
 );
 export function pathFileName(path: string): string {
