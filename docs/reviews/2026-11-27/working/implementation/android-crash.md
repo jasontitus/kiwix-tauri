@@ -122,3 +122,5 @@ All under `/home/user/kiwix-tauri/src-tauri/plugins/tauri-plugin-kiwix-mobile/an
 - The White_Space test compares against the JDK's `\p{IsWhite_Space}` table as well as the spec list. On a JDK with a different Unicode version the second comparison could disagree; the implementation itself uses only the spec list.
 - The differential corpus is derived from the fixture inputs plus mutations. It is strong evidence of agreement with the Rust reference, not proof for every input.
 - The Kotlin frame format `class.method(file:line)` goes through steps 1–5. A class or file name that looks like a path or URL is redacted inside the frame, which is intended but can make a frame less readable.
+---
+Addendum (after spec prose edits 02:48:32): no production change; +2 tests (unpaired surrogate, named residuals); 78 JVM tests green; 32 targeted differential inputs 0 differ. Spec sha256 d852cdd2…; fixture unchanged (228).

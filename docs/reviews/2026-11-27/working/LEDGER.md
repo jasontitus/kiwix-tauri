@@ -318,3 +318,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - apple crash port (impl/apple-crash2.md): Swift 228/228, 1.2M differential 0. Gaps: Some( "x y") wrapper+space leak (all 3; list §4), empty-quoted no-fallthrough. Owner: spec header file names + porter notes. -> adv-apple (a3939…) review
 - OWNER spec edits: file names, §4 wrapper+space & empty-quoted residuals, porter notes (needs docs review)
 - adv-service round 3 (adv/service-round3.md): all closed except R3-1 (dismissed set never pruned -> re-added notice hidden) + R3-2 nit (unrelated import withdraws). Owner adopts both + render only undismissed notices. -> service round 4. mobile_policy.rs:566 owner at end.
+- android crash addendum: 78 tests, spec-note differential 0. Reviewer a942b… told of addendum.
