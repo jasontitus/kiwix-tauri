@@ -288,26 +288,52 @@ pub(crate) enum FailedQuitAction {
 }
 
 /// Only the button labelled "Quit Without Saving" may give up unsaved state.
-/// Closing the dialog, an unexpected result, or labels that a translation made
-/// identical all leave Kiwix running: the dialog plugin reports a closed dialog
-/// as the Cancel button, so that slot must never mean "quit".
+/// Closing the dialog or an unexpected result leaves Kiwix running: the dialog
+/// plugin reports a closed dialog as the Cancel button, so that slot must
+/// never mean "quit".
+///
+/// A translation may give two buttons one label. The destructive answer is
+/// accepted only while its label differs from both others, and Retry only
+/// while it differs from Cancel; a label shared with Cancel means Cancel.
 pub(crate) fn failed_quit_action(
     failure: QuitFailure,
     result: &tauri_plugin_dialog::MessageDialogResult,
     labels: &FailedQuitLabels,
 ) -> FailedQuitAction {
     use tauri_plugin_dialog::MessageDialogResult::Custom;
-    let distinct = labels.quit_without_saving != labels.retry
-        && labels.quit_without_saving != labels.cancel
-        && labels.retry != labels.cancel;
+    let discard_is_unambiguous =
+        labels.quit_without_saving != labels.retry && labels.quit_without_saving != labels.cancel;
+    let retry_is_unambiguous = labels.retry != labels.cancel;
     match result {
-        Custom(label) if distinct && *label == labels.quit_without_saving => {
+        Custom(label) if discard_is_unambiguous && *label == labels.quit_without_saving => {
             FailedQuitAction::QuitWithoutSaving
         }
-        Custom(label) if distinct && *label == labels.retry => FailedQuitAction::Retry,
+        Custom(label) if retry_is_unambiguous && *label == labels.retry => FailedQuitAction::Retry,
         _ => FailedQuitAction::Stay {
             clear_relaunch: failure == QuitFailure::Flush,
         },
+    }
+}
+
+/// What the answer becomes once the dialog has closed.
+///
+/// Staying needs a window to stay in. With no application window left, a
+/// running Kiwix would be invisible, would still hold the profile, and could
+/// only be ended from a system monitor. A Quit asked for while the dialog was
+/// open (the menu, or closing the last window) was held back by the exit
+/// handler and is still wanted. In both cases Cancel becomes Retry: Quit is
+/// attempted again and, if it still cannot finish, asked about again. Retry
+/// never gives up state.
+pub(crate) fn settle_failed_quit(
+    action: FailedQuitAction,
+    shell_window_remains: bool,
+    quit_requested_while_asking: bool,
+) -> FailedQuitAction {
+    match action {
+        FailedQuitAction::Stay { .. } if !shell_window_remains || quit_requested_while_asking => {
+            FailedQuitAction::Retry
+        }
+        action => action,
     }
 }
 
@@ -460,19 +486,70 @@ mod tests {
                 assert_eq!(failed_quit_action(failure, &dismissed, &labels()), stay, "{dismissed:?}");
             }
         }
-        // A translation that gives two buttons one label cannot tell a closed
-        // dialog from the destructive button, so nothing is discarded.
-        for ambiguous in [
-            FailedQuitLabels { cancel: "Quit Without Saving".into(), ..labels() },
-            FailedQuitLabels { retry: "Quit Without Saving".into(), ..labels() },
-            FailedQuitLabels { retry: "Cancel".into(), ..labels() },
-        ] {
-            for label in ["Quit Without Saving", "Retry", "Cancel"] {
-                assert_eq!(
-                    failed_quit_action(QuitFailure::Retirement, &Custom(label.into()), &ambiguous),
-                    FailedQuitAction::Stay { clear_relaunch: false }
-                );
-            }
+        let stay = FailedQuitAction::Stay { clear_relaunch: false };
+        let answer = |label: &str, labels: &FailedQuitLabels| {
+            failed_quit_action(QuitFailure::Retirement, &Custom(label.into()), labels)
+        };
+        // A translation gave the destructive button the Cancel label: a closed
+        // dialog looks the same, so nothing is discarded. Retry still works.
+        let ambiguous = FailedQuitLabels { cancel: "Quit Without Saving".into(), ..labels() };
+        assert_eq!(answer("Quit Without Saving", &ambiguous), stay);
+        assert_eq!(answer("Retry", &ambiguous), FailedQuitAction::Retry);
+        // The destructive button shares the Retry label: it only ever retries.
+        let ambiguous = FailedQuitLabels { retry: "Quit Without Saving".into(), ..labels() };
+        assert_eq!(answer("Quit Without Saving", &ambiguous), FailedQuitAction::Retry);
+        assert_eq!(answer("Cancel", &ambiguous), stay);
+        // Retry and Cancel share a label: that label means Cancel, and the
+        // destructive button, still unmistakable, keeps the way out open.
+        let ambiguous = FailedQuitLabels { retry: "Cancel".into(), ..labels() };
+        assert_eq!(answer("Cancel", &ambiguous), stay);
+        assert_eq!(answer("Quit Without Saving", &ambiguous), FailedQuitAction::QuitWithoutSaving);
+        // All three alike: nothing but staying.
+        let ambiguous = FailedQuitLabels { retry: "OK".into(), quit_without_saving: "OK".into(), cancel: "OK".into() };
+        assert_eq!(answer("OK", &ambiguous), stay);
+    }
+
+    #[test]
+    fn cancel_cannot_leave_kiwix_running_without_a_window_or_drop_a_second_quit() {
+        for clear_relaunch in [true, false] {
+            let stay = FailedQuitAction::Stay { clear_relaunch };
+            // A window is open and nobody asked again: Cancel means stay.
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::Stay { clear_relaunch }, true, false),
+                stay
+            );
+            // The last window was closed while the dialog was open (or there
+            // never was one): staying would leave an invisible process that
+            // holds the profile, so Quit is attempted and asked about again.
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::Stay { clear_relaunch }, false, false),
+                FailedQuitAction::Retry
+            );
+            // Quit was chosen again while the dialog was open: it is not lost.
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::Stay { clear_relaunch }, true, true),
+                FailedQuitAction::Retry
+            );
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::Stay { clear_relaunch }, false, true),
+                FailedQuitAction::Retry
+            );
+        }
+        // An explicit answer is never changed, and nothing here can turn into
+        // the destructive one.
+        for (window, again) in [(true, true), (true, false), (false, true), (false, false)] {
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::Retry, window, again),
+                FailedQuitAction::Retry
+            );
+            assert_eq!(
+                settle_failed_quit(FailedQuitAction::QuitWithoutSaving, window, again),
+                FailedQuitAction::QuitWithoutSaving
+            );
+            assert_ne!(
+                settle_failed_quit(FailedQuitAction::Stay { clear_relaunch: true }, window, again),
+                FailedQuitAction::QuitWithoutSaving
+            );
         }
     }
 

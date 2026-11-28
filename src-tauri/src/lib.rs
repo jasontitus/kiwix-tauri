@@ -759,11 +759,41 @@ async fn retire_without_saving(service: &Service) {
     }
 }
 
+/// The exit handler's state, shared with the failed-Quit dialog.
+#[cfg(desktop)]
+#[derive(Clone, Default)]
+struct QuitFlags {
+    /// A Quit attempt is running or its failed-Quit dialog is open. Further
+    /// exit requests are held back.
+    exiting: Arc<AtomicBool>,
+    /// The process may exit: the service retired, or the person chose to quit
+    /// without saving.
+    authorized: Arc<AtomicBool>,
+    /// An exit request was held back while `exiting` was set. The dialog reads
+    /// it when it closes, so a Quit chosen meanwhile is not lost.
+    requested_again: Arc<AtomicBool>,
+}
+
+/// The application window the failed-Quit dialog belongs to: the focused
+/// one, else `main`, else the first by label.
+#[cfg(desktop)]
+fn failed_quit_dialog_parent(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    let mut windows: Vec<_> = app.webview_windows().into_iter().collect();
+    windows.sort_by(|a, b| a.0.cmp(&b.0));
+    let candidates: Vec<_> = windows
+        .iter()
+        .map(|(label, window)| (label.as_str(), window.is_focused().unwrap_or(false)))
+        .collect();
+    let index = launch_target_index(&candidates)?;
+    Some(windows.remove(index).1)
+}
+
 /// Quit could not save or retire cleanly. Ask the person whether to retry,
 /// keep Kiwix open, or quit knowing what is lost. `exiting` stays set until
 /// they answer, so a second Quit cannot stack another dialog, and nothing but
 /// the explicit "Quit Without Saving" button authorizes an exit that gives up
-/// state (`quit::failed_quit_action`).
+/// state (`quit::failed_quit_action`). Cancel keeps Kiwix open only while a
+/// window is left to return to (`quit::settle_failed_quit`).
 #[cfg(desktop)]
 fn ask_after_failed_quit(
     app: tauri::AppHandle,
@@ -771,8 +801,7 @@ fn ask_after_failed_quit(
     failure: quit::QuitFailure,
     error: String,
     code: Option<i32>,
-    exiting: Arc<AtomicBool>,
-    authorized: Arc<AtomicBool>,
+    flags: QuitFlags,
 ) {
     let locale = service.store.locale().unwrap_or_else(|_| "system".into());
     let strings = localization::Localizer::for_app(&locale);
@@ -781,7 +810,7 @@ fn ask_after_failed_quit(
         quit_without_saving: strings.text("Quit Without Saving", &[]),
         cancel: strings.text("Cancel", &[]),
     };
-    let dialog = app
+    let mut dialog = app
         .dialog()
         .message(quit::failed_quit_message(&strings, failure, &error))
         .title(strings.text("Quit", &[]))
@@ -791,17 +820,33 @@ fn ask_after_failed_quit(
             labels.quit_without_saving.clone(),
             labels.cancel.clone(),
         ));
+    if let Some(window) = failed_quit_dialog_parent(&app) {
+        // Attached to a window, the question cannot sit unseen behind it.
+        let _ = window.unminimize();
+        dialog = dialog.parent(&window);
+    }
+    // Only requests that arrive from here on are "while the dialog is open".
+    flags.requested_again.store(false, Ordering::SeqCst);
     dialog.show_with_result(move |result| {
-        match quit::failed_quit_action(failure, &result, &labels) {
+        let shell_window_remains = app
+            .webview_windows()
+            .keys()
+            .any(|label| quit::shell_label(label));
+        let action = quit::settle_failed_quit(
+            quit::failed_quit_action(failure, &result, &labels),
+            shell_window_remains,
+            flags.requested_again.swap(false, Ordering::SeqCst),
+        );
+        match action {
             quit::FailedQuitAction::Retry => {
-                exiting.store(false, Ordering::SeqCst);
+                flags.exiting.store(false, Ordering::SeqCst);
                 app.exit(code.unwrap_or(0));
             }
             quit::FailedQuitAction::QuitWithoutSaving => {
                 // `exiting` stays set: this attempt ends in the exit below.
                 tauri::async_runtime::spawn(async move {
                     retire_without_saving(&service).await;
-                    authorized.store(true, Ordering::SeqCst);
+                    flags.authorized.store(true, Ordering::SeqCst);
                     finish_authorized_quit(&app, code);
                 });
             }
@@ -810,7 +855,11 @@ fn ask_after_failed_quit(
                     // The shells resumed; a later plain Quit must not relaunch.
                     update::clear_restart_after_quit();
                 }
-                exiting.store(false, Ordering::SeqCst);
+                flags.exiting.store(false, Ordering::SeqCst);
+                // A Quit held back in the instant before that store is still wanted.
+                if flags.requested_again.swap(false, Ordering::SeqCst) {
+                    app.exit(code.unwrap_or(0));
+                }
             }
         }
     });
@@ -877,10 +926,12 @@ async fn open_search(
     Ok(())
 }
 
-/// Open the given archives in the launch target window. `Err` means nothing was
-/// opened. `Ok` lists the archives that could not be opened (see
-/// `launch_failures`) after every readable one was queued; the caller must show
-/// that list to the person, because nothing else does.
+/// Open the given archives in the launch target window. `Ok` lists the archives
+/// that could not be opened (see `launch_failures`) after every readable one
+/// was queued for the window. `Err` means the launch did not reach a window;
+/// archives that were readable may already be in the library, and the error
+/// text then also names the ones that were not. The caller must show either
+/// result to the person, because nothing else does.
 #[cfg(desktop)]
 async fn open_paths(
     service: Arc<Service>,
@@ -960,21 +1011,39 @@ async fn open_paths(
     if locations.is_empty() {
         return Ok(failures);
     }
-    if emit {
-        let (label, window) = desktop_launch_target(&service)?;
-        service
-            .queue_launch_locations(&label, locations, launch_generation)
-            .await?;
-        window.emit("kiwix-open", ()).map_err(|e| e.to_string())?;
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    } else {
-        service
-            .queue_launch_locations("main", locations, launch_generation)
-            .await?;
+    let delivered = async {
+        if emit {
+            let (label, window) = desktop_launch_target(&service)?;
+            service
+                .queue_launch_locations(&label, locations, launch_generation)
+                .await?;
+            window.emit("kiwix-open", ()).map_err(|e| e.to_string())?;
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        } else {
+            service
+                .queue_launch_locations("main", locations, launch_generation)
+                .await?;
+        }
+        Ok::<(), String>(())
     }
-    Ok(failures)
+    .await;
+    match delivered {
+        Ok(()) => Ok(failures),
+        Err(error) => Err(undelivered_launch_error(error, &failures)),
+    }
+}
+
+/// The error for a launch whose readable archives could not be handed to a
+/// window. The archives that could not be opened at all are still named.
+#[cfg(desktop)]
+fn undelivered_launch_error(error: String, failures: &[String]) -> String {
+    if failures.is_empty() {
+        error
+    } else {
+        format!("{error}\n{}", failures.join("\n"))
+    }
 }
 
 #[cfg(desktop)]
@@ -1560,40 +1629,42 @@ fn run_application(options: Options) -> Result<(), String> {
         })
         .build(context)
         .map_err(|e| e.to_string())?;
-    let exiting = Arc::new(AtomicBool::new(false));
-    let authorized = Arc::new(AtomicBool::new(false));
+    let quit_flags = QuitFlags::default();
     app.run(move |app, event| match event {
-        tauri::RunEvent::ExitRequested { api, code, .. } if !authorized.load(Ordering::SeqCst) => {
+        tauri::RunEvent::ExitRequested { api, code, .. } if !quit_flags.authorized.load(Ordering::SeqCst) => {
             api.prevent_exit();
-            if !exiting.swap(true, Ordering::SeqCst) {
+            if !quit_flags.exiting.swap(true, Ordering::SeqCst) {
                 if let Some(state) = app.try_state::<Arc<Service>>() {
                     let service = state.inner().clone();
                     let app = app.clone();
-                    let exiting = exiting.clone();
-                    let authorized = authorized.clone();
+                    let flags = quit_flags.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(error) = quit::prepare(&app).await {
                             // prepare cancelled the attempt and the shells resumed.
                             // The relaunch of an installed update is decided by the
                             // person's answer, not dropped behind their back.
                             eprintln!("Application Quit cancelled: {error}");
-                            ask_after_failed_quit(app, service, quit::QuitFailure::Flush, error, code, exiting, authorized);
+                            ask_after_failed_quit(app, service, quit::QuitFailure::Flush, error, code, flags);
                             return;
                         }
                         if let Err(error) = service.shutdown().await {
                             eprintln!("Application Quit needs a retry: service retirement failed: {error}");
                             // Keep the acknowledged shells frozen. Their ordinary commands
                             // cannot run once the service has started retiring.
-                            ask_after_failed_quit(app, service, quit::QuitFailure::Retirement, error, code, exiting, authorized);
+                            ask_after_failed_quit(app, service, quit::QuitFailure::Retirement, error, code, flags);
                             return;
                         }
-                        authorized.store(true, Ordering::SeqCst);
+                        flags.authorized.store(true, Ordering::SeqCst);
                         finish_authorized_quit(&app, code);
                     });
                 } else {
-                    exiting.store(false, Ordering::SeqCst);
+                    quit_flags.exiting.store(false, Ordering::SeqCst);
                     eprintln!("Application Quit cancelled: library service unavailable");
                 }
+            } else {
+                // Held back while an attempt or its dialog is in progress. The
+                // dialog acts on it when it closes.
+                quit_flags.requested_again.store(true, Ordering::SeqCst);
             }
         }
         #[cfg(target_os = "macos")]
@@ -1864,6 +1935,17 @@ mod launch_tests {
             Some("Cannot open archives while application Quit is pending")
         );
 
+        // Mixed launch that cannot reach a window (this test has none): the
+        // error still names the archive that could not be opened.
+        let undelivered = open_paths(service.clone(), vec![broken.clone(), fixture()], None, true, None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            undelivered,
+            format!("No native application is available to open the archive\n{}", failures[0])
+        );
+        assert_eq!(undelivered_launch_error("No window".into(), &[]), "No window");
+
         // Mixed launch: the readable archive opens, the other one is reported.
         let mixed = open_paths(service.clone(), vec![broken.clone(), fixture()], None, false, None)
             .await
@@ -1956,6 +2038,27 @@ mod launch_tests {
     async fn quitting_without_saving_still_retires_the_service_when_the_profile_is_gone() {
         let profile = Profile::new();
         let service = Service::new(profile.0.clone(), false, false).unwrap();
+        // A reader listener is open: a socket that only retirement releases.
+        open_paths(service.clone(), vec![fixture()], None, false, None)
+            .await
+            .unwrap();
+        let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+        let launch = snapshot["launchLocations"][0].clone();
+        let opened = service
+            .clone()
+            .dispatch(
+                "open_article",
+                json!({
+                    "bookId": launch["bookId"],
+                    "path": launch["path"],
+                    "parentOrigin": "tauri://localhost",
+                }),
+            )
+            .await
+            .unwrap();
+        let reader = url::Url::parse(opened["baseUrl"].as_str().unwrap()).unwrap();
+        let listener = ("127.0.0.1", reader.port().expect("reader listeners use an explicit port"));
+        assert!(std::net::TcpStream::connect(listener).is_ok(), "the reader is listening");
         service
             .store
             .update(|state| {
@@ -1974,30 +2077,38 @@ mod launch_tests {
         // The volume that holds the profile goes away.
         std::fs::remove_dir_all(&profile.0).unwrap();
         assert!(service.store.update(|_| Ok(())).is_err());
+        // Nothing has retired the service yet.
+        assert!(service.ensure_running().is_ok());
 
-        // Ordinary Quit: retirement reports the unsaved state, every time.
-        let error = service.shutdown().await.unwrap_err();
-        assert!(error.contains("Writing the last reading position"), "{error}");
-        let error = service.shutdown().await.unwrap_err();
-        assert!(error.contains("Writing the last reading position"), "{error}");
         let labels = quit::FailedQuitLabels {
             retry: "Retry".into(),
             quit_without_saving: "Quit Without Saving".into(),
             cancel: "Cancel".into(),
         };
-        // Only the explicit button moves on, and then retirement no longer
-        // vetoes the exit: the person is not left with a force-kill.
+        // Only the explicit button moves on.
         assert_eq!(
             quit::failed_quit_action(
-                quit::QuitFailure::Retirement,
+                quit::QuitFailure::Flush,
                 &tauri_plugin_dialog::MessageDialogResult::Custom("Quit Without Saving".into()),
                 &labels,
             ),
             quit::FailedQuitAction::QuitWithoutSaving
         );
+        // The forced path is the first and only retirement in this test. It
+        // must return although the profile cannot be written, and it must
+        // still have run the stages that release resources: the listener is
+        // closed and the service refuses commands.
         retire_without_saving(&service).await;
+        assert!(
+            std::net::TcpStream::connect(listener).is_err(),
+            "quitting without saving left the reader listener open"
+        );
         assert!(service.ensure_running().is_err());
         assert!(service.clone().dispatch("snapshot", json!({})).await.is_err());
+        // The same retirement as an ordinary Quit still reports what could not
+        // be saved, which is why the person had to be asked.
+        let error = service.shutdown().await.unwrap_err();
+        assert!(error.contains("Writing the last reading position"), "{error}");
     }
 
     #[tokio::test]

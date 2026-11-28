@@ -683,8 +683,8 @@ fn entry_identity(
 /// Anything else is published with `link(2)`, which is atomic and fails with
 /// `EEXIST` rather than replace. The old name is then retired without ever
 /// unlinking a checked public pathname: it is first captured by a rename to a
-/// private random name in the same directory, and only the captured entry is
-/// inspected. It is unlinked only while it is the same inode the destination
+/// private name in the same directory (`.kiwix-renamed-<device>-<inode>` of
+/// the published file), and only the captured entry is inspected. It is unlinked only while it is the same inode the destination
 /// name holds, so the file stays reachable there; a different entry (the
 /// source name was reused after the link) is put back under its old name.
 ///
@@ -694,7 +694,8 @@ fn entry_identity(
 ///
 /// A crash between the link and the unlink leaves two names for one file
 /// (the source name or the private `.kiwix-renamed-*` name); no step can leave
-/// fewer names than it found.
+/// fewer names than it found. Asking for the same move again finishes it: a
+/// destination that already is the source's inode is not a collision.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn exclusive_rename_fallback(
     source_dir: std::os::fd::BorrowedFd<'_>,
@@ -720,20 +721,30 @@ fn exclusive_rename_fallback(
     }
     if let Err(error) = link(source_dir, source, destination_dir, destination) {
         let unsupported = match error.raw_os_error() {
+            // Also what `fs.protected_hardlinks` and immutable files answer.
             Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP) => true,
             // Android denies hard links to applications with EACCES.
             Some(libc::EACCES) => cfg!(target_os = "android"),
             _ => false,
         };
-        if !unsupported {
+        if unsupported {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!(
+                    "Kiwix cannot rename a file on this storage without the risk of overwriting another one: it has no exclusive rename, and a hard link could not be created ({error}). Nothing was changed. Keep archives that Kiwix should move or delete on a different drive"
+                ),
+            ));
+        }
+        // An occupied name is final, unless it already is this very file: a
+        // link whose success was reported as a failure (a lost NFS reply), or
+        // an earlier run that stopped after its link. Finishing that move
+        // removes no file; the destination keeps the inode it already has.
+        let same_file = error.kind() == io::ErrorKind::AlreadyExists
+            && entry_identity(destination_dir, destination)
+                .is_ok_and(|(_, linked_device, linked_inode)| (linked_device, linked_inode) == (device, inode));
+        if !same_file {
             return Err(error);
         }
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            format!(
-                "This storage location cannot move a file into place without the risk of overwriting another file: it supports neither an exclusive rename nor hard links ({error}). Choose a folder on a different drive"
-            ),
-        ));
     }
     after_link();
     // What the link published. A destination that already changed again is
@@ -743,13 +754,23 @@ fn exclusive_rename_fallback(
             "The moved file's new name changed before its old name could be removed; the old name was kept: {error}"
         ))
     })?;
-    let private = format!(".kiwix-renamed-{}", uuid::Uuid::new_v4());
+    // Named after the published file, so a leftover can be recognized. The
+    // private name must never be one of the two names being worked on.
+    let mut private = format!(".kiwix-renamed-{linked_device:x}-{linked_inode:x}");
+    if [source, destination].iter().any(|name| name.to_bytes() == private.as_bytes()) {
+        private.push_str("-1");
+    }
     let captured = std::ffi::CString::new(private.clone())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Publication path contains NUL"))?;
-    match rustix::fs::statat(source_dir, captured.as_c_str(), AtFlags::SYMLINK_NOFOLLOW) {
-        Err(rustix::io::Errno::NOENT) => {}
-        Ok(_) => return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Private rename name is already in use; the old name was kept")),
-        Err(error) => return Err(error.into()),
+    match entry_identity(source_dir, captured.as_c_str()) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        // A second name an interrupted earlier move left for this same file,
+        // which stays reachable through the destination.
+        Ok((_, leftover_device, leftover_inode)) if (leftover_device, leftover_inode) == (linked_device, linked_inode) => {
+            rustix::fs::unlinkat(source_dir, captured.as_c_str(), AtFlags::empty())?;
+        }
+        Ok(_) => return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{private} is in use by another file; the old name was kept"))),
+        Err(error) => return Err(error),
     }
     // Capture whatever the source name holds now, atomically.
     match rustix::fs::renameat(source_dir, source, source_dir, captured.as_c_str()) {
@@ -763,8 +784,14 @@ fn exclusive_rename_fallback(
         }
     }
     let (captured_kind, captured_device, captured_inode) = entry_identity(source_dir, captured.as_c_str())?;
-    if (captured_device, captured_inode) == (linked_device, linked_inode) {
-        // The same file is reachable through the destination name.
+    // Read the destination again now that the old name is captured: the
+    // captured name is removed only while the destination name holds that
+    // same file at this moment (which also covers a source and destination
+    // that were one and the same entry).
+    let published = entry_identity(destination_dir, destination)
+        .ok()
+        .map(|(_, device, inode)| (device, inode));
+    if published == Some((captured_device, captured_inode)) {
         return rustix::fs::unlinkat(source_dir, captured.as_c_str(), AtFlags::empty()).map_err(|error| {
             io::Error::other(format!(
                 "The file was published under its new name; removing its old name, kept as {private}, failed: {error}"
@@ -785,7 +812,7 @@ fn exclusive_rename_fallback(
             "An entry that replaced the moved file's old name was preserved as {private}: {error}"
         )));
     }
-    if (linked_device, linked_inode) == (device, inode) {
+    if published == Some((device, inode)) {
         // The original file moved; its old name now belongs to a newer entry.
         return Ok(());
     }
@@ -1635,6 +1662,108 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// A link that succeeded but was reported as `EEXIST` (a lost NFS reply),
+    /// and a second request after a run that stopped right after its link,
+    /// both find the destination already holding the source's own inode.
+    /// That is the move half done, not a collision: it is finished.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_finishes_a_move_whose_link_already_exists() {
+        use std::os::fd::AsFd;
+        for lost_reply in [true, false] {
+            let (root, directory) = fallback_root();
+            directory.write("partial", b"verified archive").unwrap();
+            let original = directory.symlink_metadata("partial").unwrap();
+            if !lost_reply {
+                // The earlier run: linked, then interrupted.
+                directory.hard_link("partial", &directory, "complete").unwrap();
+            }
+            rename_noreplace_with(
+                directory.as_fd(), c"partial", directory.as_fd(), c"complete",
+                |_, _, _, _| Err(io::Error::from_raw_os_error(libc::EINVAL)),
+                |from, source, to, destination| {
+                    if lost_reply {
+                        native_link(from, source, to, destination).unwrap();
+                        return Err(io::Error::from_raw_os_error(libc::EEXIST));
+                    }
+                    native_link(from, source, to, destination)
+                },
+                || {},
+            )
+            .unwrap();
+            assert_eq!(names(&root), ["complete"], "lost_reply={lost_reply}");
+            let published = directory.symlink_metadata("complete").unwrap();
+            assert_eq!((published.dev(), published.ino()), (original.dev(), original.ino()));
+            assert_eq!(published.nlink(), 1);
+            assert_eq!(directory.read("complete").unwrap(), b"verified archive");
+            drop(directory);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    /// A run that stopped between capturing the old name and unlinking it
+    /// leaves `.kiwix-renamed-<device>-<inode>` beside the published file. The
+    /// name identifies the file, and the next move of that file removes it.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_capture_name_is_recognizable_and_a_leftover_is_cleared() {
+        let (root, directory) = fallback_root();
+        directory.write("book.zim", b"verified archive").unwrap();
+        let original = directory.symlink_metadata("book.zim").unwrap();
+        let private = format!(".kiwix-renamed-{:x}-{:x}", original.dev(), original.ino());
+        let mut seen = None;
+        rename_without_flag(libc::EINVAL, &directory, c"book.zim", &directory, c"moved.zim", || {
+            // Stop the world right after the link: the old name is still there.
+            seen = Some(names(&root));
+        })
+        .unwrap();
+        assert_eq!(seen.unwrap(), ["book.zim", "moved.zim"]);
+        assert_eq!(names(&root), ["moved.zim"]);
+        // The interrupted state: published file plus its hidden second name.
+        directory.hard_link("moved.zim", &directory, &private).unwrap();
+        assert_eq!(directory.symlink_metadata("moved.zim").unwrap().nlink(), 2);
+        rename_without_flag(libc::EINVAL, &directory, c"moved.zim", &directory, c"again.zim", || {}).unwrap();
+        assert_eq!(names(&root), ["again.zim"]);
+        assert_eq!(directory.symlink_metadata("again.zim").unwrap().nlink(), 1);
+        // A different file that happens to sit under that name is not removed.
+        directory.write(&private, b"somebody else's file").unwrap();
+        let error = rename_without_flag(libc::EINVAL, &directory, c"again.zim", &directory, c"third.zim", || {}).unwrap_err();
+        assert!(error.to_string().contains("in use by another file"), "{error}");
+        assert_eq!(directory.read(&private).unwrap(), b"somebody else's file");
+        assert_eq!(directory.read("again.zim").unwrap(), b"verified archive");
+        assert_eq!(directory.read("third.zim").unwrap(), b"verified archive");
+        drop(directory);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// No name is ever removed unless the same file is, at that moment, under
+    /// the destination name: a source and destination that are one entry (or
+    /// that use the private capture name themselves) lose nothing.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn fallback_never_removes_the_only_name_of_a_file() {
+        let (root, directory) = fallback_root();
+        directory.write("book.zim", b"verified archive").unwrap();
+        let original = directory.symlink_metadata("book.zim").unwrap();
+        let error = rename_without_flag(libc::EINVAL, &directory, c"book.zim", &directory, c"book.zim", || {}).unwrap_err();
+        assert_ne!(error.kind(), io::ErrorKind::NotFound, "{error}");
+        assert_eq!(directory.read("book.zim").unwrap(), b"verified archive");
+        assert_eq!(names(&root), ["book.zim"]);
+        // The capture name of this very inode as source, as destination, as both.
+        let private = format!(".kiwix-renamed-{:x}-{:x}", original.dev(), original.ino());
+        let reserved = std::ffi::CString::new(private.clone()).unwrap();
+        rename_without_flag(libc::EINVAL, &directory, c"book.zim", &directory, &reserved, || {}).unwrap();
+        assert_eq!(names(&root), [private.as_str()]);
+        assert!(rename_without_flag(libc::EINVAL, &directory, &reserved, &directory, &reserved, || {}).is_err());
+        assert_eq!(names(&root), [private.as_str()]);
+        rename_without_flag(libc::EINVAL, &directory, &reserved, &directory, c"book.zim", || {}).unwrap();
+        assert_eq!(names(&root), ["book.zim"]);
+        let published = directory.symlink_metadata("book.zim").unwrap();
+        assert_eq!((published.dev(), published.ino(), published.nlink()), (original.dev(), original.ino(), 1));
+        drop(directory);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn fallback_refuses_a_filesystem_without_hard_links_instead_of_risking_an_overwrite() {
@@ -1650,7 +1779,8 @@ mod tests {
             )
             .unwrap_err();
             assert_eq!(error.kind(), io::ErrorKind::Unsupported);
-            assert!(error.to_string().contains("neither an exclusive rename nor hard links"), "{error}");
+            assert!(error.to_string().contains("a hard link could not be created"), "{error}");
+            assert!(error.to_string().contains("Nothing was changed"), "{error}");
             assert_eq!(directory.read("partial").unwrap(), b"verified archive");
             assert_eq!(names(&root), ["partial"]);
             drop(directory);

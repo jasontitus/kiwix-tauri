@@ -570,6 +570,7 @@ impl EditionManager {
         Ok((transaction, file))
     }
 }
+const ORIGINAL_UNAVAILABLE: &str = "The drive or folder holding the original is not available. Reconnect it and try again";
 const ORIGINAL_DISCARDED: &str = "The original of this edition was deleted, so it can no longer be rolled back";
 /// Re-retain and identity-check the original as rollback does, then delete it
 /// through the library's own deletion path: the exact part cohort the archive
@@ -580,10 +581,17 @@ fn remove_original(transaction: &EditionTransaction, trash: bool) -> Result<Disc
     if original.source_reference.is_some() {
         return Ok(DiscardedFile::External);
     }
-    // Only an absent name counts as gone. Any other failure is reported, so
-    // an unreadable folder is never mistaken for a deleted file.
+    // Only a name that is absent from a folder that is there counts as gone.
+    // A folder that cannot be reached (an unplugged or unmounted drive) says
+    // nothing about the file, and closing the record then would give up the
+    // rollback without freeing anything. Any other failure is reported too,
+    // so an unreadable folder is never mistaken for a deleted file.
     match std::fs::symlink_metadata(&original.path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(DiscardedFile::Missing),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let folder = std::path::Path::new(&original.path).parent()
+                .is_some_and(|parent| std::fs::metadata(parent).is_ok_and(|metadata| metadata.is_dir()));
+            return if folder { Ok(DiscardedFile::Missing) } else { Err(ORIGINAL_UNAVAILABLE.into()) };
+        }
         Err(error) => return Err(format!("The original archive could not be checked, so it was not deleted: {error}")),
         Ok(_) => {}
     }
@@ -1491,6 +1499,16 @@ mod tests {
         assert_eq!(readmitted["errors"], json!([]), "{readmitted}");
         assert_eq!(readmitted["books"][0]["path"], second_original.to_string_lossy().as_ref());
         // The retained original of the other transaction is still protected.
+        assert!(reserved(&original_path));
+
+        // An unreachable folder (an unplugged drive) is not a deleted file:
+        // the record stays open, so rollback is still there on reconnection.
+        let away = root.join("unplugged");
+        fs::rename(&library, &away).unwrap();
+        let error = discard(&transaction.id).await.unwrap_err();
+        assert!(error.contains("is not available. Reconnect it"), "{error}");
+        assert!(!service.store.read().unwrap().edition_transactions[0].original_discarded);
+        fs::rename(&away, &library).unwrap();
         assert!(reserved(&original_path));
 
         // A file the person already deleted leaves only the record to close.

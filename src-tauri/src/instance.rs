@@ -212,6 +212,25 @@ fn native_message_commands<'a>(
     ]
 }
 
+/// Whether a helper that ran and ended with `code` showed its dialog.
+///
+/// Closing a dialog with Escape or its close button ends zenity and kdialog
+/// with status 1. Reading that as "not shown" opened the same message a second
+/// time in the next helper. Only zenity's 255, its status for a command line
+/// it cannot use, means nothing appeared. kdialog has no status of its own for
+/// that case (Qt's parser also exits 1), so every status it returns counts as
+/// shown; it is the last helper, and its options here are long-standing. A
+/// helper ended by a signal (`None`), as Qt does without a display, showed
+/// nothing.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn helper_showed_dialog(program: &str, code: Option<i32>) -> bool {
+    match code {
+        None => false,
+        Some(255) => program != "zenity",
+        Some(_) => true,
+    }
+}
+
 /// Show one message with an OK button before any Tauri runtime exists, and
 /// wait for it to be dismissed. Returns whether a dialog was shown; the caller
 /// owns the stderr fallback.
@@ -227,11 +246,11 @@ pub(crate) fn show_native_message(kind: NativeMessageKind, title: &str, message:
         return false;
     }
     for (program, arguments) in native_message_commands(kind, title, message) {
+        // A helper that is not installed cannot be started: try the next.
         let shown = std::process::Command::new(program)
             .args(arguments)
             .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
+            .is_ok_and(|status| helper_showed_dialog(program, status.code()));
         if shown {
             return true;
         }
@@ -657,6 +676,22 @@ mod tests {
             native_message_commands(NativeMessageKind::Warning, title, message)[0].1[0],
             "--warning"
         );
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn a_dismissed_dialog_counts_as_shown_so_the_message_is_not_repeated() {
+        for program in ["zenity", "kdialog"] {
+            // OK, then Escape or the close button, then zenity's timeout.
+            for code in [0, 1, 5] {
+                assert!(helper_showed_dialog(program, Some(code)), "{program} {code}");
+            }
+            // Ended by a signal: nothing was shown.
+            assert!(!helper_showed_dialog(program, None), "{program}");
+        }
+        // zenity could not use its command line: the next helper must run.
+        assert!(!helper_showed_dialog("zenity", Some(255)));
+        assert!(helper_showed_dialog("kdialog", Some(255)));
     }
 
     #[cfg(unix)]

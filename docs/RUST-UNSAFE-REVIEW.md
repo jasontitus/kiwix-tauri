@@ -441,9 +441,15 @@ gates; `provider_reference.rs` has one block under the shared mobile gate. All a
 type-checks with mingw. Windows runtime behavior, Linux compilation/runtime and physical devices remain
 unverified.
 
+`lib.rs` gained one real block on 2026-11-28, next to that prose mention: the Windows-only
+`show_native_message` calls `MessageBoxW` to show a fatal startup error (or `--help`/`--version` output when
+the process has no console) before any Tauri runtime exists. It passes two owned, NUL-terminated UTF-16
+strings that outlive the call and no owner window. It type-checks for `x86_64-pc-windows-gnu` and has not
+been run on Windows.
+
 `npm run check:unsafe` (also run by the Checks workflow) enforces this census: it fails on an undocumented
 `unsafe` block or `unsafe impl`, or any per-file count above `scripts/unsafe-census-baseline.json`
-(74 blocks in 19 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
+(75 blocks in 20 code files plus 2 impls). The baseline is a ceiling: reductions pass and leave headroom, so
 update it in the same change when reducing to keep the ceiling tight.
 
 `#![forbid(unsafe_code)]` is now on 140 safe modules, including archive source and search, map

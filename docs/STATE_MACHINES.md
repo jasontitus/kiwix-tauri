@@ -16,7 +16,7 @@ States: **Running** → **Stopping** (`Service.stopping = true`, which is never 
 
 The Quit attempt (`QuitManager.attempt`) moves **Idle** → **Preparing** (flush requested from every shell) → **Prepared** (all flushed; the attempt is *held* through `Service::shutdown`) → exit, or back to **Idle**.
 
-A Quit that cannot save or retire stops in **Asking**: one native dialog (`ask_after_failed_quit`) with Retry, Quit Without Saving and Cancel. `exiting` stays `true` while it is open, so a second Quit request cannot stack another dialog or start another attempt.
+A Quit that cannot save or retire stops in **Asking**: one native dialog (`ask_after_failed_quit`) with Retry, Quit Without Saving and Cancel, attached to an application window when one exists. `exiting` stays `true` while it is open, so a second Quit request cannot stack another dialog or start another attempt. Such a request is held back and remembered (`QuitFlags.requested_again`), not dropped.
 
 | From | Event | To | Where |
 |---|---|---|---|
@@ -27,8 +27,10 @@ A Quit that cannot save or retire stops in **Asking**: one native dialog (`ask_a
 | Prepared | `Service::shutdown` → Err | Stay Prepared (shells frozen) and Asking (`QuitFailure::Retirement`) | `lib.rs` `ask_after_failed_quit` |
 | Asking (either) | Retry | `exiting=false`, then a new `ExitRequested`. After a failed flush every shell is flushed again; after a failed retirement the flushed session is reused and only shutdown is retried. An installed update retains its relaunch request. | `quit::failed_quit_action`, `quit::needs_flush` |
 | Asking (either) | Quit Without Saving | `Service::shutdown` runs once more, every stage; its result no longer vetoes the exit. Then `authorized=true` and exit or the armed relaunch, as after a clean retirement. `exiting` stays `true` throughout. | `lib.rs` `retire_without_saving`, `finish_authorized_quit` |
-| Asking (`Flush`) | Cancel, or the dialog is closed | Running, Idle; `exiting=false`; the relaunch request of an installed update is cleared, so a later plain Quit does not restart | `quit::failed_quit_action`, `update::clear_restart_after_quit` |
-| Asking (`Retirement`) | Cancel, or the dialog is closed | Stay Prepared (shells frozen, service Stopping); `exiting=false`. The next Quit reuses the flushed session and retries shutdown. An installed update retains its relaunch request. | `quit::failed_quit_action`, `quit::needs_flush` |
+| Asking (either) | `RunEvent::ExitRequested` (Quit chosen again, or the last window closed) | Stay Asking; `requested_again=true` | `lib.rs` run callback |
+| Asking (`Flush`) | Cancel, or the dialog is closed, while an application window remains and `requested_again` is unset | Running, Idle; `exiting=false`; the relaunch request of an installed update is cleared, so a later plain Quit does not restart | `quit::failed_quit_action`, `quit::settle_failed_quit`, `update::clear_restart_after_quit` |
+| Asking (`Retirement`) | Cancel, or the dialog is closed, while an application window remains and `requested_again` is unset | Stay Prepared (shells frozen, service Stopping); `exiting=false`. The next Quit reuses the flushed session and retries shutdown. An installed update retains its relaunch request. | `quit::failed_quit_action`, `quit::settle_failed_quit`, `quit::needs_flush` |
+| Asking (either) | Cancel, or the dialog is closed, with no application window left or with `requested_again` set | Same as Retry: a new attempt, and Asking again if it still fails | `quit::settle_failed_quit` |
 
 Invariants:
 - Every command passes `ensure_running` at dispatch entry and again after the privacy lease is taken.
@@ -36,7 +38,8 @@ Invariants:
 - `Service::shutdown` is repeatable: after the cause is repaired it re-joins whatever is left (`shutdown_surfaces_failed_download_checkpoint_and_retains_retry_ownership`).
 - Final shutdown takes the privacy **write** lease. Therefore nothing may block while holding a privacy read lease and waiting for the exit to finish.
 - Tauri ignores `prevent_exit` for `RESTART_EXIT_CODE`. So `restart()`/`request_restart()` must only be called once Quit has authorized the exit; anything earlier skips the flush and retirement (see F-2).
-- State is given up only by the dialog button labelled Quit Without Saving. `quit::failed_quit_action` maps every other result to Retry or Cancel: a closed dialog (which the dialog plugin reports as the Cancel button), an unexpected result, and button labels that a translation made identical. No other path sets `authorized` after a failed flush or retirement, including the relaunch of an installed update.
+- State is given up only by the dialog button labelled Quit Without Saving. `quit::failed_quit_action` maps every other result to Retry or Cancel: a closed dialog (which the dialog plugin reports as the Cancel button) and an unexpected result. If a translation gives that button the same label as another one, it stops being accepted; Retry is accepted while its label differs from Cancel. No other path sets `authorized` after a failed flush or retirement, including the relaunch of an installed update.
+- Cancel never leaves a running process without an application window: `quit::settle_failed_quit` turns it into Retry, which gives up nothing and asks again while Quit still fails.
 - Quit Without Saving skips no retirement stage. Transfers are still asked to stop at a checkpoint and listeners, locks and native resources are still released; only a stage's failure to write is tolerated. After a failed flush the shells are not flushed again and window geometry is not captured.
 
 ### 1.2 Privacy / read-only mode and its epochs (`service.rs::operation`, `service/dispatch.rs` `save_settings`)

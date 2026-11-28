@@ -1013,7 +1013,10 @@ export default function Downloads({
     if (editionPending.current || localBlockedRef.current || !privacy || privacy.privateMode || privacy.readOnly ||
       transaction.originalDiscarded || transaction.rolledBackInstallationId !== null) return;
     const original = transaction.original;
-    const file = pathFileName(original.sourceReference?.displayName ?? original.path);
+    // Name the exact file: an original outside Kiwix's storage is deleted too.
+    const file = original.sourceReference
+      ? pathFileName(original.sourceReference.displayName)
+      : isIOS ? pathFileName(original.path) : displayPath(original.path);
     // A provider-backed original is not Kiwix's to delete: only its hold is released.
     const external = original.sourceReference != null;
     editionPending.current = true;

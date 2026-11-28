@@ -250,9 +250,9 @@ pub fn scan(raw: Value, library_names: &HashSet<String>) -> Result<ScanResult, S
     }
     if skipped > 0 {
         limitations.push(if skipped == 1 {
-            "1 ZIM file was left out because its name or folder is hidden or cannot be shown safely.".to_owned()
+            "1 ZIM file was found but could not be listed, so it was left out.".to_owned()
         } else {
-            format!("{skipped} ZIM files were left out because their names or folders are hidden or cannot be shown safely.")
+            format!("{skipped} ZIM files were found but could not be listed, so they were left out.")
         });
     }
     entries.sort_by(|left, right| {
@@ -441,7 +441,7 @@ mod tests {
         // One summary line for everything that was left out, after the
         // platform's own limitations; no rejected text is repeated in it.
         assert_eq!(result.limitations.len(), 2);
-        assert!(result.limitations[1].starts_with("2 ZIM files were left out"), "{}", result.limitations[1]);
+        assert!(result.limitations[1].starts_with("2 ZIM files were found but could not be listed"), "{}", result.limitations[1]);
         assert!(!result.limitations[1].contains("trashed"));
     }
 

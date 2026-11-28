@@ -39,14 +39,16 @@ static EXPORT_SESSION_STARTED: LazyLock<SystemTime> = LazyLock::new(SystemTime::
 #[allow(clippy::type_complexity)]
 static DUPLICATE_INTAKE_HOOK: Mutex<Option<(std::thread::ThreadId, Box<dyn FnOnce() + Send>)>> =
     Mutex::new(None);
-/// Test-only: fail the Nth exclusive rename on one thread, so the staged-delete
-/// restore path can be exercised without a second volume.
 #[cfg(test)]
-static MOVE_FAILURE_AT: Mutex<Option<(std::thread::ThreadId, u32)>> = Mutex::new(None);
-/// Test-only: the free space one thread sees on every volume, so the space
-/// check can be exercised without filling a disk.
-#[cfg(test)]
-static FREE_SPACE_OVERRIDE: Mutex<Option<(std::thread::ThreadId, u64)>> = Mutex::new(None);
+thread_local! {
+    /// Test-only: fail the Nth exclusive rename on this thread, so the
+    /// staged-delete restore path can be exercised without a second volume.
+    /// Per thread, so tests running in parallel cannot take each other's.
+    static MOVE_FAILURE_AT: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
+    /// Test-only: the free space this thread sees on every volume, so the
+    /// space check can be exercised without filling a disk.
+    static FREE_SPACE_OVERRIDE: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
 /// Test-only: the real Trash / Recycle Bin is refused unless a test opts in
 /// (none does), so a test cannot leave entries in the developer's Trash.
 #[cfg(test)]
@@ -73,10 +75,16 @@ struct FileStamp {
     size: u64,
     modified_ns: u128,
 }
+const HARD_LINKED: &str = "Archive parts must be regular files without hard links";
 impl FileStamp {
     fn of(metadata: &Metadata) -> Result<Self, String> {
         if !metadata.is_file() || metadata.nlink() != 1 {
-            return Err("Archive parts must be regular files without hard links".into());
+            // An exclusive move on a filesystem without RENAME_NOREPLACE that
+            // was interrupted leaves the file a second, hidden name.
+            if cfg!(any(target_os = "linux", target_os = "android")) && metadata.is_file() {
+                return Err(format!("{HARD_LINKED}. If an earlier move or delete of this archive was interrupted, a hidden second name for the file (.kiwix-renamed-…) may be left in the archive's folder; delete that hidden entry and try again"));
+            }
+            return Err(HARD_LINKED.into());
         }
         Self::read(metadata)
     }
@@ -213,7 +221,7 @@ fn basename(path: &Path) -> Result<String, String> {
     Ok(name.to_string())
 }
 /// The file name of a library archive for an operation that moves, deletes or
-/// shares the file itself. Reading accepts every platform-valid name; these
+/// shares the file itself (sharing pins the exact owned file too). Reading accepts every platform-valid name; these
 /// operations keep the stricter rule, and say which part of it the name fails
 /// and what the person can do instead.
 fn archive_basename(path: &Path) -> Result<String, String> {
@@ -234,7 +242,7 @@ fn archive_basename(path: &Path) -> Result<String, String> {
         return Err("Invalid single-component archive filename".into());
     };
     Err(format!(
-        "This archive's file name {reason}, so Kiwix will not move or delete the file itself. Rename the file and use Locate to find it again, or remove the archive from the library and delete the file yourself"
+        "This archive's file name {reason}. Kiwix can read it, but will not move, delete or share a file with such a name. Rename the file and use Locate to find it again; to remove it instead, remove the archive from the library and delete the file yourself"
     ))
 }
 fn private_child(parent: &Directory, name: &str, create: bool) -> Result<Directory, String> {
@@ -963,14 +971,21 @@ fn delete_book_impl(
         let _ = source.dir.remove_dir(&name);
         // Point at the staging folder only while it can still hold something.
         if restoration.is_empty() {
-            if parts.iter().all(|(part, stamp)| source.stamp(part).as_ref() == Ok(stamp)) {
+            let back = parts.iter().filter(|(part, stamp)| source.stamp(part).as_ref() == Ok(stamp)).count();
+            if back == parts.len() {
                 return Err(format!("{error}. The archive was left where it is"));
             }
             if source.absent(&name) == Ok(true) {
-                return Err(format!(
-                    "{error}. The archive files had already been {}",
-                    if trash { "moved to the Trash" } else { "deleted" }
-                ));
+                let gone = if trash { "moved to the Trash" } else { "deleted" };
+                return Err(if back == 0 {
+                    format!("{error}. The archive files had already been {gone}")
+                } else {
+                    format!(
+                        "{error}. {} of the archive's {} files had already been {gone}; the others were put back",
+                        parts.len() - back,
+                        parts.len()
+                    )
+                });
             }
         }
         return Err(format!(
@@ -1239,10 +1254,8 @@ fn check_part_proven(
 /// report capacity, which is never treated as zero.
 fn free_space(path: &Path) -> Option<u64> {
     #[cfg(test)]
-    if let Some((thread, free)) = *FREE_SPACE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) {
-        if thread == std::thread::current().id() {
-            return Some(free);
-        }
+    if let Some(free) = FREE_SPACE_OVERRIDE.get() {
+        return Some(free);
     }
     crate::storage::volume_space(path).map(|(free, _)| free)
 }
@@ -1256,12 +1269,28 @@ fn ensure_copy_space(free: Option<u64>, needed: u64, destination: &Path) -> Resu
         _ => Ok(()),
     }
 }
+/// Every part is still in the journaled source directory exactly as recorded
+/// (directory identity and each part's stamp; no archive byte is read).
+fn source_intact(journal: &Journal) -> bool {
+    let Ok(source) = Directory::open(&journal.source_directory) else {
+        return false;
+    };
+    source.identity == journal.source_directory_identity
+        && journal
+            .parts
+            .iter()
+            .all(|part| source.stamp(&part.name).as_ref() == Ok(&part.source))
+}
 /// Remove what an unfinished cross-volume copy left at its destination, and
 /// only that. `Ok(true)` means nothing of this move remains there: no part was
-/// published and the private staging directory is gone. `Ok(false)` means a
-/// destination part exists or the destination is no longer the journaled
-/// directory; nothing was touched. The source and the journal are never
-/// touched here.
+/// published and the private staging directory is gone. `Ok(false)` means
+/// nothing was touched: the source is not provably complete, a published
+/// destination part exists, or the destination is no longer the journaled
+/// directory. The source and the journal are never touched here.
+///
+/// A staged copy may be the only verified copy left when the source volume
+/// is unplugged, failed or was moved away, so nothing is cleared unless every
+/// source part is present with its recorded stamp.
 ///
 /// Ownership: the staging directory must be this user's private (0700) child
 /// carrying the identity the journal recorded when it was created. A finished
@@ -1274,12 +1303,18 @@ fn clear_unpublished_copy(journal: &Journal) -> Result<bool, String> {
     if journal.same_filesystem {
         return Ok(false);
     }
+    if !source_intact(journal) {
+        return Ok(false);
+    }
     let destination = Directory::open(&journal.destination_directory)?;
     if destination.identity != journal.destination_directory_identity {
         return Ok(false);
     }
     for part in &journal.parts {
-        if !destination.absent(&part.name)? {
+        // A part's copy identity is journaled before the copy is published,
+        // so an entry at the name of a part without one was never published
+        // by this move: it is somebody else's file and stays untouched.
+        if part.target.is_some() && !destination.absent(&part.name)? {
             return Ok(false);
         }
     }
@@ -1337,9 +1372,10 @@ fn clear_unpublished_copy(journal: &Journal) -> Result<bool, String> {
 }
 /// Give up a cross-volume move that failed before it published anything, so it
 /// is not re-hashed and re-copied at every launch. The journal is removed only
-/// when the library still points at the intact source side, no destination
-/// part exists and the owned staging entries are gone; in every other case it
-/// stays for startup recovery. Returns whether the move was abandoned.
+/// when the library still points at the source side, every source part is
+/// present as recorded, no destination part was published and the owned
+/// staging entries are gone; in every other case it stays for startup
+/// recovery. Returns whether the move was abandoned.
 fn abandon_unpublished_copy(store: &Store, journals: &Journals, journal: &Journal) -> Result<bool, String> {
     if journal.same_filesystem {
         return Ok(false);
@@ -1370,13 +1406,27 @@ fn failed_move(store: &Store, journals: &Journals, journal: &Journal, error: Str
     }
 }
 /// A journal this profile wrote for a book that is no longer in the library
-/// can never be validated or finished.
+/// can never be validated or finished. It is dropped only when that absence
+/// is trustworthy and nothing depends on the journal:
+/// - the profile loaded without skipped records and still lists a library
+///   book (an empty library is what a lost or freshly created profile looks
+///   like, so it proves nothing about one book);
+/// - every part is still in the source folder as recorded, so the archive is
+///   whole on one side and never split across the two folders.
 fn journal_orphaned(journal: &Journal, journals: &Journals, store: &Store) -> Result<bool, String> {
     canonical_uuid(&journal.id)?;
-    if journal.version != 1 || journal.owner != journals.owner {
+    if journal.version != 1 || journal.owner != journals.owner || !store.load_warnings().is_empty() {
         return Ok(false);
     }
-    Ok(!store.read()?.books.iter().any(|book| book.metadata.id == journal.book_id))
+    let state = store.read()?;
+    let mut library = state
+        .books
+        .iter()
+        .filter(|book| book.source_reference.as_ref().is_none_or(|source| source.persistent));
+    if library.clone().next().is_none() || library.any(|book| book.metadata.id == journal.book_id) {
+        return Ok(false);
+    }
+    Ok(source_intact(journal))
 }
 fn finish_move(
     store: &Store,
@@ -1451,6 +1501,20 @@ fn finish_move_with_rename(
                 commit_path(store, journal, &source.path.join(&journal.primary)).map_err(
                     |restore| format!("{error}; restoring intact source path failed: {restore}"),
                 )?;
+                // Nothing of this move exists any more: the archive is whole
+                // in its source folder, the library points at it again and no
+                // destination name is taken. Keeping the journal would only
+                // repeat two full hashes and this failure at every launch
+                // (for example where the two folders share a device but not a
+                // mount, so the rename can never succeed).
+                if journal.parts.iter().all(|part| destination.absent(&part.name) == Ok(true))
+                    && journals.remove(&journal.id).is_ok()
+                {
+                    return Err(format!(
+                        "{error}. This archive was not moved and is still in {}",
+                        crate::storage::display_path(&source.path)
+                    ));
+                }
             }
             return Err(error);
         }
@@ -2634,15 +2698,12 @@ fn cleanup_exports(exports: &Directory) -> Result<(), String> {
 /// Test-only fault injection shared by every `move_exclusive` implementation.
 #[cfg(test)]
 fn simulated_move_failure() -> Result<(), String> {
-    let mut failure = MOVE_FAILURE_AT.lock().unwrap();
-    if let Some((thread, remaining)) = *failure {
-        if thread == std::thread::current().id() {
-            if remaining <= 1 {
-                *failure = None;
-                return Err("Exclusive archive rename: simulated cross-device move".into());
-            }
-            *failure = Some((thread, remaining - 1));
+    if let Some(remaining) = MOVE_FAILURE_AT.get() {
+        if remaining <= 1 {
+            MOVE_FAILURE_AT.set(None);
+            return Err("Exclusive archive rename: simulated cross-device move".into());
         }
+        MOVE_FAILURE_AT.set(Some(remaining - 1));
     }
     Ok(())
 }

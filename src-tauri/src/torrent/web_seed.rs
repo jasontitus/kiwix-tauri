@@ -1728,9 +1728,11 @@ mod tests {
             .open(temp.join("control")).unwrap();
         let url = Url::parse(&format!("http://127.0.0.1:{port}/map.zim")).unwrap();
         let client = reqwest::Client::new();
+        let token = CancellationToken::new();
+        let silent = |_, _, _| {};
         let unpaced = download_file(
-            &client, &CancellationToken::new(), &url, &file, 0, BODY.len() as u64, 0, BODY.len() as u64,
-            &|_, _, _| {}, Pace::new(5, hold * 10),
+            &client, &token, &url, &file, 0, BODY.len() as u64, 0, BODY.len() as u64,
+            &silent, Pace::new(5, hold * 10),
         );
         assert!(tokio::time::timeout(window * 4, unpaced).await.is_err(), "the trickling response ended by itself");
 

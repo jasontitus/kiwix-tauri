@@ -704,8 +704,12 @@ pub(super) fn sync_map_directory(directory: &Dir) -> Result<(), String> {
     Ok(())
 }
 
-// Like library migration cleanup, capture and restoration use exclusive native
-// renames between capabilities, never a link/unlink or ambient-path fallback.
+// Like library migration cleanup, capture and restoration use exclusive
+// renames between capabilities, never an ambient-path fallback. Where the
+// filesystem has no RENAME_NOREPLACE (NFS, FUSE) the shared primitive moves
+// the entry by an exclusive link and a captured unlink through the same two
+// capabilities; an interruption there can leave the file a second name
+// (`.kiwix-renamed-<device>-<inode>` in the source directory).
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 pub(super) fn capture_partial(source: &Dir, from: &str, destination: &Dir, to: &str) -> Result<(), String> {
     let from = std::ffi::CString::new(from).map_err(|e| e.to_string())?;

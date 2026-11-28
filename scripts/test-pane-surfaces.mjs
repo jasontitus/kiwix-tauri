@@ -278,7 +278,7 @@ test("Downloads shows kept progress, retained originals and one owner per failur
   await button('section[aria-label="Retained original editions"]', "Delete retained original");
   await until(() => document.querySelector("dialog.modal-confirmation[open]"));
   assert.match(await page.$eval("dialog.modal-confirmation[open]", (node) => node.textContent),
-    /Permanently delete the retained original “Old edition” \(old_eng_2025-01\.zim\)/);
+    /Permanently delete the retained original “Old edition” \(.*old_eng_2025-01\.zim\)/);
   await page.keyboard.press("Escape");
   await until(() => !document.querySelector("dialog[open]"));
   assert.equal((await calls("edition_discard_original")).length, 0);
