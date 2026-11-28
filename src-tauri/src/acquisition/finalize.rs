@@ -14,6 +14,40 @@ pub(super) enum FinalizeMode {
     Sweep,
 }
 
+pub(super) const ZIM_ENDED_EARLY: &str = "The download ended before the whole archive arrived. Retry to fetch the rest; if it stops early again, cancel it and start a new download";
+pub(super) const ZIM_LENGTH_MISMATCH: &str = "The downloaded file is not a complete ZIM archive: its size does not match the size its own header gives. Cancel it and start a new download";
+
+/// How a file's length compares with the length its ZIM header declares.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ZimLength {
+    /// The header declares this length, or is an early header that declares none.
+    Whole,
+    /// The header declares more bytes than the file holds.
+    EndsEarly,
+    /// The header declares fewer bytes, or a length that cannot exist.
+    Mismatch,
+}
+
+/// Measure a download against its own ZIM header. A ZIM file ends with a
+/// 16-byte MD5 whose offset is the header's `checksum_pos` (bytes 72..80), so
+/// the file is exactly `checksum_pos + 16` bytes long. Only an early header,
+/// whose MIME list starts at byte 72 (`mime_list_pos`, bytes 56..64), has no
+/// such field. This is the rule `archive::validate_layout` applies when a book
+/// is opened. Applying it before publication means a transfer that ended early,
+/// with no advertised size or digest to measure it against, is never published
+/// as a complete archive.
+pub(super) fn zim_length(header: &[u8; 80], length: u64) -> ZimLength {
+    let field = |at: usize| u64::from_le_bytes(std::array::from_fn(|index| header[at + index]));
+    if field(56) == 72 {
+        return ZimLength::Whole;
+    }
+    match field(72).checked_add(16) {
+        Some(declared) if declared == length => ZimLength::Whole,
+        Some(declared) if declared > length => ZimLength::EndsEarly,
+        _ => ZimLength::Mismatch,
+    }
+}
+
 /// Expected digest and length are checked against the row, never the part.
 pub(super) fn verify_expected_digest(
     snapshot: &StoredJob,
@@ -311,12 +345,17 @@ pub(super) fn finalize_durable_download(
     // Read directly from the retained file. Buffered read-ahead would bypass
     // the checksum pass's limit on how many bytes it reads from disk.
     let mut reader = &file;
-    let mut magic = [0u8; 4];
+    let mut header = [0u8; 80];
     reader
-        .read_exact(&mut magic)
+        .read_exact(&mut header)
         .map_err(|e| format!("Reading ZIM signature: {e}"))?;
-    if magic != *b"ZIM\x04" {
+    if header[..4] != *b"ZIM\x04" {
         return Err("Downloaded resource is not a ZIM archive (invalid magic)".into());
+    }
+    // Every range of this row is already on disk, so nothing is left to fetch
+    // whichever way the lengths disagree.
+    if zim_length(&header, total) != ZimLength::Whole {
+        return Err(ZIM_LENGTH_MISMATCH.into());
     }
     reader
         .seek(std::io::SeekFrom::Start(0))

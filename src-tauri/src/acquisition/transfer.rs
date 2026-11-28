@@ -161,7 +161,21 @@ pub(super) async fn execute_transfer(
     // a 416 that carries no validator. Go straight to the local signature, size
     // and checksum verification that every download must pass before it is
     // published.
-    let complete_part = !snapshot.segmented && downloaded > 0 && known_total == Some(downloaded);
+    //
+    // That holds only for a part that is itself a whole ZIM. Anything else,
+    // such as an error page a mirror served in place of the archive, already
+    // failed that verification once and can only be put right by the server,
+    // so it takes the ordinary request path below.
+    let complete_part = !snapshot.segmented
+        && downloaded >= 80
+        && known_total == Some(downloaded)
+        && {
+            let mut header = [0u8; 80];
+            file.seek(std::io::SeekFrom::Start(0)).await.map_err(|e| e.to_string())?;
+            file.read_exact(&mut header).await.is_ok()
+                && header[..4] == *b"ZIM\x04"
+                && zim_length(&header, downloaded) == ZimLength::Whole
+        };
     // A byte count is not proof of object identity. Never append without If-Range.
     if !complete_part && downloaded > 0 && validator(&snapshot).is_none() {
         // Request a full response, but retain the old bytes until its declared
@@ -724,14 +738,26 @@ pub(super) async fn execute_transfer(
     if downloaded < 80 {
         return Err("Downloaded file is too short to be a ZIM archive".into());
     }
-    let mut magic = [0u8; 4];
-    file.read_exact(&mut magic)
+    let mut header = [0u8; 80];
+    file.read_exact(&mut header)
         .await
         .map_err(|e| format!("Reading ZIM signature: {e}"))?;
-    if magic != *b"ZIM\x04" {
+    if header[..4] != *b"ZIM\x04" {
         return Err("Downloaded resource is not a ZIM archive (invalid magic)".into());
     }
     let snapshot = inner.snapshot(id)?;
+    match zim_length(&header, downloaded) {
+        ZimLength::Whole => {}
+        ZimLength::EndsEarly if !snapshot.segmented => {
+            // The response ended without an error, so its byte count was taken
+            // for the object's size. The archive says otherwise. Forget that
+            // size, so Retry can continue the part (or fetch it again) instead
+            // of being held to a length that was never the object's.
+            inner.update(id, |stored| stored.job.total = None)?;
+            return Err(ZIM_ENDED_EARLY.into());
+        }
+        _ => return Err(ZIM_LENGTH_MISMATCH.into()),
+    }
     file.seek(std::io::SeekFrom::Start(0))
         .await
         .map_err(|e| e.to_string())?;

@@ -108,9 +108,9 @@ pub(crate) fn busy_dialog_message(data_dir: &Path, detail: &str) -> String {
     let process_tool = if cfg!(target_os = "macos") {
         "Activity Monitor"
     } else if cfg!(windows) {
-        "Activity Monitor"
+        "Task Manager"
     } else {
-        "Activity Monitor"
+        "your system monitor"
     };
     format!(
         "Another Kiwix instance is already running with this data directory:\n\n{}\n\nThat instance keeps the profile; this launch changed nothing. To use a separate library, launch Kiwix with --data-dir PATH (for example a new folder). If no Kiwix window is visible, quit the running instance from its window or {process_tool}; do not delete store.lock.{detail}",

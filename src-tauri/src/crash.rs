@@ -568,7 +568,6 @@ fn path_end(chars: &[char], start: usize) -> usize {
     let mut end = start;
     while end < chars.len() {
         let stop = match chars[end] {
-            c if c.is_whitespace() => true,
             '\n' | '\r' | '<' | '>' | '`' => true,
             // Debug-formatted paths escape an embedded quote as `\"`.
             '"' => chars[start..end].iter().rev().take_while(|c| **c == '\\').count() % 2 == 0,
