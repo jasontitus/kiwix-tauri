@@ -62,17 +62,19 @@ export default function SelectedStorageActions({ books, disabled = false, onChan
   async function relocate() {
     const privacy = capturePrivacyContext();
     if (!target || unavailable || !privacy || privacy.privateMode || privacy.readOnly) return;
+    // Re-read from the selection itself: it can change while the dialog is open.
+    const moveOriginals = removeOld && !books.some((book) => !!book.sourceReference);
     setBusy(true);
     try {
       const result = await api<Result>("library_files_relocate", {
-        bookIds: books.map((book) => book.id), target, removeOld: move, confirm: true,
+        bookIds: books.map((book) => book.id), target, removeOld: moveOriginals, confirm: true,
         privacyGeneration: privacy.generation,
       });
       setOpen(false);
       if (isPrivacyContextCurrent(privacy)) {
         setNotice(result.cleanupPending
           ? t("The managed copies are ready. Some originals were kept; restart Kiwix to finish cleanup.")
-          : move ? t("Selected archives moved.") : t("Selected archives copied. Originals were kept."));
+          : moveOriginals ? t("Selected archives moved.") : t("Selected archives copied. Originals were kept."));
         await onChanged();
         if (result.cleanupPending) {
           // Selection refresh can unmount this control, so retain the cleanup

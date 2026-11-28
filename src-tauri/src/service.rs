@@ -100,6 +100,25 @@ struct LocalSwarmAdmission {
     generation: u64,
 }
 
+/// Cancels manual and monitored imports for a policy cutover. Dropped once the
+/// privacy writer is held (or the cutover ends early), it installs a fresh
+/// token, unless Quit has begun: Quit's cancellation must stay in force.
+struct ImportCutover<'a>(&'a Service);
+impl<'a> ImportCutover<'a> {
+    fn begin(service: &'a Service) -> Self {
+        service.cancel_imports();
+        Self(service)
+    }
+}
+impl Drop for ImportCutover<'_> {
+    fn drop(&mut self) {
+        let mut token = self.0.import_cancel.lock().unwrap_or_else(|error| error.into_inner());
+        if !self.0.stopping.load(Ordering::SeqCst) {
+            *token = tokio_util::sync::CancellationToken::new();
+        }
+    }
+}
+
 struct LocalSwarmRetirement<'a> {
     service: &'a Service,
     retired: bool,
@@ -1726,20 +1745,62 @@ impl Service {
             cache.retain(|item| item.id != id);
         }
     }
+    /// The token that stops verification for the current import admission.
+    fn import_cancellation(&self) -> Result<tokio_util::sync::CancellationToken, String> {
+        Ok(self.import_cancel.lock().map_err(|_| "Import state unavailable")?.clone())
+    }
+    /// Stop every manual and monitored verification now. Readers of the
+    /// privacy lease finish promptly, so a writer queued next is not held for
+    /// a whole-archive checksum.
+    fn cancel_imports(&self) {
+        self.import_cancel.lock().unwrap_or_else(|error| error.into_inner()).cancel();
+    }
+    /// An already-registered, present file at this exact path: opening it
+    /// again must not re-run a whole-archive checksum. The reader still checks
+    /// the archive's identity when it opens the file.
+    fn registered_at_path(&self, path: &str, managed: bool) -> Result<Option<Book>, String> {
+        let Ok(canonical) = std::fs::canonicalize(path) else { return Ok(None) };
+        if !canonical.is_file() {
+            return Ok(None);
+        }
+        let Some(book) = self.store.read()?.books.into_iter().find(|book| {
+            book.source_reference.is_none() && Path::new(&book.path) == canonical
+        }) else {
+            return Ok(None);
+        };
+        // A different file now at that path, or one that cannot be opened,
+        // takes the full verified import, which reports what is wrong.
+        if !book.available || (managed && !book.managed) || self.archive_for_book(book.clone()).is_err() {
+            return Ok(None);
+        }
+        Ok(Some(book))
+    }
     pub fn import_paths(&self, paths: Vec<String>, managed: bool) -> Result<Value, String> {
         self.writable()?;
         #[cfg(mobile)]
         let paths = crate::library_files::mobile_primary_archives(paths)?;
+        let cancel = self.import_cancellation()?;
         let mut books = Vec::new();
         let mut errors = Vec::new();
         for path in paths {
             let result = (|| {
                 #[cfg(mobile)]
                 crate::library_files::mobile_import_paths(self.store.data_dir(), std::iter::once(path.as_str()))?;
+                if let Some(book) = self.registered_at_path(&path, managed)? {
+                    return Ok(book);
+                }
+                #[cfg(test)]
+                {
+                    let hook = self.import_hook.lock().unwrap().clone();
+                    if let Some(hook) = hook { hook(&cancel); }
+                }
                 // A manually chosen file is admitted only after the same
                 // integrity check as a download. A corrupt copy must fail here,
                 // not when the reader opens it.
-                let book = load_book(&path, managed, true)?;
+                let book = crate::imports::load_book_cancellable(&path, managed, true, &cancel)?;
+                if cancel.is_cancelled() {
+                    return Err(crate::imports::IMPORT_CANCELLED.to_owned());
+                }
                 self.register_books(std::slice::from_ref(&book), None)?;
                 self.store
                     .book(&book.metadata.id)?
@@ -1822,6 +1883,7 @@ impl Service {
         #[cfg(mobile)]
         let paths = crate::library_files::mobile_primary_archives(paths)?;
         let claims = self.monitored_import_claims()?;
+        let cancel = self.import_cancellation()?;
         let mut books = Vec::new();
         let mut errors = Vec::new();
         for path in paths {
@@ -1839,7 +1901,10 @@ impl Service {
                 crate::library_files::mobile_import_paths(self.store.data_dir(), std::iter::once(path.as_str()))?;
                 // Verify before admission: a monitored folder is just another
                 // way for an unverified file to become a library entry.
-                let book = load_book(&path, false, true)?;
+                let book = crate::imports::load_book_cancellable(&path, false, true, &cancel)?;
+                if cancel.is_cancelled() {
+                    return Err(crate::imports::IMPORT_CANCELLED.to_owned());
+                }
                 // Metadata loading proves the candidate already exists. Every
                 // publisher retains its claim through final-file visibility, so
                 // checking now also closes the scan-versus-rename window.
@@ -2068,6 +2133,18 @@ impl Service {
             self.record_watch_result(&result)?;
         }
 
+        // A monitored folder that is a mount point lists as an empty (or
+        // unrelated) directory while its volume or share is not mounted. When
+        // none of its known books is present, that is not evidence that each
+        // was deleted: keep them, and let the availability pass mark them
+        // missing. One vanished file among present siblings is still retired.
+        if !known.iter().any(|book| {
+            present
+                .iter()
+                .any(|path| crate::watch::same_path(path, Path::new(&book.path)))
+        }) {
+            return Ok(());
+        }
         for book in known {
             if present
                 .iter()
@@ -2791,6 +2868,9 @@ impl Service {
             self.mobile.wake.notify_waiters();
         }
         if retire_searches { self.retire_searches(None); }
+        // A manual or monitored import verifies under a read lease; stop it so
+        // the writer below is not held for a whole-archive checksum.
+        let import_cutover = retire_private_work.then(|| ImportCutover::begin(self.as_ref()));
         if retire_private_work { self.retire_private_sync(); }
         if retire_private_work { self.integrity.retire().await; }
         if retire_private_work { self.cancel_pdf_jobs(None); }
@@ -2805,6 +2885,8 @@ impl Service {
         } else {
             None
         };
+        // Every import that saw the cancelled token has released its lease.
+        drop(import_cutover);
         // Evaluate the voice cutover under the writer. Two overlapping settings
         // saves can change the effective policy after the preliminary check.
         if command == "save_settings" && args.get("settings").is_some_and(|settings|
@@ -3561,6 +3643,10 @@ impl Service {
     pub async fn shutdown(&self) -> Result<(), String> {
         let mut errors = Vec::new();
         self.stopping.store(true, Ordering::SeqCst);
+        // Before any join below (the folder watcher's included): a running
+        // verification stops at its next read and registers nothing. The
+        // token is never replaced once stopping is set.
+        self.cancel_imports();
         #[cfg(desktop)]
         self.agent_connector_stop();
         self.retire_private_sync();
