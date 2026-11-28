@@ -6,6 +6,24 @@ This changelog records source changes, not release certification. Only unsigned 
 
 ### Latest implementation and adversarial corrections
 
+- Address the 2026-11-27 cross-platform maintainability, reliability and usability review: 113 findings from eleven area reviews, each lane re-reviewed adversarially until closed. Most are fixed, some partly, and some kept as accepted residuals. Notable fixes:
+  - **Library files:** abandoning an unfinished move no longer deletes the verified copy without proving the original is intact. Moves and deletes on filesystems without an exclusive rename heal interrupted captures. An unplugged drive or empty mount point is no longer treated as a missing original or an empty monitored folder.
+  - **Downloads:** a truncated download is no longer published as complete (ZIM header length check). Web seeds repair pieces in place and drop mirrors that trickle below 128 KiB per minute. Torrents start on hosts without IPv6.
+  - **Service core:**
+    - cached archive handles and readers are released when a file changes, vanishes or is replaced by rename;
+    - re-opening a registered archive no longer re-verifies it;
+    - Quit, privacy switches and mobile backgrounding cancel running imports, removing their own staged copy and showing a notice;
+    - shared-library pages and native status labels are now in the translation catalogs.
+  - **Startup and quit:** a profile with unreadable records opens and keeps them in a sibling copy. A failed Quit offers Retry, Quit Without Saving or Cancel and can no longer leave Kiwix running with no window.
+  - **Crash records:** Rust, Swift and Kotlin follow one redaction spec, pinned by 238 shared vectors (`src-tauri/tests/fixtures/`). Kept web addresses keep only their site name.
+  - **Shell:**
+    - Android system Back closes open surfaces;
+    - errors are no longer rewritten into the wrong sentence and can no longer be hidden behind dialogs;
+    - map recovery files can be dismissed or retried.
+  - **Build:** the dead libzim SDK glue is removed. `zbus` is no longer compiled into default Linux builds, and CI type-checks the unreleased Linux and Android location providers through an opt-in.
+  
+  Host verification on Linux: 1493 Rust tests; Linux, Windows (MinGW) and Android clippy; 544 of 545 JS tests with a real headless Chromium (1 macOS-only skip); 182 Python tests; 79 Android plugin unit tests; and the Swift crash redaction on the Linux toolchain. Nothing ran on a device, a Mac, Windows or a simulator, the app was not launched, macOS and iOS Rust was not compiled, and the CI changes have not run on GitHub. About 120 new strings are not yet translated. [Remediation record](docs/reviews/2026-11-27/PROJECT-REVIEW-REMEDIATION.md)
+
 - Close the remaining residual pass: bind torrent publication to the engine's SHA-1 piece receipt, cap inline text rendering at 1 MiB, bound Android intake before worker enqueue, split updater download/install admission so the install writer is not held across the download, buffer sharing pipelined requests until the response flushes, and read Windows handle `ChangeTime` as an additional publication signal while keeping receipt reuse fail-closed. Host verification: 1359 Rust tests, Android plugin unit tests, TypeScript/Vite build, frontend/storage/theme browser tests, and the 74-block unsafe census. Physical devices and Windows/Linux runtime remain unverified; Windows change time is user-settable, shared-piece torrents are refused, and updater artifact buffering remains an upstream API limit. [Remediation record](docs/reviews/2026-11-23/PROJECT-REVIEW-REMEDIATION.md)
 
 - Complete the residual project-review pass: ctime-bound acquisition receipts and publication, catalog scratch ownership/oversized-page continuation, sharing request framing and updater retirement gates, index-pinned archive streaming, coalesced browsing flush/startup identity, Android off-main TTS/intake bounds, and lazy reader-storage credit/BFCache/theme batching. Host verification: 1353 Rust tests, 15 storage/bridge and 21 reader-video JS tests, Android plugin unit tests, TypeScript/Vite build, and isolated Chromium smoke. Native device and Windows/Linux runtime remain unverified. [Remediation record](docs/reviews/2026-11-23/PROJECT-REVIEW-REMEDIATION.md)
