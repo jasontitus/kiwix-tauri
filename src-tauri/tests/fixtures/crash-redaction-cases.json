@@ -1,0 +1,334 @@
+[
+  {
+    "input": "Failed to setup app: Cannot parse C:\\Users\\Jane Doe\\AppData\\Roaming\\kiwix\\My Library\\state.json: expected value at line 1 column 1",
+    "expected": "Failed to setup app: Cannot parse [path]: expected value at line 1 column 1"
+  },
+  {
+    "input": "open /Volumes/Family Backup/Health Records/medical_wikipedia.zim failed",
+    "expected": "open [path]"
+  },
+  {
+    "input": "cannot read \"/home/jane doe/My Books/a.zim\" (os error 13)",
+    "expected": "cannot read \"[path]\" (os error 13)"
+  },
+  {
+    "input": "cannot read \"C:\\\\Users\\\\Jane Doe\\\\\" (os error 5)",
+    "expected": "cannot read \"[path]\" (os error 5)"
+  },
+  {
+    "input": "cannot read \"/home/jane doe/a \\\"quoted\\\" name.zim\" (os error 2)",
+    "expected": "cannot read \"[path]\" (os error 2)"
+  },
+  {
+    "input": "missing '/Volumes/Jane's Backup/Private Notes/a.zim' on disk",
+    "expected": "missing '[path]"
+  },
+  {
+    "input": "see `/home/jane doe/a.zim` for details",
+    "expected": "see `[path]` for details"
+  },
+  {
+    "input": "open\t/home/jane doe/a.zim\tfailed",
+    "expected": "open [path]"
+  },
+  {
+    "input": "open /home/jane doe/a.zim",
+    "expected": "open [path]"
+  },
+  {
+    "input": "open /home/jane/a.zim\nthen /home/jane doe/b.zim\nend",
+    "expected": "open [path] then [path] end"
+  },
+  {
+    "input": "invalid route /A/Main_Page for book 12 and the len is 3",
+    "expected": "invalid route [path]"
+  },
+  {
+    "input": "path=/book-uuid/A/Private relative=/.kiwix/token/A/Private",
+    "expected": "path=[path]"
+  },
+  {
+    "input": "relative=/.kiwix/token/A/Private",
+    "expected": "relative=[path]"
+  },
+  {
+    "input": "at \\\\nas\\Family Share\\a.zim now",
+    "expected": "at [path]"
+  },
+  {
+    "input": "\\\\?\\C:\\Users\\Jane Doe\\a.zim: Access is denied. (os error 5)",
+    "expected": "[path]: Access is denied. (os error 5)"
+  },
+  {
+    "input": "at ~/My Documents/Private Notes.txt now",
+    "expected": "at [path]"
+  },
+  {
+    "input": "at ~\\Documents\\Private Notes.txt now",
+    "expected": "at [path]"
+  },
+  {
+    "input": "open //nas/Family Share/a.zim failed",
+    "expected": "open [path]"
+  },
+  {
+    "input": "share: //nas/Family Share/a.zim",
+    "expected": "share: [path]"
+  },
+  {
+    "input": "open D:/Kiwix Library/a.zim now",
+    "expected": "open [path]"
+  },
+  {
+    "input": "failed->/home/jane doe/x.zim",
+    "expected": "failed->[path]"
+  },
+  {
+    "input": "path|/home/jane doe/x.zim",
+    "expected": "path|[path]"
+  },
+  {
+    "input": "at </var/mobile/Containers/Shared/File Provider Storage/My Books/a.zim> again",
+    "expected": "at <[path]> again"
+  },
+  {
+    "input": "“/var/mobile/My Books/a.zim” is missing",
+    "expected": "“[path]"
+  },
+  {
+    "input": "‘/var/mobile/My Books/a.zim’ is missing",
+    "expected": "‘[path]"
+  },
+  {
+    "input": "Could not load NIB in bundle: 'NSBundle </private/var/containers/Bundle/Application/1A2B/Kiwix.app> (loaded)' with name 'Main'",
+    "expected": "Could not load NIB in bundle: 'NSBundle <[path]> (loaded)' with name 'Main'"
+  },
+  {
+    "input": "Error Domain=NSCocoaErrorDomain Code=260 UserInfo={NSFilePath=/var/mobile/Containers/Data/My Books/a.zim, NSUnderlyingError=0x2812 {Error Domain=NSPOSIXErrorDomain Code=2 \"No such file or directory\"}}",
+    "expected": "Error Domain=NSCocoaErrorDomain Code=260 UserInfo={NSFilePath=[path] \"No such file or directory\"}}"
+  },
+  {
+    "input": "{\"path\":\"/home/jane doe/a.zim\",\"code\":2}",
+    "expected": "{\"path\":\"[path]\",\"code\":2}"
+  },
+  {
+    "input": "Os { code: 2, kind: NotFound, message: \"No such file or directory\" }, path: \"/home/jane doe/a.zim\"",
+    "expected": "Os { code: 2, kind: NotFound, message: \"No such file or directory\" }, path: \"[path]\""
+  },
+  {
+    "input": "(/home/jane doe/a.zim) [/home/jane doe/b.zim] {/home/jane doe/c.zim}",
+    "expected": "([path]"
+  },
+  {
+    "input": "the ratio a/b and 1/2 stay, and so does a // b",
+    "expected": "the ratio a/b and 1/2 stay, and so does a // b"
+  },
+  {
+    "input": "lib.rs:1234",
+    "expected": "lib.rs:1234"
+  },
+  {
+    "input": "store.rs:88:17",
+    "expected": "store.rs:88:17"
+  },
+  {
+    "input": "org.kiwix.mobile.Reader.open(Reader.kt:12)",
+    "expected": "org.kiwix.mobile.Reader.open(Reader.kt:12)"
+  },
+  {
+    "input": "File.kt:12",
+    "expected": "File.kt:12"
+  },
+  {
+    "input": "called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }",
+    "expected": "called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }"
+  },
+  {
+    "input": "unexpected </p> tag",
+    "expected": "unexpected <[path]> tag"
+  },
+  {
+    "input": "open file:///Users/Jane Doe/Private Notes.txt now",
+    "expected": "open [url]"
+  },
+  {
+    "input": "open file:C:/Users/Jane Doe/a.zim now",
+    "expected": "open [url]"
+  },
+  {
+    "input": "open FILE:/Users/Jane Doe/a.zim now",
+    "expected": "open [url]"
+  },
+  {
+    "input": "file:///Documents/Private%20Notes.txt",
+    "expected": "[url]"
+  },
+  {
+    "input": "cannot open file: /home/jane doe/a.zim",
+    "expected": "cannot open [url] [path]"
+  },
+  {
+    "input": "mixed file:///Users/Jane Doe/a.zim: denied, see https://example.org/help",
+    "expected": "mixed [url]: denied, see https://example.org/help"
+  },
+  {
+    "input": "reader http://127.0.0.1:9/.kiwix/8f4c2a9e1b/A/Secret_Page done",
+    "expected": "reader [reader-url]"
+  },
+  {
+    "input": "reader http://12b34567.localhost:9/A/Secret Page: not found",
+    "expected": "reader [reader-url]: not found"
+  },
+  {
+    "input": "reader HTTP://12b34567-1234-5678-90ab-123456789abc-deadbeef.localhost.:9/A/Pri)vate_page?secret=1",
+    "expected": "reader [reader-url]"
+  },
+  {
+    "input": "loopback http://127.0.0.2:9/book-uuid/A/Private",
+    "expected": "loopback [reader-url]"
+  },
+  {
+    "input": "ipv6 http://[::1]:9/book-uuid/A/Private",
+    "expected": "ipv6 [reader-url]"
+  },
+  {
+    "input": "bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private",
+    "expected": "bridge [reader-url]"
+  },
+  {
+    "input": "adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
+    "expected": "adjacent [reader-url]"
+  },
+  {
+    "input": "ZIM://book-uuid/A/Private",
+    "expected": "[url]"
+  },
+  {
+    "input": "MAILTO:private@example.org was rejected",
+    "expected": "[url] was rejected"
+  },
+  {
+    "input": "open content://org.kiwix.provider/My Books/a.zim now",
+    "expected": "open [url]"
+  },
+  {
+    "input": "mount smb://nas/Family Share/a.zim failed",
+    "expected": "mount [url]"
+  },
+  {
+    "input": "custom://host/Private",
+    "expected": "[url]"
+  },
+  {
+    "input": "fetch https://user:pass@example.org/a/b?token=secret#x failed",
+    "expected": "fetch https://example.org/a/b failed"
+  },
+  {
+    "input": "see https://example.org/docs/a for help",
+    "expected": "see https://example.org/docs/a for help"
+  },
+  {
+    "input": "std::io::Error and a::b::c are not URLs",
+    "expected": "std::io::Error and a::b::c are not URLs"
+  },
+  {
+    "input": "password=/storage/emulated/0/My Books/a.zim",
+    "expected": "password=[redacted]"
+  },
+  {
+    "input": "token: /sdcard/My Books/x",
+    "expected": "token: [redacted]"
+  },
+  {
+    "input": "bearer /storage/My Books/x",
+    "expected": "bearer [redacted]"
+  },
+  {
+    "input": "password=C:\\Users\\Jane Doe\\vault.kdbx: locked",
+    "expected": "password=[redacted]: locked"
+  },
+  {
+    "input": "open /var/x password: \"hunter2\"",
+    "expected": "open [path]: \"[redacted]\""
+  },
+  {
+    "input": "login failed password: \"correct horse: battery\" for bob",
+    "expected": "login failed password: \"[redacted]\" for bob"
+  },
+  {
+    "input": "password='it's a secret' user=bob",
+    "expected": "password='[redacted]' user=bob"
+  },
+  {
+    "input": "token=\"abc def\" next",
+    "expected": "token=\"[redacted]\" next"
+  },
+  {
+    "input": "secret=\"unterminated value\nnext",
+    "expected": "secret=\"[redacted] next"
+  },
+  {
+    "input": "{\"user\":\"bob\",\"password\":\"hunter2\",\"pin\":1234}",
+    "expected": "{\"user\":\"bob\",\"password\":\"[redacted]\",\"pin\":[redacted]}"
+  },
+  {
+    "input": "Authorization: Bearer abc.def.ghi next",
+    "expected": "Authorization: [redacted] next"
+  },
+  {
+    "input": "Authorization: Basic dXNlcjpwYXNz next",
+    "expected": "Authorization: [redacted] next"
+  },
+  {
+    "input": "bearer abc.def.ghi",
+    "expected": "bearer [redacted]"
+  },
+  {
+    "input": "Cookie: session=abc123; theme=dark\nnext line",
+    "expected": "Cookie: [redacted] next line"
+  },
+  {
+    "input": "token=abc /home/jane doe/x",
+    "expected": "token=[redacted] [path]"
+  },
+  {
+    "input": "api_key=K1,secret=S2;passwd=P3&pin=4)",
+    "expected": "api_key=[redacted],secret=[redacted];passwd=[redacted]&pin=[redacted])"
+  },
+  {
+    "input": "access_token = AAA refresh_token:BBB apikey=CCC",
+    "expected": "access_token = [redacted] refresh_token:[redacted] apikey=[redacted]"
+  },
+  {
+    "input": "PASSWORD=hunter2 Token=abc",
+    "expected": "PASSWORD=[redacted] Token=[redacted]"
+  },
+  {
+    "input": "the password is wrong, tokens are fine, a pinned tab and my_token=1 stay",
+    "expected": "the password is wrong, tokens are fine, a pinned tab and my_token=1 stay"
+  },
+  {
+    "input": "open /Users/alice/Private/notes.txt?token=abc failed: https://example.org/read?token=secret&q=book#frag",
+    "expected": "open [path]: https://example.org/read"
+  },
+  {
+    "input": "id a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1 end",
+    "expected": "id [redacted] end"
+  },
+  {
+    "input": "id a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a end",
+    "expected": "id a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a end"
+  },
+  {
+    "input": "id abcdefghijabcdefghijabcdefghijabcdefghij end",
+    "expected": "id abcdefghijabcdefghijabcdefghijabcdefghij end"
+  },
+  {
+    "input": "blob=QWxhZGRpbjpvcGVuIHNlc2FtZTEyMzQ1Njc4OTBhYmNkZWY=",
+    "expected": "[redacted]"
+  },
+  {
+    "input": "  several   spaces\tand\nlines  ",
+    "expected": "several spaces and lines"
+  }
+]

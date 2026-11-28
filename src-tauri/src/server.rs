@@ -798,11 +798,33 @@ async fn archive_request_inner(
     if let Some(resource) = uri.path().strip_prefix(&prefix) {
         return internal_request(state, method, resource, uri.query(), headers).await;
     }
+    // A document navigation must still reach the reader bridge, whatever the
+    // failure: an uninstrumented page leaves the frame inert until the shell's
+    // watchdog fires. Other destinations get plain status responses.
+    let document_request = is_document_request(&headers);
     if method != Method::GET && method != Method::HEAD {
+        if document_request {
+            return reader_error_document(
+                &state,
+                method,
+                StatusCode::METHOD_NOT_ALLOWED,
+                "This page could not be opened.",
+                "Archives are read-only, so this form cannot be sent.",
+            );
+        }
         return error(StatusCode::METHOD_NOT_ALLOWED, "Archives are read-only");
     }
     let path = match decode_percent_path(uri.path().trim_start_matches('/')) {
         Ok(path) => path,
+        Err(_) if document_request => {
+            return reader_error_document(
+                &state,
+                method,
+                StatusCode::BAD_REQUEST,
+                "This page could not be opened.",
+                "The link to it is not a valid address.",
+            );
+        }
         Err(_) => return error(StatusCode::BAD_REQUEST, "Archive URL is not valid UTF-8"),
     };
     let archive = state.archive.clone();
@@ -813,7 +835,6 @@ async fn archive_request_inner(
     let query = uri.query().map(str::to_owned);
     let request_headers = headers.clone();
     let request_method = method.clone();
-    let document_request = is_document_request(&headers);
     // Resolve the entry, choose its response shape, and read every selected
     // byte inside one archive lock acquisition. Redirects and HEAD/304/416
     // decisions read nothing, and no path is looked up twice.
@@ -900,6 +921,9 @@ async fn archive_request_inner(
             // marker so the shell can say so quietly.
             if crate::archive::is_entry_not_found(&message) && document_request {
                 return missing_document(&state, method).await;
+            }
+            if document_request {
+                return document_failure(&state, method, "read_article", &message);
             }
             return archive_failure(&state, "read_article", &message);
         }
@@ -993,6 +1017,25 @@ fn archive_failure(state: &ArchiveState, operation: &str, message: &str) -> Resp
     error(status, body)
 }
 
+/// `archive_failure` for a document navigation (never a missing entry): the
+/// same status and diagnostic, as an instrumented page the shell can report.
+fn document_failure(
+    state: &ArchiveState,
+    method: Method,
+    operation: &str,
+    message: &str,
+) -> Response {
+    let (status, _) = archive_failure_status(message);
+    crate::diagnostics::record(&state.store, operation, Some(message));
+    reader_error_document(
+        state,
+        method,
+        status,
+        "This page could not be opened.",
+        "The archive could not read this entry.",
+    )
+}
+
 /// The shell recognises this query marker on the fallback document and shows a
 /// quiet navigation notice, then keeps the marker out of the tab location.
 pub(crate) const MISS_MARKER: &str = "kiwix-miss=1";
@@ -1030,7 +1073,7 @@ async fn missing_document(state: &ArchiveState, method: Method) -> Response {
                 "This archive has no articles to open.",
             )
         }
-        Err(message) => archive_failure(state, "read_article", &message),
+        Err(message) => document_failure(state, method, "read_article", &message),
     }
 }
 

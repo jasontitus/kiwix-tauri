@@ -486,23 +486,36 @@ fn replace_urls(value: &str) -> String {
         {
             continue;
         }
-        let end = if scheme.eq_ignore_ascii_case("file")
-            && tail.chars().next().is_some_and(|first| !first.is_whitespace())
-        {
-            // A file URL is a path, in any form (`file:///x`, `file:C:/x`), and
-            // may be written with unencoded spaces. `file: ` followed by a
-            // space is prose; a path after it is found by `redact_paths`.
+        let token_end = tail
+            .find(|character: char| {
+                character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
+            })
+            .map_or(value.len(), |end| colon + 1 + end);
+        // A URL that names a local file or an archive page is a path and may
+        // be written with unencoded spaces: it ends where a path would.
+        let path_like_end = || {
             let chars: Vec<char> = tail.chars().collect();
             let length = path_end(&chars, 0);
             colon + 1 + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
+        };
+        let (end, replacement) = if scheme.eq_ignore_ascii_case("file")
+            && tail.chars().next().is_some_and(|first| !first.is_whitespace())
+        {
+            // Any form (`file:///x`, `file:C:/x`). `file: ` followed by a
+            // space is prose; a path after it is found by `redact_paths`.
+            (path_like_end(), "[url]".to_owned())
         } else {
-            tail.find(|character: char| {
-                character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
-            })
-            .map_or(value.len(), |end| colon + 1 + end)
+            let replacement = safe_url(&value[start..token_end], scheme);
+            // Every `scheme://` URL that is not kept (reader pages, content
+            // and archive links, shares) goes whole, like a path.
+            if tail.starts_with("//") && matches!(replacement.as_str(), "[url]" | "[reader-url]") {
+                (token_end.max(path_like_end()), replacement)
+            } else {
+                (token_end, replacement)
+            }
         };
         output.push_str(&value[cursor..start]);
-        output.push_str(&safe_url(&value[start..end], scheme));
+        output.push_str(&replacement);
         cursor = end;
     }
     output.push_str(&value[cursor..]);
@@ -882,27 +895,107 @@ mod tests {
 
     #[test]
     fn local_reader_and_non_http_urls_keep_no_path_or_host_identity() {
-        let text = redact(
-            "reader HTTP://12b34567-1234-5678-90ab-123456789abc-deadbeef.localhost.:9/A/Pri)vate_page?secret=1 \
-             loopback http://127.0.0.2:9/book-uuid/A/Private \
-             ipv6 http://[::1]:9/book-uuid/A/Private \
-             bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private \
-             ZIM://book-uuid/A/Private MAILTO:private@example.org \
-             content://provider/Private \
-             custom://host/Private public https://user:pass@example.org/a/b?token=secret#x \
-             adjacent https://example.org/a,http://book-uuid.localhost/A/Private \
-             path=/book-uuid/A/Private relative=/.kiwix/token/A/Private",
+        // One input per line: a URL that is not kept is redacted to the end of
+        // its clause, like a path, so it would hide the inputs after it.
+        for (input, expected) in [
+            (
+                "reader HTTP://12b34567-1234-5678-90ab-123456789abc-deadbeef.localhost.:9/A/Pri)vate_page?secret=1",
+                "reader [reader-url]",
+            ),
+            ("loopback http://127.0.0.2:9/book-uuid/A/Private", "loopback [reader-url]"),
+            ("ipv6 http://[::1]:9/book-uuid/A/Private", "ipv6 [reader-url]"),
+            (
+                "bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private",
+                "bridge [reader-url]",
+            ),
+            ("path=/book-uuid/A/Private relative=/.kiwix/token/A/Private", "path=[path]"),
+            ("relative=/.kiwix/token/A/Private", "relative=[path]"),
+            ("ZIM://book-uuid/A/Private", "[url]"),
+            ("MAILTO:private@example.org", "[url]"),
+            ("content://provider/Private", "[url]"),
+            ("file:///Documents/Private%20Notes.txt", "[url]"),
+            ("custom://host/Private", "[url]"),
+            (
+                "public https://user:pass@example.org/a/b?token=secret#x",
+                "public https://example.org/a/b",
+            ),
+            (
+                "adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
+                "adjacent [reader-url]",
+            ),
+        ] {
+            assert_eq!(redact(input), expected, "{input}");
+        }
+    }
+
+    /// The vectors the Swift and Kotlin crash intakes are ported against. Each
+    /// `expected` is the exact output of `redact` for `input`.
+    #[test]
+    fn redaction_matches_the_canonical_cases_shared_with_the_mobile_intakes() {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Case {
+            input: String,
+            expected: String,
+        }
+        let cases: Vec<Case> =
+            serde_json::from_str(include_str!("../tests/fixtures/crash-redaction-cases.json")).unwrap();
+        assert!(cases.len() >= 80, "the shared fixture lost cases: {}", cases.len());
+        let differing: Vec<String> = cases
+            .iter()
+            .filter_map(|case| {
+                let actual = redact(&case.input);
+                (actual != case.expected).then(|| {
+                    format!("input:    {:?}\nexpected: {:?}\nactual:   {:?}", case.input, case.expected, actual)
+                })
+            })
+            .collect();
+        assert!(
+            differing.is_empty(),
+            "{} of {} cases differ:\n{}",
+            differing.len(),
+            cases.len(),
+            differing.join("\n\n")
         );
-        // A path may contain spaces, so it is redacted to the end of its clause:
-        // the path-like reader routes come last here and are checked one by one below.
+    }
+
+    #[test]
+    fn secrets_go_first_so_neither_a_spaced_path_nor_a_swallowed_key_leaks() {
+        // Secrets after paths: the path took the `password` key and the value
+        // was left behind.
+        assert_eq!(redact("open /var/x password: \"hunter2\""), "open [path]: \"[redacted]\"");
+        // Secrets before paths, with a value that ends at the first space:
+        // ` Books/a.zim` was left behind.
+        for input in [
+            "password=/storage/emulated/0/My Books/a.zim",
+            "token: /sdcard/My Books/a.zim",
+            "bearer /storage/My Books/a.zim",
+        ] {
+            let output = redact(input);
+            assert!(output.ends_with("[redacted]"), "{output}");
+            assert!(!output.contains("Books") && !output.contains("a.zim"), "{output}");
+        }
+        // The frame line of a backtrace runs the same steps in the same order.
         assert_eq!(
-            text,
-            "reader [reader-url] loopback [reader-url] ipv6 [reader-url] bridge [reader-url] \
-             [url] [url] [url] [url] public https://example.org/a/b \
-             adjacent [reader-url] path=[path]"
+            redact_line("3: read /Users/Jane Doe/Secret Notes/a.zim password: \"hunter2\""),
+            "3: read [path]: \"[redacted]\""
         );
-        assert_eq!(redact("relative=/.kiwix/token/A/Private"), "relative=[path]");
-        assert_eq!(redact("file:///Documents/Private%20Notes.txt"), "[url]");
+    }
+
+    #[test]
+    fn redaction_input_is_bounded_before_any_step_runs() {
+        let long = format!("/{}", "a".repeat(MAX_REDACTION_INPUT_CHARS * 4));
+        assert_eq!(bounded_input(&long).chars().count(), MAX_REDACTION_INPUT_CHARS);
+        assert_eq!(redact(&long), "[path]");
+        assert_eq!(redact_line(&long), "[path]");
+        // Characters, not bytes: a multi-byte character is never split.
+        let wide = "é".repeat(MAX_REDACTION_INPUT_CHARS + 10);
+        assert_eq!(bounded_input(&wide).chars().count(), MAX_REDACTION_INPUT_CHARS);
+        // A short field is untouched.
+        assert_eq!(bounded_input("lib.rs:12"), "lib.rs:12");
+        // A panic location is never redacted.
+        assert_eq!(redact("lib.rs:1234"), "lib.rs:1234");
+        assert_eq!(redact("store.rs:88"), "store.rs:88");
     }
 
     #[test]

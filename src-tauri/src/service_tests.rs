@@ -6024,3 +6024,382 @@ async fn agent_connector_tools_are_off_by_default_and_return_bounded_clean_resul
     assert!(service.agent_call("list_archives", json!({})).await.is_err(), "never in private mode");
     service.shutdown().await.unwrap();
 }
+
+/// A copy of the small fixture under its own archive UUID, with a matching
+/// checksum, so two copies can be in one library.
+fn fixture_with_new_uuid(path: &Path) {
+    let mut bytes = std::fs::read(fixture()).unwrap();
+    bytes[8..24].copy_from_slice(Uuid::new_v4().as_bytes());
+    let checksum = u64::from_le_bytes(bytes[72..80].try_into().unwrap()) as usize;
+    let digest = md5::compute(&bytes[..checksum]).0;
+    bytes[checksum..checksum + 16].copy_from_slice(&digest);
+    std::fs::write(path, bytes).unwrap();
+}
+
+/// Change a file's modification time in place, as a sync tool or `touch` does.
+fn touch_archive(path: &Path) {
+    let file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    let modified = file.metadata().unwrap().modified().unwrap();
+    file.set_modified(modified - std::time::Duration::from_secs(3600)).unwrap();
+}
+
+#[tokio::test]
+async fn an_archive_changed_in_place_is_reopened_for_the_library_and_its_reader() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let copy = profile.0.join("touched.zim");
+    std::fs::copy(fixture(), &copy).unwrap();
+    let imported = service.import_paths(vec![copy.to_string_lossy().into_owned()], false).unwrap();
+    let id = imported["books"][0]["id"].as_str().unwrap().to_owned();
+    let held = service.archive(&id).unwrap();
+    let opened = service.clone().dispatch("open_article", json!({
+        "bookId":id, "parentOrigin":"tauri://localhost"
+    })).await.unwrap();
+    let origin = opened["origin"].as_str().unwrap().to_owned();
+    let path = opened["path"].as_str().unwrap().to_owned();
+
+    touch_archive(&copy);
+    // The handle that was cached before the change can only fail now.
+    assert!(held.main_entry().unwrap_err().contains("contents changed"));
+    // The library reopens it, through the same identity check, instead of
+    // returning that handle until restart.
+    let reopened = service.archive(&id).unwrap();
+    assert_eq!(reopened.metadata().unwrap().id, id);
+    reopened.main_entry().unwrap();
+    assert_eq!(service.archives.lock().unwrap().len(), 1);
+
+    // Opening the book again replaces the listener that holds the old handle.
+    let again = service.clone().dispatch("open_article", json!({
+        "bookId":id, "parentOrigin":"tauri://localhost"
+    })).await.unwrap();
+    assert_ne!(again["origin"], json!(origin));
+    let page = fetch_reader(again["origin"].as_str().unwrap(), &path, Some("iframe"), false).await;
+    assert_eq!(page.status(), reqwest::StatusCode::OK);
+    assert!(page.text().await.unwrap().contains("bridge.js"));
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn availability_changes_release_cached_handles_and_readers() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let copy = profile.0.join("deleted.zim");
+    std::fs::copy(fixture(), &copy).unwrap();
+    let imported = service.import_paths(vec![copy.to_string_lossy().into_owned()], false).unwrap();
+    let id = imported["books"][0]["id"].as_str().unwrap().to_owned();
+    let installation = imported["books"][0]["installationId"].as_str().unwrap().to_owned();
+    service.clone().dispatch("open_article", json!({
+        "bookId":id, "parentOrigin":"tauri://localhost"
+    })).await.unwrap();
+    assert_eq!(service.archives.lock().unwrap().len(), 1);
+    assert!(service.readers.lock().await.values().any(|reader| reader.installation_id == installation));
+
+    // Deleting the file must not leave its descriptors open (and its space
+    // allocated) in the cache or a listener until Kiwix restarts.
+    std::fs::remove_file(&copy).unwrap();
+    service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(!service.store.book(&id).unwrap().unwrap().available);
+    assert!(service.archives.lock().unwrap().iter().all(|cached| cached.id != id));
+    assert!(service.readers.lock().await.values().all(|reader| reader.installation_id != installation));
+
+    // When the file comes back, the next open uses it.
+    std::fs::copy(fixture(), &copy).unwrap();
+    service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(service.store.book(&id).unwrap().unwrap().available);
+    service.archive(&id).unwrap().main_entry().unwrap();
+    service.shutdown().await.unwrap();
+}
+
+#[cfg(desktop)]
+#[tokio::test]
+async fn an_empty_monitored_mount_point_keeps_its_books_but_a_single_deletion_is_retired() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let monitored = profile.0.join("mount");
+    std::fs::create_dir_all(&monitored).unwrap();
+    let first = monitored.join("first.zim");
+    let second = monitored.join("second.zim");
+    fixture_with_new_uuid(&first);
+    fixture_with_new_uuid(&second);
+    let imported = service.import_paths(vec![
+        first.to_string_lossy().into_owned(),
+        second.to_string_lossy().into_owned(),
+    ], false).unwrap();
+    assert_eq!(imported["books"].as_array().unwrap().len(), 2, "{imported}");
+    let saved = (std::fs::read(&first).unwrap(), std::fs::read(&second).unwrap());
+    let installations: Vec<String> = service.store.read().unwrap().books.iter().map(|book| book.installation_id.clone()).collect();
+    service.store.update(|state| {
+        for installation in &installations {
+            state.reader_storage.insert(installation.clone(), json!({"cookie": "kept"}));
+        }
+        Ok(())
+    }).unwrap();
+
+    // The share is offline: the mount point exists and lists as empty.
+    std::fs::remove_file(&first).unwrap();
+    std::fs::remove_file(&second).unwrap();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    let state = service.store.read().unwrap();
+    assert_eq!(state.books.len(), 2);
+    for installation in &installations {
+        assert!(state.reader_storage.contains_key(installation));
+    }
+    drop(state);
+
+    // Mounted again, one archive then really is deleted next to a survivor.
+    std::fs::write(&first, &saved.0).unwrap();
+    std::fs::write(&second, &saved.1).unwrap();
+    std::fs::remove_file(&first).unwrap();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    let state = service.store.read().unwrap();
+    assert_eq!(state.books.len(), 1);
+    assert_eq!(Path::new(&state.books[0].path), second.canonicalize().unwrap());
+    drop(state);
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn opening_an_archive_already_in_the_library_does_not_verify_it_again() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let copy = profile.0.join("registered.zim");
+    std::fs::copy(fixture(), &copy).unwrap();
+    let verified = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    *service.import_hook.lock().unwrap() = Some(Arc::new({
+        let verified = verified.clone();
+        move |_: &tokio_util::sync::CancellationToken| { verified.fetch_add(1, Ordering::SeqCst); }
+    }));
+    let first = service.import_paths(vec![copy.to_string_lossy().into_owned()], false).unwrap();
+    assert_eq!(verified.load(Ordering::SeqCst), 1);
+    let again = service.clone()
+        .dispatch("import_archives", json!({"paths":[copy.to_string_lossy()]}))
+        .await
+        .unwrap();
+    assert_eq!(verified.load(Ordering::SeqCst), 1, "a registered archive was verified again");
+    assert!(again["errors"].as_array().unwrap().is_empty(), "{again}");
+    assert_eq!(again["books"][0]["installationId"], first["books"][0]["installationId"]);
+
+    // A different archive now at that path is not that entry: it takes the
+    // full, verified import.
+    fixture_with_new_uuid(&copy);
+    service.import_paths(vec![copy.to_string_lossy().into_owned()], false).unwrap();
+    assert_eq!(verified.load(Ordering::SeqCst), 2);
+    service.shutdown().await.unwrap();
+}
+
+/// Hold a manual import inside verification until its token is cancelled
+/// (or ten seconds pass), the way a whole-archive checksum would.
+fn hold_import_until_cancelled(service: &Service) -> std::sync::mpsc::Receiver<()> {
+    let (entered, waiting) = std::sync::mpsc::channel();
+    *service.import_hook.lock().unwrap() = Some(Arc::new(move |cancel: &tokio_util::sync::CancellationToken| {
+        let _ = entered.send(());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !cancel.is_cancelled() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }));
+    waiting
+}
+
+#[tokio::test]
+async fn quit_cancels_a_running_manual_import_instead_of_waiting_for_it() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let entered = hold_import_until_cancelled(&service);
+    let importing = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service.dispatch("import_archives", json!({"paths":[fixture().to_string_lossy()]})).await
+        }
+    });
+    tokio::task::spawn_blocking(move || entered.recv_timeout(std::time::Duration::from_secs(10)).unwrap())
+        .await
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), service.shutdown())
+        .await
+        .expect("Quit waited for the import")
+        .unwrap();
+    let result = importing.await.unwrap().unwrap();
+    assert!(result["books"].as_array().unwrap().is_empty(), "{result}");
+    assert!(result["errors"][0]["error"].as_str().unwrap().starts_with("Import cancelled"), "{result}");
+    assert!(service.store.read().unwrap().books.is_empty());
+}
+
+#[tokio::test]
+async fn a_privacy_switch_cancels_a_running_import_and_later_imports_still_work() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let entered = hold_import_until_cancelled(&service);
+    let importing = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service.dispatch("import_archives", json!({"paths":[fixture().to_string_lossy()]})).await
+        }
+    });
+    tokio::task::spawn_blocking(move || entered.recv_timeout(std::time::Duration::from_secs(10)).unwrap())
+        .await
+        .unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        service.clone().dispatch("save_settings", json!({"settings":{"privateMode":true}})),
+    ).await.expect("the privacy switch waited for the import").unwrap();
+    let result = importing.await.unwrap().unwrap();
+    assert!(result["errors"][0]["error"].as_str().unwrap().starts_with("Import cancelled"), "{result}");
+    assert!(service.store.read().unwrap().books.is_empty());
+
+    *service.import_hook.lock().unwrap() = None;
+    service.clone().dispatch("save_settings", json!({"settings":{"privateMode":false}})).await.unwrap();
+    let imported = service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
+    assert_eq!(imported["books"].as_array().unwrap().len(), 1, "{imported}");
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn an_intake_copy_replaces_an_unusable_entry_instead_of_being_deleted() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(profile.0.join("card")).unwrap();
+    let original = profile.0.join("card/small.zim");
+    std::fs::copy(fixture(), &original).unwrap();
+    let imported = service.import_paths(vec![original.to_string_lossy().into_owned()], false).unwrap();
+    let id = imported["books"][0]["id"].as_str().unwrap().to_owned();
+    let old_installation = imported["books"][0]["installationId"].as_str().unwrap().to_owned();
+    // The card is removed; the person shares the same archive into Kiwix.
+    std::fs::remove_file(&original).unwrap();
+    let copy = profile.0.join("incoming/small.zim");
+    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+    std::fs::copy(fixture(), &copy).unwrap();
+
+    let result = service
+        .admit_intake_batch(vec![copy.to_string_lossy().into_owned()], Some("native-incoming:relink".into()), "main")
+        .await
+        .unwrap();
+    assert!(result["errors"].as_array().unwrap().is_empty(), "{result}");
+    assert!(copy.is_file(), "the fresh copy was deleted as a duplicate");
+    let book = service.store.book(&id).unwrap().unwrap();
+    assert_eq!(Path::new(&book.path), copy.canonicalize().unwrap());
+    assert!(book.available);
+    assert_ne!(book.installation_id, old_installation);
+    assert_eq!(result["books"][0]["installationId"], json!(book.installation_id));
+    assert!(service.store.acquisition_consumed("native-incoming:relink").unwrap());
+    service.archive(&id).unwrap().main_entry().unwrap();
+
+    // A copy of an entry that still opens is a duplicate, as before.
+    let second = profile.0.join("incoming/again.zim");
+    std::fs::copy(fixture(), &second).unwrap();
+    let result = service
+        .admit_intake_batch(vec![second.to_string_lossy().into_owned()], None, "main")
+        .await
+        .unwrap();
+    assert!(result["errors"].as_array().unwrap().is_empty(), "{result}");
+    assert!(!second.exists());
+    assert_eq!(Path::new(&service.store.book(&id).unwrap().unwrap().path), copy.canonicalize().unwrap());
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn an_intake_batch_is_verified_before_admission() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let copy = profile.0.join("incoming/damaged.zim");
+    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+    let mut bytes = std::fs::read(fixture()).unwrap();
+    // The stored checksum no longer matches; the header stays readable.
+    *bytes.last_mut().unwrap() ^= 1;
+    std::fs::write(&copy, bytes).unwrap();
+    load_book(copy.to_str().unwrap(), true, false).unwrap();
+    let result = service
+        .admit_intake_batch(vec![copy.to_string_lossy().into_owned()], Some("native-incoming:damaged".into()), "main")
+        .await
+        .unwrap();
+    assert!(result["books"].as_array().unwrap().is_empty(), "{result}");
+    assert!(result["errors"][0]["error"].as_str().unwrap().contains(crate::archive::CORRUPT_ARCHIVE), "{result}");
+    assert!(service.store.read().unwrap().books.is_empty());
+    assert!(!service.store.acquisition_consumed("native-incoming:damaged").unwrap());
+    assert!(copy.is_file());
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn library_maintenance_keeps_live_spelling_dictionaries_and_collects_orphans() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let imported = service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
+    let id = imported["books"][0]["id"].as_str().unwrap().to_owned();
+    let installation = imported["books"][0]["installationId"].as_str().unwrap().to_owned();
+    service.store.update(|state| { state.settings.spelling_enabled = true; Ok(()) }).unwrap();
+    service.spelling.set_writable(true).unwrap();
+    let book = service.store.book(&id).unwrap().unwrap();
+    let archive = service.archive_for_book(book.clone()).unwrap();
+    let key = crate::spelling::Identity::from_archive(&archive, &book.metadata, &installation).unwrap().key();
+    let args = json!({"bookId":id,"installationId":installation,"sourceKey":key,"privacyGeneration":service.launch_generation()});
+    service.clone().dispatch("spelling_build", args.clone()).await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        loop {
+            let status = service.clone().dispatch("spelling_status", args.clone()).await.unwrap();
+            assert_ne!(status["state"], "error", "{status}");
+            if status["state"] == "ready" { break; }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }).await.unwrap();
+    let dictionary = profile.0.join(format!("spelling/{key}.words"));
+    assert!(dictionary.is_file());
+    let interrupted = profile.0.join(format!("spelling/.{key}.{}.tmp", Uuid::new_v4()));
+    std::fs::write(&interrupted, b"left by a killed build").unwrap();
+
+    // The key derived without opening the archive matches the build's key.
+    service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(dictionary.is_file(), "a live dictionary was collected");
+    assert!(!interrupted.exists());
+    service.shutdown().await.unwrap();
+    drop(service);
+
+    // After a relink (new installation) in a later run, the old one is garbage.
+    let restarted = Service::new(profile.0.clone(), false, false).unwrap();
+    restarted.store.update(|state| {
+        state.books[0].installation_id = crate::store::new_installation_id();
+        Ok(())
+    }).unwrap();
+    restarted.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(!dictionary.exists());
+    restarted.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_missing_archive_pauses_spelling_cache_collection() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let copy = profile.0.join("away.zim");
+    std::fs::copy(fixture(), &copy).unwrap();
+    service.import_paths(vec![copy.to_string_lossy().into_owned()], false).unwrap();
+    service.store.update(|state| { state.settings.spelling_enabled = true; Ok(()) }).unwrap();
+    service.spelling.set_writable(true).unwrap();
+    let spelling = profile.0.join("spelling");
+    std::fs::create_dir_all(&spelling).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&spelling, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let unknown = spelling.join(format!("{}.words", "a".repeat(64)));
+    std::fs::write(&unknown, b"dictionary of an archive on an unplugged drive").unwrap();
+    std::fs::remove_file(&copy).unwrap();
+    service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(unknown.is_file());
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn retired_internal_commands_are_no_longer_dispatched() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    for command in ["torrent_limits", "localswarm_hotspot_start", "localswarm_hotspot_stop"] {
+        let error = service.clone().dispatch(command, json!({"download":0,"upload":0})).await.unwrap_err();
+        assert!(error.contains("Unknown application command"), "{command}: {error}");
+    }
+    service.shutdown().await.unwrap();
+}

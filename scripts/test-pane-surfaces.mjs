@@ -126,7 +126,7 @@ const bandVisible = (text) => {
 };
 
 test("a card failure far down Discover or Maps is shown where it can be seen", { skip, timeout: 240000 }, async (t) => {
-  const { page, pageErrors, until, pane, calls } = await open(t);
+  const { page, pageErrors, until, button, pane, calls } = await open(t);
   await page.evaluate(() => {
     window.failures.start_download = "Fixture download rejected";
     window.failures.map_prepare = "Fixture preparation rejected";
@@ -174,8 +174,8 @@ test("a card failure far down Discover or Maps is shown where it can be seen", {
     .find((node) => node.textContent.trim() === "Delete download" && !node.disabled));
   await remove.asElement().click();
   await until(() => document.querySelector("dialog[open] .download-cleanup-actions"));
-  await page.evaluate(() => [...document.querySelectorAll("dialog[open] button")]
-    .find((node) => node.textContent.trim() === "Delete download and files").click());
+  // A trusted click: the dialog ignores synthetic activation.
+  await button("dialog[open] .download-cleanup-actions", "Delete download and files");
   await until(() => !document.querySelector("dialog[open]"));
   const dismiss = await until(() => [...document.querySelectorAll(".map-job .map-recovery button")]
     .find((node) => node.textContent.trim() === "Dismiss (keeps the file)" && !node.disabled));
@@ -222,7 +222,7 @@ test("Library removal, search and spelling suggestions each have one visible out
     return window.calls.slice(first + 1).map((call) => call.command).filter((command) => ["suggest", "cancel_search"].includes(command));
   });
   assert.deepEqual(afterSearch, []);
-  assert.equal(await page.evaluate(() => !!document.querySelector(".global-error, dialog[role=alertdialog][open]")), false);
+  assert.equal(await page.evaluate(() => document.querySelector(".global-error, dialog[role=alertdialog][open]")?.textContent ?? null), null);
   assert.equal((await calls("search"))[0].args.query, "animl");
   // A spelling correction for a search with no results.
   await button(".search-archives", "Search instead for “animal”");
@@ -261,8 +261,8 @@ test("Downloads shows kept progress, retained originals and one owner per failur
   // A failing Delete inside the cleanup dialog is painted there only.
   await button(".map-job .section-heading", "Delete download");
   await until(() => document.querySelector("dialog[open] .download-cleanup-actions"));
-  await page.evaluate(() => [...document.querySelectorAll("dialog[open] button")]
-    .find((node) => node.textContent.trim() === "Delete download and files").click());
+  // A trusted click: the dialog ignores synthetic activation.
+  await button("dialog[open] .download-cleanup-actions", "Delete download and files");
   await until((text) => document.querySelector("dialog[open] [role=alert]")?.textContent.includes(text), "Fixture reason");
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.deepEqual(await page.evaluate(painted, "Fixture reason"), { copies: 1, alertDialog: false });

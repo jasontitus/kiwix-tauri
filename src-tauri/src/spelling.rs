@@ -1835,8 +1835,10 @@ mod tests {
             .unwrap();
             assert!(new.matches_in(&dir, &name).unwrap());
             assert!(open_verified(&path, &id).unwrap().words > 0);
+            // A successful publish keeps no rollback copy behind.
+            assert!(!profile.0.join(backup).exists());
             if let Some(old) = old {
-                assert!(old.matches_in(&dir, backup).unwrap());
+                assert!(!old.matches_in(&dir, backup).unwrap_or(false));
             }
         }
     }

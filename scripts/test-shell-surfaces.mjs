@@ -128,12 +128,19 @@ function fixture(native) {
   window.backListeners = () => backChannels.length;
 }
 
+// A shell that does not start fails every test the same way. Only the first
+// one waits for it; the rest fail at once, so a startup regression reports its
+// cause instead of running the CI job out of time.
+let startupFailure = null;
+
 async function open(t, { native = false, userAgent, viewport = { width: 1280, height: 900 }, prepare } = {}) {
   assert.ok(process.env.KIWIX_TEST_CHROME, "CI must set KIWIX_TEST_CHROME to a Chromium executable; this browser test may not be skipped");
+  if (startupFailure) assert.fail(`Not run: the shell did not start in an earlier test (${startupFailure})`);
   const server = await createServer({ server: { host: "127.0.0.1", port: 0, strictPort: true }, logLevel: "silent" });
   await server.listen();
   t.after(() => server.close());
-  const browser = await puppeteer.launch({ executablePath: process.env.KIWIX_TEST_CHROME, headless: true });
+  // A page that stops answering is reported within the same bound as a wait.
+  const browser = await puppeteer.launch({ executablePath: process.env.KIWIX_TEST_CHROME, headless: true, protocolTimeout: 120000 });
   t.after(() => browser.close());
   const page = await browser.newPage();
   const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
@@ -154,14 +161,16 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
   // Each test starts its own development server; on a loaded runner the first
   // response and the module transforms can take most of a minute.
   page.setDefaultTimeout(45000);
-  await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded", timeout: 120000 });
   try {
+    await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded", timeout: 120000 });
     // The first load of a cold development server transforms every module.
     await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 120000 });
-  } catch {
+  } catch (error) {
     // Say where startup stopped instead of only "waiting failed".
-    const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }));
-    assert.fail(`The shell did not start: ${JSON.stringify(boot)} ${JSON.stringify(pageErrors)}`);
+    const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }))
+      .catch((inspection) => ({ unavailable: String(inspection) }));
+    startupFailure = `${error.message}; ${JSON.stringify(boot)} ${JSON.stringify(pageErrors)}`;
+    assert.fail(`The shell did not start: ${startupFailure}`);
   }
   // Every wait is on a condition. The limit only bounds a real defect; it is
   // generous because CI runs this beside other suites on a loaded runner.
