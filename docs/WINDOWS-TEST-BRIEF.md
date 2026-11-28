@@ -57,7 +57,7 @@ It should report `advisories ok, bans ok, licenses ok, sources ok`. One warning 
 
 ## Phase 2: the Windows libzim SDK (needed for anything that links)
 
-The build needs an MSVC build of **libzim 9.8.2 at commit `26ec526f74e8342a40da5ab14e364546988e0e1a`** with full-text search (Xapian), release mode, x86_64. It must include:
+Current builds skip Phase 2's SDK steps; see [WINDOWS-BUILD-PROVISIONING.md](WINDOWS-BUILD-PROVISIONING.md#build-and-test). For the historical baseline, the build needs an MSVC build of **libzim 9.8.2 at commit `26ec526f74e8342a40da5ab14e364546988e0e1a`** with full-text search (Xapian), release mode, x86_64. It must include:
 - the two patches in `src-tauri/native/`: `libzim-split-ranges.patch` and `libzim-retained-fd.patch`;
 - all transitive DLLs (zstd, xz/lzma, ICU, Xapian, and so on);
 - a schema-2 `kiwix-sdk.json` manifest.

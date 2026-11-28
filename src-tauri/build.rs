@@ -27,6 +27,18 @@ fn main() {
             );
             println!("cargo:rustc-cfg=native_location");
         }
+        // Half an opt-in builds nothing extra; say so rather than ignore it.
+        Ok("linux" | "android") => {
+            let variable = env::var_os("KIWIX_EXPERIMENTAL_LOCATION").is_some();
+            let feature = env::var_os("CARGO_FEATURE_EXPERIMENTAL_LOCATION").is_some();
+            if variable || feature {
+                println!(
+                    "cargo:warning=Experimental location providers are not compiled: set KIWIX_EXPERIMENTAL_LOCATION=1 (it is {}) together with --features experimental-location (it is {})",
+                    if variable { "not 1" } else { "unset" },
+                    if feature { "on" } else { "off" },
+                );
+            }
+        }
         _ => {}
     }
     // The authenticated headless preview embeds this directory independently of

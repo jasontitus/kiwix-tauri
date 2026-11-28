@@ -20,7 +20,7 @@ Native Windows 10/11 x64 only. WSL and Wine are not substitutes.
 
 This manifest contract was checked at build time by `src-tauri/native/desktop_sdk.rs`, which was removed once the app stopped linking libzim. No current app build step or workflow reads or verifies a Windows libzim SDK or its `kiwix-sdk.json`; `docs/windows-agent-tools/assemble-sdk.py` writes one for the native comparison tools only. Do not invent hashes.
 
-If the machine lacks the SDK, stop after the compile-only gate and report the exact missing prerequisite; do not substitute stock libzim.
+Current builds need no SDK (see [WINDOWS-BUILD-PROVISIONING.md](WINDOWS-BUILD-PROVISIONING.md#build-and-test)); for this historical baseline, if the machine lacks the SDK, stop after the compile-only gate and report the exact missing prerequisite; do not substitute stock libzim.
 
 ## 2. Build and local tests
 
