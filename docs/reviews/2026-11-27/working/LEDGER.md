@@ -339,3 +339,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - buildhygiene round 2 (impl/buildhygiene-round2.md): R1-R8 done. Owner: also refresh remaining DEPENDENCIES rows + Phase 3 title (sent).
 - INTEGRATION: localization generate done (sources 1552->1669; coverage ~0.80->~0.74 = new untranslated strings, residual; check:localization failures []), npm run build OK, node suite w/ Chrome 545: 544 pass 0 fail 1 skip (macOS-only), python unittest 182 OK (2 skip), appimage test OK.
 - buildhygiene round 3: DEPENDENCIES rows refreshed (growth since 11-05), Phase 3 retitled. -> adv-buildhygiene quick check r2+r3
+- adv-buildhygiene r2+3: R1-R8 closed; DEPENDENCIES:3 false -> OWNER applied reviewer's exact 3-column table + line 3 text (+method note column wording). LANE buildhygiene CLOSED (docs-only fix per reviewer needs no Rust re-review; owner edit to be confirmed by final record reviewer). Residuals listed.
