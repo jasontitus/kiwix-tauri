@@ -313,3 +313,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - startup round 4 (impl/startup-round4.md): v2.2, 228 vectors (+13, 0 changed), 0/206226 leaks, retry >=1s no-window. -> adv-startup quick check; then FINAL to ports
 - adv-startup round 4: SPEC FINAL (228 vectors), LANE startup CLOSED. Owner added spec §4 wording for accessToken_value residual (doc only). -> ports told FINAL.
 - OWNER docs: STATE_MACHINES §1.1/§1.2 import cancellation added (verify wording vs service round 3 cutover-count + staging removal at docs review).
+- android crash port (impl/android-crash.md): Kotlin 228/228, 76 JVM tests, 444k differential 0 diffs. Spec ambiguities 4,8,10 -> owner spec lines after Swift. Item 9 (Rust rooted \a scan) already measured by adv-startup (<=2.6ms). -> adv-android (a942b…) review

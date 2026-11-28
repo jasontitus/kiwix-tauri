@@ -182,7 +182,7 @@ final class CrashCapturePolicyTests: XCTestCase {
     let units = [
       "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
       "token='x ", "C:\\a\" ", "!\\a", "\\a\"", "pin=Some(", "auth=\\\"x", "https://a.b:1 ", "http://e.org/../",
-      "a@", "@a.", "x@y.zz ", "@.-",
+      "a@", "@a.", "x@y.zz ", "@.-", "~a", "tokenAb ", "passwordHash", "1://a ",
     ]
     for unit in units {
       // Whole units only, so the bound does not drop a partial one.
