@@ -6503,6 +6503,19 @@ async fn a_privacy_switch_cancels_a_running_import_and_later_imports_still_work(
 
     *service.import_hook.lock().unwrap() = None;
     service.clone().dispatch("save_settings", json!({"settings":{"privateMode":false}})).await.unwrap();
+    let notice_shown = |snapshot: &Value| snapshot["startupWarnings"].as_array().unwrap().iter()
+        .any(|warning| warning == crate::imports::IMPORT_CANCELLED);
+    // Another archive, added and then reopened through the registered-path
+    // shortcut, is not the cancelled one: the notice stays.
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let other = profile.0.join("other.zim");
+    fixture_with_new_uuid(&other);
+    for _ in 0..2 {
+        let added = service.import_paths(vec![other.to_string_lossy().into_owned()], false).unwrap();
+        assert_eq!(added["books"].as_array().unwrap().len(), 1, "{added}");
+        let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+        assert!(notice_shown(&snapshot), "an unrelated import withdrew the notice");
+    }
     let imported = service.import_paths(vec![fixture().to_string_lossy().into_owned()], false).unwrap();
     assert_eq!(imported["books"].as_array().unwrap().len(), 1, "{imported}");
     // Added again, so the advice to add it again is withdrawn.

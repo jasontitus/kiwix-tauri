@@ -69,7 +69,7 @@ import { translateBookmarkDrafts, translateLocation, translateTabs } from "./ref
 import { privateSyncRequest } from "./private-sync-api";
 import { diagnostics, reportError } from "./diagnostics";
 import { reportBootPhase, reportFrontendReady } from "./startup-ready";
-import { dismissStartupNotice, startupNoticeVisible } from "./startup-notice";
+import { dismissStartupNotice, pruneStartupNoticeDismissals, visibleStartupNotices } from "./startup-notice";
 import {
   errorSurface,
   isProviderUnavailableFor,
@@ -503,6 +503,14 @@ export default function App() {
   const [initialError, setInitialError] = useState("");
   // The notices the person closed; a new one brings the band back.
   const [startupNoticeDismissed, setStartupNoticeDismissed] = useState<string[]>([]);
+  const startupWarnings = snapshot?.startupWarnings;
+  // A withdrawn notice is forgotten, so the same notice noted again is new.
+  // (No snapshot is not "no notices": keep what was closed.)
+  useEffect(() => {
+    if (startupWarnings)
+      setStartupNoticeDismissed((dismissed) => pruneStartupNoticeDismissals(startupWarnings, dismissed));
+  }, [startupWarnings]);
+  const startupNotices = visibleStartupNotices(startupWarnings, startupNoticeDismissed);
   const [pageVisible, setPageVisible] = useState(document.visibilityState === "visible");
   useEffect(() => {
     const update = () => setPageVisible(document.visibilityState === "visible");
@@ -3719,15 +3727,15 @@ export default function App() {
               </button>
             </div>
           )}
-          {!!snapshot?.startupWarnings?.length && startupNoticeVisible(snapshot.startupWarnings, startupNoticeDismissed) && (
+          {startupNotices.length > 0 && (
             <div className="startup-notice" role="status">
               <div>
                 <strong>{t("Some saved items need attention.")}</strong>
-                <p>{snapshot.startupWarnings.join("\n")}</p>
+                <p>{startupNotices.join("\n")}</p>
               </div>
               <button
                 className="icon-button"
-                onClick={() => setStartupNoticeDismissed((dismissed) => dismissStartupNotice(snapshot.startupWarnings, dismissed))}
+                onClick={() => setStartupNoticeDismissed(dismissStartupNotice(startupWarnings))}
                 aria-label={t("Dismiss")}
               >
                 <X size={17} />

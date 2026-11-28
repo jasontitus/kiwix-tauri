@@ -233,6 +233,10 @@ pub struct Service {
     pdf_scratch_swept: AtomicBool,
     stopping: AtomicBool,
     startup_warnings: Mutex<Vec<String>>,
+    /// Archives (UUID, else canonical path) whose manual import a cutover
+    /// cancelled and that have not been added since: the cancellation notice
+    /// stays while any remains.
+    cancelled_imports: Mutex<HashSet<String>>,
     #[cfg(test)]
     mutation_test_gate: Mutex<
         Option<(
@@ -896,6 +900,7 @@ impl Service {
             pdf_scratch_swept: AtomicBool::new(false),
             stopping: AtomicBool::new(false),
             startup_warnings: Mutex::new(startup_warnings),
+            cancelled_imports: Mutex::new(HashSet::new()),
             #[cfg(test)]
             mutation_test_gate: Mutex::new(None),
             closed_windows: Mutex::new(HashSet::new()),
@@ -1869,6 +1874,13 @@ impl Service {
                     // drops replies from before that switch: say it where the
                     // reloaded shell looks. (At Quit nobody is left to tell.)
                     if error == crate::imports::IMPORT_CANCELLED && !self.stopping.load(Ordering::SeqCst) {
+                        // Remember which archive it was (before a staged copy
+                        // is discarded below), so the notice stays until that
+                        // archive, not just any archive, has been added.
+                        let key = cancelled_import_key(&path);
+                        if let Ok(mut cancelled) = self.cancelled_imports.lock() {
+                            cancelled.insert(key);
+                        }
                         self.note_startup_warning(error.clone());
                     }
                     // Its staged copy is not kept for a retry, which copies again.
@@ -1880,10 +1892,19 @@ impl Service {
                 }
             }
         }
-        // Once an import has gone through again, "Add the archive again" is
-        // no longer advice anyone needs.
-        if !books.is_empty() && !errors.iter().any(|error| error["error"] == crate::imports::IMPORT_CANCELLED) {
-            self.forget_startup_warning(crate::imports::IMPORT_CANCELLED);
+        // "Add the archive again" is withdrawn once every archive it was about
+        // has been added (from wherever: a picker retry makes a new copy).
+        if !books.is_empty() {
+            if let Ok(mut cancelled) = self.cancelled_imports.lock() {
+                let before = cancelled.len();
+                for book in &books {
+                    cancelled.remove(&book.metadata.id);
+                    cancelled.remove(&book.path);
+                }
+                if before > 0 && cancelled.is_empty() {
+                    self.forget_startup_warning(crate::imports::IMPORT_CANCELLED);
+                }
+            }
         }
         #[cfg(mobile)]
         if !books.is_empty() { self.mobile_apply_archive_backup()?; }
@@ -4386,6 +4407,17 @@ fn read_saved(store: &Store, relative: &str) -> Result<Value, String> {
     }
     Ok(saved)
 }
+/// Which archive a cancelled manual import was: its UUID when the file still
+/// opens (a retry from another copy is the same archive), else its path.
+fn cancelled_import_key(path: &str) -> String {
+    if let Ok(metadata) = Archive::open(Path::new(path)).and_then(|archive| archive.metadata()) {
+        return metadata.id;
+    }
+    std::fs::canonicalize(path)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_owned())
+}
+
 /// The device number of a monitored folder (Unix), which changes when a
 /// volume is mounted on it or taken away.
 #[cfg(desktop)]
