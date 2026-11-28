@@ -62,6 +62,67 @@ final class CrashCapturePolicyTests: XCTestCase {
     }
   }
 
+  /// The vectors shared with `crash.rs` and the Android intake. Each
+  /// `expected` is the exact output of `redact` for `input`.
+  func testRedactionMatchesTheCanonicalCasesSharedWithRust() throws {
+    struct Case: Decodable {
+      let input: String
+      let expected: String
+    }
+    // The fixture lives with the Rust tests, outside this package, so it is
+    // read from the checkout the tests were built from.
+    var fixture = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { fixture.deleteLastPathComponent() }
+    fixture.appendPathComponent("tests/fixtures/crash-redaction-cases.json")
+    guard let data = try? Data(contentsOf: fixture) else {
+      throw XCTSkip("The shared fixture is not readable from here: \(fixture.path)")
+    }
+    let cases = try JSONDecoder().decode([Case].self, from: data)
+    XCTAssertGreaterThanOrEqual(cases.count, 80, "The shared fixture lost cases")
+    for item in cases {
+      let actual = CrashIntake.redact(item.input)
+      // Compared as scalars: `String ==` treats canonically equivalent text
+      // as equal, and the ports must agree exactly.
+      XCTAssertEqual(Array(actual.unicodeScalars), Array(item.expected.unicodeScalars),
+        "input: \(item.input.debugDescription) expected: \(item.expected.debugDescription) actual: \(actual.debugDescription)")
+    }
+  }
+
+  func testRedactionInputIsBoundedBeforeAnyStepRunsAndCountsScalars() {
+    let bound = CrashRedaction.maxInput
+    // A path far longer than the bound is still one placeholder; a pattern
+    // engine gave up on such a line and let it through.
+    let long = "/" + String(repeating: "a", count: bound * 4)
+    XCTAssertEqual(CrashRedaction.redact(long), "[path]")
+    XCTAssertEqual(CrashRedaction.redactLine(long), "[path]")
+    XCTAssertEqual(CrashRedaction.redact("/" + String(repeating: ":", count: 1_000_000)), "[path]")
+    XCTAssertEqual(CrashRedaction.redact("open file:/" + String(repeating: "x y", count: 400_000)), "open [url]")
+    // Text past the bound is dropped, not passed through.
+    let late = String(repeating: "word ", count: 300_000) + "/Users/Jane Doe/a.zim"
+    XCTAssertFalse(CrashRedaction.redact(late).contains("Jane"))
+    XCTAssertFalse(CrashRedaction.redactLine(late).contains("Jane"))
+
+    // Characters are Unicode scalars: not bytes, UTF-16 units or grapheme
+    // clusters, so a cut never splits a surrogate pair.
+    XCTAssertEqual(CrashRedaction.redactLine(String(repeating: "\u{E9}", count: bound + 10)).unicodeScalars.count, bound)
+    let astral = CrashRedaction.redactLine(String(repeating: "\u{1F600}", count: bound + 10))
+    XCTAssertEqual(astral.unicodeScalars.count, bound)
+    XCTAssertEqual(astral.utf16.count, bound * 2)
+    XCTAssertEqual(CrashRedaction.redactLine(String(repeating: "e\u{301}", count: bound)).unicodeScalars.count, bound)
+    // "\r\n" is one `Character` but two scalars, each of them whitespace.
+    XCTAssertEqual(CrashRedaction.redactLine(String(repeating: "\r\n", count: bound)).unicodeScalars.count, bound)
+    XCTAssertEqual(CrashRedaction.redact("open /Users/Jane Doe/a.zim\r\nnext: /b c\r\nend"), "open [path] next: [path] end")
+
+    // The message cut is 1,999 scalars and an ellipsis; a frame is cut the same way.
+    let cut = CrashRedaction.redact(String(repeating: "\u{1F600} ", count: 3_000))
+    XCTAssertEqual(cut.unicodeScalars.count, 2_000)
+    XCTAssertEqual(cut.unicodeScalars.last, "\u{2026}")
+    let short = String(repeating: "ab ", count: 666) + "x"
+    XCTAssertEqual(CrashRedaction.redact(short), short)
+    XCTAssertEqual(CrashRedaction.truncate(String(repeating: "\u{1F600}", count: 300), limit: 240).unicodeScalars.count, 240)
+    XCTAssertEqual(CrashRedaction.truncate("short", limit: 240), "short")
+  }
+
   func testReadOnlyCutoverDrainsWritesAndRejectsLaterCapture() {
     CrashIntake.setEnabled(true)
     defer { CrashIntake.setEnabled(false) }

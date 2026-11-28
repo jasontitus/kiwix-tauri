@@ -57,7 +57,7 @@ export function MapRecoveryPaths({ job, disabled, onDismiss }: {
   return (
     <div className="map-recovery">
       <p className="muted" id={`${id}-note`}>
-        {t("Kiwix kept these files. Press Delete again to retry the ones it can prove are its own; remove any others yourself, then dismiss this warning.")}
+        {t("Kiwix kept these files. Press Delete to retry the ones it can prove are its own; remove any others yourself, then dismiss this warning.")}
       </p>
       <ul>
         {paths.map((path, index) => (

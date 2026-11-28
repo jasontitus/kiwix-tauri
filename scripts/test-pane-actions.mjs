@@ -278,8 +278,9 @@ test("a spelling correction keeps focus on the query on desktop and moves it to 
       isMobile: mobile, busy: false, results: null,
       searchInput: { current: { focus: () => focused.push("input") } },
       resultsRegion: { current: { focus: () => focused.push("results") } },
-      focusResults: { current: false },
-      setSearch() {}, performSearch: async (query) => { searched.push(query); },
+      focusResults: { current: false }, searchId: { current: 0 },
+      setSearch() {},
+      performSearch: async (query) => { searched.push(query); bindings.searchId.current++; },
     };
     const context = await declarations("Library.tsx", ["searchCorrection"], bindings, [], ["resultsRegion.current?.focus()"]);
     const settle = context.effects["resultsRegion.current?.focus()"];
@@ -292,6 +293,16 @@ test("a spelling correction keeps focus on the query on desktop and moves it to 
     settle();                       // its results arrived
     settle();                       // a later render does not move focus again
     assert.deepEqual(focused, mobile ? ["results"] : ["input"], mobile ? "no soft keyboard over the results" : "desktop");
+    // A correction whose search did not start (it was refused) leaves no focus
+    // move behind for a later search the user did not start from here.
+    context.performSearch = async () => {};
+    context.exported.searchCorrection("animals");
+    context.busy = true;
+    settle();
+    context.busy = false;
+    context.results = { hits: [{}] };
+    settle();
+    assert.deepEqual(focused, mobile ? ["results"] : ["input", "input"]);
   }
 });
 
@@ -337,6 +348,17 @@ test("on iOS a kept map file's path is hidden without swallowing the reason besi
     const kept = `Kiwix could not remove a partial map download, so it was kept at ${root}/.streetzim-cleanup-1/.streetzim-a.part. ${reason}`;
     assert.equal(errorText(kept), `Kiwix could not remove a partial map download, so it was kept at [File]. ${reason}`);
   }
+  // A full stop or bracket inside a folder name is part of the path: the whole
+  // path is hidden, not cut at "Dr." and shown from there on.
+  for (const folder of ["Dr. Who", "A. Smith", "Vol. II", "St. Louis Guide (Draft)", "Books (Old)"]) {
+    assert.equal(errorText(`Could not open ${root}/${folder}/wikipedia.zim right now`), "Could not open [File]", folder);
+    assert.equal(errorText(`The archive ${root}/${folder}/notes.zim is not available`), "The archive [File] is not available", folder);
+    assert.equal(errorText(`Import failed for ${root}/${folder}/b.zim`), "Import failed for [File]", folder);
+  }
+  assert.equal(errorText(`Could not open ${root}/a.zim. Try again.`), "Could not open [File]. Try again.");
+  assert.equal(errorText(`Some earlier map downloads could not be cleaned up. The files were kept here: ${root}/Vol. II/.streetzim-a.part (Its folder was moved or replaced, so Kiwix left the file alone)`),
+    "Some earlier map downloads could not be cleaned up. The files were kept here: [File] (Its folder was moved or replaced, so Kiwix left the file alone)");
+  assert.equal(errorText(`(see ${root}/a.zim)`), "(see [File])", "a closing bracket after a path still ends it");
   // The forms redaction already handled are unchanged.
   assert.equal(errorText(`Could not open ${root}/a.zim: permission denied`), "Could not open [File]: permission denied");
   assert.equal(errorText(`${root}/My Maps/a b.zim is missing`), "[File] is missing");

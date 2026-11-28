@@ -799,7 +799,11 @@ export default function Library({
     if (isMobile) focusResults.current = true;
     else searchInput.current?.focus();
     setSearch(query);
+    // performSearch claims a search id synchronously when it starts; one that
+    // did not start must not leave a focus move for some later search.
+    const before = searchId.current;
     void performSearch(query);
+    if (searchId.current === before) focusResults.current = false;
   }
   useEffect(() => {
     if (!focusResults.current || busy) return;
