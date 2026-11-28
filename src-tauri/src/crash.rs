@@ -16,6 +16,10 @@
 //! * Long opaque token-like runs are replaced.
 //! * Every field is length-bounded; the whole record is capped at 32 KiB.
 //!
+//! The order of those steps is part of the rule (see `redact`). The Swift and
+//! Kotlin crash intakes implement the same pipeline, and all three are pinned
+//! to `tests/fixtures/crash-redaction-cases.json`.
+//!
 //! The record never contains archive contents, bookmark or note text, library
 //! paths, user document paths, or URLs with sensitive query strings.
 
@@ -36,6 +40,10 @@ const PREVIOUS_FILE: &str = "previous.json";
 const TEMP_FILE: &str = ".pending.json.tmp";
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 const MAX_MESSAGE_CHARS: usize = 2_000;
+/// Text is cut to this many characters before any redaction step runs. The
+/// stored fields are far shorter, so nothing useful is lost, and no step can
+/// be handed an input long enough to exhaust it and pass text through.
+const MAX_REDACTION_INPUT_CHARS: usize = 32_768;
 const MAX_STACK_FRAMES: usize = 24;
 const MAX_FRAME_CHARS: usize = 240;
 const MAX_THREAD_CHARS: usize = 64;
@@ -421,20 +429,36 @@ fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Full redaction for one bounded text field.
+fn bounded_input(value: &str) -> String {
+    value.chars().take(MAX_REDACTION_INPUT_CHARS).collect()
+}
+
+/// Full redaction for one bounded text field. The steps run in this order:
+///
+/// 1. Keep at most `MAX_REDACTION_INPUT_CHARS` characters.
+/// 2. Secret values (`redact_secret_values`), including `bearer`. First,
+///    because a value that is a path with spaces must go as a whole, and a
+///    path must not swallow the key that marks the text after it as secret.
+/// 3. URLs (`replace_urls`).
+/// 4. Paths (`redact_paths`).
+/// 5. Long opaque tokens (`redact_opaque_tokens`).
+/// 6. Collapse whitespace, then cut to `MAX_MESSAGE_CHARS`.
 fn redact(value: &str) -> String {
-    let value = replace_urls(value);
-    let value = redact_paths(&value);
+    let value = bounded_input(value);
     let value = redact_secret_values(&value);
+    let value = replace_urls(&value);
+    let value = redact_paths(&value);
     let value = redact_opaque_tokens(&value);
     truncate_chars(&collapse_whitespace(&value), MAX_MESSAGE_CHARS)
 }
 
-/// Line redaction for backtrace frames: keeps spacing so frames stay readable.
+/// Line redaction for backtrace frames: steps 1 to 4 of `redact`, keeping
+/// spacing so frames stay readable.
 fn redact_line(value: &str) -> String {
-    let value = replace_urls(value);
-    let value = redact_paths(&value);
-    redact_secret_values(&value)
+    let value = bounded_input(value);
+    let value = redact_secret_values(&value);
+    let value = replace_urls(&value);
+    redact_paths(&value)
 }
 
 fn replace_urls(value: &str) -> String {
@@ -462,8 +486,12 @@ fn replace_urls(value: &str) -> String {
         {
             continue;
         }
-        let end = if scheme.eq_ignore_ascii_case("file") && tail.starts_with('/') {
-            // A file URL is a path and may be written with unencoded spaces.
+        let end = if scheme.eq_ignore_ascii_case("file")
+            && tail.chars().next().is_some_and(|first| !first.is_whitespace())
+        {
+            // A file URL is a path, in any form (`file:///x`, `file:C:/x`), and
+            // may be written with unencoded spaces. `file: ` followed by a
+            // space is prose; a path after it is found by `redact_paths`.
             let chars: Vec<char> = tail.chars().collect();
             let length = path_end(&chars, 0);
             colon + 1 + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
@@ -530,25 +558,44 @@ fn redact_paths(value: &str) -> String {
     output
 }
 
+/// Whether a path may begin right after `previous` (`None` is the start of
+/// the text).
+fn path_boundary(previous: Option<char>) -> bool {
+    previous.is_none_or(|previous| {
+        previous.is_whitespace()
+            || matches!(
+                previous,
+                '=' | '(' | '[' | '{' | '"' | '\'' | ',' | ';' | ':' | '`' | '<' | '>' | '|' | '“' | '‘'
+            )
+    })
+}
+
+/// Whether the text at `index` has the shape of a path start: a drive
+/// (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`), or a
+/// share (`\\`, `//host`).
+fn path_start(chars: &[char], index: usize) -> bool {
+    let Some(&current) = chars.get(index) else {
+        return false;
+    };
+    let next = chars.get(index + 1).copied();
+    let name = |character: Option<char>| character.is_some_and(|c| c != '/' && !c.is_whitespace());
+    let windows_drive =
+        current.is_ascii_alphabetic() && next == Some(':') && matches!(chars.get(index + 2), Some('\\' | '/'));
+    let unix = current == '/' && name(next);
+    let home = current == '~' && matches!(next, Some('/' | '\\'));
+    let share = (current == '\\' && next == Some('\\'))
+        || (current == '/' && next == Some('/') && name(chars.get(index + 2).copied()));
+    windows_drive || unix || home || share
+}
+
 fn path_at(chars: &[char], index: usize) -> Option<usize> {
-    let boundary = index == 0
-        || chars[index - 1].is_whitespace()
-        || matches!(
-            chars[index - 1],
-            '=' | '(' | '[' | '{' | '"' | '\'' | ',' | ';' | ':' | '`'
-        );
-    if !boundary {
+    let previous = index.checked_sub(1).map(|before| chars[before]);
+    if !path_boundary(previous) || !path_start(chars, index) {
         return None;
     }
-    let current = chars[index];
-    let windows_drive = current.is_ascii_alphabetic()
-        && chars.get(index + 1) == Some(&':')
-        && matches!(chars.get(index + 2), Some('\\' | '/'));
-    let unix = current == '/'
-        && chars.get(index + 1).is_some_and(|next| *next != '/' && !next.is_whitespace());
-    let tilde = current == '~' && chars.get(index + 1) == Some(&'/');
-    let unc = current == '\\' && chars.get(index + 1) == Some(&'\\');
-    if !(windows_drive || unix || tilde || unc) {
+    // `//host` right after a colon is the authority of a URL that the URL step
+    // kept (`https://example.org/a`), not a share.
+    if previous == Some(':') && chars[index] == '/' && chars.get(index + 1) == Some(&'/') {
         return None;
     }
     Some(path_end(chars, index))
@@ -570,7 +617,7 @@ fn path_end(chars: &[char], start: usize) -> usize {
         let stop = match chars[end] {
             '\n' | '\r' | '<' | '>' | '`' => true,
             // Debug-formatted paths escape an embedded quote as `\"`.
-            '"' => chars[start..end].iter().rev().take_while(|c| **c == '\\').count() % 2 == 0,
+            '"' => !backslash_escaped(chars, start, end),
             ':' => chars.get(end + 1).is_some_and(|next| next.is_whitespace()),
             _ => false,
         };
@@ -586,107 +633,149 @@ fn path_end(chars: &[char], start: usize) -> usize {
     end
 }
 
+/// Replace the value that follows a secret keyword with `[redacted]`.
+///
+/// A keyword is one of `SECRET_KEYS`, in any letter case, with no ASCII word
+/// character (`A-Z a-z 0-9 _`) directly before or after it. After the keyword
+/// come, in order: an optional closing quote of a quoted key (`"password":`),
+/// optional spaces, tabs or line breaks, and `=` or `:` followed by optional
+/// spaces or tabs. `authorization` and `bearer` also accept plain whitespace
+/// instead of `=` or `:`. What follows is the value (`secret_value`).
 fn redact_secret_values(value: &str) -> String {
-    const KEYS: [&str; 12] = [
-        "authorization",
-        "access_token",
-        "refresh_token",
-        "api_key",
-        "apikey",
-        "password",
-        "passwd",
-        "cookie",
-        "bearer",
-        "token",
-        "secret",
-        "pin",
-    ];
-    let bytes = value.as_bytes();
-    let lower = value.to_ascii_lowercase();
+    let chars: Vec<char> = value.chars().collect();
     let mut output = String::with_capacity(value.len());
     let mut cursor = 0;
-    'outer: while cursor < bytes.len() {
-        for key in KEYS {
-            if lower[cursor..].starts_with(key)
-                && (cursor == 0 || !is_word_byte(bytes[cursor - 1]))
-            {
-                let after_key = cursor + key.len();
-                if after_key < bytes.len() && is_word_byte(bytes[after_key]) {
-                    continue;
-                }
-                let mut separator = after_key;
-                while separator < bytes.len()
-                    && matches!(bytes[separator], b' ' | b'\t' | b'\r' | b'\n')
-                {
-                    separator += 1;
-                }
-                let explicit = separator < bytes.len()
-                    && matches!(bytes[separator], b'=' | b':');
-                let bearer = matches!(key, "authorization" | "bearer");
-                if !explicit && !(bearer && separator > after_key) {
-                    continue;
-                }
-                if explicit {
-                    separator += 1;
-                    while separator < bytes.len()
-                        && matches!(bytes[separator], b' ' | b'\t')
-                    {
-                        separator += 1;
-                    }
-                }
-                let mut quote = None;
-                if separator < bytes.len() && matches!(bytes[separator], b'"' | b'\'') {
-                    quote = Some(bytes[separator]);
-                    separator += 1;
-                }
-                let mut end = separator;
-                while end < bytes.len()
-                    && !matches!(
-                        bytes[end],
-                        b' ' | b'\t' | b'\r' | b'\n' | b',' | b';' | b'&' | b')' | b']' | b'}'
-                    )
-                    && quote != Some(bytes[end])
-                {
-                    end += 1;
-                }
-                if key == "authorization"
-                    && value[separator..end].eq_ignore_ascii_case("bearer")
-                {
-                    let mut next = end;
-                    while next < bytes.len() && bytes[next].is_ascii_whitespace() {
-                        next += 1;
-                    }
-                    while next < bytes.len()
-                        && !matches!(
-                            bytes[next],
-                            b' ' | b'\t' | b'\r' | b'\n' | b',' | b';' | b'&' | b')' | b']' | b'}'
-                        )
-                    {
-                        next += 1;
-                    }
-                    end = next;
-                }
-                if end > separator {
-                    output.push_str(&value[cursor..separator]);
-                    output.push_str("[redacted]");
-                    cursor = end;
-                    if (quote == Some(b'"') || quote == Some(b'\'')) && cursor < bytes.len() {
-                        output.push(bytes[cursor] as char);
-                        cursor += 1;
-                    }
-                    continue 'outer;
-                }
-            }
+    while cursor < chars.len() {
+        if let Some((start, end)) = secret_at(&chars, cursor) {
+            output.extend(&chars[cursor..start]);
+            output.push_str("[redacted]");
+            cursor = end;
+            continue;
         }
-        let character = value[cursor..].chars().next().unwrap_or('\u{fffd}');
-        output.push(character);
-        cursor += character.len_utf8();
+        output.push(chars[cursor]);
+        cursor += 1;
     }
     output
 }
 
-fn is_word_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
+const SECRET_KEYS: [&str; 12] = [
+    "authorization",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "apikey",
+    "password",
+    "passwd",
+    "cookie",
+    "bearer",
+    "token",
+    "secret",
+    "pin",
+];
+
+fn is_word_char(character: char) -> bool {
+    character.is_ascii_alphanumeric() || character == '_'
+}
+
+/// The value range of a secret whose keyword starts at `at`, if any.
+fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
+    if at > 0 && is_word_char(chars[at - 1]) {
+        return None;
+    }
+    for key in SECRET_KEYS {
+        let after_key = at + key.len();
+        if after_key > chars.len()
+            || !chars[at..after_key]
+                .iter()
+                .zip(key.chars())
+                .all(|(character, expected)| character.to_ascii_lowercase() == expected)
+            || chars.get(after_key).is_some_and(|next| is_word_char(*next))
+        {
+            continue;
+        }
+        let mut next = after_key;
+        let quoted_key = matches!(chars.get(next), Some('"' | '\''));
+        if quoted_key {
+            next += 1;
+        }
+        let gap = next;
+        while matches!(chars.get(next), Some(' ' | '\t' | '\r' | '\n')) {
+            next += 1;
+        }
+        if matches!(chars.get(next), Some('=' | ':')) {
+            next += 1;
+            while matches!(chars.get(next), Some(' ' | '\t')) {
+                next += 1;
+            }
+        } else if quoted_key || next == gap || !matches!(key, "authorization" | "bearer") {
+            continue;
+        }
+        let (start, end) = secret_value(chars, next, key);
+        if end > start {
+            return Some((start, end));
+        }
+    }
+    None
+}
+
+/// The range of the secret value that begins at `start`.
+///
+/// * `"…"`: everything up to the closing quote (one not escaped by a
+///   backslash), a line break or the end. The quotes stay.
+/// * `'…'`: everything up to the last `'` on the line, or to the end of the
+///   line when there is none. A value may itself contain an apostrophe.
+/// * A path start: everything `path_end` takes, so a path with spaces goes
+///   whole.
+/// * After `cookie`: the rest of the line, because one header carries several
+///   `name=value` pairs.
+/// * Otherwise one token, which ends at a space, tab, line break or one of
+///   `, ; & ) ] }`. After `authorization` a second token separated by spaces
+///   or tabs goes too (`Basic dXNlcjpwYXNz`, `Bearer …`).
+fn secret_value(chars: &[char], start: usize, key: &str) -> (usize, usize) {
+    let line_end = |from: usize| {
+        (from..chars.len())
+            .find(|index| matches!(chars[*index], '\n' | '\r'))
+            .unwrap_or(chars.len())
+    };
+    let token_end = |from: usize| {
+        (from..chars.len())
+            .find(|index| matches!(chars[*index], ' ' | '\t' | '\r' | '\n' | ',' | ';' | '&' | ')' | ']' | '}'))
+            .unwrap_or(chars.len())
+    };
+    match chars.get(start) {
+        Some('"') => {
+            let line = line_end(start + 1);
+            let close = (start + 1..line)
+                .find(|index| chars[*index] == '"' && !backslash_escaped(chars, start + 1, *index));
+            (start + 1, close.unwrap_or(line))
+        }
+        Some('\'') => {
+            let line = line_end(start + 1);
+            let close = (start + 1..line).rev().find(|index| chars[*index] == '\'');
+            (start + 1, close.unwrap_or(line))
+        }
+        _ if path_start(chars, start) => (start, path_end(chars, start)),
+        _ if key == "cookie" => (start, line_end(start)),
+        _ => {
+            let mut end = token_end(start);
+            if key == "authorization" && end > start {
+                let mut second = end;
+                while matches!(chars.get(second), Some(' ' | '\t')) {
+                    second += 1;
+                }
+                if second > end && token_end(second) > second {
+                    end = token_end(second);
+                }
+            }
+            (start, end)
+        }
+    }
+}
+
+/// Whether the character at `index` follows an odd run of backslashes that
+/// begins no earlier than `floor`.
+fn backslash_escaped(chars: &[char], floor: usize, index: usize) -> bool {
+    chars[floor..index].iter().rev().take_while(|character| **character == '\\').count() % 2 == 1
 }
 
 fn redact_opaque_tokens(value: &str) -> String {

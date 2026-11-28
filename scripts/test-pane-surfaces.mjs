@@ -211,6 +211,7 @@ test("Library removal, search and spelling suggestions each have one visible out
   // Enter right after typing: the suggestion debounce must not cancel the search.
   await page.evaluate(() => { window.delays.search = 600; });
   await page.click(".search-archives > summary");
+  await until(() => document.querySelector('input[aria-label="Include Installed archive in search"]'));
   await page.click('input[aria-label="Include Installed archive in search"]');
   await page.click('input[aria-label="Search articles"]');
   await page.keyboard.type("animl");
@@ -240,8 +241,8 @@ test("Downloads shows kept progress, retained originals and one owner per failur
     rolledBackInstallationId: null, rollbackBook: null, originalDiscarded: false };
   await page.evaluate((value) => {
     window.results.downloads = [{
-      id: "interrupted", fileName: "big.zim", status: "paused", transport: "http", downloaded: 32 * 1024 * 1024,
-      total: 40 * 1024 * 1024, error: "Download interrupted by application shutdown; resume when ready",
+      id: "interrupted", fileName: "big.zim", status: "paused", transport: "http", downloaded: 32e6,
+      total: 40e6, error: "Download interrupted by application shutdown; resume when ready",
       destination: "/fixture/downloads/big.zim", createdAt: "2026-01-01T00:00:00Z",
     }];
     window.results.map_status = {

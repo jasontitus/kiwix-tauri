@@ -64,6 +64,10 @@ function commit(key: Key, edit: Edit, retryRetained = false) {
   if ((!retryRetained && edits.get(key) !== edit) ||
       edit.phase === "saving" || edit.phase === "invalid") return;
   if (needsConfirmation(key, edit)) {
+    // Text someone typed is theirs to review. While the prompt cannot be
+    // shown (Quit, close or suspension hid the shell, which also blurs the
+    // field) it is neither applied nor thrown away: it waits in its field.
+    if (typed(edit) && !confirmationAvailable) return;
     edit.phase = "confirming";
     publish();
     return;
@@ -99,17 +103,18 @@ function commit(key: Key, edit: Edit, retryRetained = false) {
     },
   );
 }
-// Whether the App-level prompt can be shown. While it cannot (Quit, window
-// close, suspension) a typed change that needs review is neither applied nor
-// thrown away: it stays in its field, marked as not saved.
+// Whether the App-level prompt can be shown (see `commit`).
 let confirmationAvailable = false;
+/** From a text field, as opposed to a switch that was toggled. */
+function typed(edit: Edit): boolean {
+  return edit.raw !== undefined;
+}
 function awaitsReview(key: Key, edit: Edit): boolean {
   return edit.phase === "waiting" && needsConfirmation(key, edit);
 }
 function flushDrafts() {
   for (const [key, edit] of edits)
-    if (edit.phase === "waiting" && (confirmationAvailable || !needsConfirmation(key, edit)))
-      commit(key, edit);
+    if (edit.phase === "waiting") commit(key, edit);
 }
 // Explicit recovery retries the retained writes before lifecycle reconciliation
 // drains the same settings queue; the failed-network-policy fence stays intact.
@@ -189,10 +194,17 @@ export function useSettingsAutosave(settings: Settings, handlers: Handlers) {
       },
       // Enter reviews a change that is waiting for confirmation. The form has
       // no submit control, so the key would otherwise do nothing here.
-      onKeyDown: (event: { key: string; isComposing?: boolean; nativeEvent?: { isComposing?: boolean }; preventDefault: () => void }) => {
+      onKeyDown: (event: {
+        key: string;
+        isComposing?: boolean;
+        nativeEvent?: { isComposing?: boolean; keyCode?: number };
+        preventDefault: () => void;
+      }) => {
         const edit = edits.get(key);
+        // An Enter that only commits an input-method composition is still
+        // typing. WebKit reports it with keyCode 229 and isComposing false.
         if (event.key !== "Enter" || event.isComposing || event.nativeEvent?.isComposing ||
-            !edit || !awaitsReview(key, edit)) return;
+            event.nativeEvent?.keyCode === 229 || !edit || !awaitsReview(key, edit)) return;
         event.preventDefault();
         commit(key, edit);
       },
@@ -281,7 +293,12 @@ export function SettingsPolicyConfirmation({ available }: { available: boolean }
     let changed = false;
     for (const [key, edit] of edits) {
       if (edit.phase !== "confirming") continue;
-      edits.delete(key);
+      // The prompt is withdrawn, never answered on the person's behalf. A
+      // toggled switch simply reverts, which is visible. Typed text would
+      // vanish unnoticed, so it goes back to waiting in its field and is
+      // reviewed on the next blur or Enter.
+      if (typed(edit)) edit.phase = "waiting";
+      else edits.delete(key);
       changed = true;
     }
     if (changed) publish();

@@ -321,6 +321,7 @@ test("no native status code produced by Kotlin, Swift or Rust is ever shown as t
     sentence(code, `[${code}] - ${code}`, "wrapped");
     sentence(code, `Creating the Wi-Fi hotspot failed: [${code}] - ${code}`, "prefixed and wrapped");
     sentence(code, `[${code}] - {"code":"${code}","data":{}}`, "wrapped with an envelope");
+    sentence(code, `Native background checkpoint unavailable: [${code}] - {"code":"${code}"}`, "prefixed with an envelope");
   }
 });
 
@@ -368,6 +369,11 @@ test("native code families map to their instruction in every form they arrive in
     ['[EXPORT_DURABILITY_ERROR] - {"code":"EXPORT_DURABILITY_ERROR"}', "That action did not finish. Try again. (EXPORT_DURABILITY_ERROR)"],
     ['Creating the Wi-Fi hotspot failed: [HOTSPOT_FUTURE_STATE] - {"retry":false}',
       "Creating the Wi-Fi hotspot failed: Nearby could not connect. Try again. (HOTSPOT_FUTURE_STATE)"],
+    // ...and for a family the shell does not know, after a Rust sentence.
+    ['Native background checkpoint unavailable: [NATIVE_DOCUMENT_ERROR] - {"code":"NATIVE_DOCUMENT_ERROR","data":{}}',
+      "Native background checkpoint unavailable: That action did not finish. Try again. (NATIVE_DOCUMENT_ERROR)"],
+    // Two different codes and no sentence: the bracketed one is the code.
+    ["[EXPORT_DURABILITY_ERROR] - DOCUMENT_PROVIDER_ERROR", "That action did not finish. Try again. (EXPORT_DURABILITY_ERROR)"],
   ]) assert.equal(errorText(raw), expected, raw);
 });
 
@@ -393,6 +399,7 @@ test("a sentence is never mistaken for a native code", async () => {
     "Saving failed: [DOCUMENT_PROVIDER_ERROR] - EXPORT_DURABILITY_ERROR",
     // Braces in a sentence are not a JSON envelope.
     "[NEARBY_FUTURE_STATE] - Could not read {name} from the peer",
+    "Saving failed: [DOCUMENT_PROVIDER_ERROR] - Could not read {name}",
     "First line: NEARBY_JOIN_TIMEOUT\nSecond line",
     "/storage/emulated/0/wiki.zim: NEARBY_JOIN_TIMEOUT\n/storage/emulated/0/other.zim: unreadable",
   ]) assert.equal(errorText(message), message, message);

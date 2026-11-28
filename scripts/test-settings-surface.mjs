@@ -20,9 +20,11 @@ async function autosave() {
   const state = { now: 0, timers: new Map(), nextTimer: 1, writes: [], pendingWrites: [], confirmed: { ...saved } };
   const modules = {
     react: {
-      useEffect() {}, useState: (value) => [value, () => {}], useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
-      // The prompt records whether it can be shown in a layout effect.
-      useLayoutEffect: (run) => { run(); },
+      useState: (value) => [value, () => {}], useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+      // Effects run as React would run them after each render of the
+      // component: the prompt records whether it can be shown, and withdraws
+      // itself while it cannot.
+      useEffect: (run) => { run(); }, useLayoutEffect: (run) => { run(); },
     },
     "react/jsx-runtime": require("react/jsx-runtime"),
     "../api": {
@@ -131,6 +133,8 @@ test("Enter in the download directory field opens the review, and only there", a
   type(settings.field("downloadDirectory"), "/srv/zim");
   // A key that composes text, or any other key, is not a commit.
   assert.equal(settings.key(settings.field("downloadDirectory"), "Enter", { nativeEvent: { isComposing: true } }), false);
+  // WebKit reports the Enter that commits an IME composition this way.
+  assert.equal(settings.key(settings.field("downloadDirectory"), "Enter", { nativeEvent: { isComposing: false, keyCode: 229 } }), false);
   assert.equal(settings.key(settings.field("downloadDirectory"), "a"), false);
   assert.equal(settings.prompt(), null);
   assert.equal(settings.key(settings.field("downloadDirectory"), "Enter"), true);
@@ -150,7 +154,7 @@ test("Quit or close with an unreviewed download directory neither applies nor di
   settings.advance(5000);
   assert.deepEqual(settings.state.writes, [], "an unconfirmed directory is never applied by the flush");
   assert.equal(settings.field("downloadDirectory").value, "/media/reader/zim", "nor thrown away behind the person's back");
-  assert.equal(settings.status().text, "This change is not saved yet. Leave the field or press Enter to review it.");
+  assert.equal(settings.status().text, HINT);
   // If the app keeps running (Quit cancelled), the change can still be reviewed.
   assert.equal(settings.prompt(true), null);
   settings.field("downloadDirectory").onBlur();
@@ -161,6 +165,68 @@ test("Quit or close with an unreviewed download directory neither applies nor di
   other.prompt(false);
   other.exports.useSettingsAutosave(other.state.confirmed, { onRefresh() {} }).flush();
   assert.equal(other.state.writes.length, 1);
+});
+
+const HINT = "This change is not saved yet. Leave the field or press Enter to review it.";
+
+test("hiding the shell for Quit blurs the field, and the typed directory survives a cancelled Quit", async () => {
+  for (const review of ["blur", "enter"]) {
+    const settings = await autosave();
+    type(settings.field("downloadDirectory"), "/media/reader/zim");
+    // Quit: the shell is hidden (the prompt becomes unavailable), the final
+    // flush runs, and the hidden field loses focus on the next frame.
+    assert.equal(settings.prompt(false), null);
+    settings.exports.useSettingsAutosave(settings.state.confirmed, { onRefresh() {} }).flush();
+    settings.field("downloadDirectory").onBlur();
+    assert.equal(settings.prompt(false), null);
+    assert.equal(settings.field("downloadDirectory").value, "/media/reader/zim", "the typed value is not thrown away");
+    assert.equal(settings.status().text, HINT);
+    assert.deepEqual(settings.state.writes, [], "and never applied without consent");
+    // Enter in a field of a hidden shell cannot open a prompt either.
+    settings.key(settings.field("downloadDirectory"), "Enter");
+    assert.equal(settings.prompt(false), null);
+    assert.equal(settings.field("downloadDirectory").value, "/media/reader/zim");
+
+    // Quit is cancelled: the shell is back, the text is still in the field,
+    // and nothing opens until the person leaves the field or presses Enter.
+    assert.equal(settings.prompt(true), null);
+    assert.equal(settings.field("downloadDirectory").value, "/media/reader/zim");
+    assert.equal(settings.status().text, HINT);
+    if (review === "blur") settings.field("downloadDirectory").onBlur();
+    else assert.equal(settings.key(settings.field("downloadDirectory"), "Enter"), true);
+    assert.match(JSON.stringify(settings.prompt(true).props.children), /\/media\/reader\/zim/);
+    assert.deepEqual(settings.state.writes, []);
+  }
+});
+
+test("a review prompt that Quit or close withdraws puts typed text back in its field", async () => {
+  const settings = await autosave();
+  type(settings.field("downloadDirectory"), "/media/reader/zim");
+  // The window lost focus first (title-bar close, Dock): the prompt opened.
+  settings.field("downloadDirectory").onBlur();
+  assert.ok(settings.prompt(true));
+  // Then the shell was hidden. The prompt is withdrawn, not answered.
+  assert.equal(settings.prompt(false), null);
+  assert.equal(settings.field("downloadDirectory").value, "/media/reader/zim");
+  assert.equal(settings.status().text, HINT);
+  assert.deepEqual(settings.state.writes, []);
+  // Back again: reviewable on the next blur.
+  assert.equal(settings.prompt(true), null);
+  settings.field("downloadDirectory").onBlur();
+  assert.ok(settings.prompt(true));
+});
+
+test("a withdrawn prompt for a switch still reverts the switch", async () => {
+  const settings = await autosave();
+  const hook = () => settings.exports.useSettingsAutosave(settings.state.confirmed, { onRefresh() {} });
+  settings.state.confirmed.privateMode = false;
+  hook().change("privateMode", true);
+  assert.ok(settings.prompt(true));
+  assert.equal(hook().draft.privateMode, true);
+  assert.equal(settings.prompt(false), null);
+  assert.equal(hook().draft.privateMode, false, "the switch visibly returns to the saved state");
+  assert.equal(settings.prompt(true), null, "and no prompt comes back on its own");
+  assert.deepEqual(settings.state.writes, []);
 });
 
 test("submitting the form commits a typed download directory through the same confirmation", async () => {

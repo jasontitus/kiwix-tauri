@@ -220,8 +220,9 @@ function nativeCodeText(message: string): string | null {
     if (nearbyCodeFamily.test(code))
       text = t("Nearby could not connect. Try again. ({code})", { code });
     // After a sentence, a bare upper-case tail could be a name; only the
-    // Nearby families, or Tauri's own "[CODE] - CODE", are known to be codes.
-    else if (prefix && !(bracketed && detail === code)) return null;
+    // Nearby families, or Tauri's own "[CODE] - CODE" (the message being the
+    // code again or a JSON envelope), are known to be codes.
+    else if (prefix && !(bracketed && detail && (detail === code || /^\{.*\}$/.test(detail)))) return null;
     else text = t("That action did not finish. Try again. ({code})", { code });
   }
   return prefix ? `${prefix} ${text}` : text;
