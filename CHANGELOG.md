@@ -6,23 +6,47 @@ This changelog records source changes, not release certification. Only unsigned 
 
 ### Latest implementation and adversarial corrections
 
-- Address the 2026-11-27 cross-platform maintainability, reliability and usability review: 113 findings from eleven area reviews, each lane re-reviewed adversarially until closed. Most are fixed, some partly, and some kept as accepted residuals. Notable fixes:
-  - **Library files:** abandoning an unfinished move no longer deletes the verified copy without proving the original is intact. Moves and deletes on filesystems without an exclusive rename heal interrupted captures. An unplugged drive or empty mount point is no longer treated as a missing original or an empty monitored folder.
-  - **Downloads:** a truncated download is no longer published as complete (ZIM header length check). Web seeds repair pieces in place and drop mirrors that trickle below 128 KiB per minute. Torrents start on hosts without IPv6.
+- Address the 2026-11-27 cross-platform maintainability, reliability and usability review: 113 findings from eleven area reviews. Most are fixed, some partly, and some kept as accepted residuals. Every lane was adversarially re-reviewed until its reviewer closed it; apple and build hygiene closed on a recorded condition. Notable changes:
+  - **Library files:**
+    - abandoning an unfinished move proves the original is intact before the verified copy is deleted;
+    - moves on NFS/FUSE, which lack an exclusive rename, use a hard-link fallback instead of failing (Android refuses with a clear message), and an interruption between its two steps can leave a hidden `.kiwix-renamed-…` file to delete by hand;
+    - an unplugged drive or an empty mount point no longer retires a monitored folder's archives or closes an edition's original.
+  - **Downloads:**
+    - a truncated download is no longer published as complete (ZIM header length check);
+    - web seeds repair pieces in place and abandon a mirror response that delivers less than 128 KiB in 60 s;
+    - the torrent engine falls back to IPv4 when the host cannot create IPv6 sockets.
   - **Service core:**
-    - cached archive handles and readers are released when a file changes, vanishes or is replaced by rename;
-    - re-opening a registered archive no longer re-verifies it;
-    - Quit, privacy switches and mobile backgrounding cancel running imports, removing their own staged copy and showing a notice;
-    - shared-library pages and native status labels are now in the translation catalogs.
-  - **Startup and quit:** a profile with unreadable records opens and keeps them in a sibling copy. A failed Quit offers Retry, Quit Without Saving or Cancel and can no longer leave Kiwix running with no window.
-  - **Crash records:** Rust, Swift and Kotlin follow one redaction spec, pinned by 238 shared vectors (`src-tauri/tests/fixtures/`). Kept web addresses keep only their site name.
-  - **Shell:**
+    - cached archive handles and readers are dropped when a file changes, vanishes or is replaced by rename;
+    - re-opening an archive already in the library skips the full integrity pass when the file at that path is unchanged (provider-backed archives are still verified);
+    - Quit, a privacy switch and, on mobile, backgrounding or screen lock cancel running manual imports with a notice; on mobile the app also removes the staged copy it can prove is its own.
+  - **Startup and quit:**
+    - records that cannot be read at load are kept in a sibling copy of the profile instead of being dropped at the next save, and the desktop shows a notice;
+    - a failed Quit offers Retry, Quit Without Saving or Cancel and no longer leaves Kiwix running with no window.
+  - **Crash records:** Rust, Swift and Kotlin follow one redaction spec, pinned by 238 shared vectors (`src-tauri/tests/fixtures/`). Only http and https addresses with a public host name keep their scheme, host and any non-default port; their paths, queries and credentials are dropped, and other addresses become `[url]`.
+  - **Shell and panes:**
     - Android system Back closes open surfaces;
-    - errors are no longer rewritten into the wrong sentence and can no longer be hidden behind dialogs;
-    - map recovery files can be dismissed or retried.
-  - **Build:** the dead libzim SDK glue is removed. `zbus` is no longer compiled into default Linux builds, and CI type-checks the unreleased Linux and Android location providers through an opt-in.
-  
-  Host verification on Linux: 1493 Rust tests; Linux, Windows (MinGW) and Android clippy; 544 of 545 JS tests with a real headless Chromium (1 macOS-only skip); 182 Python tests; 79 Android plugin unit tests; and the Swift crash redaction on the Linux toolchain. Nothing ran on a device, a Mac, Windows or a simulator, the app was not launched, macOS and iOS Rust was not compiled, and the CI changes have not run on GitHub. About 120 new strings are not yet translated. [Remediation record](docs/reviews/2026-11-27/PROJECT-REVIEW-REMEDIATION.md)
+    - errors from actions inside a dialog appear above it, and are no longer rewritten into the wrong sentence;
+    - map recovery records can be dismissed or retried.
+  - **Localization:** Rust-only text (parts of the shared-library pages, the quit dialog and Live Activity status labels) is now collected for translation, with correct English plurals.
+  - **Build:** the dead libzim SDK glue is removed and `zbus` is no longer compiled into default Linux builds; CI type-checks the unreleased Linux and Android location providers through an opt-in.
+
+  Host verification on Linux:
+  - 1493 Rust library tests;
+  - Linux, Windows (MinGW) and Android clippy;
+  - the TypeScript/Vite build, and 544 of 545 JS tests with a real headless Chromium (1 macOS-only skip);
+  - 182 Python tests and 79 Android plugin unit tests;
+  - the 75-block unsafe census;
+  - the Swift crash redaction on the Linux toolchain.
+
+  Not exercised: nothing ran on a device, a Mac, Windows or a simulator, and the app was not launched. macOS and iOS Rust was not compiled, other Swift was only syntax-checked, and the CI changes have not run on GitHub.
+
+  Remaining limits:
+  - web seeds have no overall deadline, so a mirror that keeps to the floor still holds back peers;
+  - preserved profile copies are not cleaned up and keep reading history after Clear history;
+  - iOS linked-archive recovery after a restart is unverified on a device;
+  - about 135 new strings, including the newly collected Rust text, show English outside English.
+
+  [Remediation record](docs/reviews/2026-11-27/PROJECT-REVIEW-REMEDIATION.md)
 
 - Close the remaining residual pass: bind torrent publication to the engine's SHA-1 piece receipt, cap inline text rendering at 1 MiB, bound Android intake before worker enqueue, split updater download/install admission so the install writer is not held across the download, buffer sharing pipelined requests until the response flushes, and read Windows handle `ChangeTime` as an additional publication signal while keeping receipt reuse fail-closed. Host verification: 1359 Rust tests, Android plugin unit tests, TypeScript/Vite build, frontend/storage/theme browser tests, and the 74-block unsafe census. Physical devices and Windows/Linux runtime remain unverified; Windows change time is user-settable, shared-piece torrents are refused, and updater artifact buffering remains an upstream API limit. [Remediation record](docs/reviews/2026-11-23/PROJECT-REVIEW-REMEDIATION.md)
 
