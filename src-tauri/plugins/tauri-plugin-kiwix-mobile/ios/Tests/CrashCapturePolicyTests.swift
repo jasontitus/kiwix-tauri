@@ -60,6 +60,9 @@ final class CrashCapturePolicyTests: XCTestCase {
       // A path may start right after any punctuation, not only a listed one.
       ("at </var/mobile/Containers/Shared/File Provider Storage/My Books/a.zim> again", "at <[path]> again"),
       ("\u{201C}/var/mobile/My Books/a.zim\u{201D} is missing", "\u{201C}[path]"),
+      // A bare address goes, and what follows it is then a path.
+      ("mail jane.doe@example.org/Inbox Folder failed", "mail [email][path]"),
+      ("pkg@1.2.3 and user@host stay", "pkg@1.2.3 and user@host stay"),
       // Secrets go first, so a path cannot swallow the key that marks one.
       (#"open /var/x password: "hunter2""#, #"open [path]: "[redacted]""#),
       ("Authorization: Bearer abc.def.ghi next", "Authorization: [redacted] next"),
@@ -179,6 +182,7 @@ final class CrashCapturePolicyTests: XCTestCase {
     let units = [
       "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
       "token='x ", "C:\\a\" ", "!\\a", "\\a\"", "pin=Some(", "auth=\\\"x", "https://a.b:1 ", "http://e.org/../",
+      "a@", "@a.", "x@y.zz ", "@.-",
     ]
     for unit in units {
       // Whole units only, so the bound does not drop a partial one.
