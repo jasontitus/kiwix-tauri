@@ -160,7 +160,9 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
     const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }));
     assert.fail(`The shell did not start: ${JSON.stringify(boot)} ${JSON.stringify(pageErrors)}`);
   }
-  const until = (check, ...args) => page.waitForFunction(check, { timeout: 10000 }, ...args);
+  // Every wait is on a condition. The limit only bounds a real defect; it is
+  // generous because CI runs this beside other suites on a loaded runner.
+  const until = (check, ...args) => page.waitForFunction(check, { timeout: 45000 }, ...args);
   const button = async (scope, text) => {
     const handle = await until((sel, value) => [...document.querySelectorAll(`${sel} button`)]
       .find((node) => !node.disabled && node.getClientRects().length && node.textContent.trim() === value), scope, text);
@@ -274,6 +276,26 @@ test("a failure inside a modal is shown, announced and dismissed above it, with 
   await until(() => !document.querySelector("dialog[role=alertdialog][open]"));
   assert.equal(await page.$$eval("dialog[open]", (nodes) => nodes.length), 1);
   assert.equal(await page.$eval(note, (node) => node.value), "Draft that must survive");
+
+  // The control that started the action can no longer take focus when the
+  // alert is dismissed: focus enters the dialog underneath, never <body>.
+  await until(() => document.activeElement?.textContent.trim() === "Save changes");
+  await page.keyboard.press("Enter");
+  await until(() => document.activeElement?.textContent.trim() === "Dismiss");
+  const save = () => [...document.querySelectorAll("dialog[open]:not([role=alertdialog]) button")]
+    .find((node) => node.textContent.trim() === "Save changes");
+  await page.evaluate(`(${save})().disabled = true`);
+  await page.keyboard.press("Enter");
+  await until(() => !document.querySelector("dialog[role=alertdialog][open]"));
+  await until(() => !!document.activeElement?.closest("dialog[open]"));
+  assert.deepEqual(await page.evaluate(() => ({
+    label: document.activeElement.getAttribute("aria-label"),
+    disabled: document.activeElement.disabled,
+    dialogs: document.querySelectorAll("dialog[open]").length,
+  })), { label: "Close", disabled: false, dialogs: 1 }, "the first enabled control of the open dialog");
+  assert.equal(await page.$eval(note, (node) => node.value), "Draft that must survive");
+  await page.evaluate(`(() => { const button = (${save})(); button.disabled = false; button.focus(); })()`);
+
   // The retry works once the write is accepted, and the editor then closes.
   await page.evaluate(() => { delete window.failures.save_bookmark; });
   await until(() => document.activeElement?.textContent.trim() === "Save changes");
@@ -316,6 +338,35 @@ test("desktop-only Settings copy is not shown where there are no windows or File
   const preferences = await page.evaluate(() => document.querySelector("main").textContent);
   assert.match(preferences, /Reader tabs and reading positions reopen at launch\. Private and read-only profiles are never restored\./);
   assert.doesNotMatch(preferences, /File → Restore previous session|Windows, reader tabs/);
+
+  // Typing a download directory: a pause is not a finished value. The status
+  // says the change is not saved, and nothing opens until the field is left
+  // or Enter is pressed.
+  const directory = 'input[placeholder="Default downloads folder"]';
+  await until((selector) => {
+    const field = document.querySelector(selector);
+    for (let section = field?.closest("details"); section; section = section.parentElement?.closest("details"))
+      if (!section.open) section.querySelector(":scope > summary").click();
+    return !!field?.getClientRects().length;
+  }, directory);
+  assert.equal(await page.$eval(directory, (node) => node.value), "/fixture/downloads");
+  await page.click(directory, { clickCount: 3 });
+  await page.type(directory, "/media/re");
+  await until(() => document.querySelector(".settings-save [role=status]")?.textContent ===
+    "This change is not saved yet. Leave the field or press Enter to review it.");
+  // The removed debounce was 600 ms: well past it, still no prompt and nothing sent.
+  assert.equal(await page.waitForSelector("dialog[open]", { timeout: 1500 }).then(() => true, () => false), false,
+    "the confirmation must not open while the path is still being typed");
+  await page.type(directory, "ader/zim");
+  assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "save_settings").length), 0);
+  await page.keyboard.press("Enter");
+  await until(() => document.querySelector("dialog[open] .file-path")?.textContent === "/media/reader/zim");
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), "Cancel");
+  await page.keyboard.press("Enter");
+  await until(() => !document.querySelector("dialog[open]"));
+  assert.equal(await page.$eval(directory, (node) => node.value), "/fixture/downloads", "declining restores the saved directory");
+  assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "save_settings").length), 0);
+
   await button("main", "Help & about");
   await until(() => document.querySelector("main").textContent.includes("Keyboard shortcuts"));
   const help = await page.evaluate(() => document.querySelector("main").textContent);
@@ -351,10 +402,19 @@ test("a hardware Escape consumed by the native layer closes shell popovers outsi
   await until(() => !document.querySelector("details.facet-picker[open]"));
   assert.equal(await page.evaluate(() => document.activeElement?.closest("details.facet-picker") !== null &&
     document.activeElement.tagName), "SUMMARY", "focus returns to the picker's own control");
-  // With nothing open, Escape outside the reader changes nothing.
+  // With nothing open, Escape outside the reader changes nothing. The key is
+  // handled once its lifecycle check has answered; wait for that, not a delay.
+  const lifecycleChecks = () => window.calls.filter((call) => call.command === "mobile_lifecycle_state").length;
+  const before = await page.evaluate(lifecycleChecks);
   await escapeKey(page);
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.equal(await page.evaluate(() => document.querySelector("main h1")?.textContent.includes("Discover")), true);
+  await until((check, count) => (0, eval)(`(${check})`)() > count, String(lifecycleChecks), before);
+  // Let the continuation that follows the check run to completion.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve))));
+  assert.deepEqual(await page.evaluate(() => ({
+    pane: document.querySelector("main h1")?.textContent.includes("Discover"),
+    dialogs: document.querySelectorAll("dialog[open]").length,
+    summaryFocused: document.activeElement?.tagName,
+  })), { pane: true, dialogs: 0, summaryFocused: "SUMMARY" });
 
   // A dialog keeps its own cancel policy and closes before anything under it.
   await button(".catalog-card-content", "Example archive");

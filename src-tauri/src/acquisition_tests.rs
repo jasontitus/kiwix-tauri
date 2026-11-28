@@ -4393,7 +4393,8 @@ fn a_durable_row_whose_bytes_disagree_with_their_zim_header_is_not_published_on_
     // Every journaled byte is on disk, but the archive's header says the file
     // should be longer: the object the server sent was itself cut short.
     let mut bytes = zim_bytes(b'v', 256 * 1024);
-    bytes[72..80].copy_from_slice(&(bytes.len() as u64).to_le_bytes());
+    let declared_checksum = bytes.len() as u64;
+    bytes[72..80].copy_from_slice(&declared_checksum.to_le_bytes());
     let id = Uuid::new_v4().to_string();
     let stored = durable_stored(&root, &id, &bytes, "verifying");
     write_state(&data_dir, stored);

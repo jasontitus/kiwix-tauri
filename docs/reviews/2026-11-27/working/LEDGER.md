@@ -235,3 +235,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   Handoffs: (1) service_tests.rs assertion — APPLIED by owner. (2) dispatch library_maintenance sandbox::revive() -> service lane. (3) Reader.tsx shortcut table ⌃⌘F -> reader lane. (4) optional quit::abandon for Windows hook shell flush -> residual unless startup lane cheap.
   Doubts: read-only->writable same session drops skipped records (residual); mobile Reset window state on newer-version profile.
   -> adversarial reviewer launching
+- android round 2 DONE (impl/android-round2.md): R1-R7 + SHELL-R6 fixed. Residual: stopOwned->stopService under pending start (same platform rule) ; R2 replaced save silent (= base). -> adv-android re-review
