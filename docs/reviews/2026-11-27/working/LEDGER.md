@@ -270,3 +270,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - panes lane DONE (impl/panes.md): SHELL-3,5, SERVE-2,5, ACQ-7,8, ANDROID-6, double owners, maps UI (recoveryPaths dismiss, re-read, rate, copy), edition originals UI. 15 new strings. -> adversarial reviewer
 - adv-panes DONE (adv/panes.md): no blocking. Owner: adopt R1 (exact only when flavours equal/both unknown + variants), R2, R3, R4, R5 (except double path listing = accepted nit), + rollback errors in transaction card. -> panes round 2
 - panes round 2 DONE (impl/panes-round2.md): R1-R5 + rollback errors in card. -> adv-panes re-review
+- features round 3 DONE (impl/features-round3.md): R8 strict, R9 plain sentences per path, R10 (status probe left). -> adv-features re-review (also check stderr raw text not reaching crash/diagnostics)

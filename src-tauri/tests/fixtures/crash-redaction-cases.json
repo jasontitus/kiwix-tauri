@@ -32,7 +32,7 @@
     "expected": "open [path]"
   },
   {
-    "input": "open /home/jane doe/a.zim",
+    "input": "open\u00a0/home/jane doe/a.zim",
     "expected": "open [path]"
   },
   {
@@ -92,12 +92,12 @@
     "expected": "at <[path]> again"
   },
   {
-    "input": "“/var/mobile/My Books/a.zim” is missing",
-    "expected": "“[path]"
+    "input": "\u201c/var/mobile/My Books/a.zim\u201d is missing",
+    "expected": "\u201c[path]"
   },
   {
-    "input": "‘/var/mobile/My Books/a.zim’ is missing",
-    "expected": "‘[path]"
+    "input": "\u2018/var/mobile/My Books/a.zim\u2019 is missing",
+    "expected": "\u2018[path]"
   },
   {
     "input": "Could not load NIB in bundle: 'NSBundle </private/var/containers/Bundle/Application/1A2B/Kiwix.app> (loaded)' with name 'Main'",
