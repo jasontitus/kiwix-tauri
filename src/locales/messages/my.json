@@ -798,9 +798,6 @@
   "Save export": "တင်ပို့မှုကို သိမ်းဆည်းပါ။",
   "Transferring archives": "မှတ်တမ်းများကို လွှဲပြောင်းခြင်း။",
   "Transfers": "လွှဲပြောင်းမှုများ",
-  "{count} bytes copied": {
-    "other": "{count} ဘိုက် ကူးယူပြီးပါပြီ"
-  },
   "< / > in app controls": "အက်ပ်ထိန်းချုပ်မှုများတွင် </>",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "အက်ပ်ထိန်းချုပ်မှုများတွင် </> ⌘ / Ctrl Shift , / . ဆောင်းပါးတွင်",
   "Allow cellular and metered downloads": "ဆယ်လူလာနှင့် တိုင်းတာထားသော ဒေါင်းလုဒ်များကို ခွင့်ပြုပါ။",
@@ -984,7 +981,6 @@
   "Remove saved map “{title}”?": "သိမ်းဆည်းထားသော “{title}” မြေပုံကို ဖယ်ရှားမလား။",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "ဤဒေါင်းလုဒ်ကို စာရင်းမှ ဖယ်ရှားပြီး ၎င်း၏ဖိုင်များကို သိမ်းထားပါ၊ သို့မဟုတ် သိုလှောင်နေရာ လွတ်စေရန် ဒေါင်းလုဒ်နှင့် ၎င်း၏ဖိုင်များကို ဖျက်ပါ။",
   "The download or saved map changed. Close this dialog and try again.": "ဒေါင်းလုဒ် သို့မဟုတ် သိမ်းဆည်းထားသော မြေပုံ ပြောင်းလဲသွားသည်။ ဤဒိုင်ယာလော့ကို ပိတ်ပြီး ထပ်စမ်းကြည့်ပါ။",
-  "This download cannot be resumed. Get the map again to start a new download.": "ဤဒေါင်းလုဒ်ကို ဆက်လက်လုပ်ဆောင်၍ မရပါ။ ဒေါင်းလုဒ်အသစ် စတင်ရန် မြေပုံကို ထပ်မံရယူပါ။",
   "This download changed. Close this dialog and try again.": "ဤဒေါင်းလုဒ် ပြောင်းလဲသွားသည်။ ဤဒိုင်ယာလော့ကို ပိတ်ပြီး ထပ်စမ်းကြည့်ပါ။",
   "This download has no resumable checkpoint. Start it again from Maps.": "ဤဒေါင်းလုဒ်တွင် ပြန်လည်ဆက်လက်လုပ်ဆောင်နိုင်သည့် မှတ်တိုင်မရှိပါ။ မြေပုံများ ကဏ္ဍမှ ပြန်လည်စတင်ပါ။",
   "Completed archives to delete:": "ဖျက်မည့် ပြီးဆုံးပြီးသော မော်ကွန်းဖိုင်များ-",
@@ -1125,7 +1121,6 @@
   "Pin this article to your home screen": "ဤဆောင်းပါးကို သင့်ပင်မစခရင်တွင် ပင်ထိုးပါ။",
   "Pinned to your home screen.": "သင့်ပင်မစခရင်သို့ ပင်ထိုးထားသည်။",
   "Previous paragraph": "ယခင်စာပိုဒ်",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "ဝန်ဆောင်မှုပေးသူမှ ဖျက်ရန်ခွင့်ပြုချက်ပေးမှသာ ဝန်ဆောင်မှုပေးသူမူရင်းများကို ဖယ်ရှားပါသည်။ ခွင့်ပြုချက်မရပါက၊ ၎င်းအစား Copy ကိုရွေးချယ်ပါ။",
   "Reading": "စာဖတ်ခြင်း။",
   "Reading build information…": "တည်ဆောက်မှုအချက်အလက်ကို ဖတ်နေသည်...",
   "Reading storage information…": "သိုလှောင်မှုအချက်အလက်ကို ဖတ်နေသည်...",

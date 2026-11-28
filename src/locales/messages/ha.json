@@ -6,6 +6,7 @@
   "Open file": "Bude fayil",
   "Zoom in": "Zuƙo ciki",
   "Zoom out": "Zuƙo waje",
+  "About Kiwix": "Game da Kiwix",
   "File": "Fayil",
   "Edit": "Gyara",
   "Search": "Bincike",
@@ -42,6 +43,7 @@
   "Reading": "Karatu",
   "Languages": "Yaruka",
   "License": "Takardan izni",
+  "Build": "Gina",
   "Bookmarks": " bukumaaki",
   "None": "Babu",
   "Categories": "Bangarori",
@@ -1128,7 +1130,6 @@
   "This archive has no articles to open.": "Wannan tarihin ba shi da labarin da zai buɗe.",
   "This archive has no main page. Showing a random article.": "Wannan tarihin ba shi da babban shafi. Nuna labarin bazuwar.",
   "This archive is outside Kiwix's storage, so it cannot be deleted here. Remove it from your library, then delete the original file in your file manager.": "Wannan ma'ajin yana wajen ma'ajin Kiwix, don haka ba za a iya share shi anan ba. Cire shi daga ɗakin karatu, sannan share ainihin fayil ɗin a cikin mai sarrafa fayil ɗin ku.",
-  "This download cannot be resumed. Get the map again to start a new download.": "Ba za a iya ci gaba da wannan zazzagewar ba. Samun taswirar kuma don fara sabon zazzagewa.",
   "This download changed. Close this dialog and try again.": "Wannan zazzagewar ta canza. Rufe wannan maganganun kuma a sake gwadawa.",
   "This download has no resumable checkpoint. Start it again from Maps.": "Wannan zazzagewar ba ta da wurin bincike mai ci gaba. Fara shi daga Taswirori.",
   "This phone's Wi-Fi hotspot": "Wurin Wi-Fi na wannan wayar",
@@ -1210,7 +1211,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "Abubuwan da aka zaɓa kawai za su canza wuri. Sauran rumbun adana bayanai da wurin zazzagewa suna tsayawa a inda suke.",
   "Pin this article to your home screen": "Sanya wannan labarin zuwa allon gida",
   "Pinned to your home screen.": "An liƙa zuwa allon gida.",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "Ana cire asalin asalin mai bayarwa kawai lokacin da mai bayarwa ya ba da izinin sharewa. Idan babu izini, zaɓi Kwafi maimakon.",
   "Reading storage locations…": "Wuraren ajiya na karanta…",
   "Release notes": "Bayanan sanarwa",
   "Removable": "Mai cirewa",
@@ -1296,10 +1296,6 @@
   "{count} archives moved.": {
     "one": "UNREVIEWED MACHINE TRANSLATION: An matsar da rumbun bayanai {count}.",
     "other": "UNREVIEWED MACHINE TRANSLATION: An matsar da rumbunan bayanai {count}."
-  },
-  "{count} bytes copied": {
-    "one": "An kwafi baiti {count}",
-    "other": "An kwafi baitoci {count}"
   },
   "{count} imported or unavailable archives left unchanged.": {
     "one": "UNREVIEWED MACHINE TRANSLATION: An bar rumbun bayanai {count} da aka shigo da shi ko ba a iya samunsa ba yadda yake.",

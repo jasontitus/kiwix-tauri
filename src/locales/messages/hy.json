@@ -811,10 +811,6 @@
   "Save export": "Պահպանել արտահանումը",
   "Transferring archives": "Արխիվների փոխանցում",
   "Transfers": "Փոխանցումներ",
-  "{count} bytes copied": {
-    "one": "Պատճենվել է {count} բայթ",
-    "other": "Պատճենվել է {count} բայթ"
-  },
   "< / > in app controls": "< / > հավելվածի կառավարում",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "< / > հավելվածի կառավարում; ⌘ / Ctrl Shift, /: հոդվածում",
   "Allow cellular and metered downloads": "Թույլատրել բջջային և չափված ներբեռնումները",
@@ -999,7 +995,6 @@
   "Remove saved map “{title}”?": "Հեռացնե՞լ պահպանված «{title}» քարտեզը։",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "Հեռացրեք այս ներբեռնումը ցանկից և պահպանեք դրա ֆայլերը կամ ջնջեք ներբեռնումն ու դրա ֆայլերը՝ պահեստում տեղ ազատելու համար։",
   "The download or saved map changed. Close this dialog and try again.": "Ներբեռնումը կամ պահպանված քարտեզը փոխվել է։ Փակեք այս երկխոսության պատուհանը և նորից փորձեք։",
-  "This download cannot be resumed. Get the map again to start a new download.": "Այս ներբեռնումը հնարավոր չէ վերսկսել։ Կրկին ստացեք քարտեզը՝ նոր ներբեռնում սկսելու համար։",
   "This download changed. Close this dialog and try again.": "Այս ներբեռնումը փոխվել է։ Փակեք այս երկխոսության պատուհանը և նորից փորձեք։",
   "This download has no resumable checkpoint. Start it again from Maps.": "Այս ներբեռնումը չունի վերսկսման համար անհրաժեշտ անցակետ։ Այն կրկին սկսեք «Քարտեզներ» բաժնից։",
   "Completed archives to delete:": "Ջնջման ենթակա ավարտված արխիվներ՝",
@@ -1211,7 +1206,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "Միայն ընտրված արխիվները կփոխեն գտնվելու վայրը: Մյուս արխիվները և ներբեռնման վայրը մնում են այնտեղ, որտեղ գտնվում են:",
   "Pin this article to your home screen": "Ամրացրեք այս հոդվածը ձեր հիմնական էկրանին",
   "Pinned to your home screen.": "Ամրացված է ձեր հիմնական էկրանին:",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "Մատակարարի բնօրինակները հեռացվում են միայն այն դեպքում, երբ մատակարարը տրամադրում է ջնջման թույլտվությունը: Եթե ​​թույլտվությունն անհասանելի է, փոխարենը ընտրեք Պատճենել:",
   "Reading storage locations…": "Պահպանման վայրերի ընթերցում…",
   "Release notes": "Թողարկման նշումներ",
   "Removable": "Շարժական",

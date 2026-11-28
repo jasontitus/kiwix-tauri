@@ -6,6 +6,7 @@
   "Open file": "Ṣii faili",
   "Zoom in": "Sun-un sinu",
   "Zoom out": "Sun-un jade",
+  "About Kiwix": "Nipa Kiwix",
   "File": "Àkọsílẹ̀",
   "Edit": "Satunko",
   "Search": "Wa",
@@ -799,9 +800,6 @@
   "Save export": "Fi okeere pamọ",
   "Transferring archives": "Gbigbe awọn pamosi",
   "Transfers": "Awọn gbigbe",
-  "{count} bytes copied": {
-    "other": "A ti dàkọ báìtì {count}."
-  },
   "< / > in app controls": "</> ninu awọn iṣakoso app",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "</> ninu awọn iṣakoso app; ⌘ / Konturolu Shift , / . ni article",
   "Allow cellular and metered downloads": "Gba cellular ati awọn igbasilẹ mita laaye",
@@ -1112,7 +1110,6 @@
   "This archive has no articles to open.": "Ile-ipamọ yii ko ni awọn nkan lati ṣii.",
   "This archive has no main page. Showing a random article.": "Ile-ipamọ yii ko ni oju-iwe akọkọ. Nfihan nkan laileto.",
   "This archive is outside Kiwix's storage, so it cannot be deleted here. Remove it from your library, then delete the original file in your file manager.": "Ile-ipamọ yii wa ni ita ibi ipamọ Kiwix, nitorinaa ko ṣe paarẹ nibi. Yọọ kuro ni ile-ikawe rẹ, lẹhinna paarẹ faili atilẹba rẹ ninu oluṣakoso faili rẹ.",
-  "This download cannot be resumed. Get the map again to start a new download.": "Gbigba lati ayelujara yii ko le tun bẹrẹ. Gba maapu naa lẹẹkansi lati bẹrẹ igbasilẹ tuntun.",
   "This download changed. Close this dialog and try again.": "Gbigbasilẹ yii yipada. Pa ibaraẹnisọrọ yii ki o tun gbiyanju lẹẹkansi.",
   "This download has no resumable checkpoint. Start it again from Maps.": "Gbigbasilẹ yii ko ni aaye ayẹwo atunbere. Tun bẹrẹ lati Maps.",
   "This phone's Wi-Fi hotspot": "Wi-Fi hotspot foonu yi",
@@ -1195,7 +1192,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "Awọn ile-ipamọ ti o yan nikan yoo yi ipo pada. Awọn ile-ipamọ miiran ati ipo igbasilẹ duro ni ibiti wọn wa.",
   "Pin this article to your home screen": "Pin nkan yii si iboju ile rẹ",
   "Pinned to your home screen.": "Pin si iboju ile rẹ.",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "Awọn ipilẹṣẹ olupese yoo yọkuro nikan nigbati olupese ba funni ni igbanilaaye paarẹ. Ti igbanilaaye ko ba si, yan Daakọ dipo.",
   "Reading storage locations…": "Awọn ibi ipamọ kika…",
   "Release notes": "Awọn akọsilẹ idasilẹ",
   "Removable": "yiyọ kuro",

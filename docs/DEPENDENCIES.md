@@ -37,18 +37,18 @@ The application now uses its already-locked `time` crate directly for timestamps
 
 | Graph | Before (2026-11-05) | Now |
 |---|---|---|
-| Rust lockfile, all targets | 726 | 686 |
+| Rust lockfile, all targets | 726 | 739 (remeasured 2026-11-28) |
 | Rust, Linux x86_64 build (normal + build deps) | ~564 | ~537 (remeasured 2026-11-28) |
-| Rust, macOS arm64 | ~488 | ~456 |
-| Rust, Windows x86_64 | ~491 | ~460 |
-| Rust, Android arm64 | ~472 | ~441 |
-| Rust, iOS arm64 | ~473 | ~442 |
+| Rust, macOS arm64 | ~488 | ~511 (remeasured 2026-11-28) |
+| Rust, Windows x86_64 | ~491 | ~506 (remeasured 2026-11-28) |
+| Rust, Android arm64 | ~472 | ~488 (remeasured 2026-11-28) |
+| Rust, iOS arm64 | ~473 | ~502 (remeasured 2026-11-28) |
 | npm runtime packages | 7 | 7 |
 | npm dev/build packages | 129 | 128 |
 
-The frontend is lean; nearly all of the weight is in the Rust graph. Most of each platform's ~440–490 packages come from Tauri and its WebView/windowing stack, and that part is not optional. The reduction opportunities are in what the app adds on top.
+The frontend is lean; nearly all of the weight is in the Rust graph. Most of each platform's ~490–540 packages (2026-11-28) come from Tauri and its WebView/windowing stack, and that part is not optional. The reduction opportunities are in what the app adds on top.
 
-Per-platform counts: `cargo tree --locked --features custom-protocol --target <triple> -e normal,build --prefix none | awk '{print $1, $2}' | sort -u | wc -l` (approximate; it counts unique `name version` pairs). `--features custom-protocol` is the shipping feature set. Earlier rows were measured with `--all-features`, which on Linux now also includes 28 packages from the opt-in `experimental-location` feature (565 instead of 537 on 2026-11-28); on the other four targets in the table both methods gave the same count that day. Only the Linux row was refreshed then.
+Per-platform counts: `cargo tree --locked --features custom-protocol --target <triple> -e normal,build --prefix none | awk '{print $1, $2}' | sort -u | wc -l` (approximate; it counts unique `name version` pairs). `--features custom-protocol` is the shipping feature set. The per-platform "Before" figures were measured with `--all-features`, which on Linux now also includes 28 packages from the opt-in `experimental-location` feature (565 instead of 537 on 2026-11-28); on the other four targets in the table both methods gave the same count that day. The lockfile row counts `name = ` entries in `src-tauri/Cargo.lock`.
 
 ## Enforcement
 

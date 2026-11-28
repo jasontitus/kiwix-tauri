@@ -1,5 +1,6 @@
 {
   "Close": "Chiudi",
+  "About Kiwix": "Nfurmazzioni supra Kiwix",
   "File": "File",
   "Edit": "Cancia",
   "Settings": "Mpustazzioni",
@@ -826,11 +827,6 @@
   "Save export": "Sarba l'esportazzioni",
   "Transferring archives": "Trasfirimentu di l'archivi",
   "Transfers": "Trasfirimenti",
-  "{count} bytes copied": {
-    "one": "{count} byte cupiatu",
-    "many": "{count} byte cupiati",
-    "other": "{count} byte cupiati"
-  },
   "< / > in app controls": "< / > nnî cuntrolli di l'app",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "< / > nnî cuntrolli di l'app; ⌘ / Spustamentu di cuntrollu , / . nta l'artìculu",
   "Allow cellular and metered downloads": "Cunsenti li scaricamenti cellulari e misurati",
@@ -1143,7 +1139,6 @@
   "This archive has no articles to open.": "Chistu archiviu nun havi artìculi d'apriri.",
   "This archive has no main page. Showing a random article.": "Chistu archiviu nun havi na pàggina principali. Mustrannu n'artìculu casuali.",
   "This archive is outside Kiwix's storage, so it cannot be deleted here. Remove it from your library, then delete the original file in your file manager.": "Stu archiviu è fora di l'archiviazzioni di Kiwix, quinni nun po èssiri cancillatu ccà. Rimuovilu dâ bibbliuteca, poi cancilla lu file urigginali nnô file manager.",
-  "This download cannot be resumed. Get the map again to start a new download.": "Stu scaricamentu nun po èssiri ripigghiatu. Ripigghia la mappa pi accuminciari nu novu scaricamentu.",
   "This download changed. Close this dialog and try again.": "Stu scaricamentu canciau. Chiudi stu dialugu e pruva n'autra vota.",
   "This download has no resumable checkpoint. Start it again from Maps.": "Stu scaricamentu nun havi nuḍḍu postu di cuntrollu ripigghiabbili. Accumincialu n'autra vota di Mappi.",
   "This phone's Wi-Fi hotspot": "Lu puntu Wi-Fi di stu tilèfunu",
@@ -1226,7 +1221,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "Sulu l'archivi scigghiuti cancianu la pusizzioni. Autri archivi e lu postu di scaricamentu arrestunu unni sunu.",
   "Pin this article to your home screen": "Pinna st'artìculu â schermata principali",
   "Pinned to your home screen.": "Pinnatu â schermata principali.",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "Li urigginali dû furnituri vennu livati ​​sulu quannu lu furnituri cuncedi lu pirmissu di cancillazzioni. Si lu pirmissu nun è dispunìbbili, mmeci scegghi Copia.",
   "Reading storage locations…": "Liggiri li posti di archiviazzioni...",
   "Release notes": "Noti di rilasciu",
   "Removable": "Rimuvibbili",

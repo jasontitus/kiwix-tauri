@@ -2,6 +2,9 @@
 // Build-glue and documentation drift checks: no orphaned native Rust glue, no
 // documentation claiming the app links libzim, and the unreleased location
 // providers stay type-checked in CI without entering default builds.
+// checks.yml re-includes this file and docs/FORKS.md in its path filter; an
+// edit to any other Markdown file alone is checked by the next run that is not
+// documentation-only.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -106,5 +109,10 @@ test("CI type-checks the unreleased Linux and Android location providers", () =>
     const body = job(workflow, name);
     assert.match(body, /KIWIX_EXPERIMENTAL_LOCATION: '1'/, name);
     assert.match(body, /--features [^\n]*experimental-location/, name);
+    // The shipping cfg (no provider) must keep its own clippy run.
+    assert.ok((body.match(/cargo clippy/g) ?? []).length >= 2, `${name}: needs a default and an opt-in clippy run`);
+    const features = body.split("\n").filter((line) => /--features /.test(line));
+    assert.ok(features.some((line) => !line.includes("experimental-location")),
+      `${name}: one clippy run must use the shipping feature set`);
   }
 });

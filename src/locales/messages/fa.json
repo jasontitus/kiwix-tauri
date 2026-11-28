@@ -814,10 +814,6 @@
   "Save export": "ذخیره صادرات",
   "Transferring archives": "انتقال آرشیو",
   "Transfers": "نقل و انتقالات",
-  "{count} bytes copied": {
-    "one": "{count} بایت کپی شد",
-    "other": "{count} بایت کپی شد"
-  },
   "< / > in app controls": "< / > در کنترل های برنامه",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "</ > در کنترل های برنامه؛ ⌘ / Ctrl Shift، /. در مقاله",
   "Allow cellular and metered downloads": "دانلودهای سلولی و اندازه‌گیری شده را مجاز کنید",
@@ -1001,7 +997,6 @@
   "Remove saved map “{title}”?": "نقشهٔ ذخیره‌شدهٔ «{title}» حذف شود؟",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "این دانلود را از فهرست حذف کنید و فایل‌های آن را نگه دارید، یا برای آزاد کردن فضای ذخیره‌سازی، دانلود و فایل‌های آن را حذف کنید.",
   "The download or saved map changed. Close this dialog and try again.": "دانلود یا نقشهٔ ذخیره‌شده تغییر کرده است. این پنجره را ببندید و دوباره تلاش کنید.",
-  "This download cannot be resumed. Get the map again to start a new download.": "ادامهٔ این دانلود ممکن نیست. برای شروع دانلودی جدید، نقشه را دوباره دریافت کنید.",
   "This download changed. Close this dialog and try again.": "این دانلود تغییر کرده است. این پنجره را ببندید و دوباره تلاش کنید.",
   "This download has no resumable checkpoint. Start it again from Maps.": "این دانلود هیچ نقطهٔ ذخیره‌ای برای ادامه ندارد. آن را دوباره از بخش نقشه‌ها شروع کنید.",
   "Completed archives to delete:": "بایگانی‌های تکمیل‌شده‌ای که حذف خواهند شد:",
@@ -1212,7 +1207,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "فقط آرشیوهای انتخاب شده مکان را تغییر می دهند. سایر بایگانی ها و مکان دانلود در همان جایی که هستند باقی می مانند.",
   "Pin this article to your home screen": "این مقاله را به صفحه اصلی خود پین کنید",
   "Pinned to your home screen.": "به صفحه اصلی شما پین شده است.",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "نسخه‌های اصلی ارائه‌دهنده تنها زمانی حذف می‌شوند که ارائه‌دهنده اجازه حذف را بدهد. اگر مجوز در دسترس نیست، به جای آن کپی را انتخاب کنید.",
   "Reading storage locations…": "خواندن مکان‌های ذخیره‌سازی…",
   "Release notes": "یادداشت های انتشار",
   "Removable": "قابل جابجایی",

@@ -1,5 +1,6 @@
 {
   "Open file": "Datei uftuä",
+  "About Kiwix": "Über Kiwix",
   "File": "Datei",
   "Edit": "Bearbeite",
   "Search": "Sueche",
@@ -812,10 +813,6 @@
   "Save export": "Export speichere",
   "Transferring archives": "Archive werded übertrage",
   "Transfers": "Übertragige",
-  "{count} bytes copied": {
-    "one": "{count} Byte kopiert",
-    "other": "{count} Byte kopiert"
-  },
   "< / > in app controls": "< / > i de App-Bedienig",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "< / > i de App-Bedienig; ⌘ / Ctrl Shift , / . im Artikel",
   "Allow cellular and metered downloads": "Downloads über s Mobilfunknetz und über Verbindige mit Dateabrechnig erlaube",

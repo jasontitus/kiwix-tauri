@@ -6,6 +6,7 @@
   "Open file": "เปิดไฟล์",
   "Zoom in": "ซูมเข้า",
   "Zoom out": "ซูมออก",
+  "About Kiwix": "เกี่ยวกับ Kiwix",
   "File": "ไฟล์",
   "Edit": "แก้ไข",
   "Search": "ค้นหา",
@@ -797,9 +798,6 @@
   "Save export": "บันทึกการส่งออก",
   "Transferring archives": "การโอนย้ายเอกสารสำคัญ",
   "Transfers": "การโอน",
-  "{count} bytes copied": {
-    "other": "คัดลอกแล้ว {count} ไบต์"
-  },
   "< / > in app controls": "</ > ในการควบคุมแอป",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "</ > ในการควบคุมแอป; ⌘ / Ctrl Shift , / . ในบทความ",
   "Allow cellular and metered downloads": "อนุญาตการดาวน์โหลดผ่านมือถือและแบบคิดค่าบริการตามปริมาณข้อมูล",
@@ -983,7 +981,6 @@
   "Remove saved map “{title}”?": "นำแผนที่ที่บันทึกไว้ “{title}” ออกหรือไม่?",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "นำการดาวน์โหลดนี้ออกจากรายการและเก็บไฟล์ไว้ หรือลบการดาวน์โหลดและไฟล์ของการดาวน์โหลดเพื่อเพิ่มพื้นที่จัดเก็บ",
   "The download or saved map changed. Close this dialog and try again.": "การดาวน์โหลดหรือแผนที่ที่บันทึกไว้มีการเปลี่ยนแปลง ปิดกล่องโต้ตอบนี้แล้วลองอีกครั้ง",
-  "This download cannot be resumed. Get the map again to start a new download.": "ไม่สามารถดาวน์โหลดต่อจากเดิมได้ โปรดรับแผนที่อีกครั้งเพื่อเริ่มการดาวน์โหลดใหม่",
   "This download changed. Close this dialog and try again.": "การดาวน์โหลดนี้มีการเปลี่ยนแปลง ปิดกล่องโต้ตอบนี้แล้วลองอีกครั้ง",
   "This download has no resumable checkpoint. Start it again from Maps.": "การดาวน์โหลดนี้ไม่มีจุดตรวจสอบที่ใช้ดาวน์โหลดต่อได้ โปรดเริ่มใหม่จากส่วนแผนที่",
   "Completed archives to delete:": "ไฟล์เก็บถาวรที่ดาวน์โหลดเสร็จแล้วที่จะลบ:",
@@ -1194,7 +1191,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "เฉพาะไฟล์เก็บถาวรที่เลือกเท่านั้นที่จะเปลี่ยนตำแหน่ง ไฟล์เก็บถาวรอื่น ๆ และตำแหน่งการดาวน์โหลดจะยังคงอยู่ในตำแหน่งเดิม",
   "Pin this article to your home screen": "ปักหมุดบทความนี้ไว้ที่หน้าจอหลักของคุณ",
   "Pinned to your home screen.": "ปักหมุดไว้ที่หน้าจอหลักของคุณแล้ว",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "ต้นฉบับของผู้ให้บริการจะถูกลบเฉพาะเมื่อผู้ให้บริการให้สิทธิ์ในการลบเท่านั้น หากไม่มีสิทธิ์อนุญาต ให้เลือกคัดลอกแทน",
   "Reading storage locations…": "กำลังอ่านสถานที่จัดเก็บ...",
   "Release notes": "บันทึกประจำรุ่น",
   "Removable": "ถอดออกได้",

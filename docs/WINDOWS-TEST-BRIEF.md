@@ -70,7 +70,7 @@ No current document or build step defines or enforces this manifest: the app no 
   - Never invent hashes.
   - If this would take more than a reasonable effort, **stop after Phase 1 and report back**. Phase 1 is still valuable on its own.
 
-## Phase 3: Rust tests on Windows (needs the SDK)
+## Phase 3: Rust tests on Windows (historical baseline: needs the SDK)
 
 This suite has never run on Windows, so failures may predate this branch.
 

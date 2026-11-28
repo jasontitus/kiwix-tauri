@@ -809,10 +809,6 @@
   "Save export": "রপ্তানি সংরক্ষণ করুন",
   "Transferring archives": "সংরক্ষণাগার স্থানান্তর করা হচ্ছে",
   "Transfers": "স্থানান্তর",
-  "{count} bytes copied": {
-    "one": "{count} বাইট কপি করা হয়েছে",
-    "other": "{count} বাইট কপি করা হয়েছে"
-  },
   "< / > in app controls": "< /> অ্যাপ নিয়ন্ত্রণে",
   "< / > in app controls; ⌘ / Ctrl Shift , / . in article": "< /> অ্যাপ নিয়ন্ত্রণে; ⌘ / Ctrl শিফট , /। নিবন্ধে",
   "Allow cellular and metered downloads": "সেলুলার এবং মিটারযুক্ত ডাউনলোডের অনুমতি দিন",
@@ -997,7 +993,6 @@
   "Remove saved map “{title}”?": "সংরক্ষিত মানচিত্র “{title}” সরাবেন?",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "এই ডাউনলোডটি তালিকা থেকে সরিয়ে সেটির ফাইলগুলি রেখে দিন, অথবা স্টোরেজ খালি করতে ডাউনলোড ও সেটির ফাইলগুলি মুছে ফেলুন।",
   "The download or saved map changed. Close this dialog and try again.": "ডাউনলোড বা সংরক্ষিত মানচিত্রটি পরিবর্তিত হয়েছে। এই ডায়ালগটি বন্ধ করে আবার চেষ্টা করুন।",
-  "This download cannot be resumed. Get the map again to start a new download.": "এই ডাউনলোডটি পুনরায় চালু করা যাবে না। নতুন ডাউনলোড শুরু করতে মানচিত্রটি আবার নিন।",
   "This download changed. Close this dialog and try again.": "এই ডাউনলোডটি পরিবর্তিত হয়েছে। এই ডায়ালগটি বন্ধ করে আবার চেষ্টা করুন।",
   "This download has no resumable checkpoint. Start it again from Maps.": "এই ডাউনলোডে পুনরায় শুরু করার মতো কোনো চেকপয়েন্ট নেই। মানচিত্র বিভাগ থেকে এটি আবার শুরু করুন।",
   "Completed archives to delete:": "যে সম্পূর্ণ আর্কাইভগুলি মুছে ফেলা হবে:",
@@ -1210,7 +1205,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "শুধুমাত্র নির্বাচিত সংরক্ষণাগারগুলি অবস্থান পরিবর্তন করবে৷ অন্যান্য সংরক্ষণাগার এবং ডাউনলোড অবস্থান যেখানে আছে সেখানেই থাকে।",
   "Pin this article to your home screen": "এই নিবন্ধটি আপনার হোম স্ক্রিনে পিন করুন",
   "Pinned to your home screen.": "আপনার হোম স্ক্রিনে পিন করা হয়েছে।",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "প্রদানকারীর আসলগুলি কেবল তখনই সরানো হয় যখন প্রদানকারী মুছে ফেলার অনুমতি দেয়৷ অনুমতি অনুপলব্ধ হলে, পরিবর্তে অনুলিপি নির্বাচন করুন.",
   "Reading storage locations…": "স্টোরেজ অবস্থান পড়া হচ্ছে...",
   "Release notes": "রিলিজ নোট",
   "Removable": "অপসারণযোগ্য",

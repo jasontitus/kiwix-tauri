@@ -4,6 +4,7 @@
   "Open file": "Отвори датотеку",
   "Zoom in": "Увећај",
   "Zoom out": "Умањи",
+  "About Kiwix": "О Kiwix-у",
   "File": "Датотека",
   "Edit": "Уреди",
   "Search": "Претражи",
@@ -1013,7 +1014,6 @@
   "Remove saved map “{title}”?": "Уклонити сачувану карту „{title}“?",
   "Remove this download from the list and keep its files, or delete the download and its files to free storage.": "Уклоните ово преузимање са списка и задржите његове датотеке или избришите преузимање и његове датотеке да бисте ослободили простор.",
   "The download or saved map changed. Close this dialog and try again.": "Преузимање или сачувана карта се променила. Затворите овај дијалог и покушајте поново.",
-  "This download cannot be resumed. Get the map again to start a new download.": "Ово преузимање не може да се настави. Поново преузмите карту да бисте започели ново преузимање.",
   "This download changed. Close this dialog and try again.": "Ово преузимање се променило. Затворите овај дијалог и покушајте поново.",
   "This download has no resumable checkpoint. Start it again from Maps.": "Ово преузимање нема контролну тачку за наставак. Покрените га поново у одељку Карте.",
   "Completed archives to delete:": "Завршене архиве за брисање:",
@@ -1224,7 +1224,6 @@
   "Only the selected archives will change location. Other archives and the download location stay where they are.": "Само изабране архиве ће променити локацију. Остале архиве и локација за преузимање остају тамо где јесу.",
   "Pin this article to your home screen": "Закачите овај чланак на почетни екран",
   "Pinned to your home screen.": "Закачен на почетни екран.",
-  "Provider originals are removed only when the provider grants delete permission. If permission is unavailable, choose Copy instead.": "Оригинали добављача се уклањају само када провајдер да дозволу за брисање. Ако дозвола није доступна, изаберите Копирај.",
   "Reading storage locations…": "Читање локација за складиштење…",
   "Release notes": "Напомене о издању",
   "Removable": "Ремовабле",
@@ -1315,11 +1314,6 @@
     "one": "UNREVIEWED MACHINE TRANSLATION — {count} архива је премештена.",
     "few": "UNREVIEWED MACHINE TRANSLATION — {count} архиве су премештене.",
     "other": "UNREVIEWED MACHINE TRANSLATION — {count} архива је премештено."
-  },
-  "{count} bytes copied": {
-    "one": "Копиран је {count} бајт",
-    "few": "Копирана су {count} бајта",
-    "other": "Копирано је {count} бајтова"
   },
   "{count} imported or unavailable archives left unchanged.": {
     "one": "UNREVIEWED MACHINE TRANSLATION — {count} увезена или недоступна архива је остала непромењена.",
