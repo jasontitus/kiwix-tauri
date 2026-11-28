@@ -3,8 +3,8 @@
 This is the one rule for the text that the crash intakes write to disk. Three implementations follow it:
 
 - Rust: `src-tauri/src/crash.rs` (`redact`),
-- Swift: `plugins/tauri-plugin-kiwix-mobile/ios/Sources/CrashIntake.swift`,
-- Kotlin: `plugins/tauri-plugin-kiwix-mobile/android/.../CrashIntake.kt`.
+- Swift: `plugins/tauri-plugin-kiwix-mobile/ios/Sources/CrashRedaction.swift` (called from `CrashIntake.swift`),
+- Kotlin: `plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/CrashRedaction.kt` (called from `CrashIntake.kt`).
 
 `crash-redaction-cases.json`, next to this file, holds the test vectors. Each entry is `{"input", "expected"}`, and `expected` is the exact result of steps 1 to 8 below for `input`. Every implementation must reproduce every vector. When this text and a vector disagree, that is a defect in this text: report it, do not pick one.
 
@@ -193,6 +193,8 @@ These are known and accepted. They are not in the vectors as expected output.
 - What follows the `:` of an address-shaped remote: `git@github.com:janedoe/private-notes.git` becomes `[email]:janedoe/private-notes.git`, which still names the account and the repository.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
 - A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator, or a `_` suffix after a camelCase hump such as `accessToken_value=…` or `refreshToken_v2=…`).
+- A wrapper followed by whitespace before its quote: `token=Some( "x y") z` gives `token=[redacted] "x y") z`. Debug output never writes that space.
+- An empty quoted value (`password=""`, `Some("")`) is no match for that keyword; the value forms after it are not tried, so `cookie="" a=b` is left unchanged.
 - An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`), or whose local part is quoted (`"jane doe"@example.org`).
 
 ## 5. What it removes that was harmless
@@ -204,3 +206,14 @@ Also known and accepted.
 - Several escape sequences in a row look like a rooted path: `\d+\.\d+` becomes `[path]`.
 - A word after `pass:`, `auth:`, `pin:`, `signature:` and the other keywords, even in prose. With the camelCase suffix this includes type and field names: `TokenStream: empty` becomes `TokenStream: [redacted]`.
 - A `~` directly before a number or a word with a `/` after it looks like a home path: `~5/10 done` becomes `[path]`.
+
+## Notes for porters
+
+These follow from the rules above and from the Rust reference; each is pinned by the vectors or by both ports' differential runs against Rust.
+
+- Only `\"` opens an escaped quoted value. `\'` is accepted before a key but is not a quoted value form.
+- `classify` checks for a reader host before it checks the port, so `http://localhost:abc/x` is `[reader-url]`.
+- A kept URL is written as the lowercased scheme, `://`, and the lowercased host without one trailing dot, plus a non-default port. A default port is recognised with leading zeros ignored (`:080`, `:0443` are dropped); `:000` is kept as written.
+- Every field cut (2,000 for a message, 240 for a frame line, 64 for a thread name) keeps one scalar fewer than the limit and adds `…`.
+- Frame lines are platform-specific in form. Every implementation runs steps 1 to 5 on each frame line and then cuts it to 240 scalars. Rust does this for its `at file:line` lines as described above; Swift does it for each `callStackSymbols` line (at most 24); Kotlin for `class.method(file:line)`.
+- Kotlin strings may contain an unpaired surrogate, which is not a scalar value. Treat it as one opaque non-whitespace code point: never split it, drop it or merge it. Swift and Rust strings cannot hold one.

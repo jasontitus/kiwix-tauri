@@ -314,3 +314,6 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - adv-startup round 4: SPEC FINAL (228 vectors), LANE startup CLOSED. Owner added spec §4 wording for accessToken_value residual (doc only). -> ports told FINAL.
 - OWNER docs: STATE_MACHINES §1.1/§1.2 import cancellation added (verify wording vs service round 3 cutover-count + staging removal at docs review).
 - android crash port (impl/android-crash.md): Kotlin 228/228, 76 JVM tests, 444k differential 0 diffs. Spec ambiguities 4,8,10 -> owner spec lines after Swift. Item 9 (Rust rooted \a scan) already measured by adv-startup (<=2.6ms). -> adv-android (a942b…) review
+- service round 3 (impl/service-round3.md): R2-1..5, flake (spelling test-only fixed; integrity not reproduced -> watch in full suite), DESKTOP-R11/R8 done (store.rs 3 edits; new src/startup-notice.ts + test). -> adv-service re-review
+- apple crash port (impl/apple-crash2.md): Swift 228/228, 1.2M differential 0. Gaps: Some( "x y") wrapper+space leak (all 3; list §4), empty-quoted no-fallthrough. Owner: spec header file names + porter notes. -> adv-apple (a3939…) review
+- OWNER spec edits: file names, §4 wrapper+space & empty-quoted residuals, porter notes (needs docs review)
