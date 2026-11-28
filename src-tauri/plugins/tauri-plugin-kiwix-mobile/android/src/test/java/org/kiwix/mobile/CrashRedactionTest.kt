@@ -103,6 +103,36 @@ class CrashRedactionTest {
     }
 
     @Test
+    fun anUnpairedSurrogateIsOneOpaqueCodePoint() {
+        // Only a Kotlin string can hold one, so the shared vectors cannot: the
+        // spec's rule is one non-whitespace code point, never split, dropped or merged.
+        val high = "\uD83D"
+        val low = "\uDE00"
+        assertFalse(CrashRedaction.isWhiteSpace(0xD83D))
+        assertFalse(CrashRedaction.isWhiteSpace(0xDE00))
+        assertEquals("a $high b $low c", CrashRedaction.redact("a $high  b\t$low c"))
+        assertEquals(low + high, CrashRedaction.redact(low + high))
+        // Two halves apart stay apart: the collapsed space is still between them.
+        assertEquals("$high $low", CrashRedaction.redact("$high \t $low"))
+        // Each counts as one for the cuts.
+        assertEquals(high.repeat(1_999) + "…", CrashRedaction.redact(high.repeat(2_001)))
+        assertEquals(low.repeat(63) + "…", CrashRedaction.truncate(low.repeat(70), 64))
+        // It bounds a path or a secret like any other symbol and stays beside the placeholder.
+        assertEquals(high + "[path]", CrashRedaction.redact("$high/storage/emulated/0/Books/a.zim"))
+        assertEquals("token=[redacted] $low", CrashRedaction.redact("token=abc $low"))
+    }
+
+    @Test
+    fun theResidualsTheSpecNamesStayAsWritten() {
+        assertEquals("token=[redacted] \"x y\") z", CrashRedaction.redact("token=Some( \"x y\") z"))
+        assertEquals("password=\"\"", CrashRedaction.redact("password=\"\""))
+        assertEquals("token=Some(\"\")", CrashRedaction.redact("token=Some(\"\")"))
+        assertEquals("cookie=\"\" a=b", CrashRedaction.redact("cookie=\"\" a=b"))
+        assertEquals("http://example.org:000", CrashRedaction.redact("http://example.org:000/a"))
+        assertEquals("[reader-url]", CrashRedaction.redact("http://localhost:abc/x"))
+    }
+
+    @Test
     fun everyStepIsLinearInItsInput() {
         // The worst inputs found in review: each unit starts a URL, path or
         // secret candidate. Rescanning the rest of the line or text once per
