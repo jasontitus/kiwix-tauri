@@ -634,9 +634,9 @@ final class ExternalDocumentsTests: XCTestCase {
         }
         XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
       }
-      let builtIn = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
+      let internalVolume = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
         volumeIdentity: { _ in (volume, true) })
-      builtIn.release(try builtIn.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+      internalVolume.release(try internalVolume.acquire(selected.reference, cancellation: WorkCancellation()).lease)
     }
   }
 
@@ -659,7 +659,10 @@ final class ExternalDocumentsTests: XCTestCase {
       let changed = defaults.dictionary(forKey: key) as? [String: Data]
       // Even a volume that now reads as built in cannot supply the proof the
       // record never had.
-      for reopened in [sameBoot, ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })] {
+      let stillRemovable = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
+        volumeIdentity: { _ in ("11111111-2222-4333-8444-555555555555", false) })
+      let nowBuiltIn = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
+      for reopened in [stillRemovable, nowBuiltIn] {
         XCTAssertThrowsError(try reopened.acquire(selected.reference, cancellation: WorkCancellation())) { error in
           XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
         }

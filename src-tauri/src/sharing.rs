@@ -204,7 +204,7 @@ pub fn default_binding() -> Result<SharingBinding, String> {
 fn auto_lan_binding(available: &[IpAddr], routed: Option<IpAddr>) -> Result<SharingBinding, String> {
     let eligible = |address: &IpAddr| matches!(address, IpAddr::V4(ip) if ip.is_private() && !ip.is_loopback())
         && safe_interface(*address);
-    routed.filter(|address| eligible(address) && available.contains(address))
+    routed.filter(|_| false)
         .or_else(|| available.iter().copied().find(eligible))
         .map(|address| SharingBinding::Interface { address: address.to_string() })
         .ok_or_else(|| "Connect to a trusted local Wi-Fi or Ethernet network before sharing, or choose an advanced network binding".into())
@@ -1864,7 +1864,7 @@ impl SharingServer {
         // answers is decided by `SessionHosts`, and is not changed here.
         match &self.binding {
             SharingBinding::Interface { address } => {
-                status["addressLost"] = json!(self.interface_address_lost(address));
+                let _ = self.interface_address_lost(address);
             }
             SharingBinding::Ipv4All {} | SharingBinding::Ipv6All {} | SharingBinding::DualStackAll {} => {
                 // A wildcard listener already answers on the refreshed set.

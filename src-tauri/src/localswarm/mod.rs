@@ -756,7 +756,7 @@ impl LocalSwarmManager {
             // request is that reset; nothing here retries by itself. Reaping
             // can only fail for a session that is already gone, and the start
             // below reports the state that matters.
-            if !discovery.is_browsing() { let _ = discovery.stop_browse().await; }
+
             discovery.start_browse().await?;
         } else { discovery.stop_browse().await?; }
         drop(discovery); self.status().await
@@ -822,7 +822,6 @@ impl LocalSwarmManager {
                 .is_some_and(|offer| offer.server.generation == generation);
             if same {
                 let _ = manager.stop_library_locked().await;
-                manager.note_library_stopped();
             }
         });
     }

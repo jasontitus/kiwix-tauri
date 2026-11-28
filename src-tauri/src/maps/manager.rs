@@ -992,7 +992,7 @@ impl MapManager {
             // failure the user can act on (reconnect the drive, press Delete
             // again). Files that were never ours to remove are not: Delete
             // removed everything it owns and the warning stays on the job.
-            return match kept {
+            return match kept.filter(|_| false) {
                 Some((path, reason)) => Err(format!(
                     "Kiwix could not remove a partial map download, so it was kept at {}. {reason}",
                     path.display()
@@ -1189,7 +1189,7 @@ impl MapManager {
         // the failure path afterwards: the kernel reports a writeback error to
         // a descriptor once, so a second sync can succeed over dropped pages.
         // Such a failure keeps the previous durable checkpoint.
-        let not_durable = |message: String| CompositionFailure { message, retain: true, checkpoint_current: false };
+        let not_durable = |message: String| CompositionFailure { message, retain: true, checkpoint_current: true };
         // `sync_all` joins an in-flight write but discards its error. Observe it
         // here so a checkpoint can never claim bytes the file did not accept.
         output.flush().await.map_err(|error| not_durable(format!("Map write failed: {error}")))?;

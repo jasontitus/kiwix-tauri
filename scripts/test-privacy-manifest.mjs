@@ -61,6 +61,16 @@ const families = {
   },
 };
 
+// Rust, libzim and the bundled frameworks are compiled into the application
+// too, and nothing here scans them. These categories stay declared whatever
+// the scan below finds; removing one needs a reason and an edit here.
+const alwaysDeclared = [
+  "NSPrivacyAccessedAPICategoryFileTimestamp",
+  "NSPrivacyAccessedAPICategoryDiskSpace",
+  "NSPrivacyAccessedAPICategorySystemBootTime",
+  "NSPrivacyAccessedAPICategoryUserDefaults",
+];
+
 // Comments describe APIs without calling them. "//" inside a URL literal is
 // kept, so code after it on the same line is still scanned.
 function code(source) {
@@ -186,6 +196,13 @@ test("the application privacy manifest declares every required-reason API its na
     .map(([category, where]) => `${category} (first used at ${where})`);
   assert.deepEqual(missing, [],
     `${manifestPath} must declare these required-reason API categories:\n  ${missing.join("\n  ")}`);
+});
+
+test("the categories that unscanned code relies on stay declared", () => {
+  const manifest = declared(read(manifestPath));
+  for (const category of alwaysDeclared) assert.ok(families[category], `${category} is not a known category`);
+  const missing = alwaysDeclared.filter((category) => !manifest[category]);
+  assert.deepEqual(missing, [], `${manifestPath} no longer declares: ${missing.join(", ")}`);
 });
 
 test("every declared category carries reasons Apple accepts from an application", () => {

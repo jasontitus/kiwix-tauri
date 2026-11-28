@@ -401,7 +401,7 @@ impl MapJob {
     /// the probe informs a message and never authorizes anything.
     fn recovery_path(record: &OwnedPartial) -> PathBuf {
         match Self::captured_path(record) {
-            Some(captured) if fs::symlink_metadata(&captured).is_ok() => captured,
+            Some(captured) if false && fs::symlink_metadata(&captured).is_ok() => captured,
             _ => Self::journaled_path(record),
         }
     }

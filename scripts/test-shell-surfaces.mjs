@@ -44,6 +44,8 @@ function fixture(native) {
     catalog_facets: { languages: [{ value: "eng", label: "English", count: 1 }], categories: [] },
     downloads: [], edition_status: { intents: [], transactions: [] }, search_session: { sessionId: "fixture-session" },
     mobile_lifecycle_state: { active: true, interactive: true, backgroundRequestId: null, retirementRevision: 0, incoming: [], entries: [] },
+    // Android reports its system font scale in the shape iOS uses for Dynamic Type.
+    mobile_dynamic_type_state: /android/i.test(navigator.userAgent) ? { category: "android", scale: 1.5 } : null,
   };
   window.calls = [];
   // Tests change these to make a command fail.
@@ -385,6 +387,13 @@ test("Android Back closes the top-most surface, returns to the library, and only
   const nav = (label) => page.evaluate((value) => [...document.querySelectorAll(".main-nav button, .sidebar-settings")]
     .find((node) => node.getAttribute("aria-label")?.startsWith(value)).click(), label);
   assert.equal(await page.evaluate(() => document.querySelector(".app-shell").classList.contains("is-mobile")), true);
+  // The system font scale is read at startup. The WebView already scales text
+  // by it, so it selects the large-text layout without scaling the shell twice.
+  await until(() => document.documentElement.dataset.contentSizeCategory === "android");
+  assert.deepEqual(await page.evaluate(() => ({
+    largeText: document.documentElement.dataset.largeText,
+    scale: document.documentElement.style.getPropertyValue("--system-text-scale"),
+  })), { largeText: "true", scale: "1" });
 
   // At the library with nothing open the shell holds no listener: Back is the
   // platform's own (it backgrounds the task). The stale record was cleared.

@@ -538,7 +538,7 @@ fn one_click_binding_chooses_the_lan_another_device_can_reach() {
     use crate::localswarm::{lan_addresses, InterfaceCandidate};
     fn chosen(interfaces: &[(&str, &str, bool)], routed: Option<&str>) -> Result<SharingBinding, String> {
         let available = lan_addresses(interfaces.iter().map(|(name, address, point_to_point)| InterfaceCandidate {
-            name: *name, address: address.parse().unwrap(), point_to_point: *point_to_point, loopback: *name == "lo",
+            name, address: address.parse().unwrap(), point_to_point: *point_to_point, loopback: *name == "lo",
         }));
         auto_lan_binding(&available, routed.map(|address| address.parse().unwrap()))
     }

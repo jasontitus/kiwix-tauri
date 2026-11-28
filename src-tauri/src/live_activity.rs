@@ -263,6 +263,9 @@ fn snapshot(job: &DownloadJob, state: &str, locale: &Localizer) -> Value {
         "fileName": job.file_name,
         "status": job.status,
         "statusLabel": locale.text(label(&job.status), &[]),
+        // Shown instead of the status once the system marks the activity
+        // stale, which happens when this process stops refreshing it.
+        "staleLabel": locale.text("Open Kiwix to see progress", &[]),
         "downloaded": job.downloaded,
         "total": job.total,
     })
@@ -413,6 +416,7 @@ mod tests {
         assert_eq!(first["state"], json!("active"));
         assert_eq!(first["jobId"], json!("a"));
         assert_eq!(first["statusLabel"], json!("Downloading"));
+        assert_eq!(first["staleLabel"], json!("Open Kiwix to see progress"));
         assert_eq!(first["downloaded"], json!(100));
         assert_eq!(first["total"], json!(1000));
 
