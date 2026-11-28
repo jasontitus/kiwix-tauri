@@ -270,7 +270,7 @@ Status: `queued, downloading, validating, composing, paused, failed, cancelled, 
 Invariants:
 - At most one active worker.
 - Every unresolved partial or publication stays in `owned_partial ∪ recovery_records`, so it keeps a monitored-path claim.
-- `MapJob` tracks throttled `speed` and `eta_seconds` (reset on startup, resume, completion, finish, and error backoff). `RECIPE_CACHE` retains at most 1 (mobile) / 2 (desktop) parsed `Arc<Recipe>` entries for 5 minutes and is cleared by `clear_recipe_cache()` on `MapManager::clear_cache()`, `MapManager::cancel()`, `CatalogRegistry::retire()`, `Service::shutdown()`, privacy changes in `save_settings`, and mobile background entry.
+- `MapJob` tracks a throttled `speed` (reset on startup, resume, completion, finish, and error backoff). It has no ETA: a map's remaining work is not known in bytes. `RetainedMapJob.eta_seconds` is kept only so older saved jobs still load, and is always `None`. `RECIPE_CACHE` retains at most 1 (mobile) / 2 (desktop) parsed `Arc<Recipe>` entries for 5 minutes and is cleared by `clear_recipe_cache()` on `MapManager::clear_cache()`, `MapManager::cancel()`, `CatalogRegistry::retire()`, `Service::shutdown()`, privacy changes in `save_settings`, and mobile background entry.
 
 ### 5.2 Import verification (`imports.rs`, in memory)
 

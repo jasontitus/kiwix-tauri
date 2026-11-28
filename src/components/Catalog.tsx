@@ -106,6 +106,25 @@ function variantsCompatible(left: Map<string, string>, right: Map<string, string
   }
   return true;
 }
+/// The Rust `catalog_index::series_key` variants, as one comparable value, or
+/// null when a variant is empty or stated twice with different values
+/// (unmatchable there). `series_compatible` compares them with `==`, so a
+/// variant stated on one side only is a different series.
+const SERIES_VARIANT_KEYS = ["_pictures", "_videos", "_details", "_ftindex"];
+function seriesVariants(tags: string[]): string | null {
+  const variants = new Map<string, string>();
+  for (const tag of tags) {
+    const split = tag.indexOf(":");
+    if (split < 0) continue;
+    const key = tag.slice(0, split);
+    const value = tag.slice(split + 1);
+    if (!SERIES_VARIANT_KEYS.includes(key)) continue;
+    if (!value || (variants.has(key) && variants.get(key) !== value)) return null;
+    variants.set(key, value);
+  }
+  return [...variants].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+    .map(([key, value]) => `${key}:${value}`).join(";");
+}
 function lastSegment(value: string): string {
   return value.split(/[?#]/)[0].replace(/\\/g, "/").split("/").pop() || "";
 }
@@ -124,6 +143,8 @@ interface InstalledArchive {
   book: Book;
   flavour: string | null;
   variants: Map<string, string>;
+  series: string | null;
+  language: string;
   day: string | null;
 }
 function installedArchive(book: Book): InstalledArchive {
@@ -131,6 +152,8 @@ function installedArchive(book: Book): InstalledArchive {
     book,
     flavour: archiveFlavour(book.tags, [book.name, lastSegment(book.sourceReference?.displayName ?? book.path)]),
     variants: archiveVariants(book.tags),
+    series: seriesVariants(book.tags),
+    language: book.language.trim().toLowerCase(),
     day: editionDay(book.date),
   };
 }
@@ -139,7 +162,8 @@ function installedArchive(book: Book): InstalledArchive {
 /// or newer edition, never a duplicate of this one. A different stated flavour
 /// or content variant is a different archive. A flavour only one side states
 /// may still be another archive, so it is only ever a related edition: Download
-/// stays offered. Equal flavours, or none stated on either side, can be exact.
+/// stays offered. Exact, which removes Download, also needs what the Rust
+/// series match needs: the same language and exactly the same variants.
 /// `installed` is built once per library, so resolving a card is a map lookup
 /// instead of a full library scan with a regex per book.
 function installedEdition(
@@ -155,8 +179,11 @@ function installedEdition(
     variantsCompatible(variants, archive.variants));
   if (!matching || !matching.length) return null;
   const day = editionDay(entry.date);
-  const exact = day
-    ? matching.find((archive) => archive.flavour === flavour && archive.day === day)
+  const series = seriesVariants(entry.tags);
+  const language = entry.language.trim().toLowerCase();
+  const exact = day && series !== null
+    ? matching.find((archive) => archive.flavour === flavour && archive.series === series &&
+      archive.language === language && archive.day === day)
     : undefined;
   if (exact) return { book: exact.book, exact: true };
   return {

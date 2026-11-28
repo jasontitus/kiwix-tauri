@@ -14,7 +14,7 @@ Goal: every feature works on every platform that can support it. This audit comp
 | `zim://` article links | ✗ | ✓ | ✗ | ✓ | ✓ |
 | `kiwix://search` (Look up) | ✓ | ✓ | ✓ | ✓ | ✗ |
 | Read aloud: Next paragraph, ±15 s | ✓ | ✓ | ✓ | ✓ | ✗ |
-| "Print / save as PDF" row | ✓ | ✓ | ✓ | partial | ✗? |
+| Print the article | ✓ | ✓ | ✓ | via PDF | ✗ |
 | Camera for archive photo inputs | ✓ | ✗ | ✗ | ✗? | ✓? |
 | AI assistant connector | ✓ | ✓ | ✓ | n/a | n/a |
 | Shortcuts, home-screen widget, pinned articles | ✗ | ✗ | ✗ | ✓ | ✗ |
@@ -41,7 +41,7 @@ Goal: every feature works on every platform that can support it. This audit comp
    - Size S; testable on Windows.
 5. **Keep the machine awake during transfers.**
    - No Windows/Linux implementation exists (`power_activity.rs`).
-   - The guard is taken only for LocalSwarm; HTTP, torrent and map downloads never hold it on any platform.
+   - The guard is taken for LocalSwarm transfers on every platform that has one, and on macOS also for a whole map download (`maps/manager.rs`, macOS only because on Android the same guard takes a high-performance Wi-Fi lock). HTTP and torrent downloads never hold it.
    - API: Windows `PowerCreateRequest` / `PowerSetRequest(PowerRequestSystemRequired)`; Linux logind `Inhibit("sleep")`.
    - Size S; testable with `powercfg /requests`.
 6. **`zim://` on Windows and Linux.**
@@ -60,9 +60,10 @@ Goal: every feature works on every platform that can support it. This audit comp
      - macOS `NWPathMonitor` `isExpensive`/`isConstrained`.
    - Size M.
 8. **iOS print.**
-   - Mobile's "Print / save as PDF" row only calls `window.print()` inside the iframe, which is likely a no-op in WKWebView and Android WebView (unverified).
-   - Fix: `UIPrintInteractionController` on the PDF `pdf.mm` already renders. On Android, hide or reroute the duplicate row.
-   - Size S–M; needs a Mac.
+   - Android: Print routes to the article PDF export, which opens Android's print dialog; the duplicate `window.print()` row is no longer shown.
+   - iOS: the Print row is not offered and Cmd+P shows "Printing is not available on this device. Save or share the article as a PDF instead." There is still no native print path.
+   - Fix: `UIPrintInteractionController` on the PDF `pdf.mm` already renders.
+   - Size S–M; needs a Mac. Neither mobile behaviour has been checked on a device.
 9. **iOS `kiwix://search`.**
    - The scheme is registered (Info.plist), but `mobile.rs` only handles host `speech`, so Look up links are silently dropped.
    - Size S–M; needs a Mac.
@@ -80,6 +81,8 @@ Goal: every feature works on every platform that can support it. This audit comp
 - **AI assistant connector and Look up, macOS/Linux: implemented.**
   - Same-UID Unix socket, bundled `kiwix-mcp`, macOS `Info.plist` and Linux desktop-entry registration.
   - The packaged sandboxed macOS app and relay passed end-to-end list/search/read and private-mode stop; a Linux desktop runtime run is still required.
+
+- **Android system Back:** Back closes the top-most open dialog, picker, tab sheet or search, then steps back in the reader, then returns to the library (`src/shell-dismiss.ts`, `src/android-back.ts`). At the library root Kiwix registers no handler, so Back is the WebView default: it first walks the WebView's own page history, so after reading articles it can take several presses before the app goes to the background. Fixing that needs a native hand-back from the Tauri app plugin. Not yet checked on a device.
 
 ## Feasible, lower value
 - **Platform shortcuts and widgets:** iOS quick actions and a WidgetKit search widget; a Windows Jump List, macOS dock menu, and Linux `.desktop` actions.

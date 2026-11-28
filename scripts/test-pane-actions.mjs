@@ -8,11 +8,14 @@ import ts from "typescript";
 // against controllable service and timer boundaries.
 // `derived` names component-body constants that are re-evaluated on demand,
 // as React does on each render: `context.derive.<name>()`.
-async function declarations(file, names, bindings = {}, derived = []) {
+// `effects` names marker text; each useEffect callback containing one is
+// exported as `context.effects[marker]()`.
+async function declarations(file, names, bindings = {}, derived = [], effects = []) {
   const source = await readFile(new URL(`../src/components/${file}`, import.meta.url), "utf8");
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const found = new Map();
   const expressions = new Map();
+  const marked = new Map();
   let effect;
   function visit(node) {
     if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text)) found.set(node.name.text, node.getText(tree));
@@ -21,13 +24,17 @@ async function declarations(file, names, bindings = {}, derived = []) {
       else if (derived.includes(declaration.name.getText(tree))) expressions.set(declaration.name.getText(tree), declaration.initializer.getText(tree));
     if (ts.isCallExpression(node) && node.expression.getText(tree) === "useEffect" &&
         node.arguments[0]?.getText(tree).includes("void loadSuggestions(prefix")) effect = node.arguments[0].getText(tree);
+    if (ts.isCallExpression(node) && node.expression.getText(tree) === "useEffect")
+      for (const marker of effects) if (node.arguments[0]?.getText(tree).includes(marker)) marked.set(marker, node.arguments[0].getText(tree));
     ts.forEachChild(node, visit);
   }
   visit(tree);
   for (const name of names) assert.ok(found.has(name), `${name} exists in ${file}`);
   for (const name of derived) assert.ok(expressions.has(name), `${name} is derived in ${file}`);
+  for (const marker of effects) assert.ok(marked.has(marker), `an effect with ${marker} exists in ${file}`);
   const code = ts.transpileModule(`${names.map((name) => found.get(name)).join("\n")}
 globalThis.exported = { ${names.join(", ")} };
+globalThis.effects = { ${effects.map((marker) => `${JSON.stringify(marker)}: ${marked.get(marker)}`).join(", ")} };
 globalThis.derive = { ${derived.map((name) => `${name}: () => (${expressions.get(name)})`).join(", ")} };
 globalThis.suggestionEffect = ${effect ?? "undefined"};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
@@ -42,17 +49,18 @@ globalThis.suggestionEffect = ${effect ?? "undefined"};`, {
 }
 
 const book = (fields) => ({
-  id: "book", installationId: "installation", name: "wikipedia_en_all", date: "2026-10-16",
+  id: "book", installationId: "installation", name: "wikipedia_en_all", date: "2026-10-16", language: "eng",
   tags: [], path: "/library/wikipedia_en_all_maxi_2026-10.zim", sourceReference: null, available: true, ...fields,
 });
 const entry = (fields) => ({
-  id: "entry", name: "wikipedia_en_all", date: "2026-10-16T00:00:00Z", tags: ["_flavour:maxi"],
+  id: "entry", name: "wikipedia_en_all", date: "2026-10-16T00:00:00Z", language: "eng", tags: ["_flavour:maxi"],
   url: "https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi_2026-10.zim.meta4", ...fields,
 });
 
 test("the official catalog's RFC 3339 date matches the installed edition of the same flavour only", async () => {
   const { exported } = await declarations("Catalog.tsx", [
-    "archiveName", "FLAVOUR_IN_NAME", "archiveFlavour", "VARIANT_KEYS", "archiveVariants", "variantsCompatible", "lastSegment", "editionDay", "installedArchive", "installedEdition",
+    "archiveName", "FLAVOUR_IN_NAME", "archiveFlavour", "VARIANT_KEYS", "archiveVariants", "variantsCompatible",
+    "SERIES_VARIANT_KEYS", "seriesVariants", "lastSegment", "editionDay", "installedArchive", "installedEdition",
   ]);
   const index = (...books) => new Map([["wikipedia_en_all", books.map(exported.installedArchive)]]);
   const installed = book({});
@@ -78,6 +86,20 @@ test("the official catalog's RFC 3339 date matches the installed edition of the 
   // Content variants both sides state must agree, as in the Rust series match.
   assert.equal(exported.installedEdition(entry({ tags: ["_flavour:maxi", "_pictures:yes"] }), index(renamed)), null);
   assert.equal(exported.installedEdition(entry({ tags: ["_pictures:no"], url: "https://x.invalid/a.zim" }), index(renamed)).exact, true);
+  // Exact, which removes Download, follows the Rust series match exactly: every
+  // variant (with _ftindex) equal, none stated on one side only, same language.
+  // The related badge keeps the looser rule and Download stays offered.
+  const plain = (tags) => book({ name: "guide_en_all", tags, path: "/l/guide_en_all_2026-10.zim" });
+  const guide = (tags, fields = {}) => entry({ name: "guide_en_all", tags, url: "https://x.invalid/guide_en_all_2026-10.zim", ...fields });
+  const guides = (archive) => new Map([["guide_en_all", [exported.installedArchive(archive)]]]);
+  for (const [entryTags, bookTags] of [[["_ftindex:yes"], ["_ftindex:no"]], [["_pictures:no"], []], [[], ["_videos:no"]]]) {
+    const found = exported.installedEdition(guide(entryTags), guides(plain(bookTags)));
+    assert.equal(found?.exact, false, `${entryTags} vs ${bookTags}`);
+  }
+  assert.equal(exported.installedEdition(guide(["_ftindex:yes", "_pictures:no"]), guides(plain(["_pictures:no", "_ftindex:yes"]))).exact, true);
+  assert.equal(exported.installedEdition(guide([], { language: "fra" }), guides(plain([]))).exact, false);
+  assert.notEqual(exported.installedEdition(guide(["_pictures:no", "_pictures:yes"]), guides(plain(["_pictures:no"])))?.exact, true,
+    "conflicting variants are unmatchable");
   // Provider-backed archives are named by their display name.
   const provided = book({ path: "content://x/1", sourceReference: { reference: "r", displayName: "wikipedia_en_all_nopic_2026-10.zim", persistent: true } });
   assert.equal(exported.installedEdition(entry({}), index(provided)), null);
@@ -246,4 +268,29 @@ test("a search that fails does not pop the suggestion list over its error", asyn
   context.suggestionEffect();
   for (const callback of [...timers.values()]) callback();
   assert.equal(sent.length, 1);
+});
+
+test("a spelling correction keeps focus on the query on desktop and moves it to the results on a phone", async () => {
+  for (const mobile of [false, true]) {
+    const focused = [];
+    const searched = [];
+    const bindings = {
+      isMobile: mobile, busy: false, results: null,
+      searchInput: { current: { focus: () => focused.push("input") } },
+      resultsRegion: { current: { focus: () => focused.push("results") } },
+      focusResults: { current: false },
+      setSearch() {}, performSearch: async (query) => { searched.push(query); },
+    };
+    const context = await declarations("Library.tsx", ["searchCorrection"], bindings, [], ["resultsRegion.current?.focus()"]);
+    const settle = context.effects["resultsRegion.current?.focus()"];
+    context.exported.searchCorrection("animal");
+    assert.deepEqual(searched, ["animal"]);
+    context.busy = true;
+    settle();                       // the search is running: nothing to focus yet
+    context.busy = false;
+    context.results = { hits: [] };
+    settle();                       // its results arrived
+    settle();                       // a later render does not move focus again
+    assert.deepEqual(focused, mobile ? ["results"] : ["input"], mobile ? "no soft keyboard over the results" : "desktop");
+  }
 });

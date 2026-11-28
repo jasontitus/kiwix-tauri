@@ -312,6 +312,8 @@ export default function Library({
   const [searchInputFocused, setSearchFocused] = useState(false);
   const [searchSubmitted, setSearchSubmitted] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
+  const resultsRegion = useRef<HTMLDivElement>(null);
+  const focusResults = useRef(false);
   // Suggestions follow the focused search field but never supersede an
   // explicit search: search and suggest share one request, so a suggestion
   // would cancel the running search, and a list opened over its results (or
@@ -790,6 +792,21 @@ export default function Library({
       if (isCurrent()) setBusy(false);
     }
   }
+  /** A spelling correction replaces the results, the pressed button included.
+   * Desktop keeps focus on the field now holding the query; a phone would
+   * raise its keyboard over the results, so focus moves to them instead. */
+  function searchCorrection(query: string) {
+    if (isMobile) focusResults.current = true;
+    else searchInput.current?.focus();
+    setSearch(query);
+    void performSearch(query);
+  }
+  useEffect(() => {
+    if (!focusResults.current || busy) return;
+    focusResults.current = false;
+    // Absent after a failure, which the shell's surface reports.
+    resultsRegion.current?.focus();
+  }, [results, busy]);
   async function moreResults() {
     const request = searchRequest.current;
     if (!results || !searchParameters.current || busy || !request) return;
@@ -1485,7 +1502,7 @@ export default function Library({
           </form>
           {busy && <Loading />}
           {results && (
-            <div aria-live="polite">
+            <div aria-live="polite" ref={resultsRegion} tabIndex={-1}>
               <p className="muted">
                 {t("About {count} results", { count: results.total })}
                 {results.total > results.hits.length &&
@@ -1518,13 +1535,7 @@ export default function Library({
                 <div className="toolbar compact-toolbar" role="group" aria-label={t("Spelling suggestions")}>
                   {results.corrections.map((correction) => (
                     <button type="button" key={correction.correctedQuery} disabled={busy || snippetSaving}
-                      onClick={() => {
-                        // The results, this button included, are replaced:
-                        // keep focus on the field that now holds the query.
-                        searchInput.current?.focus();
-                        setSearch(correction.correctedQuery);
-                        void performSearch(correction.correctedQuery);
-                      }}>
+                      onClick={() => searchCorrection(correction.correctedQuery)}>
                       {t("Search instead for “{query}”", { query: correction.correctedQuery })}
                     </button>
                   ))}
