@@ -14,6 +14,8 @@ Initial audit snapshot: 2026-11-07, branch `claude/app-state-machines-doc-3zj50h
 
 States: **Running** → **Stopping** (`Service.stopping = true`, which is never reset) → **Retired** (`Service::shutdown` returned `Ok`) → process exit.
 
+Entering Stopping cancels any running manual or monitored archive import (`Service.import_cancel`); the import ends with `IMPORT_CANCELLED`, registers nothing and is not remembered as a damaged file. The token is never replaced once Stopping has begun.
+
 The Quit attempt (`QuitManager.attempt`) moves **Idle** → **Preparing** (flush requested from every shell) → **Prepared** (all flushed; the attempt is *held* through `Service::shutdown`) → exit, or back to **Idle**.
 
 A Quit that cannot save or retire stops in **Asking**: one native dialog (`ask_after_failed_quit`) with Retry, Quit Without Saving and Cancel, attached to an application window when one exists. `exiting` stays `true` while it is open, so a second Quit request cannot stack another dialog or start another attempt. Such a request is held back and remembered (`QuitFlags.requested_again`), not dropped.
@@ -59,7 +61,7 @@ Lock order in `Service::operation`: `update_admission` → `mobile.transfer_gate
 
 `save_settings` order:
 1. Admission checks: `Service::validate_settings_patch`. These run **before any retirement** (fix F-6).
-2. Retire cancellable work: LocalSwarm/Nearby, searches, private sync, integrity checks, PDF jobs.
+2. Retire cancellable work: LocalSwarm/Nearby, searches, private sync, integrity checks, PDF jobs, and running manual and monitored imports (`ImportCutover::begin` cancels the import token before the writer is requested; a fresh token is installed once the writer is held, unless Stopping has begun). The mobile background retirement writer begins the same cutover, so an import or incoming-file verification under way when the app is backgrounded ends with `IMPORT_CANCELLED` and the incoming request stays pending.
 3. Take the privacy writer.
 4. Re-run the admission checks under the writer.
 5. Replace the import manager.
