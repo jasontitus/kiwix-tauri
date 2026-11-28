@@ -194,7 +194,7 @@ final class CrashCapturePolicyTests: XCTestCase {
     }
   }
 
-  /// A frame keeps its spacing and its symbol: steps 1 to 4 only.
+  /// A frame keeps its spacing and its symbol: steps 1 to 5 only.
   func testStackFrameLineKeepsSpacingAndLongSymbols() {
     let frame = "3   Kiwix                               0x0000000104a3c1f4 $s5Kiwix11ReaderModelC4open3url10completionySS_yycSgtF + 123"
     XCTAssertEqual(CrashRedaction.redactLine(frame), frame)

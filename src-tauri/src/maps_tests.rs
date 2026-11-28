@@ -645,7 +645,8 @@ fn a_leftover_name_of_a_file_that_is_not_ours_is_never_removed() {
     assert!(matches!(result, Ok(PartialRecovery::Refused(_))), "{result:?}");
     assert_eq!(fs::read(&public).unwrap(), b"a different file");
     assert_eq!(fs::read(&twin).unwrap(), b"a different file");
-    assert_eq!(fs::metadata(&public).unwrap().nlink(), 2);
+    let restored = MapDirectory::open(&destination).unwrap().directory.symlink_metadata(&record.name).unwrap();
+    assert_eq!((FileIdentity::of(&restored), restored.nlink()), (other, 2));
     assert!(record.capture.is_some());
 }
 

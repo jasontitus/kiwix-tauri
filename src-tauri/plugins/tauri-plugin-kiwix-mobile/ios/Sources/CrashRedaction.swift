@@ -5,8 +5,9 @@
 // `crash-redaction-cases.json` next to it. `src-tauri/src/crash.rs` and the
 // Android intake follow the same text; none of them may change alone.
 //
-// The steps, in order: bound the input, secret values, URLs, paths, long
-// opaque tokens, collapse whitespace, cut. Every index, count, scan and cut is
+// The steps, in order: bound the input, secret values, URLs, e-mail
+// addresses, paths, long opaque tokens, collapse whitespace, cut. Every index,
+// count, scan and cut is
 // over Unicode scalar values, never `Character`: a `Character` can hold
 // several scalars, and "\r\n" is one. Case is folded for ASCII letters only.
 // The text is scanned as an array of scalars with plain loops, each step in
@@ -25,22 +26,25 @@ enum CrashRedaction {
   private static let pathMark = Text("[path]".unicodeScalars)
   private static let urlMark = Text("[url]".unicodeScalars)
   private static let readerURLMark = Text("[reader-url]".unicodeScalars)
+  private static let emailMark = Text("[email]".unicodeScalars)
 
-  /// Full redaction for one text field: steps 1 to 7.
+  /// Full redaction for one text field: steps 1 to 8.
   static func redact(_ value: String) -> String {
     var text = bounded(value)
     text = redactSecrets(text)
     text = replaceURLs(text)
+    text = redactEmails(text)
     text = redactPaths(text)
     text = redactOpaqueTokens(text)
     return string(truncated(collapseWhitespace(text), limit: maxMessage))
   }
 
-  /// Redaction for one stack frame line: steps 1 to 4, keeping its spacing.
+  /// Redaction for one stack frame line: steps 1 to 5, keeping its spacing.
   static func redactLine(_ value: String) -> String {
     var text = bounded(value)
     text = redactSecrets(text)
     text = replaceURLs(text)
+    text = redactEmails(text)
     return string(redactPaths(text))
   }
 
@@ -503,7 +507,54 @@ enum CrashRedaction {
     return kept
   }
 
-  // MARK: Step 4, paths
+  // MARK: Step 4, e-mail addresses
+
+  /// A bare e-mail address becomes `[email]`. This runs after the URL step,
+  /// which has already dealt with `mailto:` and with the userinfo of
+  /// `scheme://user@host`, and before the path step, so that what follows an
+  /// address (`jane@example.org/Inbox Folder`) starts at a boundary and goes
+  /// as a path instead of staying behind.
+  private static func redactEmails(_ chars: Text) -> Text {
+    func isLocal(_ scalar: Unicode.Scalar) -> Bool {
+      isASCIIAlphanumeric(scalar) || scalar == "." || scalar == "_" || scalar == "%" || scalar == "+" || scalar == "-"
+    }
+    func isHost(_ scalar: Unicode.Scalar) -> Bool {
+      isASCIIAlphanumeric(scalar) || scalar == "." || scalar == "-"
+    }
+    var output = Text()
+    output.reserveCapacity(chars.count)
+    var cursor = 0
+    var at = 0
+    while at < chars.count {
+      guard chars[at] == "@" else {
+        at += 1
+        continue
+      }
+      // The whole run on each side, never part of one. The local part cannot
+      // reach back into an address this step already replaced.
+      var start = at
+      while start > cursor, isLocal(chars[start - 1]) { start -= 1 }
+      var end = at + 1
+      while end < chars.count, isHost(chars[end]) { end += 1 }
+      // A dot or hyphen at the very end is sentence punctuation.
+      while end > at + 1, chars[end - 1] == "." || chars[end - 1] == "-" { end -= 1 }
+      // At least two labels, none empty; the last is two or more letters.
+      let labels = chars[(at + 1)..<end].split(separator: ".", omittingEmptySubsequences: false)
+      guard start < at, labels.count >= 2, let last = labels.last, last.count >= 2,
+            last.allSatisfy(isASCIILetter), labels.allSatisfy({ !$0.isEmpty }) else {
+        at += 1
+        continue
+      }
+      output.append(contentsOf: chars[cursor..<start])
+      output.append(contentsOf: emailMark)
+      cursor = end
+      at = end
+    }
+    output.append(contentsOf: chars[cursor...])
+    return output
+  }
+
+  // MARK: Step 5, paths
 
   private static func redactPaths(_ chars: Text) -> Text {
     var output = Text()
@@ -567,7 +618,7 @@ enum CrashRedaction {
     return pathEnd(chars, index)
   }
 
-  // MARK: Step 5, opaque tokens
+  // MARK: Step 6, opaque tokens
 
   private static func redactOpaqueTokens(_ chars: Text) -> Text {
     var output = Text()
@@ -592,7 +643,7 @@ enum CrashRedaction {
     return output
   }
 
-  // MARK: Step 6, whitespace
+  // MARK: Step 7, whitespace
 
   private static func collapseWhitespace(_ chars: Text) -> Text {
     var output = Text()

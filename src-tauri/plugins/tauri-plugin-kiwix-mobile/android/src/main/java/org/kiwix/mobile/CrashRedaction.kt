@@ -30,23 +30,26 @@ internal object CrashRedaction {
     private const val REDACTED = "[redacted]"
     private const val URL = "[url]"
     private const val READER_URL = "[reader-url]"
+    private const val EMAIL = "[email]"
     private const val PATH = "[path]"
 
-    /** Steps 1 to 7: a message, a thread name, a location. */
+    /** Steps 1 to 8: a message, a thread name, a location. */
     fun redact(value: String): String {
         var text = bounded(codePoints(value))
         text = redactSecrets(text)
         text = replaceUrls(text)
+        text = redactEmails(text)
         text = redactPaths(text)
         text = redactOpaque(text)
         return string(truncate(collapseWhitespace(text), MAX_MESSAGE))
     }
 
-    /** Steps 1 to 4, for the text of a stack frame: its spacing is kept. */
+    /** Steps 1 to 5, for the text of a stack frame: its spacing is kept. */
     fun redactLine(value: String): String {
         var text = bounded(codePoints(value))
         text = redactSecrets(text)
         text = replaceUrls(text)
+        text = redactEmails(text)
         return string(redactPaths(text))
     }
 
@@ -54,12 +57,12 @@ internal object CrashRedaction {
     fun truncate(value: String, limit: Int): String = string(truncate(codePoints(value), limit))
 
     /**
-     * Steps 2 to 5 on text of any length, without the bound of step 1. Only
+     * Steps 2 to 6 on text of any length, without the bound of step 1. Only
      * for the test that each step is linear in its input; returns the length
      * of the result.
      */
     internal fun unboundedStepsForTiming(value: String): Int =
-        redactOpaque(redactPaths(replaceUrls(redactSecrets(codePoints(value))))).size
+        redactOpaque(redactPaths(redactEmails(replaceUrls(redactSecrets(codePoints(value)))))).size
 
     // ---- 1. Terms --------------------------------------------------------
 
@@ -483,7 +486,65 @@ internal object CrashRedaction {
         return if (port.trimStart('0') == defaultPort) "$scheme://$host" else "$scheme://$host:$port"
     }
 
-    // ---- Step 4: paths ---------------------------------------------------
+    // ---- Step 4: e-mail addresses ----------------------------------------
+
+    /**
+     * A bare e-mail address becomes `[email]`.
+     *
+     * This runs after the URL step, which has already dealt with `mailto:` and
+     * with the userinfo of `scheme://user@host`, and before the path step, so
+     * that what follows an address (`jane@example.org/Inbox Folder`) starts at
+     * a boundary and goes as a path instead of staying behind. Both runs are
+     * taken whole: an address is never matched inside a longer run.
+     */
+    private fun redactEmails(points: IntArray): IntArray {
+        val output = Output(points.size)
+        var cursor = 0
+        var at = 0
+        while (at < points.size) {
+            if (points[at] != '@'.code) {
+                at++
+                continue
+            }
+            // The local part cannot reach back into an address already replaced.
+            var start = at
+            while (start > cursor && (isAsciiAlphanumeric(points[start - 1]) || isOneOf(points[start - 1], "._%+-"))) start--
+            var end = at + 1
+            while (end < points.size && (isAsciiAlphanumeric(points[end]) || isOneOf(points[end], ".-"))) end++
+            // A dot or hyphen at the very end is sentence punctuation and stays.
+            while (end > at + 1 && isOneOf(points[end - 1], ".-")) end--
+            if (start == at || !emailHost(points, at + 1, end)) {
+                at++
+                continue
+            }
+            output.range(points, cursor, start)
+            output.literal(EMAIL)
+            cursor = end
+            at = end
+        }
+        output.range(points, cursor, points.size)
+        return output.points()
+    }
+
+    /**
+     * Whether `points[from, to)` is the host of an address: at least two
+     * labels, none empty, the last one two or more ASCII letters.
+     */
+    private fun emailHost(points: IntArray, from: Int, to: Int): Boolean {
+        var labels = 1
+        var labelStart = from
+        for (index in from until to) {
+            if (points[index] != '.'.code) continue
+            if (index == labelStart) return false
+            labels++
+            labelStart = index + 1
+        }
+        if (labels < 2 || to - labelStart < 2) return false
+        for (index in labelStart until to) if (!isAsciiLetter(points[index])) return false
+        return true
+    }
+
+    // ---- Step 5: paths ---------------------------------------------------
 
     /** Whether a path may begin right after [previous]; -1 is the start of the text. */
     private fun pathBoundary(previous: Int): Boolean =
@@ -555,7 +616,7 @@ internal object CrashRedaction {
         return output.points()
     }
 
-    // ---- Step 5: opaque tokens -------------------------------------------
+    // ---- Step 6: opaque tokens -------------------------------------------
 
     private const val MIN_OPAQUE = 40
 
@@ -580,7 +641,7 @@ internal object CrashRedaction {
         return output.points()
     }
 
-    // ---- Step 6: whitespace, step 7: length ------------------------------
+    // ---- Step 7: whitespace, step 8: length ------------------------------
 
     private fun collapseWhitespace(points: IntArray): IntArray {
         val output = Output(points.size)
