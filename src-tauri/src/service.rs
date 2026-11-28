@@ -100,6 +100,10 @@ struct LocalSwarmAdmission {
     generation: u64,
 }
 
+/// Test rendezvous inside a manual import, just before verification.
+#[cfg(test)]
+type ImportHook = Arc<dyn Fn(&tokio_util::sync::CancellationToken) + Send + Sync>;
+
 /// Cancels manual and monitored imports for a policy cutover. Dropped once the
 /// privacy writer is held (or the cutover ends early), it installs a fresh
 /// token, unless Quit has begun: Quit's cancellation must stay in force.
@@ -208,7 +212,7 @@ pub struct Service {
     /// writer holds (no import is running then).
     import_cancel: Mutex<tokio_util::sync::CancellationToken>,
     #[cfg(test)]
-    import_hook: Mutex<Option<Arc<dyn Fn(&tokio_util::sync::CancellationToken) + Send + Sync>>>,
+    import_hook: Mutex<Option<ImportHook>>,
     spelling: Arc<SpellingManager>,
     /// When the spelling cache was last garbage-collected.
     spelling_swept_at: Mutex<Option<std::time::Instant>>,
