@@ -6254,6 +6254,8 @@ async fn an_archive_written_under_an_unmounted_mount_point_does_not_retire_the_v
     std::fs::remove_file(&on_volume).unwrap();
     let underneath = monitored.join("underneath.zim");
     fixture_with_new_uuid(&underneath);
+    // Long settled, so the scan imports it.
+    touch_archive(&underneath);
     let device = watched_directory_device(&canonical);
     // Neither a settled-file observation nor a reconciliation may adopt this
     // filesystem while the volume's book is missing.

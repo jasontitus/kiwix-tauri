@@ -1192,10 +1192,12 @@ mod tests {
         assert_eq!(text(&bounded_input("lib.rs:12")), "lib.rs:12");
         let exact = "a".repeat(bound);
         assert_eq!(bounded_input(&exact).len(), bound);
-        // The cut falls between words: everything before it stays.
-        let between = format!("{} next", "a".repeat(bound - 1).replacen('a', " ", 1));
-        assert_eq!(bounded_input(&format!("{}{}", "ab ".repeat(bound / 3), " rest")).len(), bound);
-        assert_eq!(bounded_input(&between).len(), bound - 1 + 1);
+        // The cut falls between words, on either side of the space: every
+        // whole word before it stays.
+        let space_last = format!("{} next", "a".repeat(bound - 1));
+        assert_eq!(bounded_input(&space_last).len(), bound);
+        let space_next = format!("{} next", "a".repeat(bound));
+        assert_eq!(bounded_input(&space_next).len(), bound);
 
         // The cut falls inside a token: the partial token goes. Kept, the
         // first half of this reader URL's host would be a "DNS name" and stay.
