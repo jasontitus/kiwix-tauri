@@ -6112,7 +6112,8 @@ async fn availability_changes_release_cached_handles_and_readers() {
     service.shutdown().await.unwrap();
 }
 
-#[cfg(desktop)]
+// Device numbers are what tell an unmounted mount point apart (Unix only).
+#[cfg(all(desktop, unix))]
 #[tokio::test]
 async fn an_empty_monitored_mount_point_keeps_its_books_but_a_single_deletion_is_retired() {
     let profile = Profile::new();
@@ -6137,26 +6138,55 @@ async fn an_empty_monitored_mount_point_keeps_its_books_but_a_single_deletion_is
         Ok(())
     }).unwrap();
 
-    // The share is offline: the mount point exists and lists as empty.
-    std::fs::remove_file(&first).unwrap();
-    std::fs::remove_file(&second).unwrap();
-    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
-    let state = service.store.read().unwrap();
-    assert_eq!(state.books.len(), 2);
-    for installation in &installations {
-        assert!(state.reader_storage.contains_key(installation));
-    }
-    drop(state);
+    let restore = || {
+        std::fs::write(&first, &saved.0).unwrap();
+        std::fs::write(&second, &saved.1).unwrap();
+    };
+    let offline = || {
+        std::fs::remove_file(&first).unwrap();
+        std::fs::remove_file(&second).unwrap();
+    };
+    let kept = |service: &Service| {
+        let state = service.store.read().unwrap();
+        state.books.len() == 2
+            && installations.iter().all(|installation| state.reader_storage.contains_key(installation))
+    };
 
-    // Mounted again, one archive then really is deleted next to a survivor.
-    std::fs::write(&first, &saved.0).unwrap();
-    std::fs::write(&second, &saved.1).unwrap();
+    // Launched while the share is offline: the mount point exists and lists
+    // as empty, and this run has never seen the folder holding its archives.
+    offline();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    assert!(kept(&service));
+
+    // Mounted: seen with its archives. Then the share drops, and the folder
+    // is back on the filesystem underneath (modelled by the remembered device
+    // being the mounted volume's, not this one's).
+    restore();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    let canonical = monitored.canonicalize().unwrap();
+    {
+        let mut devices = service.watched_devices.lock().unwrap();
+        let device = devices.get_mut(&canonical).expect("the mounted folder's device was not noted");
+        *device ^= 1;
+    }
+    offline();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    assert!(kept(&service));
+
+    // On the same filesystem, one deletion next to a survivor is retired, and
+    // so is deleting the last archive in the folder.
+    restore();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    assert!(kept(&service));
     std::fs::remove_file(&first).unwrap();
     service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
     let state = service.store.read().unwrap();
     assert_eq!(state.books.len(), 1);
     assert_eq!(Path::new(&state.books[0].path), second.canonicalize().unwrap());
     drop(state);
+    std::fs::remove_file(&second).unwrap();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    assert!(service.store.read().unwrap().books.is_empty());
     service.shutdown().await.unwrap();
 }
 

@@ -280,6 +280,14 @@
     "expected": "token=\"[redacted]\" next"
   },
   {
+    "input": "password='/Volumes/Jane's Backup/My Vault.kdbx' failed",
+    "expected": "password='[redacted]"
+  },
+  {
+    "input": "password='/Volumes/Jane's Backup/My Vault.kdbx",
+    "expected": "password='[redacted]"
+  },
+  {
     "input": "secret=\"unterminated value\nnext",
     "expected": "secret=\"[redacted] next"
   },
@@ -366,6 +374,30 @@
   {
     "input": "password=~/My Secrets/a.kdbx",
     "expected": "password=[redacted]"
+  },
+  {
+    "input": "token=file:///Users/Jane Doe/a.zim next",
+    "expected": "token=[redacted]"
+  },
+  {
+    "input": "password=relative/My Books/a.zim",
+    "expected": "password=[redacted]"
+  },
+  {
+    "input": "token=abc/def+ghi== and prose",
+    "expected": "token=[redacted]"
+  },
+  {
+    "input": "Authorization: Bearer\n abc.def.ghi next",
+    "expected": "Authorization: [redacted] next"
+  },
+  {
+    "input": "https://example.org/cb?token=abc/def&state=xyz#frag done",
+    "expected": "https://example.org/cb"
+  },
+  {
+    "input": "cookie=/home/jane doe/x; y=z\nnext",
+    "expected": "cookie=[redacted] next"
   },
   {
     "input": "password=//nas/My Share/a.kdbx",

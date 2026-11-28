@@ -748,14 +748,15 @@ fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
 /// * `"…"`: everything up to the closing quote (one not escaped by a
 ///   backslash), a line break or the end. The quotes stay.
 /// * `'…'`: everything up to the last `'` on the line, or to the end of the
-///   line when there is none. A value may itself contain an apostrophe.
-/// * A path start: everything `path_end` takes, so a path with spaces goes
-///   whole.
+///   line when there is none. A value may itself contain an apostrophe. If it
+///   contains `/` or `\` it takes at least what `path_end` takes.
 /// * After `cookie`: the rest of the line, because one header carries several
 ///   `name=value` pairs.
 /// * Otherwise one token, which ends at a space, tab, line break or one of
-///   `, ; & ) ] }`. After `authorization` a second token separated by spaces
-///   or tabs goes too (`Basic dXNlcjpwYXNz`, `Bearer …`).
+///   `, ; & ) ] }`. After `authorization` a second token separated by spaces,
+///   tabs or line breaks goes too (`Basic dXNlcjpwYXNz`, `Bearer …`).
+///   A value that contains `/` or `\` is a path or a URL and may contain
+///   spaces: it also takes everything `path_end` takes from where it starts.
 fn secret_value(chars: &[char], start: usize, key: &str) -> (usize, usize) {
     let line_end = |from: usize| {
         (from..chars.len())
@@ -777,24 +778,36 @@ fn secret_value(chars: &[char], start: usize, key: &str) -> (usize, usize) {
         Some('\'') => {
             let line = line_end(start + 1);
             let close = (start + 1..line).rev().find(|index| chars[*index] == '\'');
-            (start + 1, close.unwrap_or(line))
+            let mut end = close.unwrap_or(line);
+            // The closing quote may be missing, and then the last `'` is an
+            // apostrophe inside a path.
+            if has_path_separator(&chars[start + 1..end]) {
+                end = end.max(path_end(chars, start + 1));
+            }
+            (start + 1, end)
         }
-        _ if path_start(chars, start) => (start, path_end(chars, start)),
         _ if key == "cookie" => (start, line_end(start)),
         _ => {
             let mut end = token_end(start);
             if key == "authorization" && end > start {
                 let mut second = end;
-                while matches!(chars.get(second), Some(' ' | '\t')) {
+                while matches!(chars.get(second), Some(' ' | '\t' | '\r' | '\n')) {
                     second += 1;
                 }
                 if second > end && token_end(second) > second {
                     end = token_end(second);
                 }
             }
+            if has_path_separator(&chars[start..end]) {
+                end = end.max(path_end(chars, start));
+            }
             (start, end)
         }
     }
+}
+
+fn has_path_separator(chars: &[char]) -> bool {
+    chars.iter().any(|character| matches!(character, '/' | '\\'))
 }
 
 /// Whether the character at `index` follows an odd run of backslashes that

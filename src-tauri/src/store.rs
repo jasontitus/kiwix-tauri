@@ -3204,7 +3204,8 @@ fn remove_provider_activity(state: &mut State, book: &Book) {
     for window in state.windows.values_mut() { retain_tabs(&mut window.tabs, &mut window.active_tab); }
 }
 
-#[cfg(any(mobile, test))]
+/// The saved profile's bytes, bounded; `None` when there is none. Also used by
+/// `update_inner` when leaving read-only mode keeps a copy first.
 fn state_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
     let file = match File::open(path) {
         Ok(file) => file,

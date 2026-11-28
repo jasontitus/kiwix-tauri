@@ -795,6 +795,23 @@ fn reveal_target(book: &Book) -> Result<PathBuf, String> {
     Ok(retained.path)
 }
 
+/// The message for a delete that failed and left nothing in its staging
+/// folder: `back` of the archive's `total` files are under their own names
+/// again, exactly as they were; the others are gone.
+fn settled_delete_failure(error: &str, back: usize, total: usize, trash: bool) -> String {
+    let gone = if trash { "moved to the Trash" } else { "deleted" };
+    if back == total {
+        format!("{error}. The archive was left where it is")
+    } else if back == 0 {
+        format!("{error}. The archive files had already been {gone}")
+    } else {
+        format!(
+            "{error}. {} of the archive's {total} files had already been {gone}; the others were put back",
+            total - back
+        )
+    }
+}
+
 /// The staging folder is what the person finds in the Trash, so it must be
 /// visible and recognizable there on every desktop: NSFileManager Trash may
 /// omit Put Back, the Windows Recycle Bin lists the folder by name, and Linux
@@ -972,20 +989,8 @@ fn delete_book_impl(
         // Point at the staging folder only while it can still hold something.
         if restoration.is_empty() {
             let back = parts.iter().filter(|(part, stamp)| source.stamp(part).as_ref() == Ok(stamp)).count();
-            if back == parts.len() {
-                return Err(format!("{error}. The archive was left where it is"));
-            }
-            if source.absent(&name) == Ok(true) {
-                let gone = if trash { "moved to the Trash" } else { "deleted" };
-                return Err(if back == 0 {
-                    format!("{error}. The archive files had already been {gone}")
-                } else {
-                    format!(
-                        "{error}. {} of the archive's {} files had already been {gone}; the others were put back",
-                        parts.len() - back,
-                        parts.len()
-                    )
-                });
+            if back == parts.len() || source.absent(&name) == Ok(true) {
+                return Err(settled_delete_failure(&error, back, parts.len(), trash));
             }
         }
         return Err(format!(

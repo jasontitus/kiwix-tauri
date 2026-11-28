@@ -4,6 +4,9 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Where explicit cleanup kept a partial, and the reason shown for it.
+type KeptAt = (PathBuf, String);
+
 impl MapManager {
     /// Publication intent precedes visibility; complete_publication replaces it
     /// with job.path atomically under this same lock, including failed saves.
@@ -728,7 +731,7 @@ impl MapManager {
     ///
     /// Returns where the partial was kept and why, when it was. `again` words
     /// that reason for a Delete the person just pressed.
-    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob, again: bool) -> Result<Option<(PathBuf, String)>, String> {
+    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob, again: bool) -> Result<Option<KeptAt>, String> {
         let Some(mut record) = job.owned_partial.clone() else { return Ok(None) };
         let mut paths = vec![record.destination.join(&record.name)];
         if let Some(publication) = &record.publication { paths.push(record.destination.join(&publication.name)); }
@@ -813,7 +816,7 @@ impl MapManager {
     ///
     /// Returns the first record whose proven reclaim could not complete, and
     /// for each remaining record why this attempt kept it.
-    fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> (Option<(PathBuf, String)>, Vec<Option<String>>) {
+    fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> (Option<KeptAt>, Vec<Option<String>>) {
         let mut failed = None;
         let mut reasons = vec![None; job.recovery_records.len()];
         let mut remaining = job.recovery_records.len() - usize::from(skip_last);

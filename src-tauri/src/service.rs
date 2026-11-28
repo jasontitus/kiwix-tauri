@@ -237,6 +237,10 @@ pub struct Service {
     watcher: Mutex<Option<crate::watch::FolderWatch>>,
     #[cfg(desktop)]
     watch_failures: Arc<Mutex<crate::watch::FailureLog>>,
+    /// Per monitored folder, the device it was on when this run last saw
+    /// archives in it, so an unmounted mount point is not read as deletions.
+    #[cfg(desktop)]
+    watched_devices: Mutex<HashMap<PathBuf, u64>>,
     /// Throttles the on-demand session snapshot so a forced Quit still has a
     /// recent restorable session without writing on every scroll tick.
     #[cfg(desktop)]
@@ -892,6 +896,8 @@ impl Service {
             watcher: Mutex::new(None),
             #[cfg(desktop)]
             watch_failures: Arc::new(Mutex::new(crate::watch::FailureLog::default())),
+            #[cfg(desktop)]
+            watched_devices: Mutex::new(HashMap::new()),
             #[cfg(desktop)]
             session_snapshot_at: Mutex::new(None),
             #[cfg(desktop)]
@@ -1992,6 +1998,10 @@ impl Service {
                 if !crate::watch::is_settled(&path) {
                     return Ok(());
                 }
+                // A file was just written there: the folder is mounted.
+                if let Some(parent) = path.parent() {
+                    self.remember_watched_device(parent, watched_directory_device(parent));
+                }
                 {
                     let failures = self
                         .watch_failures
@@ -2077,10 +2087,11 @@ impl Service {
             let Ok(directory) = directory.canonicalize() else {
                 return Ok(None);
             };
-            Ok(scan_watched_directory(&directory, portable).map(|present| (directory, present)))
+            let device = watched_directory_device(&directory);
+            Ok(scan_watched_directory(&directory, portable).map(|present| (directory, present, device)))
         })
         .await?;
-        let Some((directory, present)) = scanned else {
+        let Some((directory, present, device)) = scanned else {
             return Ok(());
         };
         let state = self.store.read()?;
@@ -2135,14 +2146,19 @@ impl Service {
 
         // A monitored folder that is a mount point lists as an empty (or
         // unrelated) directory while its volume or share is not mounted. When
-        // none of its known books is present, that is not evidence that each
-        // was deleted: keep them, and let the availability pass mark them
-        // missing. One vanished file among present siblings is still retired.
-        if !known.iter().any(|book| {
+        // none of its known books is present, that alone is not evidence that
+        // each was deleted. Retire them only when the folder is still on the
+        // filesystem it was on when this run last saw its archives; otherwise
+        // keep them and let the availability pass mark them missing. One
+        // vanished file among present siblings is always retired.
+        let any_known_present = known.iter().any(|book| {
             present
                 .iter()
                 .any(|path| crate::watch::same_path(path, Path::new(&book.path)))
-        }) {
+        });
+        if any_known_present {
+            self.remember_watched_device(&directory, device);
+        } else if !known.is_empty() && !self.watched_device_unchanged(&directory, device) {
             return Ok(());
         }
         for book in known {
@@ -2160,6 +2176,28 @@ impl Service {
             self.retire_missing_watched_book(&book).await?;
         }
         Ok(())
+    }
+    /// Note the filesystem a monitored folder was on while it visibly held
+    /// archives (see `reconcile_watched_directory`).
+    #[cfg(desktop)]
+    fn remember_watched_device(&self, directory: &Path, device: Option<u64>) {
+        if let (Some(device), Ok(mut devices)) = (device, self.watched_devices.lock()) {
+            devices.insert(directory.to_path_buf(), device);
+        }
+    }
+    /// Whether a monitored folder is on the filesystem it was on when this
+    /// run last saw archives in it. Unknown (never seen with archives in this
+    /// run, or no device number) counts as changed where devices exist.
+    #[cfg(desktop)]
+    fn watched_device_unchanged(&self, directory: &Path, device: Option<u64>) -> bool {
+        // Windows has no portable device number here; an unmounted drive or
+        // share there removes the folder itself, which the scan already treats
+        // as unreachable.
+        if cfg!(not(unix)) {
+            return true;
+        }
+        let Ok(devices) = self.watched_devices.lock() else { return false };
+        device.is_some_and(|device| devices.get(directory) == Some(&device))
     }
     /// Remove a library entry whose file vanished from a monitored folder.
     /// Nothing on disk is touched (there is nothing to delete) and the archive
@@ -4191,6 +4229,22 @@ fn read_saved(store: &Store, relative: &str) -> Result<Value, String> {
     }
     Ok(saved)
 }
+/// The device number of a monitored folder (Unix), which changes when a
+/// volume is mounted on it or taken away.
+#[cfg(desktop)]
+fn watched_directory_device(directory: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(directory).ok().map(|metadata| metadata.dev())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = directory;
+        None
+    }
+}
+
 /// List direct-child archive candidates without following symlinks. An
 /// incomplete observation cannot authorize retiring any library installation.
 #[cfg(desktop)]
