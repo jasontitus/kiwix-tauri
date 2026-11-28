@@ -306,3 +306,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - adv-features round 4 (adv/features-round4.md): R11,R12,twin,FEAT-9 closed. R14 nit (identity check before twin unlink) -> features round 5 (small). Residuals: publication-move nlink2 unhealed, shared name helper, status() stat.
 - startup v2.1 (impl/startup-round3b-email.md): [email] step 4, 215 vectors, 0/173850 leaks. -> adv-startup re-review of round 3 + v2.1; ports notified 215.
 - adv-net round 3 (adv/net-round3.md): LANE net CLOSED. host/android/windows clippy exit 0 at 618b809. Residuals: NET-10, Windows VPN sort/IfType, CORE-3 mobile arm, NET-5 mDNS A records, NET-4 silent stop, regenerate locales/ERRORS, hardware unverified.
+- features round 5 (impl/features-round5.md): R14 fixed (observed fail). -> adv-features quick check
