@@ -1,4 +1,5 @@
 {
+  "Used today: {count} requests": { "one": "Used today: {count} request", "other": "Used today: {count} requests" },
   "{size} · {count} sources": { "one": "{size} · {count} source", "other": "{size} · {count} sources" },
   "{size} · {count} files": { "one": "{size} · {count} file", "other": "{size} · {count} files" },
   "{count} connected peers · {size} uploaded": { "one": "{count} connected peer · {size} uploaded", "other": "{count} connected peers · {size} uploaded" },
