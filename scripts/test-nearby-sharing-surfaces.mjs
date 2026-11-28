@@ -77,7 +77,10 @@ async function open(t, initial = {}) {
       const fixture = window.fixture;
       const handlers = {
         snapshot,
-        sharing_status: () => fixture.sharing,
+        sharing_status: async () => {
+          if (fixture.sharingDelay) await new Promise((resolve) => setTimeout(resolve, fixture.sharingDelay));
+          return fixture.sharing;
+        },
         sharing_interfaces: () => [],
         localswarm_status: () => fixture.localswarm,
         localswarm_discovery: () => fixture.localswarm,
@@ -182,12 +185,15 @@ test("web sharing shows the addresses the device has now, not the ones at start"
   await page.waitForFunction((value) => ![...document.querySelectorAll(".sharing-controls [role=alert]")]
     .some((node) => node.textContent.includes(value)), {}, local);
 
-  // One poll chain: hiding and showing the page repeatedly must not multiply the requests.
-  const started = await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length);
-  for (let n = 0; n < 6; n++) await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await new Promise((resolve) => setTimeout(resolve, 4600));
-  const polls = (await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length)) - started;
-  assert.ok(polls >= 1 && polls <= 3, `expected one poll chain, saw ${polls} requests in one interval`);
+  // One poll chain: the page becoming visible while a request is in flight
+  // must not start a second chain beside the one that request continues.
+  await change((fixture) => { fixture.sharingDelay = 1500; });
+  const settled = await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length);
+  await called("sharing_status", settled + 1);
+  await page.evaluate(() => { for (let n = 0; n < 6; n++) document.dispatchEvent(new Event("visibilitychange")); });
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length), settled + 1);
+  await change((fixture) => { fixture.sharingDelay = 0; });
   assert.deepEqual(pageErrors, []);
 });
 

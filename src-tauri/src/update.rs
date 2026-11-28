@@ -1016,7 +1016,7 @@ pub(crate) async fn install(
     // process would exit (and relaunch) while the Quit flush and
     // `Service::shutdown` were still running: unsaved sessions and unretired
     // transfers. Request an ordinary, preventable exit instead; the Quit path
-    // relaunches only after it retired the service. Returning first also drops
+    // relaunches only once it authorized the exit (`RESTART_AFTER_QUIT`). Returning first also drops
     // this command's privacy and admission leases, which that shutdown needs.
     #[cfg(not(target_os = "windows"))]
     {

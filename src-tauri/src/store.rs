@@ -1372,6 +1372,9 @@ struct Inner {
     browsing_pending: bool,
     /// When the profile was last written, for the coalescing window.
     last_persist: Option<Instant>,
+    /// The profile loaded read-only with skipped records, so no copy of the
+    /// original was kept; the commit that leaves read-only keeps it first.
+    skipped_unpreserved: bool,
     #[cfg(mobile)]
     mobile_relocation: Option<crate::mobile_rebase::Relocation>,
 }
@@ -1791,13 +1794,9 @@ fn load_mobile_state(
     let decoded = (|| -> Result<(State, Vec<String>, bool), String> {
         let parse_error = |error| format!("Cannot parse {}: {error}", path.display());
         let mut value: serde_json::Value = serde_json::from_slice(&bytes).map_err(parse_error)?;
-        if let Some(version) = value.get("version").and_then(serde_json::Value::as_u64) {
-            if version != 1 && version != u64::from(STATE_VERSION) {
-                foreign_version = true;
-                return Err(format!(
-                    "Kiwix cannot open your saved library because a different version of Kiwix saved it (profile version {version}; this version reads version {STATE_VERSION}). Install the latest version of Kiwix to open it. Your saved library was not changed."
-                ));
-            }
+        if let Some(error) = foreign_version_error(&value) {
+            foreign_version = true;
+            return Err(error);
         }
         has_owned_security |= value.get("readingSync").is_some() || value.get("privateSync").is_some()
             || ["editionIntents", "editionTransactions", "editionBindings", "referenceTransitions"]
@@ -1832,6 +1831,16 @@ fn load_mobile_state(
         }
         Err(error) => Err(error),
     }
+}
+
+/// A profile saved under another schema version, which this app must leave
+/// unchanged. `None` for versions 1 and 2, and when no version is readable.
+#[cfg(any(mobile, test))]
+fn foreign_version_error(value: &serde_json::Value) -> Option<String> {
+    let version = value.get("version").and_then(serde_json::Value::as_u64)?;
+    (version != 1 && version != u64::from(STATE_VERSION)).then(|| format!(
+        "Kiwix cannot open your saved library because a different version of Kiwix saved it (profile version {version}; this version reads version {STATE_VERSION}). Install the latest version of Kiwix to open it. Your saved library was not changed."
+    ))
 }
 
 /// Preserve an unreadable state.json under a new name in the same directory.
@@ -1897,6 +1906,10 @@ fn preserve_skipped_original(directory: &Path, bytes: &[u8]) -> Result<PathBuf, 
 /// allows it. A partial file is removed. A directory synchronization failure
 /// keeps the complete copy and is not reported as a missing one.
 fn write_new_private_file(directory: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    #[cfg(test)]
+    if FAIL_NEXT_PRESERVED_COPY.with(|fail| fail.replace(false)) {
+        return Err(std::io::Error::other("Injected preserved-copy failure"));
+    }
     #[cfg(not(windows))]
     let parent = File::open(directory)?;
     #[cfg(windows)]
@@ -1951,6 +1964,11 @@ pub(crate) fn reset_saved_windows(data_dir: &Path) -> Result<(), String> {
     let Some(bytes) = state_bytes(&path)? else { return Ok(()) };
     let mut value: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|error| format!("Saved settings are unreadable and cannot be edited: {error}"))?;
+    // Rewriting another version's document through this one would drop or
+    // reorder what that version saved, and opening it would still fail.
+    if let Some(error) = foreign_version_error(&value) {
+        return Err(error);
+    }
     let object = value.as_object_mut().ok_or("Saved settings are not a JSON object")?;
     object.insert("windows".into(), serde_json::Value::Object(Default::default()));
     object.insert("tabs".into(), serde_json::Value::Array(Vec::new()));
@@ -2165,6 +2183,8 @@ impl Store {
                 Err(e) => return Err(format!("Cannot open {}: {e}", path.display())),
             },
         };
+        // A read-only load kept no copy of what it skipped (see `update_inner`).
+        let skipped_unpreserved = !load_warnings.is_empty() && (initialization_read_only || state.settings.read_only);
         let persisted = state.settings.private_mode.then(|| state.clone());
         let mut visible = state;
         if persisted.is_some() {
@@ -2190,6 +2210,7 @@ impl Store {
                 durability_error: None,
                 browsing_pending: false,
                 last_persist: None,
+                skipped_unpreserved,
                 #[cfg(mobile)]
                 mobile_relocation: None,
             }),
@@ -2224,6 +2245,8 @@ impl Store {
         let path = data_dir.join("state.json");
         let (state, mut load_warnings, load_notice) =
             load_mobile_state(&data_dir, &path, read_only, relocation.as_ref())?;
+        // A read-only load kept no copy of what it skipped (see `update_inner`).
+        let skipped_unpreserved = !load_warnings.is_empty() && (read_only || state.settings.read_only);
         load_warnings.extend(initialized.notices);
         // Both views use the current root: private-mode rollback must never restore
         // old-container paths even though the read-only disk state stays untouched.
@@ -2247,6 +2270,7 @@ impl Store {
                 durability_error: None,
                 browsing_pending: false,
                 last_persist: None,
+                skipped_unpreserved,
                 mobile_relocation: relocation,
             }),
         })
@@ -3043,6 +3067,17 @@ impl Store {
             crate::reading_data::capture(&inner.state, &mut candidate)?;
         }
         candidate.validate()?;
+        // Leaving read-only is the first write of a profile that skipped
+        // records at load; nothing has replaced `state.json` since, so keep
+        // its bytes before anything (including relocation below) can.
+        if inner.skipped_unpreserved && inner.state.settings.read_only && !candidate.settings.read_only {
+            if let Some(bytes) = state_bytes(&self.data_dir.join("state.json"))? {
+                preserve_skipped_original(&self.data_dir, &bytes).map_err(|error| format!(
+                    "Kiwix could not keep a copy of the saved items it cannot read before leaving read-only mode ({error}). Free some disk space, then try again."
+                ))?;
+            }
+            inner.skipped_unpreserved = false;
+        }
         #[cfg(mobile)]
         if self.mobile_profile && inner.state.settings.read_only && !candidate.settings.read_only {
             self.mobile_complete_relocation_locked(&mut inner)?;
@@ -3487,6 +3522,17 @@ fn telemetry_only_change(before: &State, after: &State) -> bool {
 struct PersistError {
     message: String,
     committed: bool,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// The next copy of a profile with skipped records fails, as on a full disk.
+    static FAIL_NEXT_PRESERVED_COPY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_preserved_copy_for_test() {
+    FAIL_NEXT_PRESERVED_COPY.with(|fail| fail.set(true));
 }
 
 #[cfg(all(test, not(windows)))]

@@ -505,14 +505,16 @@ struct Observed {
 }
 
 /// The geometry to save for `observed`, given what was saved before. A
-/// minimized window saves nothing: Windows parks it at (-32000, -32000) with
-/// an icon-sized or empty client area, which `restore` would clamp to the
-/// minimum size and centre. A maximized or fullscreen window fills its
+/// minimized window saves nothing on Windows, which parks it at
+/// (-32000, -32000) with an icon-sized or empty client area that `restore`
+/// would clamp to the minimum size and centre. macOS and Linux keep reporting
+/// the real frame of a minimized window, so it is saved there; an empty or
+/// non-finite frame is never saved. A maximized or fullscreen window fills its
 /// screen, so it keeps the earlier normal size (its position still names the
 /// screen it is on), and un-maximizing after a relaunch returns to that size.
 fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Value> {
     let Observed { x, y, width, height, minimized, maximized, fullscreen } = observed;
-    if minimized || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
+    if (cfg!(windows) && minimized) || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
         return None;
     }
     let normal = previous.and_then(|previous| {
@@ -618,8 +620,17 @@ mod tests {
         let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
         // What Windows reports for a minimized window: parked, icon-sized.
         let parked = Observed { minimized: true, ..observed(-32000.0, -32000.0, 160.0, 28.0) };
-        assert_eq!(captured_geometry(parked, Some(&saved)), None);
-        assert_eq!(captured_geometry(parked, None), None);
+        if cfg!(windows) {
+            assert_eq!(captured_geometry(parked, Some(&saved)), None);
+            assert_eq!(captured_geometry(parked, None), None);
+        }
+        // Elsewhere a minimized window still reports where it is; a move
+        // made before minimizing is kept.
+        let moved = Observed { minimized: true, ..observed(300.0, 200.0, 900.0, 700.0) };
+        assert_eq!(
+            captured_geometry(moved, Some(&saved)).map(|geometry| geometry["x"].clone()),
+            if cfg!(windows) { None } else { Some(json!(300.0)) }
+        );
         // Some platforms leave the flag unset but still report an empty client area.
         assert_eq!(captured_geometry(observed(-32000.0, -32000.0, 0.0, 0.0), Some(&saved)), None);
         assert_eq!(captured_geometry(observed(10.0, 10.0, f64::NAN, 500.0), Some(&saved)), None);

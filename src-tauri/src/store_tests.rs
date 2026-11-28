@@ -1346,10 +1346,76 @@ fn a_read_only_profile_with_skipped_records_is_not_written_and_says_so() {
 #[test]
 fn a_copy_that_cannot_be_kept_is_reported_and_never_blocks_opening() {
     let profile = Profile::new();
-    // The directory is missing, as close as a test gets to a full disk.
-    let notice = skipped_records_notice(&profile.0.join("missing"), b"{}", true);
-    assert!(notice.contains("could not keep a copy"), "{notice}");
+    let original = profile_with_skipped_books(&profile);
+    // The copy fails as it would on a full disk.
+    fail_next_preserved_copy_for_test();
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert_eq!(store.read().unwrap().books.len(), 1);
+    assert!(preserved_copies(&profile).is_empty());
+    assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), original);
+    let notice = store.load_notice().unwrap();
+    assert!(notice.contains("could not keep a copy") && notice.contains("Injected"), "{notice}");
     assert!(notice.contains("Back up"), "{notice}");
+}
+
+/// A profile whose saved settings are read-only, holding records that are skipped.
+fn read_only_profile_with_skipped_books(profile: &Profile) -> Vec<u8> {
+    let bytes = profile_with_skipped_books(profile);
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    json["settings"]["readOnly"] = serde_json::json!(true);
+    let bytes = serde_json::to_vec_pretty(&json).unwrap();
+    fs::write(profile.0.join("state.json"), &bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn leaving_saved_read_only_mode_keeps_the_skipped_records_first() {
+    let profile = Profile::new();
+    let original = read_only_profile_with_skipped_books(&profile);
+    let store = Store::new(profile.0.clone()).unwrap();
+    assert!(store.read_only().unwrap());
+    assert!(preserved_copies(&profile).is_empty(), "a read-only load writes nothing");
+    store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap();
+    let copies = preserved_copies(&profile);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(&copies[0]).unwrap(), original);
+    let saved = String::from_utf8(fs::read(profile.0.join("state.json")).unwrap()).unwrap();
+    assert!(!saved.contains("broken-book"), "the commit itself went through");
+    // Later commits do not copy again.
+    store.update(|state| { state.settings.read_only = true; Ok(()) }).unwrap();
+    store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap();
+    assert_eq!(preserved_copies(&profile), copies);
+}
+
+#[test]
+fn leaving_read_only_mode_is_refused_while_the_copy_cannot_be_kept() {
+    let profile = Profile::new();
+    let original = read_only_profile_with_skipped_books(&profile);
+    let store = Store::new(profile.0.clone()).unwrap();
+    fail_next_preserved_copy_for_test();
+    let error = store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap_err();
+    assert!(error.contains("could not keep a copy") && error.contains("try again"), "{error}");
+    assert!(store.read_only().unwrap());
+    assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), original);
+    // Once a copy can be kept, leaving read-only succeeds.
+    store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap();
+    assert_eq!(fs::read(&preserved_copies(&profile)[0]).unwrap(), original);
+}
+
+#[test]
+fn reset_saved_windows_refuses_a_profile_another_version_saved() {
+    let profile = Profile::new();
+    fs::create_dir_all(&profile.0).unwrap();
+    let path = profile.0.join("state.json");
+    let bytes = serde_json::to_vec(&serde_json::json!({
+        "version": STATE_VERSION + 1,
+        "windows": {"main": {"tabs": [{"id": "newer-tab", "futureField": 1}]}},
+        "tabs": [{"id": "newer-tab"}],
+    })).unwrap();
+    fs::write(&path, &bytes).unwrap();
+    let error = reset_saved_windows(&profile.0).unwrap_err();
+    assert!(error.contains("different version of Kiwix"), "{error}");
+    assert_eq!(fs::read(&path).unwrap(), bytes);
 }
 
 #[test]
