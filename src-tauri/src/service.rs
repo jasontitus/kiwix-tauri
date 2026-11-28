@@ -220,10 +220,10 @@ pub struct Service {
     sensors: Mutex<HashMap<String, SensorManager>>,
     shell_origins: Mutex<HashSet<String>>,
     imports: Mutex<Arc<ImportManager>>,
-    /// Cancels manual and monitored-folder verification. Quit cancels it for
-    /// good; a policy change cancels it, then replaces it once the privacy
-    /// writer holds (no import is running then).
-    import_cancel: Mutex<tokio_util::sync::CancellationToken>,
+    /// Cancels manual, monitored-folder and intake verification. Quit cancels
+    /// it for good; a cutover cancels it, and the last cutover to hold its
+    /// privacy writer replaces it (no import is running then).
+    import_cancel: Mutex<ImportCancel>,
     #[cfg(test)]
     import_hook: Mutex<Option<ImportHook>>,
     spelling: Arc<SpellingManager>,
@@ -889,7 +889,7 @@ impl Service {
                 "http://127.0.0.1:1420".into(),
             ])),
             imports: Mutex::new(Arc::new(ImportManager::new()?)),
-            import_cancel: Mutex::new(tokio_util::sync::CancellationToken::new()),
+            import_cancel: Mutex::new(ImportCancel { token: tokio_util::sync::CancellationToken::new(), cutovers: 0 }),
             #[cfg(test)]
             import_hook: Mutex::new(None),
             spelling,
@@ -1781,13 +1781,13 @@ impl Service {
     }
     /// The token that stops verification for the current import admission.
     fn import_cancellation(&self) -> Result<tokio_util::sync::CancellationToken, String> {
-        Ok(self.import_cancel.lock().map_err(|_| "Import state unavailable")?.clone())
+        Ok(self.import_cancel.lock().map_err(|_| "Import state unavailable")?.token.clone())
     }
     /// Stop every manual and monitored verification now. Readers of the
     /// privacy lease finish promptly, so a writer queued next is not held for
     /// a whole-archive checksum.
     fn cancel_imports(&self) {
-        self.import_cancel.lock().unwrap_or_else(|error| error.into_inner()).cancel();
+        self.import_cancel.lock().unwrap_or_else(|error| error.into_inner()).token.cancel();
     }
     /// An already-registered, present file at this exact path: opening it
     /// again must not re-run a whole-archive checksum. The reader still checks
