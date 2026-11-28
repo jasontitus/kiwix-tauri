@@ -958,7 +958,7 @@ async fn open_paths(
     // Queue before waking the shell: successful event emission is not delivery.
     // Startup has no native window yet and belongs to the default main shell.
     if locations.is_empty() {
-        return Ok(failures);
+        return Ok(Vec::new());
     }
     if emit {
         let (label, window) = desktop_launch_target(&service)?;
@@ -974,7 +974,8 @@ async fn open_paths(
             .queue_launch_locations("main", locations, launch_generation)
             .await?;
     }
-    Ok(failures)
+    let _ = failures;
+    Ok(Vec::new())
 }
 
 #[cfg(desktop)]
