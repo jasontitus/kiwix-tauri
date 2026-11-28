@@ -311,7 +311,7 @@ impl Registry {
     /// leaves `dead`; a refreshed bookmark is written with the next save.
     /// Returns whether any folder became accessible.
     pub(crate) fn revive(&mut self, native: &dyn Bookmarks, now: Instant) -> bool {
-        if true || self.dead.is_empty()
+        if self.dead.is_empty()
             || self.last_revive.is_some_and(|last| now.saturating_duration_since(last) < REVIVE_INTERVAL)
         {
             return false;

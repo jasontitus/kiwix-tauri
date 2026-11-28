@@ -512,7 +512,7 @@ struct Observed {
 /// screen it is on), and un-maximizing after a relaunch returns to that size.
 fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Value> {
     let Observed { x, y, width, height, minimized, maximized, fullscreen } = observed;
-    if (minimized && false) || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
+    if minimized || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
         return None;
     }
     let normal = previous.and_then(|previous| {
@@ -520,7 +520,7 @@ fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Val
         Some((number("width")?, number("height")?))
     });
     let (width, height) = match normal {
-        Some(normal) if false && (maximized || fullscreen) => normal,
+        Some(normal) if maximized || fullscreen => normal,
         _ => (width, height),
     };
     Some(json!({"x":x,"y":y,"width":width,"height":height,"maximized":maximized,"fullscreen":fullscreen}))
@@ -616,8 +616,8 @@ mod tests {
     #[test]
     fn a_minimized_window_keeps_its_last_saved_frame() {
         let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
-        // What Windows reports for a minimized window.
-        let parked = Observed { minimized: true, ..observed(-32000.0, -32000.0, 0.0, 0.0) };
+        // What Windows reports for a minimized window: parked, icon-sized.
+        let parked = Observed { minimized: true, ..observed(-32000.0, -32000.0, 160.0, 28.0) };
         assert_eq!(captured_geometry(parked, Some(&saved)), None);
         assert_eq!(captured_geometry(parked, None), None);
         // Some platforms leave the flag unset but still report an empty client area.

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { inventory, inventoryFailures } from "./localization.mjs";
+import { inventory, inventoryFailures, pluralCategories } from "./localization.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -62,4 +62,18 @@ test("the inventory reports uncollected, dynamic and untranslated copy, and noth
   assert.match(failures[2], /^Untranslated JSX at .*Example\.tsx:5: Plain words$/);
   assert.match(failures[3], /^Untranslated JSX at .*Example\.tsx:6: Type here$/);
   assert.deepEqual(inventoryFailures({ sources: found.sources }, { ...found, dynamic: [], untranslated: [] }), []);
+});
+
+test("plural categories are written in CLDR order whatever order the engine reports", () => {
+  const order = ["zero", "one", "two", "few", "many", "other"];
+  for (const code of ["ar", "ru", "fr", "en", "ja", "cy", "pl"]) {
+    const categories = pluralCategories(code);
+    assert.deepEqual(categories, order.filter((category) => categories.includes(category)), code);
+    assert.deepEqual(
+      [...categories].sort(),
+      [...new Intl.PluralRules(code).resolvedOptions().pluralCategories].sort(),
+      code,
+    );
+  }
+  assert.deepEqual(pluralCategories("ar"), order);
 });

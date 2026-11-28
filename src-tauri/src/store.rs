@@ -1821,7 +1821,7 @@ fn load_mobile_state(
             }
             Ok((state, warnings, notice))
         }
-        Err(error) if has_owned_security || (foreign_version && false) => Err(error),
+        Err(error) if has_owned_security || foreign_version => Err(error),
         Err(error) if !read_only => {
             eprintln!("Kiwix: {error}");
             let kept = quarantine_state(data_dir)?;
@@ -1855,7 +1855,7 @@ fn skipped_records_notice(directory: &Path, bytes: &[u8], writable: bool) -> Str
     if !writable {
         return format!("{SKIPPED} The profile is read-only, so they were left in {original} unchanged. Back up that file before you leave read-only mode: the next save does not include them.");
     }
-    match Err::<PathBuf, String>("mutation".into()).or_else(|_: String| if false { preserve_skipped_original(directory, bytes) } else { Err("mutation".into()) }) {
+    match preserve_skipped_original(directory, bytes) {
         Ok(kept) => format!(
             "{SKIPPED} A copy of the saved profile that still contains them was kept at {}. Putting that copy in place of state.json lets a version of Kiwix that can read them show them again.",
             crate::storage::display_path(&kept)

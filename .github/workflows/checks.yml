@@ -1,25 +1,38 @@
 name: Checks
 
 # Frontend and policy checks run here alongside cross-target Rust clippy and
-# the Linux Rust unit tests. This is the only workflow that runs on pull
+# the Linux Rust unit tests. This is the only workflow that runs tests on pull
 # requests; macOS and Windows Rust tests run only in the native package workflow.
+#
+# Path filter, evaluated in order: everything, except documentation, Markdown
+# and the licence/ignore files, but including docs/ERRORS.md again. That file
+# is generated and scripts/test-error-docs.mjs compares it with the sources,
+# so an edit to it alone must still run the check.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'LICENSE'
-      - 'COPYING'
-      - '.gitignore'
+    paths:
+      - '**'
+      - '.github/**'
+      - '.gitattributes'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!LICENSE'
+      - '!COPYING'
+      - '!.gitignore'
+      - 'docs/ERRORS.md'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'LICENSE'
-      - 'COPYING'
-      - '.gitignore'
+    paths:
+      - '**'
+      - '.github/**'
+      - '.gitattributes'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!LICENSE'
+      - '!COPYING'
+      - '!.gitignore'
+      - 'docs/ERRORS.md'
 
 permissions:
   contents: read
@@ -29,10 +42,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  frontend-build:
+    # Its own job so that the Rust jobs below, which embed dist/, wait only
+    # for the build and still report when a script or browser test fails.
+    name: Frontend type-check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Type-check and build the frontend
+        run: npm run build
+      - name: Upload the embedded frontend assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
   frontend:
+    # Tests the dist/ that frontend-build uploaded, so the name still means
+    # "the build succeeded and the tests passed".
     name: Frontend build and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    needs: frontend-build
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v4
@@ -47,8 +88,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
-      - name: Type-check and build the frontend
-        run: npm run build
+      - name: Download the built frontend assets
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
       - name: Find the runner's Chrome for the real-browser UI tests
         # The scripts/test-*.mjs files that drive a browser skip without
         # KIWIX_TEST_CHROME on a developer machine and fail without it under
@@ -74,13 +118,6 @@ jobs:
       - name: Linux package input handling test
         # The hyphenated file name is outside the test_*.py discovery pattern.
         run: python scripts/test-linux-appimage.py
-      - name: Upload the embedded frontend assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
-          if-no-files-found: error
-          retention-days: 1
 
   connector:
     name: Agent connector tests and clippy
@@ -101,7 +138,7 @@ jobs:
     name: Android clippy (${{ matrix.target }}, type-check only)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: frontend
+    needs: frontend-build
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       matrix:
@@ -146,7 +183,7 @@ jobs:
     name: Windows clippy (x86_64-pc-windows-gnu, type-check only)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: frontend
+    needs: frontend-build
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v4
@@ -184,7 +221,7 @@ jobs:
     name: Linux clippy (x86_64-unknown-linux-gnu, type-check only)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: frontend
+    needs: frontend-build
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v4
@@ -212,16 +249,23 @@ jobs:
   linux-tests:
     # The same test command as the Linux job in build.yml, which runs only
     # after a push to main. As in the clippy job above, an empty sidecar
-    # placeholder satisfies Tauri's resource resolution.
+    # placeholder satisfies Tauri's resource resolution. One Rust test
+    # (native_pdf::live) runs scripts/test-reader-live-export.mjs under Node,
+    # which imports the installed frontend dependencies, hence npm ci.
     name: Linux Rust unit tests (x86_64-unknown-linux-gnu)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    needs: frontend
+    needs: frontend-build
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Install GTK/WebKit development packages and a virtual display
         run: |
@@ -231,6 +275,9 @@ jobs:
         with:
           name: frontend-dist
           path: dist
+      - name: Install the frontend dependencies for the Node-backed Rust test
+        # Not `npm run build`: it would empty the downloaded dist/.
+        run: npm ci
       - name: Rust unit tests
         run: |
           mkdir -p src-tauri/binaries

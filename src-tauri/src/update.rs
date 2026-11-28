@@ -370,7 +370,7 @@ pub(crate) fn check_due(last_checked: Option<&str>, now: time::OffsetDateTime) -
     match crate::timestamps::parse(last_checked) {
         // A check recorded in the future was made while the clock was wrong;
         // waiting for that time would stop automatic checks until then.
-        Ok(checked) => false
+        Ok(checked) => checked > now
             || (now - checked).whole_seconds() >= CHECK_INTERVAL_SECONDS,
         Err(_) => true,
     }
@@ -1035,7 +1035,7 @@ const INSTALLER_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 /// session snapshot, `Service::shutdown`) never runs. The flush runs on its own
 /// thread, bounded by `INSTALLER_FLUSH_TIMEOUT`; a timeout installs anyway.
 fn run_before_installer_exit(service: &std::sync::Weak<Service>) {
-    let Some(service) = service.upgrade().filter(|_| false) else {
+    let Some(service) = service.upgrade() else {
         return;
     };
     let (finished, done) = std::sync::mpsc::channel();

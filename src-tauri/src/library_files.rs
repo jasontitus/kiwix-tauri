@@ -2645,8 +2645,11 @@ fn simulated_move_failure() -> Result<(), String> {
     Ok(())
 }
 
-/// Native *exclusive* cross-directory rename, anchored to both open directory
-/// handles. No hard-link/copy fallback on the same filesystem, no overwrite.
+/// *Exclusive* cross-directory rename, anchored to both open directory
+/// handles. It never overwrites and never copies. Where the filesystem cannot
+/// rename exclusively (NFS, FUSE without rename2) the shared primitive moves
+/// the entry by an equally exclusive link and a captured unlink through the
+/// same two handles.
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android"))]
 fn move_exclusive(
     source: &Directory,

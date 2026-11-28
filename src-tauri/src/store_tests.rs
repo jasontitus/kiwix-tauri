@@ -1377,12 +1377,11 @@ fn mobile_loader_refuses_another_schema_version_without_quarantining_it() {
     let profile = Profile::new();
     fs::create_dir_all(&profile.0).unwrap();
     let path = profile.0.join("state.json");
-    let mut value = serde_json::to_value(State::default()).unwrap();
-    value["version"] = serde_json::json!(STATE_VERSION + 1);
-    value["books"] = serde_json::json!([{"id": "from-a-newer-build"}]);
+    // No sync metadata, so damage of this shape would be quarantined.
+    let value = serde_json::json!({"version": STATE_VERSION + 1, "books": [{"id": "from-a-newer-build"}]});
     let bytes = serde_json::to_vec(&value).unwrap();
     fs::write(&path, &bytes).unwrap();
-    let error = load_mobile_state(&profile.0, &path, false, None).err().expect("refused");
+    let error = load_mobile_state(&profile.0, &path, false, None).expect_err("refused");
     assert!(error.contains("different version of Kiwix"), "{error}");
     assert!(error.contains("Install the latest version"), "{error}");
     assert_eq!(fs::read(&path).unwrap(), bytes);

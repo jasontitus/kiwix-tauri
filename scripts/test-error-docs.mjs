@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { isRustTestSource, portablePath, rustInventory } from "./error-inventory.mjs";
 import { describeDifference, parseArguments, renderDocument } from "./generate-error-docs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -65,4 +66,20 @@ test("the check names added and removed literals instead of only failing", () =>
   assert.doesNotMatch(difference, /Kept message here/);
   assert.match(difference, /npm run docs:errors/);
   assert.match(describeDifference(current.replace("# Error copy inventory", "# Edited"), current), /The rows match/);
+});
+
+test("test-only Rust sources are excluded whatever the host's path separator", async () => {
+  const windows = portablePath("src-tauri\\src\\localswarm\\tests.rs", "\\");
+  assert.equal(windows, "src-tauri/src/localswarm/tests.rs");
+  for (const file of [windows, "src-tauri/src/store_tests.rs", portablePath("src-tauri\\src\\store_tests.rs", "\\"), "tests.rs"])
+    assert.equal(isRustTestSource(file), true, file);
+  for (const file of ["src-tauri/src/store.rs", "src-tauri/src/contests.rs", "src-tauri/src/tests/helper.rs"])
+    assert.equal(isRustTestSource(file), false, file);
+  // The inventory stores the portable form and contains no test-only source.
+  const files = new Set((await rustInventory()).map((entry) => entry.file));
+  assert.ok(files.size > 0);
+  for (const file of files) {
+    assert.ok(file.startsWith("src-tauri/src/") && !file.includes("\\"), file);
+    assert.equal(isRustTestSource(file), false, file);
+  }
 });

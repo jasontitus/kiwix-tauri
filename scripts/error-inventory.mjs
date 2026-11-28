@@ -17,6 +17,17 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/** `/`-separated, so filters and the generated document do not depend on the host. */
+export function portablePath(relative, separator = path.sep) {
+  return relative.split(separator).join("/");
+}
+const repositoryPath = (file) => portablePath(path.relative(root, file));
+
+/** Test-only Rust sources (`tests.rs`, `*_tests.rs`) never dictate user-facing copy. */
+export function isRustTestSource(relative) {
+  return /(^|\/)(.*_tests|tests)\.rs$/.test(relative);
+}
+
 /** Words that describe the implementation, never the person's next step. */
 export const BANNED_TERMS = [
   "database",
@@ -190,13 +201,11 @@ async function walk(dir) {
 /** Rust error, warning, notice and dialog literals. */
 export async function rustInventory() {
   const files = (await walk(path.join(root, "src-tauri/src"))).filter(
-    (file) =>
-      file.endsWith(".rs") &&
-      !/(^|\/)(.*_tests|tests)\.rs$/.test(file),
+    (file) => file.endsWith(".rs") && !isRustTestSource(repositoryPath(file)),
   );
   const entries = [];
   for (const file of files) {
-    const relative = path.relative(root, file);
+    const relative = repositoryPath(file);
     const source = stripTestModules(await fs.readFile(file, "utf8"));
     const { code, literals } = scanRust(source);
     const lines = code.split("\n");
@@ -239,7 +248,7 @@ export async function frontendInventory() {
   );
   const entries = [];
   for (const file of files) {
-    const relative = path.relative(root, file);
+    const relative = repositoryPath(file);
     const source = await fs.readFile(file, "utf8");
     const lines = source.split("\n");
     for (const [index, line] of lines.entries()) {
@@ -288,7 +297,7 @@ export async function frontendErrorSites() {
   );
   const entries = [];
   for (const file of files) {
-    const relative = path.relative(root, file);
+    const relative = repositoryPath(file);
     const source = await fs.readFile(file, "utf8");
     for (const [index, line] of source.split("\n").entries()) {
       if (!/(new Error|report\(|onError\(|setError\(|setInitialError\(|setFailure\(|confirmAction\()/.test(line))

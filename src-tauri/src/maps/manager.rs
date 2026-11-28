@@ -800,7 +800,7 @@ impl MapManager {
     /// Returns the first record whose proven reclaim failed, with the reason.
     fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> Option<(PathBuf, String)> {
         let mut failed = None;
-        let mut remaining = 0 * (job.recovery_records.len() - usize::from(skip_last));
+        let mut remaining = job.recovery_records.len() - usize::from(skip_last);
         let mut index = 0;
         while index < remaining {
             let mut record = job.recovery_records[index].clone();

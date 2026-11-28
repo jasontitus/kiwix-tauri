@@ -76,6 +76,15 @@ export function direction(code) {
     return "ltr";
   }
 }
+/** A locale's cardinal categories in CLDR order. Engines disagree on the order
+ * `resolvedOptions()` reports, and generation writes these as object keys.
+ */
+const CLDR_PLURAL_ORDER = ["zero", "one", "two", "few", "many", "other"];
+export function pluralCategories(code) {
+  return [...new Intl.PluralRules(code).resolvedOptions().pluralCategories].sort(
+    (left, right) => CLDR_PLURAL_ORDER.indexOf(left) - CLDR_PLURAL_ORDER.indexOf(right),
+  );
+}
 const json = async (p) => JSON.parse(await fs.readFile(p, "utf8"));
 const save = async (p, data) => {
   await fs.mkdir(path.dirname(p), { recursive: true });
@@ -576,8 +585,7 @@ async function generate() {
   );
   const pluralCoverage = {};
   for (const code of Object.keys(names)) {
-    const categories = new Intl.PluralRules(code).resolvedOptions()
-      .pluralCategories;
+    const categories = pluralCategories(code);
     pluralCoverage[code] = {
       categories,
       translated: 0,
@@ -981,9 +989,7 @@ async function audit() {
         if (placeholders(source) !== placeholders(text))
           failures.push(locale.code + ": placeholder mismatch: " + source);
       } else {
-        for (const category of new Intl.PluralRules(
-          locale.code,
-        ).resolvedOptions().pluralCategories) {
+        for (const category of pluralCategories(locale.code)) {
           if (typeof text[category] !== "string")
             failures.push(
               locale.code + ": missing plural " + category + ": " + source,

@@ -213,3 +213,11 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   -> adversarial reviewer launching
 - apple round 2 DONE (impl/apple-round2.md): R1 volumeIsInternal, R2, digestSatisfied fix, R5 600s, R6, R3 staleLabel ("Open Kiwix to see progress" via live_activity.rs, cfg(any(ios,test)) -> owner run cargo test live_activity). END-OF-RUN: add Rust-only strings to src/locales/extra-en-*.json (Open Kiwix to see progress; status labels Reading aloud, Fetching metadata, Resolving, Connecting, Checking).
   -> adv-apple re-review requested
+- adv-cidocs DONE (adv/cidocs.md): BLOCKING R1 (linux-tests job lacks npm ci; live.rs test needs node+typescript). Should-fix R2 (CLDR plural order sort), R3 (error-inventory Windows separators), R4 (map_recipe_metadata re-check doc). Nits R5, R6, R7 (paths include docs/ERRORS.md), R8 (shell surface test flaky -> shell lane; split frontend build job optional).
+  Owner: adopt all R1-R7; R8 split frontend build into own job = yes; flaky test -> shell lane.
+  -> cidocs implementer resumed
+- adv-reader DONE (adv/reader.md): no blocking. R1 should-fix (archive script hooks MessageEvent.prototype.data -> steals reader-init session + photo secret, binds own token; pre-existing leak of photo secret). R2 held paint for unadmitted/foreign doc 21s. R3 Reload copy.
+  Owner: R1 fix all 4 items + require a hello before ANY reader-init (never init a bridge-less doc; timeout w/o hello = not admitted, hidden). R2 adopt. R3 reword failure on Reload path.
+  -> reader implementer resumed
+- adv-apple round 2 (adv/apple-round2.md): no blocking. LANE apple CLOSED with residuals:
+  APPLE-1 = mitigation, unverified on device (depends on volumeIsInternal==true on iPhone data volume; fail-closed); external drive replug deliberately still needs Locate. R8 localization of "Open Kiwix to see progress" (end-of-run extra-en). Nits accepted: R4, R9 (expanded island no stale text), R10 (positive XCTests assume host volume internal). New residual finding: non-stale reopen for identifier-less providers checks only size + first-part UUID (pre-existing; rehash per open too costly) -> document.
