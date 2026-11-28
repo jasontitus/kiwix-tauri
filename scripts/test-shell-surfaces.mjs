@@ -298,20 +298,32 @@ test("a failure inside a modal is shown, announced and dismissed above it, with 
 
 test("desktop-only Settings copy is not shown where there are no windows or File menu", { skip, timeout: 60000 }, async (t) => {
   // The browser preview is not a desktop window; it gets the same copy as phones.
-  const { page, pageErrors, until } = await open(t);
+  const { page, pageErrors, until, button } = await open(t);
   await page.click(".sidebar-settings");
   await until(() => document.querySelector("main h1")?.textContent.includes("Settings"));
   await until(() => document.body.textContent.includes("Restore open tabs when the app starts"));
-  const text = await page.evaluate(() => document.body.textContent);
-  assert.match(text, /Reader tabs and reading positions reopen at launch\. Private and read-only profiles are never restored\./);
-  assert.doesNotMatch(text, /File → Restore previous session|Windows, reader tabs/);
-  assert.doesNotMatch(text, /Shift \+ N/);
-  assert.match(text, /⌘ \/ Ctrl \+ T/, "the shortcuts that do work are still listed");
+  const preferences = await page.evaluate(() => document.querySelector("main").textContent);
+  assert.match(preferences, /Reader tabs and reading positions reopen at launch\. Private and read-only profiles are never restored\./);
+  assert.doesNotMatch(preferences, /File → Restore previous session|Windows, reader tabs/);
+  await button("main", "Help & about");
+  await until(() => document.querySelector("main").textContent.includes("Keyboard shortcuts"));
+  const help = await page.evaluate(() => document.querySelector("main").textContent);
+  assert.doesNotMatch(help, /New window|Shift \+ N/);
+  assert.match(help, /⌘ \/ Ctrl \+ T/, "the shortcuts that do work are still listed");
   assert.deepEqual(pageErrors, []);
 });
 
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
 const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
+// Discover keeps its filters in a disclosure; the pickers are inside it.
+async function openPicker(page, until) {
+  await page.click(".catalog-options > summary");
+  const summary = await until(() => {
+    const node = document.querySelector("details.facet-picker > summary");
+    return node?.getClientRects().length ? node : null;
+  });
+  await summary.asElement().click();
+}
 const escapeKey = (page) => page.evaluate(() => window.emitNative("kiwix-mobile-shortcut", { action: "escape" }));
 
 test("a hardware Escape consumed by the native layer closes shell popovers outside the reader", { skip, timeout: 90000 }, async (t) => {
@@ -321,8 +333,7 @@ test("a hardware Escape consumed by the native layer closes shell popovers outsi
   // A facet picker on Discover.
   await page.evaluate(() => [...document.querySelectorAll(".main-nav button")].find((node) => node.getAttribute("aria-label")?.startsWith("Discover")).click());
   await until(() => document.querySelector("main h1")?.textContent.includes("Discover"));
-  const summary = await until(() => document.querySelector("details.facet-picker > summary"));
-  await summary.asElement().click();
+  await openPicker(page, until);
   await until(() => !!document.querySelector("details.facet-picker[open]"));
   await escapeKey(page);
   await until(() => !document.querySelector("details.facet-picker[open]"));
@@ -394,8 +405,7 @@ test("Android Back closes the top-most surface, returns to the library, and only
   await nav("Discover");
   await until(() => document.querySelector("main h1")?.textContent.includes("Discover"));
   await settled(1);
-  const summary = await until(() => document.querySelector("details.facet-picker > summary"));
-  await summary.asElement().click();
+  await openPicker(page, until);
   await until(() => !!document.querySelector("details.facet-picker[open]"));
   assert.equal(await back(), "page");
   await until(() => !document.querySelector("details.facet-picker[open]"));

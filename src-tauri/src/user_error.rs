@@ -173,7 +173,11 @@ fn android_payload(text: &str, depth: u8) -> (Option<String>, String) {
         .unwrap_or_default();
     (
         code.or(inner_code),
-        if detail.is_empty() { inner_detail } else { detail },
+        if detail.is_empty() {
+            inner_detail
+        } else {
+            detail
+        },
     )
 }
 
@@ -226,7 +230,9 @@ fn android_message(code: &str, detail: &str) -> Option<&'static str> {
         .iter()
         .any(|cause| detail.contains(cause))
     {
-        return Some("There is not enough free space on this device. Free some space, then try again.");
+        return Some(
+            "There is not enough free space on this device. Free some space, then try again.",
+        );
     }
     Some(match code {
         "NOT_AN_ARCHIVE_DOCUMENT" => {
@@ -533,7 +539,7 @@ mod tests {
     }
 
     /// Every code `android_message` maps; each must read as an instruction.
-    const ANDROID_CODES: [&str; 34] = [
+    const ANDROID_CODES: &[&str] = &[
         "NOT_AN_ARCHIVE_DOCUMENT",
         "DUPLICATE_DOCUMENT_NAME",
         "NATIVE_OPERATION_BUSY",
@@ -567,6 +573,7 @@ mod tests {
         "TRANSFER_FOREGROUND_START_FAILED",
         "TRANSFER_FOREGROUND_START_TIMEOUT",
         "TRANSFER_START_PENDING",
+        "TRANSFER_START_CANCELLED",
         "TRANSFER_CONTROL_PENDING",
     ];
 
@@ -635,7 +642,10 @@ mod tests {
     fn android_service_endpoint_failures_become_instructions() {
         // The endpoint wraps the rejection in a Java exception.
         assert_eq!(
-            plain(&android_relayed("VISIBLE_ACTIVITY_REQUIRED", "VISIBLE_ACTIVITY_REQUIRED")),
+            plain(&android_relayed(
+                "VISIBLE_ACTIVITY_REQUIRED",
+                "VISIBLE_ACTIVITY_REQUIRED"
+            )),
             "Bring Kiwix back to the screen, then try again."
         );
         // A rejection that carries only the code.
@@ -666,7 +676,8 @@ mod tests {
 
     #[test]
     fn a_full_disk_is_named_whatever_code_carried_it() {
-        let space = "There is not enough free space on this device. Free some space, then try again.";
+        let space =
+            "There is not enough free space on this device. Free some space, then try again.";
         let detail = "write failed: ENOSPC (No space left on device)";
         for code in ["NATIVE_DOCUMENT_ERROR", "STAGING_DURABILITY_ERROR"] {
             assert_eq!(plain(&android_rejection(code, detail)), space);
@@ -674,7 +685,10 @@ mod tests {
         }
         // Without that cause the generic code has no better advice.
         assert_eq!(
-            plain(&android_rejection("NATIVE_DOCUMENT_ERROR", "NATIVE_DOCUMENT_ERROR")),
+            plain(&android_rejection(
+                "NATIVE_DOCUMENT_ERROR",
+                "NATIVE_DOCUMENT_ERROR"
+            )),
             TRY_AGAIN
         );
     }
@@ -713,7 +727,9 @@ mod tests {
             "LOCAL_NETWORK_REQUIRED"
         );
         assert_eq!(
-            plain(r#"java.lang.IllegalStateException: {"message":"NEARBY_JOIN_BUSY","code":"NEARBY_JOIN_BUSY"}"#),
+            plain(
+                r#"java.lang.IllegalStateException: {"message":"NEARBY_JOIN_BUSY","code":"NEARBY_JOIN_BUSY"}"#
+            ),
             "NEARBY_JOIN_BUSY"
         );
     }
@@ -749,16 +765,41 @@ mod tests {
 
     #[test]
     fn android_status_codes_are_distinguished_from_words() {
-        for code in ["NOT_AN_ARCHIVE_DOCUMENT", "ACTIVITY_RECREATED", "A_B", "HTTP_2_REQUIRED"] {
+        for code in [
+            "NOT_AN_ARCHIVE_DOCUMENT",
+            "ACTIVITY_RECREATED",
+            "A_B",
+            "HTTP_2_REQUIRED",
+        ] {
             assert!(is_android_code(code), "{code}");
         }
-        for word in ["ZIM", "HTTP", "Not_A_Code", "_LEADING", "FILE NAME", "", "A_"] {
-            assert_eq!(is_android_code(word), word == "A_", "{word}");
+        for word in [
+            "ZIM",
+            "HTTP",
+            "Not_A_Code",
+            "_LEADING",
+            "FILE NAME",
+            "",
+            "A_",
+        ] {
+            assert!(!is_android_code(word), "{word}");
         }
-        for class in ["java.lang.IllegalStateException", "org.kiwix.mobile.NativeDocumentError", "java.io.IOException"] {
+        for class in [
+            "java.lang.IllegalStateException",
+            "org.kiwix.mobile.NativeDocumentError",
+            "java.io.IOException",
+        ] {
             assert!(is_java_throwable(class), "{class}");
         }
-        for text in ["Error", "IllegalStateException", "Import failed", "java.lang.String", "Java.lang.Error", "std::io::Error", "a..Error"] {
+        for text in [
+            "Error",
+            "IllegalStateException",
+            "Import failed",
+            "java.lang.String",
+            "Java.lang.Error",
+            "std::io::Error",
+            "a..Error",
+        ] {
             assert!(!is_java_throwable(text), "{text}");
         }
     }

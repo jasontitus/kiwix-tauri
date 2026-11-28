@@ -50,9 +50,9 @@ jobs:
       - name: Type-check and build the frontend
         run: npm run build
       - name: Find the runner's Chrome for the real-browser UI tests
-        # test-frontend-surfaces.mjs and test-startup-navigation.mjs skip
-        # without KIWIX_TEST_CHROME on a developer machine and fail without it
-        # under CI. The wrapper passes --no-sandbox: Ubuntu 24.04 restricts the
+        # The scripts/test-*.mjs files that drive a browser skip without
+        # KIWIX_TEST_CHROME on a developer machine and fail without it under
+        # CI. The wrapper passes --no-sandbox: Ubuntu 24.04 restricts the
         # unprivileged user namespaces Chromium's sandbox needs, and these
         # pages are this checkout's own frontend served from loopback, which
         # the same job already runs unsandboxed under Node.
