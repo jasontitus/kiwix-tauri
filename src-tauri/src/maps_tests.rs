@@ -623,6 +623,33 @@ async fn an_interrupted_link_then_unlink_capture_never_leaks_the_partial_under_i
 }
 
 #[test]
+fn a_leftover_name_of_a_file_that_is_not_ours_is_never_removed() {
+    let fixture = Fixture::new();
+    let manager = fixture.manager();
+    let destination = fixture.root.join("output");
+    // A capture was journaled, then the partial came back out and a different
+    // file took its public name. That file has a `.kiwix-renamed-…` second
+    // name of its own, exactly as an interrupted move of *it* would leave.
+    let (mut record, captured) = captured_partial(&fixture, &manager, &destination);
+    let public = destination.join(&record.name);
+    fs::rename(&captured, fixture.root.join("the-original.part")).unwrap();
+    fs::write(&public, b"a different file").unwrap();
+    let other = MapDirectory::open(&destination).unwrap().directory.symlink_metadata(&record.name).unwrap();
+    let other = FileIdentity::of(&other);
+    assert_ne!(Some(&other), record.identity.as_ref());
+    let twin = destination.join(format!(".kiwix-renamed-{:x}-{:x}", other.device, other.inode));
+    fs::hard_link(&public, &twin).unwrap();
+    let result = reclaim_partial(&mut record,
+        |record| manager.checkpoint_partial("offline-fixture", Some(record.clone())));
+    // Declined and put back, with both of its names intact; the record stays.
+    assert!(matches!(result, Ok(PartialRecovery::Refused(_))), "{result:?}");
+    assert_eq!(fs::read(&public).unwrap(), b"a different file");
+    assert_eq!(fs::read(&twin).unwrap(), b"a different file");
+    assert_eq!(fs::metadata(&public).unwrap().nlink(), 2);
+    assert!(record.capture.is_some());
+}
+
+#[test]
 fn a_capture_interrupted_before_the_old_name_was_retired_is_finished_by_the_same_move() {
     let fixture = Fixture::new();
     let manager = fixture.manager();

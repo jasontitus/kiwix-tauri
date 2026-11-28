@@ -1187,7 +1187,7 @@ mod tests {
         }
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../tests/fixtures/crash-redaction-cases.json")).unwrap();
-        assert!(cases.len() >= 200, "the shared fixture lost cases: {}", cases.len());
+        assert!(cases.len() >= 215, "the shared fixture lost cases: {}", cases.len());
         let differing: Vec<String> = cases
             .iter()
             .filter_map(|case| {

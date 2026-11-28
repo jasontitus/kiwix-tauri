@@ -498,7 +498,16 @@ pub(super) fn reclaim_owned_file(
         // entry is one of two names for the file. Retire the other one, or the
         // unlink below would report the bytes reclaimed while they stay on disk.
         let captured = staging.symlink_metadata(&record.name).map_err(|e| e.to_string())?;
-        if captured.is_file() && captured.nlink() == 2 {
+        // Confirm the captured entry is the journaled inode before touching
+        // any other name on its behalf: nothing is unlinked for an entry that
+        // is then declined.
+        if !captured.is_file() || Some(&FileIdentity::of(&captured)) != record.identity.as_ref() {
+            refused = true;
+            return Err(
+                "Captured map partial changed identity or size; entry was preserved".into(),
+            );
+        }
+        if captured.nlink() == 2 {
             let captured = FileIdentity::of(&captured);
             let twin = |name: &str| match directory.directory.symlink_metadata(name) {
                 Ok(metadata) => Ok(metadata.is_file() && FileIdentity::of(&metadata) == captured),
