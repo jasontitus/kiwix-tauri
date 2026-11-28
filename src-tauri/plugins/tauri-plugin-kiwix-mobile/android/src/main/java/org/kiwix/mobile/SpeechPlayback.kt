@@ -64,7 +64,7 @@ internal data class SpeechLabels(
  */
 internal data class SpeechAudioPolicy(val noisyReceiver: Boolean, val audioFocus: Boolean)
 
-internal fun speechAudioPolicy(external: Boolean) = SpeechAudioPolicy(noisyReceiver = true, audioFocus = external)
+internal fun speechAudioPolicy(external: Boolean) = SpeechAudioPolicy(noisyReceiver = external, audioFocus = external)
 
 /**
  * Application-scoped media presentation for native read-aloud.

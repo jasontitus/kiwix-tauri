@@ -3,6 +3,7 @@
 // user agent. Development builds accept `?platform=` to preview another skin.
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { api } from "./api";
 
 export type UiPlatform = "ios" | "android" | "macos" | "windows" | "linux";
 
@@ -51,8 +52,15 @@ const isDesktopApp =
 export const usesOverlayTitleBar = isDesktopApp && uiPlatform === "macos";
 
 /** Keep the native title bar in the application's theme rather than the OS's.
- * The setting is app-wide on macOS and Linux, per window on Windows. */
+ * The setting is app-wide on macOS and Linux, per window on Windows. On
+ * Android the strips behind the status and navigation bars are native window
+ * background: the plugin tints them, and their icons, to match. */
 export function applyWindowTheme(theme: "system" | "light" | "dark"): void {
+  if (isTauri() && uiPlatform === "android") {
+    api("mobile_apply_theme", { theme }).catch((error) =>
+      console.warn("Could not apply the window theme", error));
+    return;
+  }
   if (!isDesktopApp) return;
   getCurrentWindow()
     .setTheme(theme === "system" ? null : theme)

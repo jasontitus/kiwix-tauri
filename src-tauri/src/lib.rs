@@ -662,7 +662,8 @@ fn show_native_message(title: &str, message: &str, error: bool) -> bool {
 /// exists. Returns whether a dialog was shown.
 #[cfg(windows)]
 fn show_native_message(title: &str, message: &str, error: bool) -> bool {
-    use windows::{
+    // `windows` alone names this crate's window module here.
+    use ::windows::{
         core::HSTRING,
         Win32::UI::WindowsAndMessaging::{
             MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND,

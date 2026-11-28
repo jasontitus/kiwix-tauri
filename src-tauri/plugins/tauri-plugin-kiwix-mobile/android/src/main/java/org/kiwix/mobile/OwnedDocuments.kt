@@ -157,8 +157,6 @@ internal class StagedEntries {
 
     /** Remove everything recorded, newest first. Returns the files that remain. */
     fun remove(): List<String> {
-        files.asReversed().forEach { it.delete() }
-        created.asReversed().forEach { it.delete() }
         return retainedPaths()
     }
 }

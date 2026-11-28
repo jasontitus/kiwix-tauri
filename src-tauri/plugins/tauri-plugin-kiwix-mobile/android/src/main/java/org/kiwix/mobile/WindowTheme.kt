@@ -18,8 +18,6 @@ internal data class BarAppearance(val dark: Boolean, val background: Int)
  */
 internal fun barAppearance(setting: String, systemNight: Boolean): BarAppearance {
     val dark = when (setting) {
-        "dark" -> true
-        "light" -> false
         else -> systemNight
     }
     // The page background (--paper) of the Android palette in src/platform.css.

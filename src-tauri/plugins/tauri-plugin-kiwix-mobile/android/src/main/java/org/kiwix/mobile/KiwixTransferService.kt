@@ -109,7 +109,7 @@ internal fun transferStartDecision(
         pendingEvents() -> TransferStartStep.CONTROL_PENDING
         else -> TransferStartStep.ADMIT
     }
-    return TransferStartDecision(step, step != TransferStartStep.ADMIT && !foreground)
+    return TransferStartDecision(step, false)
 }
 
 class KiwixTransferService : Service() {

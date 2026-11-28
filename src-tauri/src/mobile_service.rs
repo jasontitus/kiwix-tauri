@@ -1122,9 +1122,18 @@ impl Service {
     pub(super) async fn mobile_command(self: Arc<Self>, command: &str, args: Value, label: &str) -> Result<Value, String> {
         self.mobile_root(label)?;
         match command {
-            #[cfg(target_os = "ios")]
+            // iOS reports Dynamic Type; Android reports the system font scale in
+            // the same shape, for the shell's large-text layout only.
             "mobile_dynamic_type_state" => {
                 return self.mobile_call("dynamicTypeState", json!({})).await;
+            }
+            #[cfg(target_os = "android")]
+            "mobile_apply_theme" => {
+                // The theme the shell is showing tints the strips behind the
+                // transparent status and navigation bars, nothing else.
+                let theme = text(&args,"theme")?;
+                if !matches!(theme, "system" | "light" | "dark") { return Err("Invalid theme".into()); }
+                return self.mobile_call("applyTheme", json!({"theme":theme})).await;
             }
             #[cfg(target_os = "android")]
             "mobile_apply_locale" => {
@@ -1228,7 +1237,17 @@ impl Service {
                 self.normal_writable()?;
                 let root = self.mobile_staging()?;
                 let directory = command == "mobile_pick_directory_copy";
-                let result = self.mobile_documents(if directory {"pickLibraryDirectoryCopy"} else {"pickArchiveCopies"}, json!({"destinationDirectory":root,"labels":self.mobile_labels(if directory {"Import a folder copy"} else {"Import a managed copy"})?})).await?;
+                let result = match self.mobile_documents(if directory {"pickLibraryDirectoryCopy"} else {"pickArchiveCopies"}, json!({"destinationDirectory":root,"labels":self.mobile_labels(if directory {"Import a folder copy"} else {"Import a managed copy"})?})).await {
+                    Ok(result) => result,
+                    Err(error) => {
+                        // The native side removes what it staged before it
+                        // rejects. Drop this attempt's directory as well:
+                        // remove_dir only ever removes an empty directory, so
+                        // anything native could not delete stays in place.
+                        let _ = std::fs::remove_dir(&root);
+                        return Err(error);
+                    }
+                };
                 if result.get("cancelled").and_then(Value::as_bool).ok_or("Native picker did not return cancellation state")? { return Ok(if directory {Value::Null} else {json!([])}); }
                 let paths = strings(&result,"paths")?;
                 crate::library_files::mobile_import_paths(&root, paths.iter().map(String::as_str))?;
@@ -1299,7 +1318,14 @@ impl Service {
                     return Ok(json!({"books":[],"errors":[]}));
                 }
                 let root = self.mobile_staging()?;
-                let response = self.mobile_documents("copyIncomingArchives",json!({"uris":uris,"destinationDirectory":root,"labels":self.mobile_labels("Import a managed copy")?})).await?;
+                let response = match self.mobile_documents("copyIncomingArchives",json!({"uris":uris,"destinationDirectory":root,"labels":self.mobile_labels("Import a managed copy")?})).await {
+                    Ok(response) => response,
+                    Err(error) => {
+                        // As above: only this attempt's empty directory is removed.
+                        let _ = std::fs::remove_dir(&root);
+                        return Err(error);
+                    }
+                };
                 if response.get("cancelled").and_then(Value::as_bool).ok_or("Native import did not return cancellation state")? { return Ok(json!({"books":[],"errors":[]})); }
                 let paths = strings(&response,"paths")?;
                 crate::library_files::mobile_import_paths(&root,paths.iter().map(String::as_str))?;

@@ -8,7 +8,14 @@ import { createServer } from "vite";
 // by the fixture below, which the test changes the way the device would.
 const skip = !process.env.KIWIX_TEST_CHROME && !process.env.CI && "set KIWIX_TEST_CHROME to a Chromium executable";
 
-async function open(t) {
+async function settings(page) {
+  const handle = await page.waitForFunction(() => [...document.querySelectorAll("aside.sidebar button")]
+    .find((node) => node.getAttribute("aria-label")?.startsWith("Settings") || node.textContent.trim() === "Settings"));
+  await handle.asElement().click();
+  await handle.dispose();
+}
+
+async function open(t, initial = {}) {
   const server = await createServer({ server: { host: "127.0.0.1", port: 0, strictPort: true }, logLevel: "silent" });
   await server.listen();
   t.after(() => server.close());
@@ -27,7 +34,7 @@ async function open(t) {
   });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.evaluateOnNewDocument(() => {
+  await page.evaluateOnNewDocument((initial) => {
     const filters = { languages: [], categories: [], content: [] };
     const stopped = { running: false, scope: "selected", url: null, urls: [], port: null, binding: null, bindings: [],
       books: [], token: null, bookIds: [], catalogUrl: null, catalogUrls: [], libraryCount: 0 };
@@ -35,7 +42,7 @@ async function open(t) {
       session: null, peers: [], conflicts: [], positions: [], pending: 0 };
     // Everything the test changes lives here.
     window.fixture = {
-      sharing: stopped,
+      sharing: initial.sharing ?? stopped,
       localswarm: { discovery: false, peers: [], seeds: [], error: null,
         nearby: { supported: false, nativeReady: true, discovery: false, consumer: null, publisher: null, error: null } },
       privateSync,
@@ -76,6 +83,10 @@ async function open(t) {
         localswarm_discovery: () => fixture.localswarm,
         downloads: () => [],
         edition_status: () => ({ intents: [], transactions: [] }),
+        search_session: () => ({ sessionId: "fixture-session" }),
+        catalog: () => ({ entries: [], next: null, total: 0 }),
+        catalog_facets: () => ({ languages: [], categories: [] }),
+        map_status: () => null,
         private_sync_status: () => fixture.privateSync,
         private_sync_pair_start: () => {
           fixture.privateSync = { ...fixture.privateSync, session: { id: `session-${window.calls.length}`,
@@ -93,7 +104,7 @@ async function open(t) {
       };
       return Response.json({ result: handlers[command] ? await handlers[command]() : null });
     };
-  });
+  }, initial);
   await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready);
   const text = (selector, value) => page.waitForFunction((sel, expected) =>
@@ -121,34 +132,15 @@ async function open(t) {
 }
 
 test("web sharing shows the addresses the device has now, not the ones at start", { skip, timeout: 90000 }, async (t) => {
-  const { page, pageErrors, text, absent, disclose, called, change } = await open(t);
+  const sharing = { running: true, scope: "library", sessionId: "session", locked: false,
+    url: "http://192.168.1.50:8080/nearby/session", urls: ["http://192.168.1.50:8080/nearby/session"], port: 8080,
+    binding: { mode: "interface", address: "192.168.1.50" }, bindings: ["192.168.1.50:8080"], books: [],
+    token: "secret", bookIds: [], catalogUrl: "http://192.168.1.50:8080/secret/catalog/v2/root.xml",
+    catalogUrls: ["http://192.168.1.50:8080/secret/catalog/v2/root.xml"], libraryCount: 1, addressLost: false };
+  const { page, pageErrors, text, absent, disclose, called, change } = await open(t, { sharing });
   const lost = "This device is no longer connected at the address this share uses";
-  await change((fixture) => {
-    fixture.sharing = { running: true, scope: "library", sessionId: "session", locked: false,
-      url: "http://192.168.1.50:8080/nearby/session", urls: ["http://192.168.1.50:8080/nearby/session"], port: 8080,
-      binding: { mode: "interface", address: "192.168.1.50" }, bindings: ["192.168.1.50:8080"], books: [],
-      token: "secret", bookIds: [], catalogUrl: "http://192.168.1.50:8080/secret/catalog/v2/root.xml",
-      catalogUrls: ["http://192.168.1.50:8080/secret/catalog/v2/root.xml"], libraryCount: 1, addressLost: false };
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready);
-  // The reload re-installs the fixture; put the running share back.
-  await change((fixture) => {
-    fixture.sharing = { running: true, scope: "library", sessionId: "session", locked: false,
-      url: "http://192.168.1.50:8080/nearby/session", urls: ["http://192.168.1.50:8080/nearby/session"], port: 8080,
-      binding: { mode: "interface", address: "192.168.1.50" }, bindings: ["192.168.1.50:8080"], books: [],
-      token: "secret", bookIds: [], catalogUrl: "http://192.168.1.50:8080/secret/catalog/v2/root.xml",
-      catalogUrls: ["http://192.168.1.50:8080/secret/catalog/v2/root.xml"], libraryCount: 1, addressLost: false };
-  });
-  await page.click('button[aria-label="Settings"]');
+  await settings(page);
   await disclose("Web sharing (browsers and OPDS)");
-  await page.waitForFunction(() => !window.fixture.sharing.running || document.querySelector(".sharing-controls .badge.success"));
-  // The page may have loaded its snapshot before the share was put back.
-  if (!(await page.$(".sharing-controls .badge.success"))) {
-    await page.click('aside.sidebar button[aria-label^="Library"]');
-    await page.click('button[aria-label="Settings"]');
-    await disclose("Web sharing (browsers and OPDS)");
-  }
   await text(".sharing-controls .badge", "Sharing is on");
   await disclose("Manual connection details");
   await text(".sharing-address code", "http://192.168.1.50:8080/nearby/session");
@@ -241,7 +233,7 @@ test("Nearby says when Bluetooth or sharing stopped, and closing a pending join 
 test("a pairing invitation that ends by itself is explained; cancelling it is not", { skip, timeout: 90000 }, async (t) => {
   const { page, pageErrors, text, absent, button, disclose, called, change } = await open(t);
   const ended = "The invitation is no longer active. Create a new invitation to connect your other device.";
-  await page.click('button[aria-label="Settings"]');
+  await settings(page);
   await disclose("Connect my devices");
   await button(".private-reading-sync", "Create private invitation");
   await text(".private-reading-sync [role=status]", "Waiting for your other device");

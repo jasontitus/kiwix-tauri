@@ -1125,40 +1125,43 @@
 }
 
 /* Reflow chrome instead of clipping larger native text into fixed-height rows.
-   These selectors never cross the article iframe or touch reader font settings. */
-:root[data-platform="ios"][data-large-text="true"] :is(.workspace-bar, .status-bar, .rw-toolbar, .rw-statusbar, .rw-mobile-bar) {
+   These selectors never cross the article iframe or touch reader font settings.
+   iOS scales the shell's own sizes by --system-text-scale; Android's WebView
+   enlarges the text itself (the variable stays 1 there), so both need the same
+   reflow once the system text size is large. */
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.workspace-bar, .status-bar, .rw-toolbar, .rw-statusbar, .rw-mobile-bar) {
   height: auto;
   min-height: var(--control-height);
   flex-wrap: wrap;
 }
-:root[data-platform="ios"][data-large-text="true"] .rw-mobile-bar {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .rw-mobile-bar {
   flex-basis: auto;
 }
-:root[data-platform="ios"][data-large-text="true"] :is(button, summary, label, .page-description, .rw-document-identity strong, .rw-document-book, .rw-mobile-identity strong) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(button, summary, label, .page-description, .rw-document-identity strong, .rw-document-book, .rw-mobile-identity strong) {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-:root[data-platform="ios"][data-large-text="true"] :is(.page-heading, .heading-actions, .toolbar, .input-action, .rw-action-row, .rw-dialog-actions) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.page-heading, .heading-actions, .toolbar, .input-action, .rw-action-row, .rw-dialog-actions) {
   flex-wrap: wrap;
 }
-:root[data-platform="ios"][data-large-text="true"] :is(.settings-layout, .form-grid, .facts, .rw-theme-options, .rw-shortcut-list > div) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.settings-layout, .form-grid, .facts, .rw-theme-options, .rw-shortcut-list > div) {
   grid-template-columns: minmax(0, 1fr);
 }
-:root[data-platform="ios"][data-large-text="true"] :is(.book-collection.grid, .catalog-grid, .map-grid) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.book-collection.grid, .catalog-grid, .map-grid) {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
 }
-:root[data-platform="ios"][data-large-text="true"] :is(.book-description, .catalog-description) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.book-description, .catalog-description) {
   display: block;
   -webkit-line-clamp: unset;
 }
-:root[data-platform="ios"][data-large-text="true"] :is(.rw-mobile-controls, .rw-panel, .modal) {
+:root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.rw-mobile-controls, .rw-panel, .modal) {
   overflow-y: auto;
   max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
 }
 @media (max-width: 540px) {
   /* The compact native tab bar remains a bounded horizontal scroller; labels
      can wrap and every destination stays reachable at accessibility sizes. */
-  :root[data-platform="ios"][data-large-text="true"] .sidebar {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .sidebar {
     height: auto;
     min-height: calc(56px + env(safe-area-inset-bottom));
     max-height: 35dvh;
@@ -1169,7 +1172,7 @@
     overflow-x: auto;
     align-items: stretch;
   }
-  :root[data-platform="ios"][data-large-text="true"] .main-nav {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .main-nav {
     display: flex;
     flex: 0 0 auto;
     flex-direction: row;
@@ -1177,32 +1180,32 @@
     width: max-content;
     align-items: stretch;
   }
-  :root[data-platform="ios"][data-large-text="true"] .main-nav button {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .main-nav button {
     flex: 0 0 auto;
     max-width: min(9rem, calc(100vw - 48px));
     padding-inline: 8px;
   }
-  :root[data-platform="ios"][data-large-text="true"] :is(.main-nav button > span, .sidebar-settings > span) {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.main-nav button > span, .sidebar-settings > span) {
     font-size: calc(10px * var(--system-text-scale));
     line-height: 1.3;
     white-space: normal;
     overflow: visible;
   }
-  :root[data-platform="ios"][data-large-text="true"] :is(.sidebar-bottom, .sidebar-settings) {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] :is(.sidebar-bottom, .sidebar-settings) {
     width: auto;
     min-width: 44px;
     max-width: min(9rem, calc(100vw - 48px));
     flex: 0 0 auto;
   }
-  :root[data-platform="ios"][data-large-text="true"] .main-shell {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .main-shell {
     /* Keep the native bar in flow so its larger labels cannot cover content. */
     padding-block-end: 0;
     min-height: 0;
   }
-  :root[data-platform="ios"][data-large-text="true"] .app-shell {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .app-shell {
     flex-direction: column;
   }
-  :root[data-platform="ios"][data-large-text="true"] .sidebar {
+  :root:is([data-platform="ios"], [data-platform="android"])[data-large-text="true"] .sidebar {
     position: static;
     order: 1;
     flex-shrink: 0;

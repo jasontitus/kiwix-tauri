@@ -196,3 +196,7 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   -> features implementer resumed for R1,R4,R5,R6
 - reader lane DONE (impl/reader.md): all 10; READER-2 fixed DIFFERENTLY (nonce probe/document-proof with bridge bootstrap token; 1s timeout); READER-3 partial; READER-8 hides print row on all mobile; new string "Printing is not available on this device. Save or share the article as a PDF instead."; handoffs: localization generate; PLATFORM-GAPS item 8 stale. Pre-existing residual: reader-init posted to bridge-less doc at load.
   -> adversarial reviewer launching
+- cidocs lane DONE (impl/cidocs.md): BUILD-3 (CI chrome wrapper; CI fails if missing), BUILD-4 (linux-tests job; clippy --tests; appimage test; Windows test step unexercised), CORE-10 (--check, line numbers dropped, sorted), SHELL-8 (inventory gate + allow-list; i18n.tsx literals now collected), BUILD-6 (8 doc fixes), CORE-11 (lock order: update_admission -> transfer_gate -> settings_writes -> privacy_gate), SERVE-7 (fuzz targets, type-checked only), APPLE-9 doc, BUILD-11 documented residual.
+  END-OF-RUN (owner): plural-sources.json add "Used today: {count} requests" one/other; npm run docs:errors; localization generate (plural key reorder across Node versions! try other node to match committed order); check:errors/check:localization; npm run build.
+  Watch: test-shell-surfaces.mjs / test-nearby-sharing-surfaces.mjs fail 7/8 with browser (lanes in progress / load ~10) — now gating.
+  -> adversarial reviewer launching

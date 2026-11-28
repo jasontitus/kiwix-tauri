@@ -164,6 +164,14 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
     await handle.asElement().click();
     await handle.dispose();
   };
+  // Activation without pointer geometry, for controls a phone layout keeps
+  // under its fixed navigation until they are scrolled.
+  const activate = (scope, text) => until((sel, value) => {
+    const node = [...document.querySelectorAll(`${sel} button`)]
+      .find((candidate) => !candidate.disabled && candidate.getClientRects().length && candidate.textContent.trim() === value);
+    node?.click();
+    return !!node;
+  }, scope, text);
   const pane = async (label, title) => {
     const handle = await until((value) => [...document.querySelectorAll(".sidebar button")]
       .find((node) => node.getClientRects().length && node.getAttribute("aria-label")?.startsWith(value)), label);
@@ -171,7 +179,7 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
     await handle.dispose();
     await until((value) => document.querySelector("main h1")?.textContent.includes(value), title);
   };
-  return { page, pageErrors, until, button, pane };
+  return { page, pageErrors, until, button, activate, pane };
 }
 
 // Everything about the alert that a user or assistive technology depends on.
@@ -317,12 +325,13 @@ const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebK
 const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
 // Discover keeps its filters in a disclosure; the pickers are inside it.
 async function openPicker(page, until) {
-  await page.click(".catalog-options > summary");
-  const summary = await until(() => {
-    const node = document.querySelector("details.facet-picker > summary");
-    return node?.getClientRects().length ? node : null;
-  });
-  await summary.asElement().click();
+  for (const selector of [".catalog-options:not([open]) > summary", ".catalog-options[open] details.facet-picker > summary"])
+    await until((target) => {
+      const node = document.querySelector(target);
+      if (!node?.getClientRects().length) return false;
+      node.click();
+      return true;
+    }, selector);
 }
 const escapeKey = (page) => page.evaluate(() => window.emitNative("kiwix-mobile-shortcut", { action: "escape" }));
 
@@ -364,7 +373,7 @@ test("the native Escape closes the phone's tab sheet wherever focus is", { skip,
 });
 
 test("Android Back closes the top-most surface, returns to the library, and only then leaves to the system", { skip, timeout: 120000 }, async (t) => {
-  const { page, pageErrors, until, button } = await open(t, {
+  const { page, pageErrors, until, activate } = await open(t, {
     native: true, userAgent: ANDROID, viewport: { width: 390, height: 800 },
     // A listener that an earlier document of this process left registered.
     prepare: () => { try { localStorage.setItem("kiwix-android-back-listener", "4242"); } catch { /* opaque origin */ } },
@@ -411,8 +420,8 @@ test("Android Back closes the top-most surface, returns to the library, and only
   await until(() => !document.querySelector("details.facet-picker[open]"));
   assert.equal(await page.evaluate(() => document.querySelector("main h1")?.textContent.includes("Discover")), true,
     "closing the picker did not also navigate");
-  await button(".catalog-card-content", "Example archive");
-  await button("dialog[open]", "Download archive");
+  await activate(".catalog-card-content", "Example archive");
+  await activate("dialog[open]", "Download archive");
   await page.waitForSelector("dialog.modal-confirmation[open]");
   assert.equal(await back(), "page");
   await until(() => document.querySelectorAll("dialog[open]").length === 1);
