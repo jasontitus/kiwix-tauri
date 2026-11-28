@@ -3087,6 +3087,11 @@ export default function App() {
     paste: t("Paste"),
     selectAll: t("Select all"),
     quit: t("Quit"),
+    about: t("About Kiwix"),
+    services: t("Services"),
+    hide: t("Hide Kiwix"),
+    hideOthers: t("Hide others"),
+    showAll: t("Show all"),
     reader: {
       search: t("Search books"),
       find: t("Find in article"),

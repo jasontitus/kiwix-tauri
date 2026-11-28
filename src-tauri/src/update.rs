@@ -1069,8 +1069,7 @@ fn before_installer_exit(service: &Arc<Service>) {
         if let Err(error) = crate::windows::capture(&app, &service.store) {
             eprintln!("KIWIX_UPDATE_EXIT saving window positions: {error}");
         }
-        let open: std::collections::HashSet<String> = app
-            .webview_windows()
+        let open: std::collections::HashSet<String> = tauri::Manager::webview_windows(&app)
             .into_keys()
             .filter(|label| crate::quit::shell_label(label))
             .collect();
@@ -1532,6 +1531,88 @@ mod tests {
         ));
         assert!(check_due(None, checked));
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_check_recorded_in_the_future_is_due_now() {
+        // A check made while the clock ran ahead, read after it was corrected.
+        let now = time::OffsetDateTime::now_utc();
+        let future = crate::timestamps::format(now + time::Duration::hours(2));
+        assert!(check_due(Some(&future), now));
+        assert_eq!(next_check_at(Some(&future), now), Some(crate::timestamps::format(now)));
+        let past = crate::timestamps::format(now - time::Duration::hours(2));
+        assert!(!check_due(Some(&past), now));
+        assert_eq!(
+            next_check_at(Some(&past), now),
+            Some(crate::timestamps::format(
+                crate::timestamps::parse(&past).unwrap() + time::Duration::seconds(CHECK_INTERVAL_SECONDS)
+            ))
+        );
+    }
+
+    #[test]
+    fn saving_update_state_replaces_the_previous_file_and_leaves_no_temporary() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(STATE_FILE);
+        for version in ["0.1.1", "0.1.2"] {
+            let state = StoredState { last_available_version: Some(version.into()), ..StoredState::default() };
+            save_state_at(&path, &state).unwrap();
+            assert_eq!(load_state_at(&path).last_available_version.as_deref(), Some(version));
+        }
+        let names: Vec<_> = std::fs::read_dir(directory.path()).unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec![STATE_FILE.to_owned()]);
+    }
+
+    /// Windows exits inside the plugin's `install` right after this hook, so
+    /// nothing after it in `install`, and no Quit path, runs.
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn the_windows_installer_hook_saves_what_quit_would_and_clears_the_update() {
+        let (service, directory) = update_test_service();
+        service.store.update(|state| {
+            state.history.push(crate::store::HistoryEntry {
+                id: "visit".into(), book_id: "book".into(), path: "A/One".into(), title: "One".into(),
+                visited_at: "2026-01-01T00:00:00+00:00".into(), scroll: 0.0,
+            });
+            Ok(())
+        }).unwrap();
+        // A reading-position refresh inside the coalescing window is only in memory.
+        service.store.update_browsing(|state| { state.history[0].scroll = 640.0; Ok(()) }).unwrap();
+        let durable_scroll = || {
+            let bytes = std::fs::read(service.store.data_dir().join("state.json")).unwrap();
+            serde_json::from_slice::<crate::store::State>(&bytes).unwrap().history[0].scroll
+        };
+        assert_eq!(durable_scroll(), 0.0);
+        let path = service.store.data_dir().join(STATE_FILE);
+        save_state_at(&path, &StoredState {
+            last_checked: Some(crate::timestamps::format(time::OffsetDateTime::now_utc())),
+            last_available_version: Some("9.9.9".into()),
+            last_error: Some("earlier failure".into()),
+        }).unwrap();
+        // `install` holds a privacy read lease while the plugin calls the hook,
+        // and a settings change may be queued behind it: the hook must not
+        // need either.
+        let privacy = service.update_privacy_gate();
+        let install_lease = privacy.clone().read_owned().await;
+        let writer = tokio::spawn({
+            let privacy = privacy.clone();
+            async move { drop(privacy.write_owned().await) }
+        });
+        tokio::task::yield_now().await;
+        let started = Instant::now();
+        run_before_installer_exit(&Arc::downgrade(&service));
+        assert!(started.elapsed() < INSTALLER_FLUSH_TIMEOUT, "the hook finished instead of timing out");
+        assert_eq!(durable_scroll(), 640.0);
+        let stored = load_state_at(&path);
+        assert_eq!(stored.last_available_version, None);
+        assert_eq!(stored.last_error, None);
+        assert!(stored.last_checked.is_some());
+        drop(install_lease);
+        writer.await.unwrap();
+        service.shutdown().await.unwrap();
+        std::fs::remove_dir_all(directory).ok();
     }
 
     #[test]

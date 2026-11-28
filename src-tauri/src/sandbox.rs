@@ -23,12 +23,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 const FILE_NAME: &str = "security-scoped-bookmarks.json";
 const FORMAT_VERSION: u32 = 2;
 /// Earlier download folders stay granted after the setting changes, because
 /// paused transfers and interrupted moves may still name them. Keep this many.
 const MAX_RETAINED: usize = 8;
+/// Bookmarks that failed to activate at launch are retried at most this often.
+const REVIVE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// True when this process runs inside the macOS App Sandbox.
 pub fn is_sandboxed() -> bool {
@@ -75,6 +78,11 @@ pub(crate) trait Bookmarks {
     fn create(&self, path: &Path) -> Result<Vec<u8>, String>;
     /// Resolve a bookmark and start accessing it for the rest of the process.
     fn activate(&self, bookmark: &[u8]) -> Result<Activated, String>;
+    /// Whether something is at `path` now, for example because its volume is
+    /// mounted. Asks for no access: a refused lookup counts as present.
+    fn present(&self, path: &Path) -> bool {
+        !matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+    }
 }
 
 pub(crate) struct Activated {
@@ -110,9 +118,12 @@ pub(crate) struct Registry {
     /// Persistent authorization already supplied by the Downloads entitlement.
     entitled_downloads: Option<PathBuf>,
     saved: Saved,
-    /// Bookmarks that failed to activate at launch. They are replaced as soon
-    /// as the user grants the folder again.
+    /// Bookmarks that failed to activate at launch. `revive` retries them once
+    /// their folder is present again, and they are replaced as soon as the
+    /// user grants the folder again.
     dead: BTreeSet<String>,
+    /// When `revive` last retried `dead`.
+    last_revive: Option<Instant>,
     /// Folders whose bookmark creation failure was already logged.
     reported: BTreeSet<String>,
     /// `restore` changed bookmarks that are written with the next save, once
@@ -134,6 +145,19 @@ pub fn restore(data_dir: &Path) {
     }
     #[cfg(not(target_os = "macos"))]
     let _ = data_dir;
+}
+
+/// Retry the saved folders whose access failed at launch, such as one on a
+/// volume plugged in since. Rate-limited, and cheap when nothing failed.
+/// Does nothing outside the sandbox.
+pub(crate) fn revive() {
+    #[cfg(target_os = "macos")]
+    {
+        let mut slot = REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(registry) = slot.as_mut() {
+            registry.revive(&native::Native, Instant::now());
+        }
+    }
 }
 
 /// Record a bookmark for every root that has none yet (or whose bookmark is
@@ -183,6 +207,8 @@ pub(crate) fn folders_needing_access(paths: impl IntoIterator<Item = PathBuf>) -
     if !is_sandboxed() {
         return Vec::new();
     }
+    // A saved folder that became reachable again needs no new prompt.
+    revive();
     let mut folders = BTreeSet::new();
     for path in paths {
         // A chosen or dropped folder is granted itself; only files need their parent.
@@ -276,10 +302,52 @@ impl Registry {
                 }
             }
         }
-        Self { file, container, entitled_downloads, saved, dead, reported: BTreeSet::new(), dirty }
+        Self { file, container, entitled_downloads, saved, dead, last_revive: None, reported: BTreeSet::new(), dirty }
+    }
+
+    /// Activate again the bookmarks that failed at launch, at most once per
+    /// `REVIVE_INTERVAL`. Only folders that are present are resolved, so an
+    /// absent volume or share is not looked up again and again. A success
+    /// leaves `dead`; a refreshed bookmark is written with the next save.
+    /// Returns whether any folder became accessible.
+    pub(crate) fn revive(&mut self, native: &dyn Bookmarks, now: Instant) -> bool {
+        if self.dead.is_empty()
+            || self.last_revive.is_some_and(|last| now.saturating_duration_since(last) < REVIVE_INTERVAL)
+        {
+            return false;
+        }
+        self.last_revive = Some(now);
+        let present: Vec<String> = self.dead.iter().filter(|root| native.present(Path::new(root))).cloned().collect();
+        let mut revived = false;
+        for root in present {
+            let Some(grant) = self.saved.roots.get_mut(&root) else {
+                self.dead.remove(&root);
+                continue;
+            };
+            let Ok(activated) = decode(&grant.bookmark)
+                .ok_or_else(|| "The saved bookmark is corrupt".to_owned())
+                .and_then(|bytes| native.activate(&bytes))
+            else {
+                // Still unavailable; retried after the interval.
+                continue;
+            };
+            if let Some(fresh) = activated.refreshed {
+                grant.bookmark = encode(&fresh);
+                self.dirty = true;
+            }
+            if activated.path != Path::new(&root) {
+                eprintln!("Kiwix: {root} has moved to {}", activated.path.display());
+            }
+            self.dead.remove(&root);
+            revived = true;
+        }
+        revived
     }
 
     pub(crate) fn grant(&mut self, roots: &[Root], native: &dyn Bookmarks) {
+        // A dead bookmark whose volume is back is reused instead of being
+        // replaced, which needs a live grant this process may not have.
+        self.revive(native, Instant::now());
         let mut changed = false;
         for root in self.relevant(roots) {
             let key = root.path.to_string_lossy().into_owned();
@@ -524,7 +592,7 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     #[derive(Default)]
     struct Fake {
@@ -532,7 +600,9 @@ mod tests {
         created: RefCell<Vec<PathBuf>>,
         activated: RefCell<Vec<Vec<u8>>>,
         stale: bool,
-        broken: bool,
+        broken: Cell<bool>,
+        /// Paths whose volume is mounted; nothing else is present.
+        mounted: RefCell<BTreeSet<PathBuf>>,
         forbidden: Option<PathBuf>,
     }
 
@@ -558,13 +628,16 @@ mod tests {
         }
         fn activate(&self, bookmark: &[u8]) -> Result<Activated, String> {
             self.activated.borrow_mut().push(bookmark.to_vec());
-            if self.broken {
+            if self.broken.get() {
                 return Err("volume missing".into());
             }
             let text = String::from_utf8(bookmark.to_vec()).unwrap();
             let path = PathBuf::from(text.strip_prefix("bm:").unwrap());
             assert_ne!(self.forbidden.as_deref(), Some(path.as_path()), "unexpected entitlement-root activation");
             Ok(Activated { path, refreshed: self.stale.then(|| b"bm:fresh".to_vec()) })
+        }
+        fn present(&self, path: &Path) -> bool {
+            self.mounted.borrow().contains(path)
         }
     }
 
@@ -710,7 +783,7 @@ mod tests {
         let folder = abs("/Volumes/Gone/ZIMs");
         let fake = Fake::granting(&[&folder]);
         Registry::restore(&profile, None, &fake).grant(&[Root::folder(&folder)], &fake);
-        let broken = Fake { broken: true, ..Fake::granting(&[&folder]) };
+        let broken = Fake { broken: Cell::new(true), ..Fake::granting(&[&folder]) };
         let mut registry = Registry::restore(&profile, None, &broken);
         assert!(registry.dead.contains(&key(&folder)));
         registry.grant(&[Root::folder(&folder)], &broken);
@@ -719,6 +792,60 @@ mod tests {
         // Further saves keep the fresh bookmark.
         registry.grant(&[Root::folder(&folder)], &broken);
         assert_eq!(broken.created.borrow().len(), 1);
+        std::fs::remove_dir_all(profile).unwrap();
+    }
+
+    #[test]
+    fn a_bookmark_that_failed_at_launch_works_once_its_volume_is_mounted() {
+        let profile = temp();
+        let folder = abs("/Volumes/External/ZIMs");
+        let fake = Fake::granting(&[&folder]);
+        Registry::restore(&profile, None, &fake).grant(&[Root::folder(&folder)], &fake);
+        let saved = std::fs::read(profile.join(FILE_NAME)).unwrap();
+        // Launched with the volume unplugged: activation fails, and the folder
+        // is not accessible without it, so a save cannot replace the bookmark.
+        let launch = Fake { broken: Cell::new(true), ..Fake::default() };
+        let mut registry = Registry::restore(&profile, None, &launch);
+        assert!(registry.dead.contains(&key(&folder)));
+        let start = Instant::now();
+        // Absent volumes are not resolved again.
+        assert!(!registry.revive(&launch, start));
+        assert_eq!(launch.activated.borrow().len(), 1);
+        // The volume is plugged in.
+        launch.broken.set(false);
+        launch.mounted.borrow_mut().insert(folder.clone());
+        // Retries are rate-limited from the last attempt.
+        assert!(!registry.revive(&launch, start + Duration::from_secs(1)));
+        assert_eq!(launch.activated.borrow().len(), 1);
+        assert!(registry.revive(&launch, start + REVIVE_INTERVAL));
+        assert_eq!(launch.activated.borrow().len(), 2);
+        assert!(registry.dead.is_empty());
+        // The saved bookmark is kept: nothing new is created or written.
+        registry.grant(&[Root::folder(&folder)], &launch);
+        assert!(launch.created.borrow().is_empty());
+        assert_eq!(std::fs::read(profile.join(FILE_NAME)).unwrap(), saved);
+        // Nothing is left to retry.
+        assert!(!registry.revive(&launch, start + REVIVE_INTERVAL * 3));
+        assert_eq!(launch.activated.borrow().len(), 2);
+        std::fs::remove_dir_all(profile).unwrap();
+    }
+
+    #[test]
+    fn a_save_revives_a_dead_bookmark_before_deciding_to_replace_it() {
+        let profile = temp();
+        let folder = abs("/Volumes/External/ZIMs");
+        let fake = Fake::granting(&[&folder]);
+        Registry::restore(&profile, None, &fake).grant(&[Root::folder(&folder)], &fake);
+        let launch = Fake { broken: Cell::new(true), ..Fake::default() };
+        let mut registry = Registry::restore(&profile, None, &launch);
+        launch.broken.set(false);
+        launch.mounted.borrow_mut().insert(folder.clone());
+        // The store's next commit calls grant, which retries first.
+        registry.grant(&[Root::folder(&folder)], &launch);
+        assert!(registry.dead.is_empty());
+        assert_eq!(launch.activated.borrow().len(), 2);
+        assert!(launch.created.borrow().is_empty());
+        assert_eq!(saved_roots(&profile), vec![key(&folder)]);
         std::fs::remove_dir_all(profile).unwrap();
     }
 

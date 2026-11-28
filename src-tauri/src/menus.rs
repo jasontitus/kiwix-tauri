@@ -54,12 +54,36 @@ const ACTIONS: [(&str, &str, &str); 38] = [
     ("search-scope", "Search options", "CmdOrCtrl+Shift+L"),
 ];
 
+/// Where macOS conventions differ from the `ACTIONS` keys, which Windows and
+/// Linux keep. Cmd+M is the system Minimize key (the Window menu carries it),
+/// F11 shows the desktop, Settings lives in the application menu on Cmd+,,
+/// and full screen is Control+Command+F.
+const MACOS_ACCELERATORS: [(&str, &str); 3] = [
+    ("settings", "CmdOrCtrl+,"),
+    ("reader-toc", "Alt+CmdOrCtrl+T"),
+    ("reader-fullscreen", "Ctrl+Cmd+F"),
+];
+
+/// The accelerator `action` uses on macOS (`macos`) or on Windows and Linux.
+fn platform_accelerator(action: &str, accelerator: &'static str, macos: bool) -> &'static str {
+    if !macos {
+        return accelerator;
+    }
+    MACOS_ACCELERATORS
+        .iter()
+        .find(|(id, _)| *id == action)
+        .map_or(accelerator, |(_, macos)| *macos)
+}
+
 pub struct NativeMenus {
     file: Submenu<tauri::Wry>,
     tabs: Submenu<tauri::Wry>,
     items: Vec<(&'static str, MenuItem<tauri::Wry>)>,
     edit: Submenu<tauri::Wry>,
     standard: Vec<PredefinedMenuItem<tauri::Wry>>,
+    /// About, Services, Hide, Hide Others and Show All, in `MenuLabels` order.
+    #[cfg(target_os = "macos")]
+    application: [PredefinedMenuItem<tauri::Wry>; 5],
     #[cfg(target_os = "macos")]
     quit: PredefinedMenuItem<tauri::Wry>,
     #[cfg(not(target_os = "macos"))]
@@ -93,6 +117,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     }
     let mut items = Vec::with_capacity(ACTIONS.len());
     for (action, label, accelerator) in ACTIONS {
+        let accelerator = platform_accelerator(action, accelerator, cfg!(target_os = "macos"));
         let item = MenuItem::with_id(
             app,
             format!("kiwix-{action}"),
@@ -102,15 +127,21 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         )?;
         // Settings/import/session actions are file-scoped, the two search
         // commands belong with editing, and Home is an archive reader action.
-        if matches!(
+        // On macOS Settings belongs to the application menu instead (below).
+        let parent = if cfg!(target_os = "macos") && action == "settings" {
+            None
+        } else if matches!(
             action,
             "new-window" | "restore-session" | "import" | "settings"
         ) {
-            file.append(&item)?;
+            Some(&file)
         } else if matches!(action, "library-search" | "search-scope") {
-            edit.append(&item)?;
+            Some(&edit)
         } else {
-            tabs.append(&item)?;
+            Some(&tabs)
+        };
+        if let Some(parent) = parent {
+            parent.append(&item)?;
         }
         items.push((action, item));
     }
@@ -122,6 +153,32 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     let main_thread = objc2::MainThreadMarker::new()
         .ok_or_else(|| std::io::Error::other("Install the application menu on the main thread"))?;
     let application = Submenu::with_id(app, "kiwix-application", "Kiwix", true)?;
+    // The standard macOS application menu: About; Settings; Services; Hide,
+    // Hide Others, Show All; Quit. Hide and Hide Others carry their system keys.
+    #[cfg(target_os = "macos")]
+    let application_items = [
+        PredefinedMenuItem::about(app, Some("About Kiwix"), None)?,
+        PredefinedMenuItem::services(app, Some("Services"))?,
+        PredefinedMenuItem::hide(app, Some("Hide Kiwix"))?,
+        PredefinedMenuItem::hide_others(app, Some("Hide others"))?,
+        PredefinedMenuItem::show_all(app, Some("Show all"))?,
+    ];
+    #[cfg(target_os = "macos")]
+    {
+        let [about, services, hide, hide_others, show_all] = &application_items;
+        application.append(about)?;
+        application.append(&PredefinedMenuItem::separator(app)?)?;
+        if let Some((_, settings)) = items.iter().find(|(action, _)| *action == "settings") {
+            application.append(settings)?;
+        }
+        application.append(&PredefinedMenuItem::separator(app)?)?;
+        application.append(services)?;
+        application.append(&PredefinedMenuItem::separator(app)?)?;
+        application.append(hide)?;
+        application.append(hide_others)?;
+        application.append(show_all)?;
+        application.append(&PredefinedMenuItem::separator(app)?)?;
+    }
     application.append(&quit)?;
     let menu = Menu::with_items(app, &[&application, &file, &edit, &tabs])?;
     app.set_menu(menu)?;
@@ -149,6 +206,8 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         items,
         edit,
         standard,
+        #[cfg(target_os = "macos")]
+        application: application_items,
         quit,
     });
     app.on_menu_event(|app, event| {
@@ -236,6 +295,12 @@ pub struct MenuLabels {
     paste: String,
     select_all: String,
     quit: String,
+    /// The macOS application menu; accepted and validated everywhere.
+    about: String,
+    services: String,
+    hide: String,
+    hide_others: String,
+    show_all: String,
 }
 
 /// Only text can change: IDs, actions and accelerators are fixed in Rust.
@@ -272,6 +337,11 @@ pub fn update_native_menu(
         &labels.paste,
         &labels.select_all,
         &labels.quit,
+        &labels.about,
+        &labels.services,
+        &labels.hide,
+        &labels.hide_others,
+        &labels.show_all,
     ];
     if values
         .iter()
@@ -340,6 +410,16 @@ pub fn update_native_menu(
     ]) {
         item.set_text(escaped(&label)).map_err(|e| e.to_string())?;
     }
+    #[cfg(target_os = "macos")]
+    for (item, label) in menus.application.iter().zip([
+        &labels.about,
+        &labels.services,
+        &labels.hide,
+        &labels.hide_others,
+        &labels.show_all,
+    ]) {
+        item.set_text(escaped(label)).map_err(|e| e.to_string())?;
+    }
     for (action, item) in &menus.items {
         let label = match *action {
             "new-tab" => &labels.new_tab,
@@ -384,7 +464,91 @@ mod wry_accelerator;
 
 #[cfg(test)]
 mod tests {
-    use super::{is_shell, shortcut_event, wry_accelerator::forward, ACTIONS};
+    use super::{is_shell, platform_accelerator, shortcut_event, wry_accelerator::forward, ACTIONS, MACOS_ACCELERATORS};
+    use std::collections::{BTreeSet, HashMap};
+
+    /// An accelerator as the key a person presses: modifiers spelled one way,
+    /// CmdOrCtrl resolved for the platform, the key upper-cased.
+    fn chord(accelerator: &str, macos: bool) -> (BTreeSet<&'static str>, String) {
+        let mut modifiers = BTreeSet::new();
+        let mut key = None;
+        for part in accelerator.split('+').filter(|part| !part.is_empty()) {
+            let modifier = match part.to_ascii_lowercase().as_str() {
+                "cmdorctrl" | "commandorcontrol" => Some(if macos { "Cmd" } else { "Ctrl" }),
+                "cmd" | "command" | "super" | "meta" => Some("Cmd"),
+                "ctrl" | "control" => Some("Ctrl"),
+                "alt" | "option" => Some("Alt"),
+                "shift" => Some("Shift"),
+                _ => None,
+            };
+            match modifier {
+                Some(modifier) => assert!(modifiers.insert(modifier), "{accelerator} repeats {modifier}"),
+                None => {
+                    assert!(key.is_none(), "{accelerator} has two keys");
+                    key = Some(part.to_ascii_uppercase());
+                }
+            }
+        }
+        (modifiers, key.unwrap_or_else(|| panic!("{accelerator} has no key")))
+    }
+
+    /// Keys macOS or its standard menus own: Minimize (the Window menu also
+    /// carries it) and Minimize All, Hide and Hide Others, Quit, Settings
+    /// (reserved here for the application menu's own item), window cycling,
+    /// the Window menu's tab commands, Show Desktop, Spotlight, the character
+    /// viewer, lock screen, log out, screenshots, Dock hiding, app switching
+    /// and Force Quit.
+    const MACOS_RESERVED: [&str; 20] = [
+        "Cmd+M", "Cmd+Alt+M", "Cmd+H", "Cmd+Alt+H", "Cmd+Q", "Cmd+,", "Cmd+`",
+        "Cmd+Shift+[", "Cmd+Shift+]", "F11", "Cmd+Space", "Ctrl+Cmd+Space",
+        "Ctrl+Cmd+Q", "Cmd+Shift+Q", "Cmd+Shift+3", "Cmd+Shift+4", "Cmd+Shift+5",
+        "Cmd+Alt+D", "Cmd+Tab", "Cmd+Alt+Escape",
+    ];
+
+    #[test]
+    fn macos_accelerators_leave_system_keys_alone_and_none_repeat() {
+        let reserved: BTreeSet<_> = MACOS_RESERVED.iter().map(|key| chord(key, true)).collect();
+        for macos in [true, false] {
+            // The predefined Edit items (and, on Windows and Linux, Quit) are taken too.
+            let mut taken: HashMap<_, &str> = if macos {
+                ["Cmd+Z", "Cmd+Shift+Z", "Cmd+X", "Cmd+C", "Cmd+V", "Cmd+A"].as_slice()
+            } else {
+                ["Ctrl+Z", "Ctrl+Y", "Ctrl+X", "Ctrl+C", "Ctrl+V", "Ctrl+A", "Ctrl+Q"].as_slice()
+            }
+            .iter()
+            .map(|key| (chord(key, macos), *key))
+            .collect();
+            for (action, _, default) in ACTIONS {
+                let accelerator = platform_accelerator(action, default, macos);
+                if accelerator.is_empty() {
+                    continue;
+                }
+                let pressed = chord(accelerator, macos);
+                if macos && action != "settings" {
+                    assert!(!reserved.contains(&pressed), "{action} ({accelerator}) is a macOS system key");
+                }
+                if let Some(other) = taken.insert(pressed, action) {
+                    panic!("{action} ({accelerator}) repeats {other} (macOS: {macos})");
+                }
+            }
+        }
+        // Settings sits on the macOS convention, and the overrides name real actions.
+        assert_eq!(chord(platform_accelerator("settings", "F12", true), true), chord("Cmd+,", true));
+        assert_eq!(chord(platform_accelerator("reader-fullscreen", "F11", true), true), chord("Ctrl+Cmd+F", true));
+        for (id, _) in MACOS_ACCELERATORS {
+            assert!(ACTIONS.iter().any(|(action, _, _)| *action == id), "{id}");
+        }
+    }
+
+    #[test]
+    fn windows_and_linux_keep_their_documented_accelerators() {
+        for (action, _, default) in ACTIONS {
+            assert_eq!(platform_accelerator(action, default, false), default, "{action}");
+        }
+        assert_eq!(platform_accelerator("settings", "F12", false), "F12");
+        assert_eq!(platform_accelerator("reader-toc", "CmdOrCtrl+M", false), "CmdOrCtrl+M");
+        assert_eq!(platform_accelerator("reader-fullscreen", "F11", false), "F11");
+    }
 
     const DOWN: i32 = 1; // lParam of a first key-down: repeat count 1, bit 30 clear.
     const REPEAT: i32 = 1 | (1 << 30);
