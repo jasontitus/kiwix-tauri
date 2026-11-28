@@ -231,9 +231,10 @@ export interface SharingStatus {
    */
   addressLost?: boolean;
   /**
-   * A share on all interfaces while this device has no network address: it
-   * is still running, but only this device can open its links. It serves the
-   * next network the device joins without being restarted.
+   * A share on all interfaces of one kind while the device has no address of
+   * that kind (no network, or an IPv6-only share on an IPv4 network): it is
+   * still running, but only this device can open its links. It serves the
+   * next matching network the device joins without being restarted.
    */
   localOnly?: boolean;
 }

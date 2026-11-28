@@ -119,15 +119,18 @@ pub(crate) fn busy_dialog_message(data_dir: &Path, detail: &str) -> String {
 }
 
 /// Show the busy-profile explanation using a native dialog. The pre-Tauri path
-/// has no `AppHandle`, so this goes through the platform's dialog helper and
-/// falls back to stderr if none is available.
+/// has no `AppHandle`, so this goes through the platform's dialog helper.
+///
+/// The explanation is always written to stderr first. Whether a helper really
+/// showed its dialog cannot be known for certain (zenity also exits 1 when it
+/// cannot open a stale display), so the dialog is an addition, never the only
+/// place the message goes.
 #[cfg(unix)]
 pub(crate) fn show_profile_busy(data_dir: &Path, detail: &str) {
     let message = busy_dialog_message(data_dir, detail);
     let title = "Kiwix — data directory in use";
-    if !show_native_message(NativeMessageKind::Warning, title, &message) {
-        eprintln!("{title}: {message}");
-    }
+    eprintln!("{title}: {message}");
+    show_native_message(NativeMessageKind::Warning, title, &message);
 }
 
 /// Which icon a pre-Tauri native message carries.

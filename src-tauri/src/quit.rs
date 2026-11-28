@@ -337,6 +337,30 @@ pub(crate) fn settle_failed_quit(
     }
 }
 
+/// No one reads a question and answers it sooner than this.
+const DIALOG_ANSWER_FLOOR: Duration = Duration::from_millis(50);
+
+/// Whether the failed-Quit dialog was really put in front of the person.
+///
+/// The dialog plugin has no error path: a dialog that the platform could not
+/// display comes back at once as "Cancel", exactly like a closed one. Retry
+/// and Quit Without Saving can only come from their buttons, so only a Cancel
+/// that arrived faster than a person can answer counts as "not shown".
+pub(crate) fn failed_quit_dialog_was_shown(answer: &FailedQuitAction, elapsed: Duration) -> bool {
+    !matches!(answer, FailedQuitAction::Stay { .. }) || elapsed >= DIALOG_ANSWER_FLOOR
+}
+
+/// How long to wait before Quit is attempted again when `unshown` dialogs in a
+/// row could not be shown: no wait after a dialog that was shown, then 1 s,
+/// 2 s, 4 s and so on, at most 60 s. With no window and no dialog, Cancel
+/// becomes Retry (`settle_failed_quit`), and without this wait that would spin.
+pub(crate) fn unshown_dialog_retry_delay(unshown: u32) -> Duration {
+    match unshown {
+        0 => Duration::ZERO,
+        failures => Duration::from_secs(1_u64.checked_shl(failures - 1).unwrap_or(u64::MAX).min(60)),
+    }
+}
+
 /// The failed-Quit dialog text: what could not be done, the cause, how to fix
 /// it, and exactly what quitting without saving gives up.
 pub(crate) fn failed_quit_message(
@@ -551,6 +575,32 @@ mod tests {
                 FailedQuitAction::QuitWithoutSaving
             );
         }
+    }
+
+    #[test]
+    fn a_dialog_that_cannot_be_shown_is_retried_with_backoff_and_never_quits() {
+        let stay = FailedQuitAction::Stay { clear_relaunch: false };
+        // A Cancel faster than a person can answer: the dialog was not shown.
+        for elapsed in [Duration::ZERO, Duration::from_millis(3), Duration::from_millis(49)] {
+            assert!(!failed_quit_dialog_was_shown(&stay, elapsed), "{elapsed:?}");
+            assert!(!failed_quit_dialog_was_shown(&FailedQuitAction::Stay { clear_relaunch: true }, elapsed));
+        }
+        for elapsed in [Duration::from_millis(50), Duration::from_secs(2), Duration::from_secs(3600)] {
+            assert!(failed_quit_dialog_was_shown(&stay, elapsed), "{elapsed:?}");
+        }
+        // A button was pressed, however quickly: that is an answer.
+        for answer in [FailedQuitAction::Retry, FailedQuitAction::QuitWithoutSaving] {
+            assert!(failed_quit_dialog_was_shown(&answer, Duration::ZERO));
+        }
+        // No wait after a real answer; then 1, 2, 4 … seconds, at most 60.
+        let delays: Vec<u64> = (0..=9).map(|unshown| unshown_dialog_retry_delay(unshown).as_secs()).collect();
+        assert_eq!(delays, [0, 1, 2, 4, 8, 16, 32, 60, 60, 60]);
+        for unshown in [64, 65, 1_000, u32::MAX] {
+            assert_eq!(unshown_dialog_retry_delay(unshown), Duration::from_secs(60));
+        }
+        // An unshown dialog with no window left is retried, never turned into
+        // quitting without saving.
+        assert_eq!(settle_failed_quit(stay, false, false), FailedQuitAction::Retry);
     }
 
     #[test]

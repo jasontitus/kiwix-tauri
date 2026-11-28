@@ -6285,10 +6285,11 @@ async fn a_cancelled_monitored_import_is_retried_not_remembered_as_damaged() {
         {"path":cancelled.to_string_lossy(),"error":crate::imports::IMPORT_CANCELLED},
         {"path":damaged.to_string_lossy(),"error":crate::archive::CORRUPT_ARCHIVE},
     ]})).unwrap();
-    let failures = service.watch_failures.lock().unwrap();
-    assert!(!failures.should_skip(&cancelled));
-    assert!(failures.should_skip(&damaged));
-    drop(failures);
+    {
+        let failures = service.watch_failures.lock().unwrap();
+        assert!(!failures.should_skip(&cancelled));
+        assert!(failures.should_skip(&damaged));
+    }
     service.shutdown().await.unwrap();
 }
 

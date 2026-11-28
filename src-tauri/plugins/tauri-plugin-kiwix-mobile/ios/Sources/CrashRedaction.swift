@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Redaction of crash-record text. This is a port of `redact` and `redact_line`
-// in `src-tauri/src/crash.rs` and must change only together with them: both
-// are pinned to `src-tauri/tests/fixtures/crash-redaction-cases.json`.
+// Redaction of crash-record text: the Swift implementation of
+// `src-tauri/tests/fixtures/crash-redaction-spec.md`, pinned to the vectors in
+// `crash-redaction-cases.json` next to it. `src-tauri/src/crash.rs` and the
+// Android intake follow the same text; none of them may change alone.
 //
 // The steps, in order: bound the input, secret values, URLs, paths, long
-// opaque tokens, collapse whitespace, cut. A "character" is a Unicode scalar
-// value, as in Rust, so a bound or a cut never splits a surrogate pair. The
-// text is scanned as an array of scalars with plain loops; there is no pattern
-// engine whose limits could let a long line through unredacted.
+// opaque tokens, collapse whitespace, cut. Every index, count, scan and cut is
+// over Unicode scalar values, never `Character`: a `Character` can hold
+// several scalars, and "\r\n" is one. Case is folded for ASCII letters only.
+// The text is scanned as an array of scalars with plain loops, each step in
+// time proportional to its input; there is no pattern engine whose limits
+// could let a long line through unredacted, and no platform URL parser whose
+// reading could differ between systems.
 enum CrashRedaction {
   /// Longest input any step looks at. The bound comes first, so no later scan
   /// sees more than this.
@@ -22,9 +26,9 @@ enum CrashRedaction {
   private static let urlMark = Text("[url]".unicodeScalars)
   private static let readerURLMark = Text("[reader-url]".unicodeScalars)
 
-  /// Full redaction for one message field: all seven steps.
+  /// Full redaction for one text field: steps 1 to 7.
   static func redact(_ value: String) -> String {
-    var text = Text(value.unicodeScalars.prefix(maxInput))
+    var text = bounded(value)
     text = redactSecrets(text)
     text = replaceURLs(text)
     text = redactPaths(text)
@@ -32,15 +36,15 @@ enum CrashRedaction {
     return string(truncated(collapseWhitespace(text), limit: maxMessage))
   }
 
-  /// Redaction for one stack frame line: steps one to four, keeping spacing.
+  /// Redaction for one stack frame line: steps 1 to 4, keeping its spacing.
   static func redactLine(_ value: String) -> String {
-    var text = Text(value.unicodeScalars.prefix(maxInput))
+    var text = bounded(value)
     text = redactSecrets(text)
     text = replaceURLs(text)
     return string(redactPaths(text))
   }
 
-  /// At most `limit` characters; a longer value ends in an ellipsis.
+  /// At most `limit` scalars; a longer value ends in an ellipsis.
   static func truncate(_ value: String, limit: Int) -> String {
     string(truncated(Text(value.unicodeScalars), limit: limit))
   }
@@ -53,7 +57,24 @@ enum CrashRedaction {
 
   private static func truncated(_ text: Text, limit: Int) -> Text {
     if text.count <= limit { return text }
-    return Text(text.prefix(max(limit - 1, 0))) + ["\u{2026}"]
+    var cut = Text(text.prefix(max(limit - 1, 0)))
+    cut.append("\u{2026}")
+    return cut
+  }
+
+  // MARK: Step 1, bound
+
+  /// The first `maxInput` scalars. When that cuts through a run of
+  /// non-whitespace the partial run goes too: half a host name or half a path
+  /// must not be judged as if it were whole.
+  private static func bounded(_ value: String) -> Text {
+    var text = Text()
+    var rest = value.unicodeScalars.makeIterator()
+    while text.count < maxInput, let scalar = rest.next() { text.append(scalar) }
+    if let dropped = rest.next(), !isWhitespace(dropped) {
+      while let last = text.last, !isWhitespace(last) { text.removeLast() }
+    }
+    return text
   }
 
   // MARK: Character classes

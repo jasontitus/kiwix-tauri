@@ -772,6 +772,8 @@ struct QuitFlags {
     /// An exit request was held back while `exiting` was set. The dialog reads
     /// it when it closes, so a Quit chosen meanwhile is not lost.
     requested_again: Arc<AtomicBool>,
+    /// How many failed-Quit dialogs in a row could not be shown.
+    unshown_dialogs: Arc<std::sync::atomic::AtomicU32>,
 }
 
 /// The application window the failed-Quit dialog belongs to: the focused
@@ -827,20 +829,45 @@ fn ask_after_failed_quit(
     }
     // Only requests that arrive from here on are "while the dialog is open".
     flags.requested_again.store(false, Ordering::SeqCst);
+    let asked_at = std::time::Instant::now();
     dialog.show_with_result(move |result| {
+        let answer = quit::failed_quit_action(failure, &result, &labels);
+        // A dialog the platform could not display comes back at once as
+        // Cancel. Count those, so that retrying cannot spin.
+        let unshown = if quit::failed_quit_dialog_was_shown(&answer, asked_at.elapsed()) {
+            flags.unshown_dialogs.store(0, Ordering::SeqCst);
+            0
+        } else {
+            flags.unshown_dialogs.fetch_add(1, Ordering::SeqCst).saturating_add(1)
+        };
         let shell_window_remains = app
             .webview_windows()
             .keys()
             .any(|label| quit::shell_label(label));
         let action = quit::settle_failed_quit(
-            quit::failed_quit_action(failure, &result, &labels),
+            answer,
             shell_window_remains,
             flags.requested_again.swap(false, Ordering::SeqCst),
         );
         match action {
             quit::FailedQuitAction::Retry => {
-                flags.exiting.store(false, Ordering::SeqCst);
-                app.exit(code.unwrap_or(0));
+                let delay = quit::unshown_dialog_retry_delay(unshown);
+                if delay.is_zero() {
+                    flags.exiting.store(false, Ordering::SeqCst);
+                    app.exit(code.unwrap_or(0));
+                } else {
+                    // No window and no dialog: keep trying, slowly, and never
+                    // give up unsaved state without being told to.
+                    eprintln!(
+                        "Application Quit: its question could not be shown ({unshown} in a row). Nothing was discarded; trying Quit again in {} s. Cause: {error}",
+                        delay.as_secs()
+                    );
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(delay).await;
+                        flags.exiting.store(false, Ordering::SeqCst);
+                        app.exit(code.unwrap_or(0));
+                    });
+                }
             }
             quit::FailedQuitAction::QuitWithoutSaving => {
                 // `exiting` stays set: this attempt ends in the exit below.
@@ -851,6 +878,9 @@ fn ask_after_failed_quit(
                 });
             }
             quit::FailedQuitAction::Stay { clear_relaunch } => {
+                if unshown > 0 {
+                    eprintln!("Application Quit: its question could not be shown; Kiwix stays open. Cause: {error}");
+                }
                 if clear_relaunch {
                     // The shells resumed; a later plain Quit must not relaunch.
                     update::clear_restart_after_quit();

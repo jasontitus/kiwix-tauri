@@ -536,12 +536,15 @@ async fn selected_browser_activation_is_revoked_with_its_installation() {
 #[test]
 fn one_click_binding_chooses_the_lan_another_device_can_reach() {
     use crate::localswarm::{host_switch_addresses, lan_addresses, InterfaceCandidate};
-    fn chosen(interfaces: &[(&str, &str, bool)], routed: Option<&str>) -> Result<SharingBinding, String> {
+    fn chosen_on(windows: bool, interfaces: &[(&str, &str, bool)], routed: Option<&str>) -> Result<SharingBinding, String> {
         let candidates = || interfaces.iter().map(|&(name, address, point_to_point)| InterfaceCandidate {
             name, address: address.parse().unwrap(), point_to_point, loopback: name == "lo",
         });
         auto_lan_binding(&lan_addresses(candidates()), routed.map(|address| address.parse().unwrap()),
-            &host_switch_addresses(candidates()))
+            &host_switch_addresses(candidates()), windows)
+    }
+    fn chosen(interfaces: &[(&str, &str, bool)], routed: Option<&str>) -> Result<SharingBinding, String> {
+        chosen_on(false, interfaces, routed)
     }
     let wifi = |address: &str| Ok(SharingBinding::Interface { address: address.into() });
     for (interfaces, expected) in [
@@ -569,11 +572,28 @@ fn one_click_binding_chooses_the_lan_another_device_can_reach() {
     assert_eq!(chosen(&[("tun0", "10.8.0.2", true), ("wlan0", "192.168.1.50", false)], Some("10.8.0.2")), wifi("192.168.1.50"));
     // Only virtual adapters: refuse, so the person is told to connect.
     assert!(chosen(&[("docker0", "172.17.0.1", false), ("rmnet0", "10.1.1.1", false)], Some("172.17.0.1")).is_err());
+    // Windows cannot tell a full-tunnel VPN adapter from a LAN adapter: it is
+    // not flagged and is named like one. It owns the default route, so the
+    // routed address is not preferred there and the plain order decides.
+    let vpn = [("Ethernet 3", "10.8.0.6", false), ("Wi-Fi", "10.0.0.5", false)];
+    assert_eq!(chosen_on(true, &vpn, Some("10.8.0.6")), wifi("10.0.0.5"));
+    assert_eq!(chosen_on(true, &vpn, None), wifi("10.0.0.5"));
+    assert_eq!(chosen_on(true, &two, Some("192.168.1.50")), wifi("10.0.0.5"));
+    // Elsewhere such a tunnel is flagged or named, so the preference stays.
+    assert_eq!(chosen_on(false, &vpn, Some("10.8.0.6")), wifi("10.8.0.6"));
+    assert_eq!(chosen_on(false, &two, Some("192.168.1.50")), wifi("192.168.1.50"));
+    // The name and flag exclusions are the same on Windows.
+    for windows in [true, false] {
+        assert_eq!(chosen_on(windows, &[("vEthernet (WSL)", "172.29.0.1", false), ("Wi-Fi", "192.168.1.50", false)], Some("172.29.0.1")), wifi("192.168.1.50"));
+        assert_eq!(chosen_on(windows, &[("NordLynx", "10.5.0.2", false), ("Wi-Fi", "192.168.1.50", false)], Some("10.5.0.2")), wifi("192.168.1.50"));
+    }
     // A Hyper-V external switch holds the machine's only LAN address and its
     // default route; the physical adapter has none. That is the working LAN.
     let hyper_v = [("vEthernet (Default Switch)", "172.28.112.1", false), ("vEthernet (WSL)", "172.29.0.1", false),
         ("vEthernet (External Switch)", "192.168.1.20", false)];
     assert_eq!(chosen(&hyper_v, Some("192.168.1.20")), wifi("192.168.1.20"));
+    assert_eq!(chosen_on(true, &hyper_v, Some("192.168.1.20")), wifi("192.168.1.20"));
+    assert!(chosen_on(true, &hyper_v, None).is_err());
     // Without a route nothing says which switch is external: refuse.
     assert!(chosen(&hyper_v, None).is_err());
     assert!(chosen(&hyper_v, Some("203.0.113.9")).is_err());
@@ -606,17 +626,17 @@ fn session_defaults_and_pin_validation_do_not_widen_network_authority() {
     assert_eq!(query_value("id with +/percent%"), "id%20with%20%2B%2Fpercent%25");
     let addresses = ["127.0.0.1", "169.254.1.2", "0.0.0.0", "8.8.8.8", "::1", "fe80::1", "192.168.7.9"];
     let addresses: Vec<IpAddr> = addresses.iter().map(|address| address.parse().unwrap()).collect();
-    assert_eq!(auto_lan_binding(&addresses, None, &[]).unwrap(), SharingBinding::Interface { address: "192.168.7.9".into() });
-    assert!(auto_lan_binding(&addresses[..6], None, &[]).is_err());
+    assert_eq!(auto_lan_binding(&addresses, None, &[], false).unwrap(), SharingBinding::Interface { address: "192.168.7.9".into() });
+    assert!(auto_lan_binding(&addresses[..6], None, &[], false).is_err());
     // The routed address grants nothing by itself: public, loopback and
     // unlisted addresses cannot become the binding.
     for routed in ["8.8.8.8", "127.0.0.1", "10.9.9.9"] {
-        assert!(auto_lan_binding(&addresses[..6], Some(routed.parse().unwrap()), &[]).is_err(), "{routed}");
-        assert_eq!(auto_lan_binding(&addresses, Some(routed.parse().unwrap()), &[]).unwrap(),
+        assert!(auto_lan_binding(&addresses[..6], Some(routed.parse().unwrap()), &[], false).is_err(), "{routed}");
+        assert_eq!(auto_lan_binding(&addresses, Some(routed.parse().unwrap()), &[], false).unwrap(),
             SharingBinding::Interface { address: "192.168.7.9".into() }, "{routed}");
         // Being on a host switch does not make a public or loopback address
         // eligible; only a private one that is also the routed address is.
-        let on_switch = auto_lan_binding(&addresses[..6], Some(routed.parse().unwrap()), &[routed.parse().unwrap()]);
+        let on_switch = auto_lan_binding(&addresses[..6], Some(routed.parse().unwrap()), &[routed.parse().unwrap()], true);
         assert_eq!(on_switch.is_ok(), routed == "10.9.9.9", "{routed}");
     }
     for pin in ["123", "12345", "1234567890123", "12ab", "１２３４", "1234\n"] {

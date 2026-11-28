@@ -193,7 +193,7 @@ pub fn interfaces() -> Result<Vec<SharingInterface>, String> {
 /// available as explicit choices.
 pub fn default_binding() -> Result<SharingBinding, String> {
     let (available, switches) = crate::localswarm::local_candidates()?;
-    auto_lan_binding(&available, crate::localswarm::routed_local_address(), &switches)
+    auto_lan_binding(&available, crate::localswarm::routed_local_address(), &switches, cfg!(windows))
 }
 
 /// `available` holds only real LAN interfaces. Among them, the address the
@@ -207,10 +207,17 @@ pub fn default_binding() -> Result<SharingBinding, String> {
 /// is the very address the system routes from: a Hyper-V external switch,
 /// which holds the machine's only LAN address. Without that, such a machine
 /// would be told to connect to a network it is already on.
-fn auto_lan_binding(available: &[IpAddr], routed: Option<IpAddr>, switches: &[IpAddr]) -> Result<SharingBinding, String> {
+///
+/// `windows`: there the routed address is not preferred. A full-tunnel VPN
+/// adapter on Windows is neither flagged point-to-point nor recognisable by
+/// name ("Ethernet 3"), so it stays in `available`, and it owns the default
+/// route: preferring the routed address would pick it over the real LAN even
+/// when the LAN sorts first. Windows keeps the plain order instead.
+fn auto_lan_binding(available: &[IpAddr], routed: Option<IpAddr>, switches: &[IpAddr], windows: bool) -> Result<SharingBinding, String> {
     let eligible = |address: &IpAddr| matches!(address, IpAddr::V4(ip) if ip.is_private() && !ip.is_loopback())
         && safe_interface(*address);
-    routed.filter(|address| eligible(address) && available.contains(address))
+    let prefer_routed = !windows;
+    routed.filter(|address| prefer_routed && eligible(address) && available.contains(address))
         .or_else(|| available.iter().copied().find(eligible))
         .or_else(|| routed.filter(|address| eligible(address) && switches.contains(address)))
         .map(|address| SharingBinding::Interface { address: address.to_string() })
@@ -1877,9 +1884,10 @@ impl SharingServer {
             SharingBinding::Ipv4All {} | SharingBinding::Ipv6All {} | SharingBinding::DualStackAll {} => {
                 // A wildcard listener already answers on the refreshed set.
                 let hosts = self.hosts.current();
-                // Still running, but with no network: only this device can
-                // open the links. Nothing needs restarting; say so instead of
-                // presenting loopback links as a share others can use.
+                // Still running, but with no address of the family it listens
+                // on (no network at all, or an IPv6-only share on an IPv4
+                // network): only this device can open the links. Say so
+                // instead of presenting loopback links as a usable share.
                 status["localOnly"] = json!(loopback_only(&hosts));
                 if !hosts.is_empty() {
                     let links = |port: u16, path: &str| -> Vec<String> {

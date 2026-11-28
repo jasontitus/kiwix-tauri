@@ -399,7 +399,7 @@ export default function SharingControls({
       {sharing.running && shown.localOnly && (
         <p className="inline-error" role="alert">
           {t(
-            "This device has no network connection, so only this device can open the links below. Connect to a trusted Wi-Fi or Ethernet network; sharing continues there without restarting.",
+            "No network address is available for this share, so only this device can open the links below. Connect to a trusted Wi-Fi or Ethernet network, or stop web sharing and choose a different “Listen on” option. Sharing continues on a new connection without restarting.",
           )}
         </p>
       )}
