@@ -11,6 +11,35 @@
     if (link.namespaceURI !== "http://www.w3.org/1999/xhtml") return link.href;
     return (link.localName === "area" ? nativeAreaHref : nativeAnchorHref).call(link);
   }
+  // Archive scripts run in this same realm after this bootstrap and can replace
+  // any prototype getter or method the bridge looks up later. Everything that
+  // touches a message from the shell before its secrets are out of reach is
+  // therefore captured here, while the realm is still pristine, and called
+  // through pre-bound natives: the MessageEvent accessors, own-property reads
+  // of the message (a missing field must not fall through to a getter planted
+  // on Object.prototype), and stopImmediatePropagation.
+  const capturedGetter = (prototype, key) => {
+    try {
+      const getter = Object.getOwnPropertyDescriptor(prototype, key)?.get;
+      return getter ? Function.prototype.call.bind(getter) : null;
+    } catch (_) { return null; }
+  };
+  const messagePrototype = typeof MessageEvent === "function" ? MessageEvent.prototype : null;
+  const nativeMessageData = messagePrototype && capturedGetter(messagePrototype, "data");
+  const nativeMessageSource = messagePrototype && capturedGetter(messagePrototype, "source");
+  const nativeMessageOrigin = messagePrototype && capturedGetter(messagePrototype, "origin");
+  // Without a MessageEvent constructor (a test double, never a webview) there
+  // is no prototype to hook either.
+  const messageData = (event) => (nativeMessageData ? nativeMessageData(event) : event.data);
+  const messageSource = (event) => (nativeMessageSource ? nativeMessageSource(event) : event.source);
+  const messageOrigin = (event) => (nativeMessageOrigin ? nativeMessageOrigin(event) : event.origin);
+  const hasOwnField = Function.prototype.call.bind(Object.prototype.hasOwnProperty);
+  const ownField = (message, key) => (hasOwnField(message, key) ? message[key] : undefined);
+  const stopMessage = typeof Event === "function" && typeof Event.prototype.stopImmediatePropagation === "function"
+    ? Function.prototype.call.bind(Event.prototype.stopImmediatePropagation) : null;
+  // `window.parent` is replaceable by page script; the embedding window is not.
+  const embedder = window.parent;
+  const archiveOrigin = location.origin;
   let archiveChild = false;
   try { archiveChild = window.parent.location.origin === location.origin; } catch (_) { /* Shell is cross-origin. */ }
   const descendantChannel = "kiwix-reader-media";
@@ -227,10 +256,14 @@
     reportMediaState();
   }
   window.addEventListener("message", (event) => {
-    const message = event.data;
-    if (mediaRetired || event.origin !== location.origin ||
-        message?.channel !== descendantChannel || message.version !== 1) return;
-    if (archiveChild && event.source === window.parent) {
+    // This listener is registered before the shell listener below, so it sees
+    // the shell's messages first. Its channel is archive-to-archive only: a
+    // message from any other origin leaves before anything hookable runs.
+    if (messageOrigin(event) !== archiveOrigin) return;
+    const message = messageData(event);
+    if (mediaRetired || message?.channel !== descendantChannel || message.version !== 1) return;
+    const eventSource = messageSource(event);
+    if (archiveChild && eventSource === window.parent) {
       if (message.type === "probe") {
         mediaPost(window.parent, "hello", "");
       } else if (message.type === "init" && typeof message.session === "string" &&
@@ -259,13 +292,13 @@
       }
       return;
     }
-    const frame = childFrame(event.source);
+    const frame = childFrame(eventSource);
     if (!frame) return;
     if (message.type === "hello") {
       const entry = mediaChildren.get(frame);
       if (entry && entry.document !== frame.contentDocument) cancelMediaRestore();
       if (!entry || entry.document !== frame.contentDocument) initializeMediaChild(frame);
-      else mediaPost(event.source, "init", entry.session);
+      else mediaPost(eventSource, "init", entry.session);
       return;
     }
     const entry = mediaChildren.get(frame);
@@ -725,7 +758,7 @@
   // Bootstrap must precede archive scripts. Keep the gesture proof private:
   // only the cross-origin shell receives it, never this window.
   const readingPanToken = crypto.randomUUID();
-  const postToParent = parent.postMessage.bind(parent);
+  const postToParent = embedder.postMessage.bind(embedder);
   // Announce the private gesture token before any archive script can run. The
   // shell pins this first announcement per document, so a document replaced by
   // archive code later cannot bind or forge gestures with a token of its own.
@@ -3877,41 +3910,62 @@
     }
   });
 
+  // Messages from the shell. This listener was registered before any archive
+  // script could add one, and nothing an archive script can replace runs here
+  // until the message has been stopped and its secrets taken out of it:
+  //  - the event is read through the natives captured at bootstrap;
+  //  - the session id and the photo secret are copied into this closure and
+  //    deleted from the message object, which is the one object every later
+  //    `event.data` (or `window.event.data`) read returns;
+  //  - propagation stops, so no archive listener receives shell traffic.
+  // That holds only while this listener exists. A page that erases it (for
+  // example `document.open()` on itself) receives shell messages directly.
   window.addEventListener("message", (event) => {
-    if (!event.isTrusted || event.source !== parent || event.origin !== parentOrigin) return;
-    const message = event.data;
-    if (!message || message.channel !== channel || message.version !== 1)
+    if (!event.isTrusted || messageSource(event) !== embedder || messageOrigin(event) !== parentOrigin) return;
+    const message = messageData(event);
+    if (message === null || typeof message !== "object" ||
+        ownField(message, "channel") !== channel || ownField(message, "version") !== 1)
       return;
+    const type = ownField(message, "type");
+    const claimedSession = ownField(message, "sessionId");
+    const claimedSecret = ownField(message, "photoSecret");
+    delete message.sessionId;
+    delete message.photoSecret;
+    try { if (stopMessage) stopMessage(event); } catch (_) { /* Not a real event: a test double. */ }
     if (
-      message.type === "reader-init" &&
-      typeof message.sessionId === "string" &&
-      message.sessionId
+      type === "reader-init" &&
+      typeof claimedSession === "string" &&
+      claimedSession
     ) {
-      if (sessionId && sessionId !== message.sessionId) {
-        resetDocumentHistory();
-        stopSpeech();
-        resetReadAloud();
-        pauseAllMedia();
-        retireMediaChildren();
-        for (const frame of document.querySelectorAll("iframe,frame"))
-          if (childFrame(frame.contentWindow)) mediaPost(frame.contentWindow, "probe", "");
-        revoke("camera");
-        revoke("location");
+      // Bind this bridge's private token to the new session before anything
+      // else. The shell keeps the first binding it receives for a session, and
+      // no archive script has been able to learn this session id yet.
+      postToParent(
+        { channel, version: 1, type: "reading-pan-bind", sessionId: claimedSession, token: readingPanToken },
+        parentOrigin,
+      );
+      if (sessionId && sessionId !== claimedSession) {
+        // The outgoing session is retired on a best-effort basis: a page that
+        // makes this throw only breaks itself, never the new session's binding.
+        try {
+          resetDocumentHistory();
+          stopSpeech();
+          resetReadAloud();
+          pauseAllMedia();
+          retireMediaChildren();
+          for (const frame of document.querySelectorAll("iframe,frame"))
+            if (childFrame(frame.contentWindow)) mediaPost(frame.contentWindow, "probe", "");
+          revoke("camera");
+          revoke("location");
+        } catch (_) { /* The replacement session proceeds regardless. */ }
       }
-      if (sessionId !== message.sessionId) observedLocationPermission = "prompt";
-      sessionId = message.sessionId;
+      if (sessionId !== claimedSession) observedLocationPermission = "prompt";
+      sessionId = claimedSession;
       // Desktop and not restricted: offer the app's photo chooser. A new
       // session never inherits a request made by the previous one.
       photoChooser = message.photoChooser === true;
-      photoSecret = typeof message.photoSecret === "string" ? message.photoSecret : "";
+      photoSecret = typeof claimedSecret === "string" ? claimedSecret : "";
       clearPhotoPending();
-      // Archive scripts never see reader-init: it carries the session and the
-      // photo secret. This listener was registered before any archive script.
-      try { photoNatives?.stopImmediatePropagation(event); } catch (_) { /* Test doubles. */ }
-      // Capture listener order matters: the bridge responds before any archive
-      // listener can observe this fresh session. The shell pins only its first
-      // proof; later archive-authored bind/pan messages cannot replace it.
-      post("reading-pan-bind", { token: readingPanToken });
       resetReadingPan();
       setLinkPreviews(message.linkPreviews === true);
       if (!mediaReady) mediaRetired = false;
@@ -3928,22 +3982,23 @@
         post("sensor-request", entry.message);
       return;
     }
-    if (!sessionId || message.sessionId !== sessionId) return;
-    if (message.type === "document-probe") {
+    if (!sessionId || claimedSession !== sessionId) return;
+    if (type === "document-probe") {
       // Some engines fire the embedding frame's load event for a same-document
-      // (fragment) navigation. Only this bridge instance, still holding the
-      // probed session, can answer with its private bootstrap token, so the
-      // shell can tell that case from a replaced document without trusting
-      // anything an archive script could send.
-      if (typeof message.nonce === "string" && uuid.test(message.nonce))
-        post("document-proof", { nonce: message.nonce, token: readingPanToken });
+      // (fragment) navigation. The answer says exactly one thing: the bridge
+      // that bound its token to this session is still listening in this
+      // window. Only this instance holds that token, and it leaves this realm
+      // solely through the pre-bound post to the shell.
+      const nonce = ownField(message, "nonce");
+      if (typeof nonce === "string" && uuid.test(nonce))
+        post("document-proof", { nonce, token: readingPanToken });
       return;
     }
-    if (message.type === "photo-result" || message.type === "photo-cancel" || message.type === "photo-accepted") {
+    if (type === "photo-result" || type === "photo-cancel" || type === "photo-accepted") {
       photoResult(message);
       return;
     }
-    if (message.type === "sensor-response") {
+    if (type === "sensor-response") {
       const entry = pending.get(message.requestId);
       if (!entry) return;
       pending.delete(message.requestId);
@@ -3959,7 +4014,7 @@
         updateLocationPermission();
       }
       entry.resolve(message);
-    } else if (message.type === "sensor-revoke") {
+    } else if (type === "sensor-revoke") {
       if (message.sensor === "camera" || message.sensor === "location") {
         if (message.sensor === "location") {
           observedLocationPermission = "prompt";
@@ -3969,7 +4024,7 @@
         }
         revoke(message.sensor);
       }
-    } else if (message.type === "reader-command") command(message);
+    } else if (type === "reader-command") command(message);
   }, true);
   // The shell and the native opener accept only http, https and mailto. Every
   // other scheme (tel:, sms:, geo:, data:, ...) stays blocked here; a genuine
@@ -4271,6 +4326,16 @@
     revoke("location");
     stopSpeech();
     resetReadAloud();
+  });
+  // A document restored from the back-forward cache does not bootstrap again,
+  // so it repeats its announcement: the shell then sees that the frame's
+  // document changed and hands this bridge a session of its own.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted)
+      postToParent(
+        { channel, version: 1, type: "reading-gesture-hello", token: readingPanToken },
+        parentOrigin,
+      );
   });
   // A MapLibre canvas can lose its WebGL context in WKWebView after navigating
   // away and back. Reload once (rate-limited) instead of leaving a blank map.

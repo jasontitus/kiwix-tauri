@@ -13,6 +13,26 @@
   const installed = Symbol.for("kiwix.reader.storage.bridge");
   if (Object.prototype.hasOwnProperty.call(window, installed)) return;
   Object.defineProperty(window, installed, { value: true });
+  // This script's message listener is registered before the reader bridge's,
+  // so the shell's reader messages (which carry the reader session and its
+  // photo secret) can pass through it first. Archive scripts can replace any
+  // prototype accessor later; the event is therefore read only through natives
+  // captured now, and a message that is not a storage message leaves the
+  // listener before anything replaceable runs.
+  const capturedGetter = (key) => {
+    try {
+      const getter = Object.getOwnPropertyDescriptor(MessageEvent.prototype, key)?.get;
+      return getter ? Function.prototype.call.bind(getter) : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const nativeMessageData = capturedGetter("data");
+  const nativeMessageSource = capturedGetter("source");
+  const nativeMessageOrigin = capturedGetter("origin");
+  const hasOwnField = Function.prototype.call.bind(Object.prototype.hasOwnProperty);
+  // `window.parent` is replaceable by page script; the embedding window is not.
+  const embedder = window.parent;
   // Descendants share one synchronous producer owned by the shell's direct
   // reader frame. Only that registered WindowProxy ever posts durable batches;
   // a detached child cannot acquire its own credit or root-message authority.
@@ -443,8 +463,24 @@
   };
   addEventListener("message", (event) => {
     if (upstream) return;
-    if (event.source !== parent || event.origin !== parentOrigin) return;
-    const message = event.data;
+    if (
+      (nativeMessageSource ? nativeMessageSource(event) : event.source) !== embedder ||
+      (nativeMessageOrigin ? nativeMessageOrigin(event) : event.origin) !== parentOrigin
+    )
+      return;
+    const message = nativeMessageData ? nativeMessageData(event) : event.data;
+    if (message === null || typeof message !== "object" || !hasOwnField(message, "type")) return;
+    const type = message.type;
+    // Plain comparisons only: nothing an archive script can replace may run
+    // while a reader message is being dispatched.
+    if (
+      type !== "kiwix-storage-credit" &&
+      type !== "kiwix-storage-ack" &&
+      type !== "kiwix-storage-failed" &&
+      type !== "kiwix-storage-drain" &&
+      type !== "kiwix-storage-resume"
+    )
+      return;
     if (
       message?.documentId === documentId &&
       message.type === "kiwix-storage-credit"

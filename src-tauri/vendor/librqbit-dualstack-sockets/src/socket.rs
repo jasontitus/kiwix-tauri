@@ -83,6 +83,28 @@ impl<S> MaybeDualstackSocket<S> {
     }
 }
 
+/// Whether creating a socket failed because this host does not provide the
+/// requested address family (or its protocol) at all.
+fn address_family_unsupported(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        use nix::errno::Errno;
+        error.raw_os_error().is_some_and(|code| {
+            code == Errno::EAFNOSUPPORT as i32 || code == Errno::EPROTONOSUPPORT as i32
+        })
+    }
+    #[cfg(windows)]
+    {
+        // WSAEAFNOSUPPORT
+        error.raw_os_error() == Some(10047)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = error;
+        false
+    }
+}
+
 impl MaybeDualstackSocket<Socket> {
     fn bind(addr: SocketAddr, opts: BindOpts, is_udp: bool) -> crate::Result<Self> {
         let socket = match Socket::new(
@@ -106,10 +128,15 @@ impl MaybeDualstackSocket<Socket> {
             // A host without IPv6 cannot create the socket at all. A dual-stack
             // wildcard bind asks for every address the host has, and there that
             // is the IPv4 wildcard. Callers that hard-code `[::]` (the UDP
-            // tracker client) would otherwise fail outright.
+            // tracker client) would otherwise fail outright. Any other failure
+            // (no descriptors left, a denied socket) is reported as it is.
             Err(error) => {
                 return match addr {
-                    SocketAddr::V6(v6) if opts.request_dualstack && v6.ip().is_unspecified() => {
+                    SocketAddr::V6(v6)
+                        if opts.request_dualstack
+                            && v6.ip().is_unspecified()
+                            && address_family_unsupported(&error) =>
+                    {
                         debug!(?addr, "IPv6 socket unavailable ({error}); binding the IPv4 wildcard");
                         Self::bind(
                             SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, v6.port())),

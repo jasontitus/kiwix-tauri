@@ -13,18 +13,30 @@ use futures_util::FutureExt;
 /// not make the history permanently unwritable.
 static JOURNAL: Mutex<()> = Mutex::new(());
 
-/// Whether this host can bind the `[::]` dual-stack TCP and UDP sockets the
-/// torrent engine uses by default. A kernel without IPv6 refuses to create
-/// them at all; the same probe-then-IPv4 rule as the LocalSwarm listeners.
+/// Whether this host provides the IPv6 sockets behind the `[::]` dual-stack
+/// TCP and UDP binds the torrent engine uses by default. A kernel without IPv6
+/// refuses to create them at all. Only that refusal counts: any other failure
+/// is left for the engine to report when it binds.
 pub(super) fn dual_stack_available() -> bool {
-    let bind = |kind, protocol| {
-        socket2::Socket::new(socket2::Domain::IPV6, kind, Some(protocol)).and_then(|socket| {
-            socket.set_only_v6(false)?;
-            socket.bind(&SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), 0).into())
-        })
+    let unsupported = |kind, protocol| {
+        socket2::Socket::new(socket2::Domain::IPV6, kind, Some(protocol))
+            .is_err_and(|error| address_family_unsupported(&error))
     };
-    bind(socket2::Type::STREAM, socket2::Protocol::TCP).is_ok()
-        && bind(socket2::Type::DGRAM, socket2::Protocol::UDP).is_ok()
+    !unsupported(socket2::Type::STREAM, socket2::Protocol::TCP)
+        && !unsupported(socket2::Type::DGRAM, socket2::Protocol::UDP)
+}
+
+/// The same rule as the vendored socket crate's IPv4 fallback.
+fn address_family_unsupported(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        matches!(error.raw_os_error(), Some(libc::EAFNOSUPPORT | libc::EPROTONOSUPPORT))
+    }
+    #[cfg(windows)]
+    {
+        // WSAEAFNOSUPPORT
+        error.raw_os_error() == Some(10047)
+    }
 }
 
 impl TorrentManager {

@@ -27,9 +27,9 @@ const SEED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// alone. With the delays below that rides out about fifteen seconds without a
 /// connection.
 const SEED_STALLED_PASSES: u32 = 5;
-/// The stage also ends once this long has gone by without a pass adding
-/// anything, however few passes that took: mirrors that fail slowly must not
-/// hold peers back for the sum of their timeouts.
+/// The stage also ends once consecutive stalled passes have spent this long
+/// waiting on mirrors, however few passes that took: mirrors that fail slowly
+/// must not hold peers back for the sum of their timeouts.
 const SEED_STALL_LIMIT: Duration = Duration::from_secs(120);
 /// Passes one run of the stage may make in total, whatever they add.
 const SEED_MAX_PASSES: u32 = 32;
@@ -452,6 +452,10 @@ struct SeedProgress {
     gained: u64,
     /// Whether the current pass shrank `missing` by at least one piece.
     repaired: bool,
+    /// When the current pass last began waiting on mirrors: its start, or the
+    /// end of the full hash pass, which can take minutes and is no mirror's
+    /// fault.
+    waiting_since: Instant,
 }
 
 /// Download every advertised file into the confined staging factory and verify
@@ -494,10 +498,17 @@ async fn download_with_backoff(
         }))
         .build()
         .map_err(display)?;
-    let mut state = SeedProgress { missing: None, sequential: 0, gained: 0, repaired: false };
+    let mut state = SeedProgress {
+        missing: None,
+        sequential: 0,
+        gained: 0,
+        repaired: false,
+        waiting_since: Instant::now(),
+    };
     let mut stalled = 0u32;
-    let mut last_advance = Instant::now();
-    for _ in 0..SEED_MAX_PASSES {
+    let mut stalled_for = Duration::ZERO;
+    let mut passes = 0u32;
+    loop {
         state.gained = 0;
         state.repaired = false;
         let error = match download_once(&client, token, factory, seed, progress, &mut state).await {
@@ -515,12 +526,17 @@ async fn download_with_backoff(
         let piece = seed.piece_length.min(seed.total.saturating_sub(before)).max(1);
         if state.repaired || state.gained >= piece {
             stalled = 0;
-            last_advance = Instant::now();
+            stalled_for = Duration::ZERO;
         } else {
             stalled += 1;
-            if stalled >= SEED_STALLED_PASSES || last_advance.elapsed() >= SEED_STALL_LIMIT {
-                return Err(error);
-            }
+            stalled_for += state.waiting_since.elapsed();
+        }
+        passes += 1;
+        if stalled >= SEED_STALLED_PASSES
+            || stalled_for >= SEED_STALL_LIMIT
+            || passes >= SEED_MAX_PASSES
+        {
+            return Err(error);
         }
         let delay = backoff * (1 << stalled.saturating_sub(1).min(4));
         tokio::select! {
@@ -528,7 +544,6 @@ async fn download_with_backoff(
             _ = tokio::time::sleep(delay) => {}
         }
     }
-    Err("Web seed kept dropping the connection".into())
 }
 
 async fn download_once(
@@ -539,6 +554,7 @@ async fn download_once(
     progress: &(dyn Fn(u64, u64, f64) + Sync),
     state: &mut SeedProgress,
 ) -> Result<(), SeedError> {
+    state.waiting_since = Instant::now();
     let mut files: Vec<Option<Arc<File>>> = Vec::with_capacity(seed.files.len());
     let mut completed = 0u64;
     for file in &seed.files {
@@ -624,7 +640,10 @@ async fn download_once(
     let mut missing = match state.missing.take() {
         Some(missing) => missing,
         None => match unverified_pieces(seed, &files, None, token).await {
-            Ok(missing) => missing,
+            Ok(missing) => {
+                state.waiting_since = Instant::now();
+                missing
+            }
             Err(_) if token.is_cancelled() => return Ok(()),
             Err(error) => return Err(SeedError::Fatal(error)),
         },
@@ -1332,9 +1351,19 @@ mod tests {
 
     /// A single-file torrent of `BODY` in five-byte pieces with these mirrors.
     fn body_seed(ports: &[u16]) -> WebSeedTorrent {
-        let hashes: Vec<u8> = BODY.chunks(5).flat_map(|chunk| Sha1::digest(chunk).to_vec()).collect();
+        seed_of(BODY, ports)
+    }
+
+    /// A staging directory for `body_seed`, holding `staged` when it is given.
+    fn body_staging(staged: Option<&[u8]>) -> (PathBuf, ConfinedFactory) {
+        staging_of(BODY.len(), staged)
+    }
+
+    /// A single-file torrent of `body` in five-byte pieces with these mirrors.
+    fn seed_of(body: &[u8], ports: &[u16]) -> WebSeedTorrent {
+        let hashes: Vec<u8> = body.chunks(5).flat_map(|chunk| Sha1::digest(chunk).to_vec()).collect();
         let info = dict(&[
-            (b"length", bint(BODY.len() as u64)),
+            (b"length", bint(body.len() as u64)),
             (b"name", bstr(b"map.zim")),
             (b"piece length", bint(5)),
             (b"pieces", bstr(&hashes)),
@@ -1347,8 +1376,9 @@ mod tests {
         parse(&dict(&[(b"info", info), (b"url-list", urls)])).unwrap().unwrap()
     }
 
-    /// A staging directory for `body_seed`, holding `staged` when it is given.
-    fn body_staging(staged: Option<&[u8]>) -> (PathBuf, ConfinedFactory) {
+    /// A staging directory for a `length`-byte `seed_of` torrent, holding
+    /// `staged` when it is given.
+    fn staging_of(length: usize, staged: Option<&[u8]>) -> (PathBuf, ConfinedFactory) {
         let temp = std::env::temp_dir().join(format!("kiwix-webseed-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&temp).unwrap();
         if let Some(staged) = staged {
@@ -1358,7 +1388,7 @@ mod tests {
         let factory = ConfinedFactory {
             root: Arc::new(root),
             path: temp.clone(),
-            expected: Arc::new(HashMap::from([(PathBuf::from("map.zim"), BODY.len() as u64)])),
+            expected: Arc::new(HashMap::from([(PathBuf::from("map.zim"), length as u64)])),
             sources: Arc::new(Mutex::new(HashMap::new())),
             // As the manager sets it for this stage: a file may already exist,
             // and a missing one is still created.
@@ -1421,7 +1451,7 @@ mod tests {
     async fn run_seed(token: &CancellationToken, factory: &ConfinedFactory, seed: &WebSeedTorrent) -> (Result<(), String>, Vec<u64>) {
         let reported = Mutex::new(Vec::new());
         let result = download(token, factory, seed, &|done, total, _| {
-            assert_eq!(total, BODY.len() as u64);
+            assert_eq!(total, seed.total);
             reported.lock().unwrap().push(done);
         }).await;
         (result, reported.into_inner().unwrap())
@@ -1498,19 +1528,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn drops_that_still_add_bytes_do_not_use_up_the_retry_limit() {
-        // More drops than the stall limit allows, each after three new bytes.
-        let drops = SEED_STALLED_PASSES as usize - 1;
-        assert!(drops * 3 < BODY.len());
-        let (port, requests) = mirror(move |index, request| answer(BODY, request, (index < drops).then_some(3)));
-        let (temp, factory) = body_staging(None);
-        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+    async fn drops_that_each_add_a_whole_piece_do_not_use_up_the_stall_limit() {
+        // More drops than the stall limit allows, each after one new piece.
+        let body: Vec<u8> = (0..40).collect();
+        let drops = SEED_STALLED_PASSES as usize + 1;
+        assert!(drops * 5 < body.len());
+        let served = body.clone();
+        let (port, requests) = mirror(move |index, request| answer(&served, request, (index < drops).then_some(5)));
+        let (temp, factory) = staging_of(body.len(), None);
+        let (result, reported) = run_seed(&CancellationToken::new(), &factory, &seed_of(&body, &[port])).await;
         result.unwrap();
-        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), BODY);
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), body);
         let ranges: Vec<_> = requests.lock().unwrap().iter().map(|request| requested_range(request)).collect();
-        let expected: Vec<_> = (0..=drops).map(|index| (index > 0).then(|| format!("{}-", index * 3))).collect();
+        let expected: Vec<_> = (0..=drops).map(|index| (index > 0).then(|| format!("{}-", index * 5))).collect();
         assert_eq!(ranges, expected);
         assert!(reported.is_sorted(), "{reported:?}");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn drops_that_add_less_than_a_piece_still_count_as_stalls() {
+        // A mirror that hands over one byte per connection is not progress the
+        // peers should wait for: the stage ends as it does for no bytes at all.
+        let (port, requests) = mirror(|_, request| answer(BODY, request, Some(1)));
+        let (temp, factory) = body_staging(None);
+        let (result, _) = run_seed(&CancellationToken::new(), &factory, &body_seed(&[port])).await;
+        assert!(result.is_err());
+        assert_eq!(requests.lock().unwrap().len(), SEED_STALLED_PASSES as usize);
+        // What did arrive is kept for the engine and for the next start.
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), &BODY[..SEED_STALLED_PASSES as usize]);
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn the_stage_ends_at_its_pass_limit_however_much_each_pass_adds() {
+        // Every connection delivers one piece and drops, for longer than the
+        // stage may run.
+        let body: Vec<u8> = (0..SEED_MAX_PASSES as usize * 5 + 10).map(|index| index as u8).collect();
+        let served = body.clone();
+        let (port, requests) = mirror(move |_, request| answer(&served, request, Some(5)));
+        let (temp, factory) = staging_of(body.len(), None);
+        let (result, _) = run_seed(&CancellationToken::new(), &factory, &seed_of(&body, &[port])).await;
+        assert!(result.is_err());
+        assert_eq!(requests.lock().unwrap().len(), SEED_MAX_PASSES as usize);
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), &body[..SEED_MAX_PASSES as usize * 5]);
         let _ = std::fs::remove_dir_all(temp);
     }
 
@@ -1524,15 +1585,20 @@ mod tests {
         assert!(result.is_err());
         assert!(reported.is_empty(), "{reported:?}");
         // A pause or cancel during the wait between passes ends the stage at
-        // once, as a stop rather than as a web-seed failure.
+        // once, as a stop rather than as a web-seed failure. The wait here is
+        // far longer than the test allows, so a wait that ignored the stop
+        // would fail it.
+        let wait = Duration::from_secs(30);
         let token = CancellationToken::new();
         let stop = token.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(SEED_BACKOFF / 2).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             stop.cancel();
         });
-        let (result, _) = run_seed(&token, &factory, &seed).await;
+        let started = Instant::now();
+        let result = download_with_backoff(&token, &factory, &seed, &|_, _, _| {}, wait).await;
         assert_eq!(result, Ok(()));
+        assert!(started.elapsed() < wait / 3, "stopping took {:?}", started.elapsed());
         let _ = std::fs::remove_dir_all(temp);
     }
 

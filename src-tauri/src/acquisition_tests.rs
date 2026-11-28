@@ -5288,3 +5288,158 @@ async fn a_rounded_catalog_size_admits_a_direct_download_without_rejecting_its_r
     }
 }
 
+/// What a well-behaved static file server answers for `body`: the requested
+/// tail as a 206 when the request's `If-Range` (if any) names `etag`, and the
+/// whole object as a 200 otherwise.
+fn honest_answer(body: &[u8], etag: &str, request: &str) -> Vec<u8> {
+    let header = |name: &str| request.lines().find_map(|line| line.strip_prefix(name)).map(str::trim);
+    let start = header("range: bytes=")
+        .and_then(|range| range.strip_suffix('-'))
+        .and_then(|start| start.parse::<usize>().ok())
+        .filter(|start| *start < body.len() && header("if-range:").is_none_or(|validator| validator == etag));
+    let mut response = match start {
+        Some(start) => format!(
+            "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{}/{}\r\nContent-Length: {}\r\nETag: {etag}\r\nConnection: close\r\n\r\n",
+            body.len() - 1, body.len(), body.len() - start,
+        ),
+        None => format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: {etag}\r\nConnection: close\r\n\r\n", body.len()),
+    }
+    .into_bytes();
+    response.extend_from_slice(&body[start.unwrap_or(0)..]);
+    response
+}
+
+#[tokio::test]
+async fn a_download_that_ends_before_its_own_header_says_is_refused_and_retry_fetches_the_rest() {
+    // A response delimited only by the connection closing, cut short by a clean
+    // close: nothing in HTTP says it is incomplete, and a direct link has no
+    // advertised digest or exact size. The archive's own header does say.
+    let body = zim_bytes(b'k', 96 * 1024 - 46);
+    let cut = body.len() / 2;
+    for validator in [true, false] {
+        let served = body.clone();
+        let answered = Arc::new(AtomicUsize::new(0));
+        let count = Arc::clone(&answered);
+        let (base, requests, task) = scripted_server(move |request| {
+            if count.fetch_add(1, Ordering::SeqCst) > 0 {
+                return honest_answer(&served, "\"v1\"", request);
+            }
+            let mut response = b"HTTP/1.1 200 OK\r\n".to_vec();
+            if validator {
+                response.extend_from_slice(b"ETag: \"v1\"\r\n");
+            }
+            response.extend_from_slice(b"Connection: close\r\n\r\n");
+            response.extend_from_slice(&served[..cut]);
+            response
+        }).await;
+        let root = test_directory();
+        let store = test_store(&root);
+        let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+        let job = manager.start(format!("{base}/fixture.zim"), root.clone(), None, Some(96 * 1024), None).await.unwrap();
+        let job = finished_job(&manager, &job.id).await;
+        assert_eq!(job.status, "failed", "validator={validator}");
+        assert_eq!(job.error.as_deref(), Some(ZIM_ENDED_EARLY));
+        assert!(!Path::new(&job.destination).exists(), "a cut-off archive was published");
+        assert_eq!(fs::metadata(paths(&job).unwrap().1).unwrap().len(), cut as u64);
+
+        // Retry is the action the message names, and it works: the kept bytes
+        // are continued under their validator, or fetched again without one.
+        manager.resume(&job.id, None).await.unwrap();
+        let job = finished_job(&manager, &job.id).await;
+        assert_eq!(job.status, "complete", "validator={validator}: {:?}", job.error);
+        assert_eq!(fs::read(&job.destination).unwrap(), body);
+        let requests = requests.lock().unwrap().clone();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[1].contains(&format!("\r\nrange: bytes={cut}-\r\n")), validator, "{}", requests[1]);
+        task.abort();
+        drop(manager);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn a_whole_archive_delimited_only_by_the_connection_closing_is_published() {
+    let body = zim_bytes(b'w', 96 * 1024 - 46);
+    let mut response = b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n".to_vec();
+    response.extend_from_slice(&body);
+    let (url, server) = single_response(response).await;
+    let root = test_directory();
+    let store = test_store(&root);
+    let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+    let job = manager.start(url, root.clone(), None, Some(96 * 1024), None).await.unwrap();
+    let job = finished_job(&manager, &job.id).await;
+    assert_eq!(job.status, "complete", "{:?}", job.error);
+    assert_eq!(job.total, Some(body.len() as u64));
+    assert_eq!(fs::read(&job.destination).unwrap(), body);
+    server.await.unwrap();
+    drop(manager);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_zim_header_measures_the_file_it_begins() {
+    let whole = zim_bytes(b'h', 4096);
+    let header: &[u8; 80] = whole[..80].try_into().unwrap();
+    assert_eq!(zim_length(header, 4096), ZimLength::Whole);
+    assert_eq!(zim_length(header, 4095), ZimLength::EndsEarly);
+    assert_eq!(zim_length(header, 2048), ZimLength::EndsEarly);
+    assert_eq!(zim_length(header, 4097), ZimLength::Mismatch);
+    // An early header puts its MIME list at byte 72 and has no checksum field
+    // to measure with, exactly as `archive::validate_layout` treats it.
+    let mut early = *header;
+    early[56..64].copy_from_slice(&72u64.to_le_bytes());
+    assert_eq!(zim_length(&early, 100), ZimLength::Whole);
+    // A checksum position that cannot exist is never a match.
+    let mut absurd = *header;
+    absurd[72..80].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert_eq!(zim_length(&absurd, 4096), ZimLength::Mismatch);
+}
+
+#[tokio::test]
+async fn retry_asks_the_server_again_after_a_mirror_served_a_page_instead_of_the_archive() {
+    // A maintenance or "not found" page sent as a complete 200. Its length was
+    // learned and every byte of it is on disk, but it is not an archive, so
+    // only another request can put the download right.
+    let body = zim_bytes(b'z', 96 * 1024);
+    for (page_length, validator, failure) in [
+        (200, true, "not a ZIM archive"),
+        (200, false, "not a ZIM archive"),
+        (20, false, "too short"),
+    ] {
+        let served = body.clone();
+        let answered = Arc::new(AtomicUsize::new(0));
+        let count = Arc::clone(&answered);
+        let (base, requests, task) = scripted_server(move |request| {
+            if count.fetch_add(1, Ordering::SeqCst) > 0 {
+                return honest_answer(&served, "\"zim\"", request);
+            }
+            let mut response = format!("HTTP/1.1 200 OK\r\nContent-Length: {page_length}\r\n").into_bytes();
+            if validator {
+                response.extend_from_slice(b"ETag: \"page\"\r\n");
+            }
+            response.extend_from_slice(b"Connection: close\r\n\r\n");
+            response.extend(std::iter::repeat_n(b'<', page_length));
+            response
+        }).await;
+        let root = test_directory();
+        let store = test_store(&root);
+        let manager = DownloadManager::new(root.join("state"), store.clone(), crate::update_admission::AdmissionGate::default()).unwrap();
+        let job = manager.start(format!("{base}/fixture.zim"), root.clone(), None, None, None).await.unwrap();
+        let job = finished_job(&manager, &job.id).await;
+        assert_eq!(job.status, "failed");
+        assert!(job.error.as_deref().unwrap().contains(failure), "{:?}", job.error);
+
+        manager.resume(&job.id, None).await.unwrap();
+        let job = finished_job(&manager, &job.id).await;
+        assert_eq!(job.status, "complete", "page={page_length} validator={validator}: {:?}", job.error);
+        assert_eq!(fs::read(&job.destination).unwrap(), body);
+        assert_eq!(requests.lock().unwrap().len(), 2, "Retry must contact the server");
+        task.abort();
+        drop(manager);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+

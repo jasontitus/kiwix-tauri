@@ -227,3 +227,6 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 - net lane DONE (impl/net.md): NET-1 (lan_interface classifier + routed probe), NET-2 (finder error top-level; publisher in share card), NET-4 (library_stopped slot; Android hotspot waiter), NET-5 (addressLost; wildcard urls refresh; 4s poll), NET-6, NET-7, NET-8 (pendingOnly stop), NET-9, CORE-3 fixed; NET-10 residual (owner decision: keep residual until testable on Apple). 9 new t() strings + 1 Rust string. new test-nearby-sharing-surfaces.mjs.
   -> adversarial reviewer launching
 - adv-cidocs round 2 (adv/cidocs-round2.md): R1-R8 closed. LANE cidocs CLOSED. Nits accepted: R9 (call-site not asserted), R10 (job name kept for possible required check). Unverified: Actions run, paths filter on GitHub, Windows host.
+- adv-android DONE (adv/android.md): no blocking. Should-fix R1 (peek on worker -> false 4s timeout pauses all), R2 (export recreated leaks prepared file), R4 (stopSelf(startId)), R5 (unknown codes -> bare code so localized frontend fallback), R3/R6 nits adopt; R7 nits: use hiddenScanName at inline sites only.
+  Owner: adopt R1-R6 (+R7 hiddenScanName). Residuals: onNewIntent-before-plugin-load loss (pre-existing), layoutDirection not handled, Rust sentence table English-only (better than raw JSON), dead nearbyRoute commands.
+  -> android implementer resumed
