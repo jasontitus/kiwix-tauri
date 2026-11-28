@@ -22,10 +22,10 @@ This changelog records source changes, not release certification. Only unsigned 
   - **Startup and quit:**
     - records that cannot be read at load are kept in a sibling copy of the profile instead of being dropped at the next save, and the desktop shows a notice;
     - a failed Quit offers Retry, Quit Without Saving or Cancel and no longer leaves Kiwix running with no window.
-  - **Crash records:** Rust, Swift and Kotlin follow one redaction spec, pinned by 238 shared vectors (`src-tauri/tests/fixtures/`). Only http and https addresses with a public host name keep their scheme, host and any non-default port; their paths, queries and credentials are dropped, and other addresses become `[url]`.
+  - **Crash records:** Rust, Swift and Kotlin follow one redaction spec, pinned by 238 shared vectors (`src-tauri/tests/fixtures/`). Only http and https addresses with a public host name keep their scheme, host and any non-default port; their paths, queries and credentials are dropped, and other addresses become `[url]`. Known gaps, such as a kept host name that is itself personal, are listed in `crash-redaction-spec.md` §4.
   - **Shell and panes:**
     - Android system Back closes open surfaces;
-    - errors from actions inside a dialog appear above it, and are no longer rewritten into the wrong sentence;
+    - errors from actions inside a dialog appear above it and are no longer rewritten into the wrong sentence;
     - map recovery records can be dismissed or retried.
   - **Localization:** Rust-only text (parts of the shared-library pages, the quit dialog and Live Activity status labels) is now collected for translation, with correct English plurals.
   - **Build:** the dead libzim SDK glue is removed and `zbus` is no longer compiled into default Linux builds; CI type-checks the unreleased Linux and Android location providers through an opt-in.
