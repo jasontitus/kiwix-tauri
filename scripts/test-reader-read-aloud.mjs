@@ -956,6 +956,18 @@ test("replaced accessors cannot make the bridge accept a message that is not fro
   assert.deepEqual(frame.messages.slice(before), [], "the bridge reads the real source and origin");
 });
 
+test("a document restored from the back-forward cache announces itself again", () => {
+  const frame = article();
+  const hellos = () => frame.messages.filter((message) => message.type === "reading-gesture-hello");
+  assert.equal(hellos().length, 1);
+  frame.emit("pageshow", { persisted: false });
+  assert.equal(hellos().length, 1, "an ordinary first show is not a restore");
+  frame.emit("pageshow", { persisted: true });
+  assert.equal(hellos().length, 2);
+  assert.equal(hellos()[1].token, hellos()[0].token, "with the same private token");
+  assert.equal(hellos()[1].sessionId, undefined, "and without the session it used to hold");
+});
+
 function click(frame, href, { trusted = true, type = "click", button = 0 } = {}) {
   const anchor = { namespaceURI: "http://www.w3.org/1999/xhtml", localName: "a", url: href, target: "" };
   const event = {

@@ -179,9 +179,18 @@ pub(crate) fn lan_interface(name: &str, point_to_point: bool, loopback: bool) ->
 /// Apple's `pdp_ip*` is already in the virtual list. This is not part of the
 /// peer-locality fence, which proves the peer's address on-link instead.
 pub(crate) fn cellular_interface(name: &str) -> bool {
-    const CELLULAR: [&str; 7] = ["rmnet", "ccmni", "seth", "ppp", "v4-", "clat", "wwan"];
+    const CELLULAR: [&str; 8] = ["rmnet", "ccmni", "seth", "ppp", "v4-", "clat", "wwan", "wwp"];
     let lower = name.to_ascii_lowercase();
     CELLULAR.iter().any(|prefix| lower.starts_with(prefix))
+}
+
+/// A virtual switch that can carry this machine's own LAN address. With a
+/// Hyper-V external switch the physical adapter has no address at all: the
+/// host's only LAN address, and its default route, are on a `vEthernet`
+/// adapter. The NAT "Default Switch" and WSL adapters share the name but
+/// never carry the default route, which is how the caller tells them apart.
+pub(crate) fn host_switch_interface(name: &str) -> bool {
+    name.to_ascii_lowercase().starts_with("vethernet")
 }
 
 /// Names of adapters that are virtual, tunnelled or otherwise not a physical
@@ -190,13 +199,14 @@ pub(crate) fn cellular_interface(name: &str) -> bool {
 /// does not know is admitted only after the address is proven on-link.
 fn virtual_interface(name: &str) -> bool {
     const VIRTUAL: [&str; 9] = ["utun", "bridge", "awdl", "llw", "lo", "gif", "stf", "anpi", "pdp_ip"];
-    const VIRTUAL_LINUX: [&str; 20] = [
+    const VIRTUAL_LINUX: [&str; 23] = [
         "wg", "tun", "tap", "docker", "veth", "br-", "virbr", "vmnet", "zt", "tailscale",
         "cni", "flannel", "kube", "lxc", "lxd", "dummy", "ifb", "sit", "ip6tnl", "gre",
+        "vboxnet", "zerotier", "nordlynx",
     ];
-    const VIRTUAL_WINDOWS: [&str; 7] = [
+    const VIRTUAL_WINDOWS: [&str; 8] = [
         "vethernet", "loopback", "teredo", "isatap", "npcap loopback",
-        "bluetooth network connection", "local area connection*",
+        "bluetooth network connection", "local area connection*", "virtualbox host-only",
     ];
     let lower = name.to_ascii_lowercase();
     VIRTUAL.iter().any(|prefix| name.starts_with(prefix))
@@ -386,11 +396,12 @@ mod tests {
             // Linux tunnels, bridges and container links.
             "wg0", "tun0", "tap0", "docker0", "veth1a2b", "br-9f8e", "virbr0", "vmnet8",
             "zt0", "tailscale0", "cni0", "flannel.1", "kube-ipvs0", "lxcbr0", "lxdbr0",
-            "dummy0", "ifb0", "sit0", "ip6tnl0", "gre0",
+            "dummy0", "ifb0", "sit0", "ip6tnl0", "gre0", "vboxnet0", "nordlynx",
             // Windows virtual adapters.
             "vEthernet (Default Switch)", "Loopback Pseudo-Interface 1", "Teredo Tunneling Pseudo-Interface",
             "isatap.example.org", "Npcap Loopback Adapter", "Bluetooth Network Connection",
-            "Local Area Connection* 1",
+            "Local Area Connection* 1", "VirtualBox Host-Only Network", "VirtualBox Host-Only Ethernet Adapter #2",
+            "ZeroTier One [8056c2e21c000001]", "NordLynx",
         ] {
             assert!(super::virtual_interface(name), "{name}");
         }
@@ -410,10 +421,18 @@ mod tests {
             assert!(!super::lan_interface(name, false, true), "{name} as loopback");
             assert!(!super::cellular_interface(name), "{name}");
         }
-        for name in ["docker0", "vEthernet (WSL)", "tun0", "wg0", "utun3", "bridge100", "pdp_ip0", "lo"] {
+        for name in ["docker0", "vEthernet (WSL)", "tun0", "wg0", "utun3", "bridge100", "pdp_ip0", "lo",
+            "vboxnet0", "VirtualBox Host-Only Network", "ZeroTier One [8056c2e21c000001]", "NordLynx"] {
             assert!(!super::lan_interface(name, false, false), "{name}");
         }
-        for name in ["rmnet_data0", "rmnet0", "ccmni1", "seth_lte0", "ppp0", "v4-rmnet_data0", "clat4", "wwan0"] {
+        // Only a Hyper-V switch can be the adapter that holds the host's LAN.
+        for name in ["vEthernet (External Switch)", "vEthernet (Default Switch)", "vEthernet (WSL)"] {
+            assert!(super::host_switch_interface(name), "{name}");
+        }
+        for name in ["docker0", "NordLynx", "wg0", "tailscale0", "bridge100", "Ethernet", "Wi-Fi"] {
+            assert!(!super::host_switch_interface(name), "{name}");
+        }
+        for name in ["rmnet_data0", "rmnet0", "ccmni1", "seth_lte0", "ppp0", "v4-rmnet_data0", "clat4", "wwan0", "wwp0s20f0u6"] {
             assert!(super::cellular_interface(name), "{name}");
             // Not part of the locality fence: that proves the peer on-link.
             assert!(super::lan_interface(name, false, false), "{name}");

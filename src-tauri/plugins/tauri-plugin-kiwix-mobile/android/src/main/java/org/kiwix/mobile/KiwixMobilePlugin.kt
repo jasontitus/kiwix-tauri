@@ -1801,7 +1801,7 @@ class KiwixMobilePlugin(initialActivity: Activity) : Plugin(initialActivity) {
         }
         foregroundTimeout = timeout
         main.postDelayed(timeout, 4000)
-        try { ContextCompat.startForegroundService(applicationContext, intent) }
+        try { KiwixTransferService.requestForegroundStart(applicationContext, intent) }
         catch (error: Exception) {
             foregroundInvoke = null
             foregroundTimeout = null

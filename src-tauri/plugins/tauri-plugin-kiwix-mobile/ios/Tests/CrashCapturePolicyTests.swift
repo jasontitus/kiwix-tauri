@@ -8,7 +8,8 @@ final class CrashCapturePolicyTests: XCTestCase {
       HTTP://book-uuid-nonce.localhost.:9/A/Pri)vate_Page
       http://127.0.0.2:9/A/Private http://[::1]:9/A/Private
       https://example.org/book-uuid/%2Ekiwix/token/A/Private
-      path=/book-uuid/A/Private relative=/.kiwix/token/A/Private
+      path=/book-uuid/A/Private
+      relative=/.kiwix/token/A/Private
       ZIM://book-uuid/A/Private MAILTO:private@example.org
       content://provider/Private file:///Documents/Private%20Notes.txt
       custom://host/Private https://user:pass@example.org/read?q=private#private
@@ -17,6 +18,48 @@ final class CrashCapturePolicyTests: XCTestCase {
       [reader-url] [reader-url] [reader-url] [reader-url] path=[path] relative=[path] \
       [url] [url] [url] [url] [url] https://example.org/read
       """)
+  }
+
+  func testReportTextKeepsNoPartOfAPathOrFileURLThatContainsSpaces() {
+    // Stopping at the first space kept the rest of the container or library
+    // path. A path now ends only where it cannot continue.
+    let cases: [(String, String)] = [
+      ("open /var/mobile/Containers/Data/Application/0A1B/Documents/My Books/medical wikipedia.zim failed",
+       "open [path]"),
+      ("Cannot parse /private/var/mobile/Jane Doe/My Library/state.json: expected value at line 1 column 1",
+       "Cannot parse [path]: expected value at line 1 column 1"),
+      (#"Cannot parse C:\Users\Jane Doe\My Library\state.json: expected value"#,
+       "Cannot parse [path]: expected value"),
+      // A quoted path ends at its closing quote, so the cause survives; an
+      // escaped quote inside the name does not end it.
+      (#"cannot read "/var/mobile/jane doe/My Books/a.zim" (os error 13)"#,
+       #"cannot read "[path]" (os error 13)"#),
+      (#"cannot read "/var/mobile/My \"Best\" Books/a.zim" (os error 13)"#,
+       #"cannot read "[path]" (os error 13)"#),
+      (#"cannot read "C:\\Users\\Jane Doe\\" (os error 5)"#,
+       #"cannot read "[path]" (os error 5)"#),
+      // An apostrophe is part of a name, not the end of the path.
+      ("missing '/Volumes/Jane's Backup/Private Notes/a.zim' on disk", "missing '[path]"),
+      ("at ~/My Documents/Private Notes.txt now", "at [path]"),
+      ("see </var/mobile/My Books/a.zim> and `/var/mobile/Other Books/b.zim` next",
+       "see <[path]> and `[path]` next"),
+      ("open /var/mobile/My Books/a.zim\nthen retry", "open [path] then retry"),
+      // A file URL is a path and may carry unencoded spaces.
+      ("open file:///var/mobile/Jane Doe/Private Notes.txt now", "open [url]"),
+      ("file:///var/mobile/My Books/a.zim: No such file or directory", "[url]: No such file or directory"),
+      (#"opening "file:///var/mobile/My Books/a.zim" did not work"#, #"opening "[url]" did not work"#),
+      ("FILE:/var/mobile/My Books/a.zim\nthen retry", "[url] then retry"),
+      // Other URLs still end at whitespace.
+      ("see https://example.org/read me", "see https://example.org/read me"),
+      ("content://provider/My Books and more", "[url] Books and more"),
+    ]
+    for (text, expected) in cases {
+      let redacted = CrashIntake.redact(text)
+      XCTAssertEqual(redacted, expected)
+      for leaked in ["Doe", "doe", "Library", "Books/", "Backup", "Notes", "wikipedia", "Documents", "state.json", "a.zim"] {
+        XCTAssertFalse(redacted.contains(leaked), "\(leaked) survived in: \(redacted)")
+      }
+    }
   }
 
   func testReadOnlyCutoverDrainsWritesAndRejectsLaterCapture() {

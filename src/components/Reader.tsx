@@ -1974,6 +1974,8 @@ export default function Reader(props: ReaderProps) {
   const initializeDocument = useCallback((session: FrameSession) => {
     bridgeVouched.current = false;
     pendingInit.current = "";
+    // A proof that would only have vouched for this initialisation is spent.
+    if (documentProbe.current && !documentProbe.current.kept) clearDocumentProbe();
     frameRef.current?.contentWindow?.postMessage(
       {
         channel: "kiwix-reader",
@@ -1993,7 +1995,7 @@ export default function Reader(props: ReaderProps) {
       },
       session.location.origin,
     );
-  }, [photoSecretFor]);
+  }, [clearDocumentProbe, photoSecretFor]);
   // A document that no bridge has vouched for is never initialised: a page
   // without a bridge, or one whose bridge listener is gone, would read the
   // session id and the photo secret directly. It stays unadmitted and hidden
@@ -2135,8 +2137,9 @@ export default function Reader(props: ReaderProps) {
         frameNavigation.current?.node !== probe.node ||
         frameNavigation.current.frameId !== active.frameId
       )
-        return;
+        return false;
       resessionFrame(probe.node, active, painted);
+      return true;
     },
     [resessionFrame],
   );
@@ -2156,7 +2159,7 @@ export default function Reader(props: ReaderProps) {
           // the bridge is alive, so the replacement session reaches it.
           probe.kept = false;
           probe.timer = undefined;
-          resessionUnproven(probe, false);
+          if (!resessionUnproven(probe, false)) documentProbe.current = null;
         }, DOCUMENT_PROOF_TIMEOUT);
       probe.node.contentWindow?.postMessage(
         {

@@ -1154,6 +1154,28 @@ pub fn lan_addresses<'a>(candidates: impl IntoIterator<Item = InterfaceCandidate
     addresses
 }
 
+/// Addresses on a host virtual switch: never advertised as a LAN, but the
+/// place a machine's own LAN address lives when a Hyper-V external switch
+/// took it over. Only a caller that also knows the routed address may use one.
+pub fn host_switch_addresses<'a>(candidates: impl IntoIterator<Item = InterfaceCandidate<'a>>) -> Vec<IpAddr> {
+    let mut addresses: Vec<IpAddr> = candidates.into_iter()
+        .filter(|candidate| !candidate.point_to_point && !candidate.loopback && transfer_policy::host_switch_interface(candidate.name))
+        .map(|candidate| candidate.address).filter(|address| usable_address(*address)).collect();
+    addresses.sort(); addresses.dedup(); addresses.truncate(32);
+    addresses
+}
+
+/// The LAN addresses of this device and, separately, those on a host virtual
+/// switch, from one enumeration.
+pub fn local_candidates() -> Result<(Vec<IpAddr>, Vec<IpAddr>), String> {
+    let interfaces = if_addrs::get_if_addrs().map_err(|e| format!("Cannot enumerate local interfaces: {e}"))?;
+    let candidates = || interfaces.iter().map(|interface| InterfaceCandidate {
+        name: &interface.name, address: interface.ip(),
+        point_to_point: interface.is_p2p(), loopback: interface.is_loopback(),
+    });
+    Ok((lan_addresses(candidates()), host_switch_addresses(candidates())))
+}
+
 pub fn reachable_addresses() -> Result<Vec<IpAddr>, String> {
     let interfaces = if_addrs::get_if_addrs().map_err(|e| format!("Cannot enumerate local interfaces: {e}"))?;
     Ok(lan_addresses(interfaces.iter().map(|interface| InterfaceCandidate {

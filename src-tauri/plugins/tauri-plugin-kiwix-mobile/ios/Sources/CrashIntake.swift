@@ -18,13 +18,20 @@ enum CrashIntake {
   private static let previousFile = "previous.json"
   private static let tempFile = ".pending.json.tmp"
   // Compiled once: the redaction helper runs per field and per stack frame.
+  // Folder and file names contain spaces and apostrophes, so neither ends a
+  // path. Once one starts it runs to a closing quote (not `\"`), an angle
+  // bracket, a backtick, a line break or the ": " before an error's cause;
+  // words in between are dropped with it. Same rule as `path_end` in crash.rs.
+  private static let pathTail = #"(?>[^"<>`\r\n:\\]|\\\\|\\"|\\|:(?!\s))*+"#
+  // A file URL is a path and may be written with unencoded spaces.
   private static let urlPattern = try! NSRegularExpression(
-    pattern: #"(?i)(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://|(?:blob|content|data|file|mailto|tauri|tel|zim):(?!:))[^\s"<>`]*"#)
+    pattern: #"(?i)(?<![a-z0-9+.-])(?:file:(?=/)"# + pathTail
+      + #"|(?:[a-z][a-z0-9+.-]*://|(?:blob|content|data|file|mailto|tauri|tel|zim):(?!:))[^\s"<>`]*)"#)
   private static let bearerPattern = try! NSRegularExpression(pattern: #"(?i)\bbearer\s+\S+"#)
   private static let secretPattern = try! NSRegularExpression(
     pattern: #"(?i)\b(authorization|access_token|refresh_token|api_key|apikey|password|passwd|cookie|token|secret|pin)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;&)\]}]+)"#)
   private static let pathPattern = try! NSRegularExpression(
-    pattern: #"(?<![^\s=(\[{"',;:`])(?:/(?!/)|[a-zA-Z]:[\\/]|~/|\\\\)[^\s"<>`]+"#)
+    pattern: #"(?<![^\s=(\[{"',;:`])(?:/(?=[^/\s])|[a-zA-Z]:(?=[\\/])|~/|\\\\)"# + pathTail)
   private static let tokenPattern = try! NSRegularExpression(pattern: #"\b[A-Za-z0-9_+/=-]{40,}\b"#)
 
   static func install() {
@@ -147,7 +154,7 @@ enum CrashIntake {
 
   static func redact(_ value: String) -> String {
     var text = replacing(value, urlPattern) { match in
-      safeURL(match)
+      keepingSeparator(match, safeURL(match))
     }
     text = replacing(text, bearerPattern) { _ in "bearer [redacted]" }
     text = replacing(text, secretPattern) { match in
@@ -155,9 +162,14 @@ enum CrashIntake {
         .trimmingCharacters(in: .whitespaces)
       return "\(key)=[redacted]"
     }
-    text = replacing(text, pathPattern) { _ in "[path]" }
+    text = replacing(text, pathPattern) { match in keepingSeparator(match, "[path]") }
     text = replacing(text, tokenPattern) { _ in "[redacted]" }
     return text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+  }
+
+  /// The space before the delimiter that ended a path is not part of it.
+  private static func keepingSeparator(_ match: String, _ replacement: String) -> String {
+    match.last?.isWhitespace == true ? replacement + " " : replacement
   }
 
   private static func replacing(

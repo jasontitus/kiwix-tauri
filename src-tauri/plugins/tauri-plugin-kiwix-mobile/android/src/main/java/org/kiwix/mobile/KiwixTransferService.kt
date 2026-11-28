@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.ResultReceiver
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import java.lang.ref.WeakReference
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -112,6 +113,25 @@ internal fun transferStartDecision(
     return TransferStartDecision(step, step != TransferStartStep.ADMIT && !foreground)
 }
 
+internal enum class TransferStop { STOP_SERVICE, LEAVE_TO_QUEUED_START }
+
+/**
+ * How the service is retired from outside. Android kills the process when a
+ * service is stopped while a start requested with startForegroundService has
+ * not been delivered yet. Such a start is never stopped from outside: its
+ * admission is retired instead, so it arrives stale, enters the foreground
+ * once and stops itself.
+ */
+internal fun transferStopDecision(queuedForegroundStarts: Int): TransferStop =
+    if (queuedForegroundStarts > 0) TransferStop.LEAVE_TO_QUEUED_START else TransferStop.STOP_SERVICE
+
+/**
+ * The start id a service instance may stop itself up to, or null while the
+ * start that created it has not been delivered: that start stops the service
+ * when it arrives.
+ */
+internal fun transferSelfStopId(deliveredStartId: Int): Int? = deliveredStartId.takeIf { it > 0 }
+
 class KiwixTransferService : Service() {
     companion object {
         const val ACTION_UPDATE = "org.kiwix.mobile.TRANSFER_UPDATE"
@@ -120,6 +140,8 @@ class KiwixTransferService : Service() {
         private const val NOTIFICATION = 7401
         private const val ADMISSION = "org.kiwix.mobile.TRANSFER_ADMISSION"
         private var generation = 0L
+        /** Foreground starts requested from Android and not yet delivered to onStartCommand. */
+        private var queuedForegroundStarts = 0
         private var instance = WeakReference<KiwixTransferService>(null)
         @Volatile var running = false
             private set
@@ -137,12 +159,39 @@ class KiwixTransferService : Service() {
             return running && isCurrent(admitted)
         }
 
+        /**
+         * Main thread. The only place a foreground start is requested, so every
+         * one is counted from the request until Android delivers it.
+         */
+        @Synchronized fun requestForegroundStart(context: Context, intent: Intent) {
+            check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+            ContextCompat.startForegroundService(context, intent)
+            queuedForegroundStarts += 1
+        }
+
+        @Synchronized private fun foregroundStartDelivered() {
+            if (queuedForegroundStarts > 0) queuedForegroundStarts -= 1
+        }
+
+        /**
+         * Retires every admission issued so far. The service is stopped from
+         * outside only when no foreground start is queued; a queued start finds
+         * its admission retired and stops the service itself.
+         */
         @Synchronized fun stop(context: Context) {
             generation += 1
+            if (transferStopDecision(queuedForegroundStarts) == TransferStop.LEAVE_TO_QUEUED_START) return
             context.stopService(Intent(context, KiwixTransferService::class.java))
         }
 
-        /** Main-thread retirement releases the owned lock before acknowledging Rust. */
+        /**
+         * Main-thread retirement releases the owned lock before acknowledging Rust.
+         * The returned latch opens when the instance that existed at this call
+         * is destroyed, which a queued foreground start may delay until that
+         * start has been delivered. Null means no instance existed: a service
+         * that a still-queued start creates afterwards stops itself and has no
+         * latch here.
+         */
         fun stopOwned(context: Context): CountDownLatch? {
             val service = instance.get()
             service?.finish()
@@ -182,6 +231,9 @@ class KiwixTransferService : Service() {
         // updateRunning calls this directly with startId 0; only Android's own
         // deliveries carry an id that stopSelf can be bounded by.
         if (startId > 0) deliveredStartId = startId
+        // Android's deliveries of ACTION_UPDATE are exactly the starts requested
+        // through requestForegroundStart.
+        if (startId > 0 && intent?.action == ACTION_UPDATE) foregroundStartDelivered()
         if (intent?.action == ACTION_PAUSE) {
             TransferEvents.emit(this, "transfers-pause")
             finish()
@@ -321,11 +373,13 @@ class KiwixTransferService : Service() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         foreground = false
         // Stop only up to the newest delivered start. A start Android has queued
-        // but not delivered yet (a foreground start racing a Pause tap) keeps
-        // the service alive; it then arrives with a retired admission, enters
-        // the foreground once and stops itself. An unbounded stopSelf() would
-        // stop the service under that queued foreground start.
-        if (deliveredStartId > 0) stopSelf(deliveredStartId) else stopSelf()
+        // but not delivered yet (a foreground start racing a Pause tap or an
+        // outside stop) keeps the service alive; it then arrives with a retired
+        // admission, enters the foreground once and stops itself. An unbounded
+        // stopSelf() would stop the service under that queued foreground start.
+        // With nothing delivered yet, the start that created this instance is
+        // itself still queued and does the stopping.
+        transferSelfStopId(deliveredStartId)?.let { stopSelf(it) }
     }
 
     override fun onDestroy() {

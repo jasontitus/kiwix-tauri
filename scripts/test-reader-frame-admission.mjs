@@ -547,6 +547,10 @@ test("a same-document reopen is initialised once the bridge already in the frame
   const navigated = reopen();
   navigated.r.hello();
   assert.equal(navigated.r.inits().at(-1).data.sessionId, "session-2");
+  // The proof that was asked for is spent with that initialisation.
+  navigated.r.proof(navigated.token, { sessionId: navigated.session, nonce: navigated.r.probes().at(-1).data.nonce });
+  assert.equal(navigated.r.context.bridgeVouched.current, false);
+  assert.equal(navigated.r.inits().length, 2);
   // The earlier session is never named to another frame or another archive origin.
   for (const overrides of [
     { contextId: "context-2" },
