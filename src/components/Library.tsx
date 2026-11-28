@@ -310,11 +310,13 @@ export default function Library({
   const [suggestionToken, setSuggestionToken] = useState<string | null>(null);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
   const [searchInputFocused, setSearchFocused] = useState(false);
+  const [searchSubmitted, setSearchSubmitted] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
   // Suggestions follow the focused search field but never supersede an
   // explicit search: search and suggest share one request, so a suggestion
-  // would cancel the running search, and a list opened over fresh results
-  // hides them. Typing (which clears the results) brings suggestions back.
-  const searchFocused = searchInputFocused && !busy && !results;
+  // would cancel the running search, and a list opened over its results (or
+  // its error) hides them. The next keystroke brings suggestions back.
+  const searchFocused = searchInputFocused && !busy && !searchSubmitted;
   const [suggestionActive, setSuggestionActive] = useState(-1);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const suggestionId = useRef(0);
@@ -761,6 +763,7 @@ export default function Library({
     const request = searchRequest.current;
     if (!privacy || !request) return;
     const id = ++searchId.current;
+    setSearchSubmitted(true);
     const parameters = { bookIds: [...selected], query, mode };
     searchParameters.current = { parameters, privacy };
     const isCurrent = () =>
@@ -1375,9 +1378,11 @@ export default function Library({
               <label className="search-field">
                 <Search size={17} />
                 <input
+                  ref={searchInput}
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
+                    setSearchSubmitted(false);
                     invalidateSearch();
                   }}
                   onKeyDown={onSearchKeyDown}
@@ -1514,6 +1519,9 @@ export default function Library({
                   {results.corrections.map((correction) => (
                     <button type="button" key={correction.correctedQuery} disabled={busy || snippetSaving}
                       onClick={() => {
+                        // The results, this button included, are replaced:
+                        // keep focus on the field that now holds the query.
+                        searchInput.current?.focus();
                         setSearch(correction.correctedQuery);
                         void performSearch(correction.correctedQuery);
                       }}>

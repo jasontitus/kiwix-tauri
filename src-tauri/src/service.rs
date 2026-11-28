@@ -2137,11 +2137,13 @@ impl Service {
                 imports.push(path.to_string_lossy().into_owned());
             }
         }
+        let mut imported = false;
         if !imports.is_empty() {
             imports.sort();
             let service = self.clone();
             let result = blocking(move || service.import_monitored_paths(imports)).await?;
             self.record_watch_result(&result)?;
+            imported = result["books"].as_array().is_some_and(|books| !books.is_empty());
         }
 
         // A monitored folder that is a mount point lists as an empty (or
@@ -2156,9 +2158,14 @@ impl Service {
                 .iter()
                 .any(|path| crate::watch::same_path(path, Path::new(&book.path)))
         });
-        if any_known_present {
+        let unchanged = self.watched_device_unchanged(&directory, device);
+        // Archives just admitted from this listing also show the folder is
+        // live, unless known archives are missing from a changed filesystem
+        // (files left underneath an unmounted mount point).
+        if any_known_present || (imported && (known.is_empty() || unchanged)) {
             self.remember_watched_device(&directory, device);
-        } else if !known.is_empty() && !self.watched_device_unchanged(&directory, device) {
+        }
+        if !any_known_present && !known.is_empty() && !unchanged {
             return Ok(());
         }
         for book in known {

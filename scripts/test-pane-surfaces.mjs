@@ -154,6 +154,28 @@ test("a card failure far down Discover or Maps is shown where it can be seen", {
   await last.asElement().click();
   await until(bandVisible, "Fixture preparation rejected");
   assert.deepEqual(await page.evaluate(painted, "Fixture preparation rejected"), { copies: 1, alertDialog: false });
+  await page.click('.global-error button[aria-label="Dismiss error"]');
+  await until(() => !document.querySelector(".global-error"));
+  // A card's failure that arrives while another area's dialog is open is not
+  // painted as that area's: it goes to the alert above the dialog.
+  await page.evaluate(() => {
+    delete window.failures.map_prepare;
+    window.results.map_prepare = (args) => ({ regionId: args.regionId, language: args.language,
+      name: "map_39", md5: "fixture", installed: null, token: "decision" });
+    window.failures.map_start = "Fixture area 39 rejected";
+    window.delays.map_start = 1500;
+  });
+  await last.asElement().click();
+  await until(() => window.calls.some((call) => call.command === "map_start"));
+  await page.evaluate(() => [...document.querySelectorAll(".map-card h3 button")].find((node) => node.textContent === "Area 00").click());
+  await until(() => document.querySelector("dialog[open]")?.textContent.includes("Map language"));
+  await until(() => document.querySelector("dialog[role=alertdialog][open]")?.textContent.includes("Fixture area 39 rejected"));
+  assert.deepEqual(await page.evaluate(painted, "Fixture area 39 rejected"), { copies: 1, alertDialog: true });
+  await button("dialog[role=alertdialog][open]", "Dismiss");
+  await until(() => !document.querySelector("dialog[role=alertdialog][open]"));
+  await page.keyboard.press("Escape");
+  await until(() => !document.querySelector("dialog[open]"));
+  await page.evaluate(() => { window.delays.map_start = 0; });
 
   // Delete can keep a file it cannot prove is its own: the job stays listed.
   const job = {
@@ -228,13 +250,15 @@ test("Library removal, search and spelling suggestions each have one visible out
   await until(() => window.calls.filter((call) => call.command === "search").length === 2);
   assert.equal((await calls("search"))[1].args.query, "animal");
   assert.equal(await page.$eval('input[aria-label="Search articles"]', (node) => node.value), "animal");
+  // The pressed correction is replaced by the new results; focus stays on the query.
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Search articles");
   assert.deepEqual(pageErrors, []);
 });
 
 test("Downloads shows kept progress, retained originals and one owner per failure", { skip, timeout: 240000 }, async (t) => {
   const { page, pageErrors, until, button, pane, calls } = await open(t);
   const original = { id: "original", title: "Old edition", name: "old_eng", installationId: "old-installation",
-    path: "/fixture/old_eng_2025-01.zim", date: "2025-01-01", tags: [], sourceReference: null };
+    path: "/fixture/old_eng_2025-01.zimaa", date: "2025-01-01", tags: [], sourceReference: null };
   const transaction = { id: "transaction-1", intentId: "intent", original, revision: 1,
     replacement: { id: "installed", installationId: "fixture-installation", title: "Installed archive", date: "2026-01-01" },
     rolledBackInstallationId: null, rollbackBook: null, originalDiscarded: false };
@@ -267,6 +291,15 @@ test("Downloads shows kept progress, retained originals and one owner per failur
   await button("dialog[open]", "Cancel");
   await until(() => !document.querySelector("dialog[open]"));
 
+  // A failed rollback is shown in its own card, once, where the button was.
+  await page.evaluate(() => { window.failures.edition_rollback = "Fixture rollback refused"; });
+  await button('section[aria-label="Retained original editions"]', "Roll back to original edition");
+  await button("dialog.modal-confirmation[open]", "Roll back edition");
+  await until(() => document.querySelector("#edition-original-transaction-1[role=alert]")?.textContent === "Fixture rollback refused");
+  assert.deepEqual(await page.evaluate(painted, "Fixture rollback refused"), { copies: 1, alertDialog: false });
+  // The button disabled itself while working, so focus is kept on the outcome.
+  assert.equal(await page.evaluate(() => document.activeElement?.id), "edition-original-transaction-1");
+
   // Deleting a retained original asks first, names the file and closes rollback.
   await page.evaluate((value) => {
     window.results.edition_discard_original = () => {
@@ -278,7 +311,7 @@ test("Downloads shows kept progress, retained originals and one owner per failur
   await button('section[aria-label="Retained original editions"]', "Delete retained original");
   await until(() => document.querySelector("dialog.modal-confirmation[open]"));
   assert.match(await page.$eval("dialog.modal-confirmation[open]", (node) => node.textContent),
-    /Permanently delete the retained original “Old edition” \(.*old_eng_2025-01\.zim\)/);
+    /Permanently delete the retained original “Old edition” \(.*old_eng_2025-01\.zimaa\)[^]*every part of it is removed/);
   await page.keyboard.press("Escape");
   await until(() => !document.querySelector("dialog[open]"));
   assert.equal((await calls("edition_discard_original")).length, 0);

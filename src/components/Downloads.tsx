@@ -1001,12 +1001,21 @@ export default function Downloads({
       if (alive.current && isPrivacyContextCurrent(privacy)) {
         onRefresh();
         await load();
-        setEditionActionError(errorText(value));
+        // Shown in this transaction's card, where the action was, not at the
+        // top of a page that may be scrolled away; recorded, not painted twice.
+        onError(value, "blocking", false);
+        originalOutcomeFocus.current = true;
+        setOriginalOutcome({ id: transaction.id, failed: true, message: errorText(value) });
       }
     } finally {
       editionPending.current = false;
       if (alive.current) setEditionWorking(null);
     }
+  }
+  function rollbackFromCard(transaction: EditionTransaction) {
+    setOriginalOutcome(null);
+    originalOutcomeFocus.current = false;
+    void rollbackEdition(transaction);
   }
   async function discardOriginal(transaction: EditionTransaction) {
     const privacy = capturePrivacyContext();
@@ -1019,6 +1028,8 @@ export default function Downloads({
       : isIOS ? pathFileName(original.path) : displayPath(original.path);
     // A provider-backed original is not Kiwix's to delete: only its hold is released.
     const external = original.sourceReference != null;
+    // delete_book removes the whole part set of a split archive, named by its first part.
+    const split = /\.zimaa$/i.test(original.path);
     editionPending.current = true;
     setEditionWorking(transaction.id);
     setOriginalOutcome(null);
@@ -1026,9 +1037,10 @@ export default function Downloads({
     try {
       const confirmed = await confirmAction(external
         ? t("Stop keeping the retained original “{title}” ({file})? Kiwix cannot delete it: the file stays where it is, in the app or storage that provides it. This edition can then no longer be rolled back.", { title: original.title, file })
-        : settingsRef.current.trashDeletedFiles
+        : (settingsRef.current.trashDeletedFiles
           ? t("Move the retained original “{title}” ({file}) to the system trash? This edition can then no longer be rolled back.", { title: original.title, file })
-          : t("Permanently delete the retained original “{title}” ({file})? This cannot be undone, and this edition can then no longer be rolled back.", { title: original.title, file }), {
+          : t("Permanently delete the retained original “{title}” ({file})? This cannot be undone, and this edition can then no longer be rolled back.", { title: original.title, file })) +
+          (split ? "\n\n" + t("This is the first part of a split archive: every part of it is removed.") : ""), {
         confirmLabel: external ? t("Stop keeping original") : t("Delete retained original"),
         danger: !external,
       });
@@ -1038,6 +1050,10 @@ export default function Downloads({
         privacyGeneration: privacy.generation,
       });
       if (alive.current && isPrivacyContextCurrent(privacy)) {
+        onRefresh();
+        await load();
+        // Set after the refreshed status, so the outcome renders with the
+        // card's final buttons and its focus decision sees them.
         originalOutcomeFocus.current = true;
         setOriginalOutcome({
           id: transaction.id,
@@ -1050,13 +1066,15 @@ export default function Downloads({
                 ? t("The retained original was already gone, so nothing was deleted. This edition can no longer be rolled back.")
                 : t("Kiwix no longer keeps the retained original. Its file was not deleted; remove it in the app or storage that provides it if you no longer need it."),
         });
-        onRefresh();
-        await load();
       }
     } catch (value) {
       if (alive.current && isPrivacyContextCurrent(privacy)) {
+        // Shown in the transaction's card; recorded, not painted twice.
+        onError(value, "blocking", false);
         onRefresh();
         await load();
+        // The refreshed status can remove the button (already discarded).
+        originalOutcomeFocus.current = true;
         setOriginalOutcome({ id: transaction.id, failed: true, message: errorText(value) });
       }
     } finally {
@@ -1067,12 +1085,14 @@ export default function Downloads({
   useEffect(() => {
     // The action button leaves once the original is gone; keep keyboard and
     // screen-reader focus on the outcome instead of dropping it to the page.
+    // Outcomes are set after the refreshed status, so this render already has
+    // the card's final buttons: decide once.
     if (!originalOutcome || !originalOutcomeFocus.current) return;
+    originalOutcomeFocus.current = false;
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
-    originalOutcomeFocus.current = false;
     document.getElementById(`edition-original-${originalOutcome.id}`)?.focus();
-  }, [originalOutcome, editions]);
+  }, [originalOutcome]);
   function eta(seconds: number) {
     const remaining = remainingTime(seconds);
     return remaining.unit === "seconds"
@@ -1634,7 +1654,7 @@ export default function Downloads({
                     <div className="download-actions">
                       <button disabled={localBlocked || editionWorking !== null ||
                         !libraryIndex.installations.has(transaction.replacement.installationId)}
-                        onClick={() => void rollbackEdition(transaction)}>
+                        onClick={() => rollbackFromCard(transaction)}>
                         {t("Roll back to original edition")}
                       </button>
                       <button className={transaction.original.sourceReference != null ? undefined : "danger"}

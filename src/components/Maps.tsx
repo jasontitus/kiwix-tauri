@@ -391,11 +391,12 @@ export default function Maps({
       isPrivacyContextCurrent(request.privacy) &&
       !request.privacy.privateMode && !request.privacy.readOnly;
   }
-  /** The open area dialog shows its failure beside Get map. A card or the job
-   * panel can be scrolled anywhere in the page, so their failures go to the
-   * shell's always-visible surface instead of the top of the scrolled page. */
-  function reportStartError(e: unknown) {
-    if (!openedRef.current) {
+  /** The area dialog that started a request shows its failure beside Get map.
+   * A card or the job panel can be scrolled anywhere in the page, and another
+   * area's dialog would misattribute it, so those failures go to the shell's
+   * always-visible surface instead of the top of the scrolled page. */
+  function reportStartError(e: unknown, regionId: string) {
+    if (openedRef.current?.id !== regionId) {
       onError(e);
       return;
     }
@@ -507,7 +508,7 @@ export default function Maps({
         setDetail(null);
       }
     } catch (e) {
-      if (alive.current && isPrivacyContextCurrent(request.privacy)) reportStartError(e);
+      if (alive.current && isPrivacyContextCurrent(request.privacy)) reportStartError(e, request.regionId);
     } finally {
       startPending.current = false;
       dismissDecision();
@@ -552,7 +553,7 @@ export default function Maps({
       }
     } catch (e) {
       if (selectionRequest.current === request) {
-        if (requestCurrent(request)) reportStartError(e);
+        if (requestCurrent(request)) reportStartError(e, request.regionId);
         dismissDecision();
       }
     } finally {
@@ -635,7 +636,8 @@ export default function Maps({
         setJob(next);
       }
     } catch (e) {
-      if (alive.current && isPrivacyContextCurrent(privacy)) reportStartError(e);
+      // The job panel is never inside an area dialog.
+      if (alive.current && isPrivacyContextCurrent(privacy)) onError(e);
     } finally {
       mapActionPending.current = false;
       if (alive.current) setWorking(false);

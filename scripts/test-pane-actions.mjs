@@ -6,23 +6,29 @@ import ts from "typescript";
 
 // Run the production declarations of the Library, Catalog and storage panes
 // against controllable service and timer boundaries.
-async function declarations(file, names, bindings = {}) {
+// `derived` names component-body constants that are re-evaluated on demand,
+// as React does on each render: `context.derive.<name>()`.
+async function declarations(file, names, bindings = {}, derived = []) {
   const source = await readFile(new URL(`../src/components/${file}`, import.meta.url), "utf8");
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const found = new Map();
+  const expressions = new Map();
   let effect;
   function visit(node) {
     if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text)) found.set(node.name.text, node.getText(tree));
     if (ts.isVariableStatement(node)) for (const declaration of node.declarationList.declarations)
       if (names.includes(declaration.name.getText(tree))) found.set(declaration.name.getText(tree), node.getText(tree));
+      else if (derived.includes(declaration.name.getText(tree))) expressions.set(declaration.name.getText(tree), declaration.initializer.getText(tree));
     if (ts.isCallExpression(node) && node.expression.getText(tree) === "useEffect" &&
         node.arguments[0]?.getText(tree).includes("void loadSuggestions(prefix")) effect = node.arguments[0].getText(tree);
     ts.forEachChild(node, visit);
   }
   visit(tree);
   for (const name of names) assert.ok(found.has(name), `${name} exists in ${file}`);
+  for (const name of derived) assert.ok(expressions.has(name), `${name} is derived in ${file}`);
   const code = ts.transpileModule(`${names.map((name) => found.get(name)).join("\n")}
 globalThis.exported = { ${names.join(", ")} };
+globalThis.derive = { ${derived.map((name) => `${name}: () => (${expressions.get(name)})`).join(", ")} };
 globalThis.suggestionEffect = ${effect ?? "undefined"};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
   }).outputText;
@@ -46,7 +52,7 @@ const entry = (fields) => ({
 
 test("the official catalog's RFC 3339 date matches the installed edition of the same flavour only", async () => {
   const { exported } = await declarations("Catalog.tsx", [
-    "archiveName", "FLAVOUR_IN_NAME", "archiveFlavour", "lastSegment", "editionDay", "installedArchive", "installedEdition",
+    "archiveName", "FLAVOUR_IN_NAME", "archiveFlavour", "VARIANT_KEYS", "archiveVariants", "variantsCompatible", "lastSegment", "editionDay", "installedArchive", "installedEdition",
   ]);
   const index = (...books) => new Map([["wikipedia_en_all", books.map(exported.installedArchive)]]);
   const installed = book({});
@@ -64,11 +70,22 @@ test("the official catalog's RFC 3339 date matches the installed edition of the 
   // A flavour neither side states does not separate them.
   const unnamed = book({ path: "/library/archive.zim" });
   assert.equal(exported.installedEdition(entry({ tags: [], url: "https://x.invalid/a.zim" }), index(unnamed)).exact, true);
-  assert.equal(exported.installedEdition(entry({}), index(unnamed)).exact, true);
+  // A flavour only one side states is a related edition, never "Open": the
+  // renamed copy may be the nopic archive, so Download stays offered.
+  const renamed = book({ path: "/library/wikipedia.zim", tags: ["_category:wikipedia", "_pictures:no"] });
+  assert.equal(exported.installedEdition(entry({}), index(unnamed)).exact, false);
+  assert.equal(exported.installedEdition(entry({}), index(renamed)).exact, false);
+  // Content variants both sides state must agree, as in the Rust series match.
+  assert.equal(exported.installedEdition(entry({ tags: ["_flavour:maxi", "_pictures:yes"] }), index(renamed)), null);
+  assert.equal(exported.installedEdition(entry({ tags: ["_pictures:no"], url: "https://x.invalid/a.zim" }), index(renamed)).exact, true);
   // Provider-backed archives are named by their display name.
   const provided = book({ path: "content://x/1", sourceReference: { reference: "r", displayName: "wikipedia_en_all_nopic_2026-10.zim", persistent: true } });
   assert.equal(exported.installedEdition(entry({}), index(provided)), null);
   assert.equal(exported.editionDay("not a date"), null);
+  // Strict RFC 3339 only: without Z or an offset the day depends on the time zone.
+  assert.equal(exported.editionDay("2026-10-16T00:30:00"), null);
+  assert.equal(exported.editionDay("2026-10-16T00:30:00+09:00"), "2026-10-15");
+  assert.equal(exported.editionDay("2026-10-16t00:30:00z"), "2026-10-16");
   assert.equal(exported.editionDay("2026-10"), null);
 });
 
@@ -142,6 +159,7 @@ test("Enter before the suggestion debounce elapses keeps the submitted search ru
     diagnostics: { record() {} }, ERROR_SITES: {},
     setSuggestions() {}, setSuggestionToken() {}, setSuggestionOpen() {}, setSuggestionActive() {}, setSuggestionLoading() {},
     setBusy: (value) => { state.busy = value; }, setResults: (value) => { state.results = value; },
+    setSearchSubmitted() {},
     onError: (error) => state.errors.push(error), api: async () => null,
     window: {
       setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
@@ -186,4 +204,46 @@ test("a provider-backed selection is copied, never moved, even if Move was chose
   calls.length = 0;
   await context.exported.relocate();
   assert.equal(calls[0].args.removeOld, true, "managed archives can still be moved");
+});
+
+test("a search that fails does not pop the suggestion list over its error", async () => {
+  const timers = new Map();
+  let nextTimer = 0;
+  const sent = [];
+  const errors = [];
+  const bindings = {
+    search: "animal", selected: ["wiki"], searchOpen: true, searchInputFocused: true, mode: "combined",
+    busy: false, searchSubmitted: false, snippetSaving: false, SUGGESTION_DEBOUNCE_MS: 120, SUGGESTION_PAGE_SIZE: 15,
+    suggestionId: { current: 0 }, suggestionPrefix: { current: "" }, suggestionScope: { current: [] },
+    suggestionMore: { current: false }, searchId: { current: 0 }, searchParameters: { current: null },
+    capturePrivacyContext: () => ({ generation: 1 }), isPrivacyContextCurrent: () => true,
+    diagnostics: { record() {} }, ERROR_SITES: {},
+    setSuggestions() {}, setSuggestionToken() {}, setSuggestionOpen() {}, setSuggestionActive() {}, setSuggestionLoading() {},
+    setResults() {}, onError: (error) => errors.push(error), api: async () => null,
+    window: {
+      setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
+      clearTimeout(id) { timers.delete(id); },
+    },
+    searchRequest: { current: {
+      suggest(parameters) { sent.push(parameters); return new Promise(() => {}); },
+      run: async () => { throw new Error("Archive unreadable"); },
+    } },
+  };
+  const context = await declarations("Library.tsx", ["closeSuggestions", "loadSuggestions", "performSearch"],
+    bindings, ["searchFocused"]);
+  context.setBusy = (value) => { context.busy = value; };
+  context.setSearchSubmitted = (value) => { context.searchSubmitted = value; };
+  await context.exported.performSearch("animal");
+  assert.equal(errors.length, 1);
+  assert.equal(context.busy, false);
+  // React re-runs the debounce effect with the settled value; the field still has focus.
+  context.searchFocused = context.derive.searchFocused();
+  context.suggestionEffect();
+  for (const callback of [...timers.values()]) callback();
+  assert.deepEqual(sent, [], "no suggestion list is requested until the next keystroke");
+  context.searchSubmitted = false; // what the next keystroke does
+  context.searchFocused = context.derive.searchFocused();
+  context.suggestionEffect();
+  for (const callback of [...timers.values()]) callback();
+  assert.equal(sent.length, 1);
 });

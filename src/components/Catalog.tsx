@@ -88,35 +88,58 @@ function archiveFlavour(tags: string[], names: string[]): string | null {
   }
   return null;
 }
+/// Content variants both sides must agree on when both state them, as in the
+/// Rust series match: a picture-less archive is not the full one.
+const VARIANT_KEYS = ["_pictures", "_videos", "_details"];
+function archiveVariants(tags: string[]): Map<string, string> {
+  const variants = new Map<string, string>();
+  for (const tag of tags) {
+    const [key, value] = tag.split(":", 2);
+    if (VARIANT_KEYS.includes(key) && value) variants.set(key, value.trim().toLowerCase());
+  }
+  return variants;
+}
+function variantsCompatible(left: Map<string, string>, right: Map<string, string>): boolean {
+  for (const [key, value] of left) {
+    const other = right.get(key);
+    if (other !== undefined && other !== value) return false;
+  }
+  return true;
+}
 function lastSegment(value: string): string {
   return value.split(/[?#]/)[0].replace(/\\/g, "/").split("/").pop() || "";
 }
 /// The calendar day of an edition date. A ZIM `Date` is `YYYY-MM-DD`; an OPDS
 /// `issued` is an RFC 3339 timestamp, taken in UTC as the Rust catalog index does.
+/// A timestamp without `Z` or an offset is not RFC 3339 (Rust rejects it), and
+/// reading it in local time would make the match depend on the time zone.
 function editionDay(value: string): string | null {
   const trimmed = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed)) return null;
   const time = Date.parse(trimmed);
   return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : null;
 }
 interface InstalledArchive {
   book: Book;
   flavour: string | null;
+  variants: Map<string, string>;
   day: string | null;
 }
 function installedArchive(book: Book): InstalledArchive {
   return {
     book,
     flavour: archiveFlavour(book.tags, [book.name, lastSegment(book.sourceReference?.displayName ?? book.path)]),
+    variants: archiveVariants(book.tags),
     day: editionDay(book.date),
   };
 }
 /// The catalog entry a library book already satisfies, if any. The same name,
-/// flavour and edition day is the installed edition; another day of the same
-/// name and flavour is an older or newer edition, never a duplicate of this
-/// one. Another flavour is a different archive. A flavour neither side states
-/// does not separate them (as in the Rust series match).
+/// flavour and edition day is the installed edition; another day is an older
+/// or newer edition, never a duplicate of this one. A different stated flavour
+/// or content variant is a different archive. A flavour only one side states
+/// may still be another archive, so it is only ever a related edition: Download
+/// stays offered. Equal flavours, or none stated on either side, can be exact.
 /// `installed` is built once per library, so resolving a card is a map lookup
 /// instead of a full library scan with a regex per book.
 function installedEdition(
@@ -126,11 +149,15 @@ function installedEdition(
   const name = archiveName(entry.name);
   if (!name) return null;
   const flavour = archiveFlavour(entry.tags, [entry.name, lastSegment(entry.url)]);
+  const variants = archiveVariants(entry.tags);
   const matching = installed.get(name)?.filter((archive) =>
-    !flavour || !archive.flavour || archive.flavour === flavour);
+    (!flavour || !archive.flavour || archive.flavour === flavour) &&
+    variantsCompatible(variants, archive.variants));
   if (!matching || !matching.length) return null;
   const day = editionDay(entry.date);
-  const exact = day ? matching.find((archive) => archive.day === day) : undefined;
+  const exact = day
+    ? matching.find((archive) => archive.flavour === flavour && archive.day === day)
+    : undefined;
   if (exact) return { book: exact.book, exact: true };
   return {
     book: [...matching].sort((a, b) => b.book.date.localeCompare(a.book.date))[0].book,
