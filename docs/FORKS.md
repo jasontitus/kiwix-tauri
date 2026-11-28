@@ -67,13 +67,15 @@ What it does fix is edge cases: zero-size reads, and reads ending exactly at the
 
 This adds `Xapian::Database::open_fd_at(fd, offset)`, which opens a single-file Glass database at an absolute offset with `pread`, never touching the descriptor's position. Xapian 1.4.32's `Database(int fd)` takes its base offset from `lseek(fd, 0, SEEK_CUR)` and seeks again on version reads. This is a feature request rather than a bug fix, and it is only needed for fd-based search (retained-fd item 3).
 
-## Replacing libzim with zimru
+## Replacing libzim with zimru (done; pre-migration analysis)
 
-[zimru](https://github.com/jasontitus/zimru) is a clean-room, MIT-licensed Rust ZIM reader/writer. A separate `libzim-shim` (not yet public) exposes libzim's C++ API (`zim::Archive`, `zim::Searcher`, `zim::SuggestionSearcher`, …) on top of zimru and Xapian. [xapianbuilder](https://github.com/jasontitus/xapianbuilder) builds indexes only and has no query API, so it is not part of the read path. Nothing in this repository's history mentions zimru, so why the original implementation chose libzim was never recorded.
+This migration is complete: the app reads archives with `zimru` and searches with `zimfile-xapian` (pinned in `src-tauri/Cargo.toml`), and the C++ bridge `src-tauri/native/archive.cpp` has been removed. The rest of this section is the analysis written before the migration and is not a current gap list.
+
+[zimru](https://github.com/jasontitus/zimru) is a clean-room, MIT-licensed Rust ZIM reader/writer. A separate `libzim-shim` (not yet public) exposes libzim's C++ API (`zim::Archive`, `zim::Searcher`, `zim::SuggestionSearcher`, …) on top of zimru and Xapian. [xapianbuilder](https://github.com/jasontitus/xapianbuilder) builds indexes only and has no query API, so it is not part of the read path.
 
 ### What the app needs from a ZIM engine
 
-`src-tauri/native/archive.cpp` uses a small slice of libzim:
+`src-tauri/native/archive.cpp` used a small slice of libzim:
 
 - open by path, or from a vector of `FdInput` (whole or split archives, already-open descriptors);
 - `OpenConfig().preloadXapianDb(false)`;
@@ -83,7 +85,7 @@ This adds `Xapian::Database::open_fd_at(fd, offset)`, which opens a single-file 
 - `SuggestionSearcher`;
 - `checkIntegrity(CHECKSUM)`.
 
-### Gaps today
+### Gaps at the time of the analysis
 
 | Need | zimru | libzim-shim |
 |---|---|---|

@@ -105,7 +105,7 @@ def check_tree(root, binary=None, relay=None):
             d.get("Terminal") == "false" and not d.get("Actions") and d.get("Exec") == APP + " %U" and d.get("Icon") == APP and
             d.get("StartupWMClass") == ID and d.get("Name") == "Kiwix" and
             {"application/x-zim", "x-scheme-handler/kiwix", ""} == set(d.get("MimeType", "").split(";")),
-            "Desktop entry lost its executable, icon, name, GeoClue identity or file associations")
+            "Desktop entry lost its executable, icon, name, startup class or file associations")
     app = (root / BIN / APP).read_bytes()
     require(app.count(MARKER + b"APP") == 1 and app.count(MARKER) == 1,
             "Packaged app lacks its AppImage updater type")

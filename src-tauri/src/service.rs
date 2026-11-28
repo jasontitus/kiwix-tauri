@@ -2501,8 +2501,10 @@ impl Service {
     /// library entry can no longer be opened replaces that entry, as Locate
     /// would, before the batch resolves against the library. Only then is a
     /// copy of a still-usable entry a duplicate that may be removed. A failure
-    /// returns the batch's errors and removes no copy, so the native request
-    /// stays pending and the copies stay. It is not all-or-nothing: an entry
+    /// returns the batch's errors and the native request stays pending. Copies
+    /// stay, except that a verification cancelled by a cutover or Quit
+    /// (`IMPORT_CANCELLED`) removes this attempt's own staged copies, which
+    /// nothing references yet; a retry copies again. It is not all-or-nothing: an entry
     /// relinked before a later relink or the admission failed stays relinked
     /// (to its verified copy), and a retry resolves that copy as already
     /// installed.

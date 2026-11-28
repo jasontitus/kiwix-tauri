@@ -1880,7 +1880,9 @@ impl Service {
             // and their source authority are retired. No terminal shutdown here.
             // A running whole-archive verification (an incoming copy, a manual
             // import) would hold this writer for its whole checksum: it fails
-            // as cancelled instead, and nothing it staged is removed.
+            // as cancelled instead. The cancelled attempt's own staged copy is
+            // removed (`discard_cancelled_staged_copy`), and an incoming
+            // request stays pending, so a retry copies again.
             let import_cutover = super::ImportCutover::begin(self.as_ref());
             let _mode = self.privacy_gate.write().await;
             drop(import_cutover);

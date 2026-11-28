@@ -61,7 +61,7 @@ Lock order in `Service::operation`: `update_admission` → `mobile.transfer_gate
 
 `save_settings` order:
 1. Admission checks: `Service::validate_settings_patch`. These run **before any retirement** (fix F-6).
-2. Retire cancellable work: LocalSwarm/Nearby, searches, private sync, integrity checks, PDF jobs, and running manual and monitored imports (`ImportCutover::begin` cancels the import token before the writer is requested; a fresh token is installed once the writer is held, unless Stopping has begun). The mobile background retirement writer begins the same cutover, so an import or incoming-file verification under way when the app is backgrounded ends with `IMPORT_CANCELLED` and the incoming request stays pending.
+2. Retire cancellable work: LocalSwarm/Nearby, searches, private sync, integrity checks, PDF jobs, and running manual and monitored imports. `ImportCutover::begin` cancels the import token before the writer is requested and counts itself as an active cutover. When a cutover ends (once its writer is held, or earlier if the save fails before that), it uncounts itself; only the last overlapping cutover to end installs a fresh token, and never once Stopping has begun. The mobile background retirement writer begins the same cutover, so an import or incoming-file verification under way when the app is backgrounded ends with `IMPORT_CANCELLED`. A cancelled mobile import or intake removes its own staged copy under `archives/mobile-imports-v1/<uuid>/` (`discard_cancelled_staged_copy`), an incoming request stays pending and is offered again, and a cancelled manual import (other than by Quit) posts the startup notice asking to add the archive again until that archive is admitted.
 3. Take the privacy writer.
 4. Re-run the admission checks under the writer.
 5. Replace the import manager.
@@ -273,7 +273,7 @@ Status: `queued, downloading, validating, composing, paused, failed, cancelled, 
 Invariants:
 - At most one active worker.
 - Every unresolved partial or publication stays in `owned_partial ∪ recovery_records`, so it keeps a monitored-path claim.
-- `MapJob` tracks a throttled `speed` (reset on startup, resume, completion, finish, and error backoff). It has no ETA: a map's remaining work is not known in bytes. `RetainedMapJob.eta_seconds` is kept only so older saved jobs still load, and is always `None`. `RECIPE_CACHE` retains at most 1 (mobile) / 2 (desktop) parsed `Arc<Recipe>` entries for 5 minutes and is cleared by `clear_recipe_cache()` on `MapManager::clear_cache()`, `MapManager::cancel()`, `CatalogRegistry::retire()`, `Service::shutdown()`, privacy changes in `save_settings`, and mobile background entry.
+- `MapJob` tracks a throttled `speed` (reset on startup, resume, completion, finish, and error backoff). It has no ETA: a map's remaining work is not known in bytes. Older journals that carry `etaSeconds` still load because `MapJob` ignores unknown fields. `RetainedMapJob.eta_seconds` is always `None` (serialized as `etaSeconds: null` in the download-row shape). `RECIPE_CACHE` retains at most 1 (mobile) / 2 (desktop) parsed `Arc<Recipe>` entries for 5 minutes and is cleared by `clear_recipe_cache()` on `MapManager::clear_cache()`, `MapManager::cancel()`, `CatalogRegistry::retire()`, `Service::shutdown()`, privacy changes in `save_settings`, and mobile background entry.
 
 ### 5.2 Import verification (`imports.rs`, in memory)
 

@@ -1,4 +1,6 @@
 {
+  "{count} articles": { "one": "{count} article", "other": "{count} articles" },
+  "Serving {count} archives from this device. Read-only; no application controls are exposed.": { "one": "Serving {count} archive from this device. Read-only; no application controls are exposed.", "other": "Serving {count} archives from this device. Read-only; no application controls are exposed." },
   "Used today: {count} requests": { "one": "Used today: {count} request", "other": "Used today: {count} requests" },
   "{size} · {count} sources": { "one": "{size} · {count} source", "other": "{size} · {count} sources" },
   "{size} · {count} files": { "one": "{size} · {count} file", "other": "{size} · {count} files" },

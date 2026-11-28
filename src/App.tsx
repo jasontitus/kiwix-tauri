@@ -3009,7 +3009,8 @@ export default function App() {
   // listener is registered and offers no call that hands it back, so the
   // listener is held exactly while the shell has something to dismiss (see
   // src/android-back.ts). At the library with nothing open, Back stays the
-  // platform's: it backgrounds the task and transfers keep running.
+  // platform's: the WebView first walks its own page history, then the task
+  // goes to the background and transfers keep running.
   const [androidSurfaceOpen, setAndroidSurfaceOpen] = useState(false);
   const readAndroidSurfaces = useCallback(() => {
     setAndroidSurfaceOpen(openDialogs(document).length > 0 ||

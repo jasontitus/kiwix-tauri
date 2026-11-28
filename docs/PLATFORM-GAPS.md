@@ -41,7 +41,7 @@ Goal: every feature works on every platform that can support it. This audit comp
    - Size S; testable on Windows.
 5. **Keep the machine awake during transfers.**
    - No Windows/Linux implementation exists (`power_activity.rs`).
-   - The guard is taken for LocalSwarm transfers on every platform that has one, and on macOS also for a whole map download (`maps/manager.rs`, macOS only because on Android the same guard takes a high-performance Wi-Fi lock). HTTP and torrent downloads never hold it.
+   - The guard is taken for LocalSwarm transfers (effective on macOS and Android; on iOS, Windows and Linux the guard does nothing), and on macOS also for a whole map download (`maps/manager.rs`, macOS only because on Android the same guard takes a high-performance Wi-Fi lock). HTTP and torrent downloads never hold it.
    - API: Windows `PowerCreateRequest` / `PowerSetRequest(PowerRequestSystemRequired)`; Linux logind `Inhibit("sleep")`.
    - Size S; testable with `powercfg /requests`.
 6. **`zim://` on Windows and Linux.**
@@ -82,7 +82,7 @@ Goal: every feature works on every platform that can support it. This audit comp
   - Same-UID Unix socket, bundled `kiwix-mcp`, macOS `Info.plist` and Linux desktop-entry registration.
   - The packaged sandboxed macOS app and relay passed end-to-end list/search/read and private-mode stop; a Linux desktop runtime run is still required.
 
-- **Android system Back:** Back closes the top-most open dialog, picker, tab sheet or search, then steps back in the reader, then returns to the library (`src/shell-dismiss.ts`, `src/android-back.ts`). At the library root Kiwix registers no handler, so Back is the WebView default: it first walks the WebView's own page history, so after reading articles it can take several presses before the app goes to the background. Fixing that needs a native hand-back from the Tauri app plugin. Not yet checked on a device.
+- **Android system Back:** Back closes, in this order, an open dialog, the tab sheet, a popover (a shell picker, menu or suggestion list, or a reader overlay such as the find bar or a preview), then search; then it steps back in the reader's history, then returns to the library (`src/shell-dismiss.ts`, `src/android-back.ts`). At the library root Kiwix registers no handler, so Back is the WebView default: it first walks the WebView's own page history, so after reading articles it can take several presses before the app goes to the background. Fixing that needs a native hand-back from the Tauri app plugin. Not yet checked on a device.
 
 ## Feasible, lower value
 - **Platform shortcuts and widgets:** iOS quick actions and a WidgetKit search widget; a Windows Jump List, macOS dock menu, and Linux `.desktop` actions.

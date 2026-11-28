@@ -7,7 +7,11 @@ name: Checks
 # Path filter, evaluated in order: everything, except documentation, Markdown
 # and the licence/ignore files, but including docs/ERRORS.md again. That file
 # is generated and scripts/test-error-docs.mjs compares it with the sources,
-# so an edit to it alone must still run the check.
+# so an edit to it alone must still run the check. docs/FORKS.md and
+# scripts/test-build-hygiene.mjs are re-included for the same reason: that
+# test checks the libzim claim FORKS.md once made (other Markdown edits are
+# caught by the next run that is not documentation-only). Re-included paths
+# must follow the exclusions, because the last matching pattern wins.
 on:
   push:
     branches: [main]
@@ -21,6 +25,8 @@ on:
       - '!COPYING'
       - '!.gitignore'
       - 'docs/ERRORS.md'
+      - 'docs/FORKS.md'
+      - 'scripts/test-build-hygiene.mjs'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -33,6 +39,8 @@ on:
       - '!COPYING'
       - '!.gitignore'
       - 'docs/ERRORS.md'
+      - 'docs/FORKS.md'
+      - 'scripts/test-build-hygiene.mjs'
 
 permissions:
   contents: read

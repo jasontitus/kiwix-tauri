@@ -50,7 +50,7 @@ platform-specific paths (nearby/AWDL, BLE, Android intents, signing).
   `adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
 - Android release APK (acceptance): `scripts/dev.sh android`.
 - iOS simulator (fast, no signing):
-  `TAURI_KIWIX_MOBILE_SDK_ROOT="$PWD/.native/mobile-retained-fd-v2/aarch64-apple-ios-sim" npm run tauri -- ios dev --target aarch64-sim`.
+  `npm run tauri -- ios dev --target aarch64-sim`.
 - iOS device release pipeline: `scripts/dev.sh ios -- --config ... --prepare-only ...`
   (the `scripts/iphone.py` flow; ~80-200 s depending on native cache).
 - iOS device debug: `npm run tauri -- ios build --debug --target aarch64` and

@@ -3,8 +3,8 @@
 This is the one rule for the text that the crash intakes write to disk. Three implementations follow it:
 
 - Rust: `src-tauri/src/crash.rs` (`redact`),
-- Swift: `plugins/tauri-plugin-kiwix-mobile/ios/Sources/CrashRedaction.swift` (called from `CrashIntake.swift`),
-- Kotlin: `plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/CrashRedaction.kt` (called from `CrashIntake.kt`).
+- Swift: `src-tauri/plugins/tauri-plugin-kiwix-mobile/ios/Sources/CrashRedaction.swift` (called from `CrashIntake.swift`),
+- Kotlin: `src-tauri/plugins/tauri-plugin-kiwix-mobile/android/src/main/java/org/kiwix/mobile/CrashRedaction.kt` (called from `CrashIntake.kt`).
 
 `crash-redaction-cases.json`, next to this file, holds the test vectors. Each entry is `{"input", "expected"}`, and `expected` is the exact result of steps 1 to 8 below for `input`. Every implementation must reproduce every vector. When this text and a vector disagree, that is a defect in this text: report it, do not pick one.
 
@@ -176,7 +176,7 @@ If the text is longer than 2,000 scalars, keep the first 1,999 and append `…` 
 
 A message, a thread name, an operation name or an identifier goes through all eight steps. Each platform then applies its own shorter limit to some fields (for example 64 scalars for a thread name).
 
-Stack frames are formatted differently on each platform, so their handling is per platform. Every platform must still run steps 1 to 5, in that order, on any frame text it keeps, and must cut a frame by scalars. What Rust does:
+Stack frames are formatted differently on each platform, so their handling is per platform. Every platform must run steps 1 to 5, in that order, on the symbol text of each frame it keeps, and must cut a frame by scalars. A source location that a platform reduces to its file name may instead take the reduced handling Rust gives it below. What Rust does:
 
 - A frame is a line of the backtrace that starts with decimal digits and `:`. That line goes through steps 1 to 5 only, so its spacing is kept.
 - If the next line starts with `at `, it is the source location. Rust runs step 3 on the rest of that line, keeps only what follows the last `/` or `\`, runs step 2 on that, and appends it to the frame after ` at `.
@@ -198,7 +198,7 @@ These are known and accepted. They are not in the vectors as expected output.
 - What follows the `:` of an address-shaped remote: `git@github.com:janedoe/private-notes.git` becomes `[email]:janedoe/private-notes.git`, which still names the account and the repository.
 - A secret with spaces that is neither quoted nor path-like: only its first token goes.
 - A value that is a struct, array or map (`Some(Token { … })`, `Ok([…])`, `Some(["a b"])`): only its first token goes.
-- A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator, or a `_` suffix after a camelCase hump such as `accessToken_value=…` or `refreshToken_v2=…`).
+- A secret behind a keyword that is not in the list, or in a form the left and right sides reject (`OAuth=…`, `token hunter2` without a separator, or any `_` suffix after a keyword, such as `accessToken_value=…`, `secret_value=…`, `token_value=…` or `password_hash=…`).
 - An empty quoted value (`password=""`, `Some("")`) is no match for that keyword; the value forms after it are not tried, so `cookie="" a=b` is left unchanged.
 - An e-mail address whose host has non-ASCII letters or no dot (`jane@exämple.org`, `jane@host`), or whose local part is quoted (`"jane doe"@example.org`).
 
@@ -216,9 +216,9 @@ Also known and accepted.
 
 These follow from the rules above and from the Rust reference; each is pinned by the vectors or by both ports' differential runs against Rust.
 
-- Only `\"` opens an escaped quoted value. `\'` is accepted before a key but is not a quoted value form.
+- Only `\"` opens an escaped quoted value. `\'` is accepted as the escaped closing quote of a quoted key (rule 4.1) but is not a quoted value form.
 - `classify` checks for a reader host before it checks the port, so `http://localhost:abc/x` is `[reader-url]`.
 - A kept URL is written as the lowercased scheme, `://`, and the lowercased host without one trailing dot, plus a non-default port. A default port is recognised with leading zeros ignored (`:080`, `:0443` are dropped); `:000` is kept as written.
 - Every field cut (2,000 for a message, 240 for a frame line, 64 for a thread name) keeps one scalar fewer than the limit and adds `…`.
-- Frame lines are platform-specific in form. Every implementation runs steps 1 to 5 on each frame line and then cuts it to 240 scalars. Rust does this for its `at file:line` lines as described above; Swift does it for each `callStackSymbols` line (at most 24); Kotlin for `class.method(file:line)`.
+- Frame lines are platform-specific in form. Every implementation runs steps 1 to 5 on each frame's symbol text and cuts the frame to 240 scalars. Rust runs them on the numbered symbol line; its following `at file:line` location gets only step 3, the reduction to a file name and then step 2, as §3 describes, so an address-like file name such as `jane@example.org.rs` is kept there. Swift runs steps 1 to 5 on each whole `callStackSymbols` line (at most 24); Kotlin on each whole `class.method(file:line)` string.
 - Kotlin strings may contain an unpaired surrogate, which is not a scalar value. Treat it as one opaque non-whitespace code point: never split it, drop it or merge it. Swift and Rust strings cannot hold one.
