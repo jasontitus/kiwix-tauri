@@ -806,5 +806,57 @@
   {
     "input": "java.io.FileNotFoundException: /storage/emulated/0/My Books/a.zim: open failed: ENOENT (No such file or directory)",
     "expected": "java.io.FileNotFoundException: [path]: open failed: ENOENT (No such file or directory)"
+  },
+  {
+    "input": "contact jane.doe+kiwix@mail.example.co.uk for help",
+    "expected": "contact [email] for help"
+  },
+  {
+    "input": "Jane Doe <jane@example.org>, bob_1%x@sub-1.example.museum.",
+    "expected": "Jane Doe <[email]>, [email]."
+  },
+  {
+    "input": "user=jane@example.org id=7",
+    "expected": "user=[email] id=7"
+  },
+  {
+    "input": "JANE@EXAMPLE.ORG",
+    "expected": "[email]"
+  },
+  {
+    "input": "sent to jane@example.org: bounced",
+    "expected": "sent to [email]: bounced"
+  },
+  {
+    "input": "mailto:jane@example.org tel:+15551234 jane@example.org",
+    "expected": "[url] [url] [email]"
+  },
+  {
+    "input": "mailto: jane@example.org",
+    "expected": "[url] [email]"
+  },
+  {
+    "input": "https://jane@example.org/a",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "git@github.com:kiwix/app.git",
+    "expected": "[email]:kiwix/app.git"
+  },
+  {
+    "input": "/home/jane@example.org/My Docs/a.zim",
+    "expected": "[path]"
+  },
+  {
+    "input": "jane@example.org/Inbox Folder",
+    "expected": "[email][path]"
+  },
+  {
+    "input": "user@host and me@localhost and a@b.c and pkg@1.2.3 and x@y.z9 stay",
+    "expected": "user@host and me@localhost and a@b.c and pkg@1.2.3 and x@y.z9 stay"
+  },
+  {
+    "input": "@jane and jane@ and a@.org and a@b..org stay",
+    "expected": "@jane and jane@ and a@.org and a@b..org stay"
   }
 ]

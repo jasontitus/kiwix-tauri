@@ -53,6 +53,14 @@ internal object CrashRedaction {
     /** At most [limit] scalars, the last one `…` when something was cut. */
     fun truncate(value: String, limit: Int): String = string(truncate(codePoints(value), limit))
 
+    /**
+     * Steps 2 to 5 on text of any length, without the bound of step 1. Only
+     * for the test that each step is linear in its input; returns the length
+     * of the result.
+     */
+    internal fun unboundedStepsForTiming(value: String): Int =
+        redactOpaque(redactPaths(replaceUrls(redactSecrets(codePoints(value))))).size
+
     // ---- 1. Terms --------------------------------------------------------
 
     private fun codePoints(value: CharSequence): IntArray {

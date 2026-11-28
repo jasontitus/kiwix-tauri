@@ -103,7 +103,56 @@ class CrashRedactionTest {
     }
 
     @Test
-    fun whitespaceIsTheUnicodeWhiteSpaceProperty() {
+    fun everyStepIsLinearInItsInput() {
+        // The worst inputs found in review: each unit starts a URL, path or
+        // secret candidate. Rescanning the rest of the line or text once per
+        // candidate makes these quadratic.
+        val units = listOf(
+            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
+            "token='x ", "C:\\a\" ", "pin='' ", "token=\\\"\\\" ", "\\a<", "Some(Some(", "https://example.org/a ",
+        )
+        fun repeated(unit: String, length: Int) = unit.repeat(length / unit.length)
+        fun fastest(text: String): Long {
+            var best = Long.MAX_VALUE
+            repeat(5) {
+                val started = System.nanoTime()
+                CrashRedaction.unboundedStepsForTiming(text)
+                best = minOf(best, System.nanoTime() - started)
+            }
+            return best
+        }
+        // Let the JIT compile the steps before anything is measured.
+        for (unit in units) repeat(3) { CrashRedaction.unboundedStepsForTiming(repeated(unit, CrashRedaction.MAX_INPUT)) }
+        for (unit in units) {
+            val small = fastest(repeated(unit, CrashRedaction.MAX_INPUT))
+            val large = fastest(repeated(unit, CrashRedaction.MAX_INPUT * 4))
+            // Four times the input takes about four times as long when linear and
+            // sixteen times when quadratic. The floor absorbs timer noise.
+            val allowed = maxOf(small, 5_000_000L) * 10
+            assertTrue("$unit: ${small / 1000} us at the bound, ${large / 1000} us for four times as much", large <= allowed)
+            // Generous for a shared machine; a quadratic step needs far longer.
+            assertTrue("$unit: ${small / 1_000_000} ms at the bound", small < 300_000_000L)
+        }
+    }
+
+    @Test
+    fun whitespaceIsExactlyTheUnicodeWhiteSpaceProperty() {
+        // Every scalar value against the specification's list, and that list
+        // against the runtime's own table of the Unicode property.
+        val property = java.util.regex.Pattern.compile("\\p{IsWhite_Space}")
+        val listed = setOf(0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000) +
+            (0x2000..0x200A)
+        for (point in 0..0x10FFFF) {
+            val expected = point in listed
+            if (CrashRedaction.isWhiteSpace(point) != expected)
+                throw AssertionError("U+" + Integer.toHexString(point) + " differs from the specification's list")
+            if (point !in 0xD800..0xDFFF && property.matcher(String(Character.toChars(point))).matches() != expected)
+                throw AssertionError("U+" + Integer.toHexString(point) + " differs from the Unicode property")
+        }
+    }
+
+    @Test
+    fun whitespaceIsNotWhatThePlatformCallsWhitespace() {
         // Java's Character.isWhitespace excludes the no-break spaces and
         // includes the information separators; the pipeline must do neither.
         for (point in listOf(0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0x85, 0xA0, 0x1680, 0x2000, 0x200A,

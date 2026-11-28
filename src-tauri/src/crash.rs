@@ -13,6 +13,7 @@
 //! * Path-like text may be a reader route; do not keep its final component.
 //!   Compiler-supplied panic locations and backtrace locations keep filenames.
 //! * Values following token/secret/password/cookie/bearer keywords are replaced.
+//! * E-mail addresses are replaced.
 //! * Long opaque token-like runs are replaced.
 //! * Every field is length-bounded; the whole record is capped at 32 KiB.
 //!
@@ -440,7 +441,7 @@ fn truncate_chars(value: &str, limit: usize) -> String {
     result
 }
 
-/// Step 6: whitespace runs become one space; leading and trailing ones go.
+/// Step 7: whitespace runs become one space; leading and trailing ones go.
 fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -459,22 +460,24 @@ fn bounded_input(value: &str) -> Vec<char> {
     scalars
 }
 
-/// Full redaction for one text field: steps 1 to 7 of the specification.
+/// Full redaction for one text field: steps 1 to 8 of the specification.
 fn redact(value: &str) -> String {
     let scalars = bounded_input(value);
     let scalars = redact_secret_values(&scalars);
     let scalars = replace_urls(&scalars);
+    let scalars = redact_emails(&scalars);
     let scalars = redact_paths(&scalars);
     let scalars = redact_opaque_tokens(&scalars);
     truncate_chars(&collapse_whitespace(&text(&scalars)), MAX_MESSAGE_CHARS)
 }
 
-/// Redaction for the symbol line of a backtrace frame: steps 1 to 4, keeping
+/// Redaction for the symbol line of a backtrace frame: steps 1 to 5, keeping
 /// spacing so the frame stays readable.
 fn redact_line(value: &str) -> String {
     let scalars = bounded_input(value);
     let scalars = redact_secret_values(&scalars);
     let scalars = replace_urls(&scalars);
+    let scalars = redact_emails(&scalars);
     text(&redact_paths(&scalars))
 }
 
@@ -509,7 +512,7 @@ fn matches_ascii_word(scalars: &[char], at: usize, word: &str) -> bool {
             .all(|(scalar, expected)| scalar.to_ascii_lowercase() == expected)
 }
 
-// --- Step 4 helpers, shared with steps 2 and 3 -----------------------------
+// --- Step 5 helpers, shared with steps 2 and 3 -----------------------------
 
 /// Where the redaction of a path that starts at `start` stops.
 ///
@@ -595,7 +598,7 @@ fn path_at(scalars: &[char], index: usize) -> Option<usize> {
     Some(path_end(scalars, index))
 }
 
-/// Step 4: every path becomes `[path]`.
+/// Step 5: every path becomes `[path]`.
 fn redact_paths(scalars: &[char]) -> Vec<char> {
     let mut output = Vec::with_capacity(scalars.len());
     let mut index = 0;
@@ -987,9 +990,54 @@ fn safe_url(scheme: &str, authority: &[char]) -> String {
     }
 }
 
-// --- Step 5: opaque tokens -----------------------------------------------------
+// --- Step 4: e-mail addresses ---------------------------------------------------
 
-/// Step 5: a run of 40 or more token characters that has both a digit and a
+/// Step 4: a bare e-mail address becomes `[email]`.
+///
+/// It runs after the URL step, which has already dealt with `mailto:` and with
+/// the userinfo of `scheme://user@host`, and before the path step, so that
+/// what follows an address (`jane@example.org/Inbox Folder`) starts at a
+/// boundary and goes as a path instead of staying behind.
+fn redact_emails(scalars: &[char]) -> Vec<char> {
+    let local = |scalar: char| scalar.is_ascii_alphanumeric() || matches!(scalar, '.' | '_' | '%' | '+' | '-');
+    let host = |scalar: char| scalar.is_ascii_alphanumeric() || matches!(scalar, '.' | '-');
+    let mut output = Vec::with_capacity(scalars.len());
+    let mut cursor = 0;
+    let mut at = 0;
+    while at < scalars.len() {
+        if scalars[at] != '@' {
+            at += 1;
+            continue;
+        }
+        // The whole run on each side, as for opaque tokens: never part of one.
+        let mut start = at;
+        while start > cursor && local(scalars[start - 1]) {
+            start -= 1;
+        }
+        let mut end = find_from(scalars, at + 1, |scalar| !host(scalar));
+        // A dot or hyphen at the very end is sentence punctuation.
+        while end > at + 1 && matches!(scalars[end - 1], '.' | '-') {
+            end -= 1;
+        }
+        let mut labels = scalars[at + 1..end].split(|scalar| *scalar == '.');
+        let last = labels.next_back().unwrap_or_default();
+        let dotted = labels.clone().next().is_some() && labels.all(|label| !label.is_empty());
+        if start == at || !dotted || last.len() < 2 || !last.iter().all(char::is_ascii_alphabetic) {
+            at += 1;
+            continue;
+        }
+        output.extend_from_slice(&scalars[cursor..start]);
+        output.extend("[email]".chars());
+        cursor = end;
+        at = end;
+    }
+    output.extend_from_slice(&scalars[cursor..]);
+    output
+}
+
+// --- Step 6: opaque tokens -----------------------------------------------------
+
+/// Step 6: a run of 40 or more token characters that has both a digit and a
 /// letter becomes `[redacted]`.
 fn redact_opaque_tokens(scalars: &[char]) -> Vec<char> {
     const MIN_TOKEN: usize = 40;
@@ -1257,6 +1305,7 @@ mod tests {
         let steps = |scalars: &[char]| {
             let scalars = redact_secret_values(scalars);
             let scalars = replace_urls(&scalars);
+            let scalars = redact_emails(&scalars);
             let scalars = redact_paths(&scalars);
             redact_opaque_tokens(&scalars).len()
         };
@@ -1271,7 +1320,7 @@ mod tests {
                 .unwrap()
         };
         for unit in [
-            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ",
+            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ", "a@b-", "a.b@",
         ] {
             let small = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS));
             let large = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS * 4));

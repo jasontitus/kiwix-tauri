@@ -162,6 +162,38 @@ final class CrashCapturePolicyTests: XCTestCase {
     XCTAssertEqual(CrashRedaction.truncate("short", limit: 240), "short")
   }
 
+  /// The rule requires every step to take time proportional to its input.
+  /// Each unit below starts a URL, path or secret candidate; rescanning the
+  /// rest of the text once per candidate made such inputs quadratic.
+  func testEveryRedactionStepIsLinearInItsInput() {
+    func fastest(_ text: String) -> TimeInterval {
+      var best = TimeInterval.infinity
+      for _ in 0..<3 {
+        let started = Date()
+        _ = CrashRedaction.redact(text)
+        _ = CrashRedaction.redactLine(text)
+        best = min(best, Date().timeIntervalSince(started))
+      }
+      return best
+    }
+    let units = [
+      "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'",
+      "token='x ", "C:\\a\" ", "!\\a", "\\a\"", "pin=Some(", "auth=\\\"x", "https://a.b:1 ", "http://e.org/../",
+    ]
+    for unit in units {
+      // Whole units only, so the bound does not drop a partial one.
+      let length = unit.unicodeScalars.count
+      let quarter = fastest(String(repeating: unit, count: CrashRedaction.maxInput / 4 / length))
+      let full = fastest(String(repeating: unit, count: CrashRedaction.maxInput / length))
+      // Four times the input takes about four times as long when linear and
+      // sixteen times when quadratic. The floor absorbs timer noise.
+      XCTAssertLessThanOrEqual(full, max(quarter, 0.005) * 10,
+        "\(unit.debugDescription): \(quarter) s for a quarter of the bound, \(full) s for all of it")
+      // Generous for an unoptimized build on a busy machine.
+      XCTAssertLessThan(full, 2, unit.debugDescription)
+    }
+  }
+
   /// A frame keeps its spacing and its symbol: steps 1 to 4 only.
   func testStackFrameLineKeepsSpacingAndLongSymbols() {
     let frame = "3   Kiwix                               0x0000000104a3c1f4 $s5Kiwix11ReaderModelC4open3url10completionySS_yycSgtF + 123"
