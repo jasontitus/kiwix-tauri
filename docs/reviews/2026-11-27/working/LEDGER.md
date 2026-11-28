@@ -349,3 +349,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
   Kotlin :tauri-plugin-kiwix-mobile:testDebugUnitTest 79/0/0/0.
   Swift: Linux toolchain harness fixture 238/238, bound ALL PASSED, differential 1.6M+ 0 mismatches; swiftc -parse Sources+Tests OK.
   NOT RUN: Apple compilers, iOS/macOS Rust, devices, simulator, Windows runtime, GitHub Actions, cargo deny/npm audit (network).
+- RECORD drafted (a454b…), owner filled §5.4, updated §1/§2/§7/§8 (no history rewrite: evidence commit + removal commit). -> final record reviewer
