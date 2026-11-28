@@ -2225,4 +2225,94 @@ mod tests {
         assert_eq!(inner.statuses[&identity.key()].state, "cancelled");
         assert!(!directory.0.exists());
     }
+
+    #[test]
+    fn sweep_removes_only_cache_files_that_no_live_entry_uses() {
+        let profile = TestDirectory::new();
+        fs::create_dir_all(&profile.0).unwrap();
+        let directory = profile.0.join("spelling");
+        drop(fixture(&directory));
+        let live = identity();
+        let mut removed = identity();
+        removed.installation_id = "removed-installation".into();
+        let words = |identity: &Identity| directory.join(format!("{}.words", identity.key()));
+        fs::copy(words(&live), words(&removed)).unwrap();
+        let run = uuid::Uuid::new_v4();
+        let names = [
+            format!(".{}.{run}.previous", removed.key()),
+            format!(".{}.{run}.previous", live.key()),
+            format!(".{}.{run}.tmp", live.key()),
+            format!(".spelling-{run}.run"),
+            // Not names this module creates: never touched.
+            "notes.words".to_string(),
+            format!("{}.sqlite", removed.key()),
+            format!("{}.words.bak", removed.key()),
+            format!(".{}.{run}.other", removed.key()),
+        ];
+        for name in &names {
+            fs::write(directory.join(name), b"cache").unwrap();
+        }
+        fs::create_dir(directory.join(format!("{}.words", "b".repeat(64)))).unwrap();
+        #[cfg(unix)]
+        let outside = {
+            let outside = profile.0.join("outside");
+            fs::write(&outside, b"outside").unwrap();
+            std::os::unix::fs::symlink(&outside, directory.join(format!("{}.words", "c".repeat(64)))).unwrap();
+            outside
+        };
+        let manager = SpellingManager::new(directory.clone());
+        // Caches are not writable (private or read-only mode): nothing runs.
+        assert_eq!(manager.sweep(&[]).unwrap(), 0);
+        manager.set_writable(true).unwrap();
+        assert_eq!(manager.sweep(std::slice::from_ref(&live)).unwrap(), 4);
+        assert!(words(&live).is_file());
+        assert!(!words(&removed).exists());
+        assert!(directory.join(&names[1]).is_file(), "a live entry's backup is kept for recovery");
+        for name in &names[4..] {
+            assert!(directory.join(name).is_file(), "{name}");
+        }
+        assert!(directory.join(format!("{}.words", "b".repeat(64))).is_dir());
+        #[cfg(unix)]
+        {
+            assert!(fs::symlink_metadata(directory.join(format!("{}.words", "c".repeat(64)))).is_ok());
+            assert_eq!(fs::read(&outside).unwrap(), b"outside");
+        }
+
+        // A legacy dictionary keeps explaining "rebuild" until a current one exists.
+        let legacy = directory.join(format!("{}.words", live.unbound_key(2)));
+        fs::write(&legacy, b"legacy").unwrap();
+        fs::remove_file(words(&live)).unwrap();
+        assert_eq!(manager.sweep(std::slice::from_ref(&live)).unwrap(), 0);
+        assert!(legacy.is_file());
+
+        // No live entries: every cache file goes, nothing else does.
+        assert_eq!(manager.sweep(&[]).unwrap(), 2);
+        assert!(!legacy.exists());
+        assert!(!directory.join(&names[1]).exists());
+        for name in &names[4..] {
+            assert!(directory.join(name).is_file(), "{name}");
+        }
+    }
+
+    #[test]
+    fn sweep_name_accepts_only_this_modules_cache_names() {
+        let key = "0123456789abcdef".repeat(4);
+        let run = uuid::Uuid::new_v4();
+        assert!(matches!(sweep_name(&format!("{key}.words")), Some(SweepName::Dictionary(found)) if found == key));
+        assert!(matches!(sweep_name(&format!(".{key}.{run}.previous")), Some(SweepName::Backup(found)) if found == key));
+        assert!(matches!(sweep_name(&format!(".{key}.{run}.tmp")), Some(SweepName::Staging)));
+        assert!(matches!(sweep_name(&format!(".spelling-{run}.run")), Some(SweepName::Staging)));
+        for name in [
+            format!("{}.words", key.to_uppercase()),
+            format!("{}.words", &key[1..]),
+            format!("{key}.sqlite"),
+            format!(".{key}.{}.tmp", run.simple()),
+            format!(".{key}.{run}.tmp.extra"),
+            format!("{key}.{run}.tmp"),
+            ".spelling-x.run".to_string(),
+            "../escape.words".to_string(),
+        ] {
+            assert!(sweep_name(&name).is_none(), "{name}");
+        }
+    }
 }

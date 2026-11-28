@@ -1127,3 +1127,48 @@ async fn unsatisfiable_range_is_rejected_with_the_entry_size() {
     assert_eq!(response.header("content-range"), Some(format!("bytes */{size}").as_str()));
     assert!(response.body.is_empty());
 }
+
+#[tokio::test]
+async fn document_navigations_that_fail_still_load_the_reader_bridge() {
+    let directory = std::env::temp_dir().join(format!("kiwix-reader-failure-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let copy = directory.join("media.zim");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/media.zim"),
+        &copy,
+    )
+    .unwrap();
+    let fixture = ReaderFixture::start_path(copy.clone()).await;
+    let main = format!("/{}", super::encode_path(&fixture.archive.main_or_random_entry().unwrap().0.path));
+    let iframe = [("sec-fetch-dest", "iframe")];
+    let instrumented = |response: &HttpResponse| {
+        response.header("content-type") == Some("text/html; charset=utf-8")
+            && String::from_utf8_lossy(&response.body).contains("bridge.js")
+    };
+
+    // A malformed escape and an archive form post are refused, as a page.
+    let malformed = fetch(fixture.port, &fixture.host, "GET", "/%zz", &iframe).await;
+    assert_eq!(malformed.status, 400);
+    assert!(instrumented(&malformed));
+    let posted = fetch(fixture.port, &fixture.host, "POST", &main, &iframe).await;
+    assert_eq!(posted.status, 405);
+    assert!(instrumented(&posted));
+    let plain_post = fetch(fixture.port, &fixture.host, "POST", &main, &[]).await;
+    assert_eq!(plain_post.status, 405);
+    assert!(!instrumented(&plain_post));
+
+    // The archive can no longer be read: its file changed in place.
+    let file = std::fs::OpenOptions::new().write(true).open(&copy).unwrap();
+    let modified = file.metadata().unwrap().modified().unwrap();
+    file.set_modified(modified - std::time::Duration::from_secs(3600)).unwrap();
+    let document = fetch(fixture.port, &fixture.host, "GET", &main, &iframe).await;
+    assert_eq!(document.status, 500);
+    assert!(instrumented(&document), "{}", String::from_utf8_lossy(&document.body));
+    assert!(String::from_utf8_lossy(&document.body).contains("The archive could not read this entry."));
+    // A subresource fetch keeps the honest plain status.
+    let resource = fetch(fixture.port, &fixture.host, "GET", &main, &[]).await;
+    assert_eq!(resource.status, 500);
+    assert_eq!(resource.header("content-type"), Some("text/plain; charset=utf-8"));
+    fixture.shutdown().await;
+    let _ = std::fs::remove_dir_all(&directory);
+}
