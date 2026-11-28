@@ -569,14 +569,6 @@ fn one_click_binding_chooses_the_lan_another_device_can_reach() {
     assert_eq!(chosen(&[("tun0", "10.8.0.2", true), ("wlan0", "192.168.1.50", false)], Some("10.8.0.2")), wifi("192.168.1.50"));
     // Only virtual adapters: refuse, so the person is told to connect.
     assert!(chosen(&[("docker0", "172.17.0.1", false), ("rmnet0", "10.1.1.1", false)], Some("172.17.0.1")).is_err());
-    // A VirtualBox host-only network and name-only VPNs are not a LAN, even
-    // when no default route exists to prefer the real one.
-    let hosted = [("VirtualBox Host-Only Network", "192.168.56.1", false), ("ZeroTier One [8056c2e21c000001]", "10.147.17.5", false),
-        ("NordLynx", "10.5.0.2", false), ("vboxnet0", "192.168.56.2", false), ("Wi-Fi", "192.168.178.20", false)];
-    for routed in [None, Some("10.5.0.2"), Some("192.168.56.1")] {
-        assert_eq!(chosen(&hosted, routed), wifi("192.168.178.20"), "{routed:?}");
-    }
-    assert!(chosen(&hosted[..4], Some("10.5.0.2")).is_err());
     // A Hyper-V external switch holds the machine's only LAN address and its
     // default route; the physical adapter has none. That is the working LAN.
     let hyper_v = [("vEthernet (Default Switch)", "172.28.112.1", false), ("vEthernet (WSL)", "172.29.0.1", false),
@@ -588,6 +580,14 @@ fn one_click_binding_chooses_the_lan_another_device_can_reach() {
     // A real LAN adapter always wins over a switch, routed or not.
     let with_wifi = [("vEthernet (Default Switch)", "172.28.112.1", false), ("Wi-Fi", "192.168.1.50", false)];
     assert_eq!(chosen(&with_wifi, Some("172.28.112.1")), wifi("192.168.1.50"));
+    // A VirtualBox host-only network and name-only VPNs are not a LAN, even
+    // when no default route exists to prefer the real one.
+    let hosted = [("VirtualBox Host-Only Network", "192.168.56.1", false), ("ZeroTier One [8056c2e21c000001]", "10.147.17.5", false),
+        ("NordLynx", "10.5.0.2", false), ("vboxnet0", "192.168.56.2", false), ("Wi-Fi", "192.168.178.20", false)];
+    for routed in [None, Some("10.5.0.2"), Some("192.168.56.1")] {
+        assert_eq!(chosen(&hosted, routed), wifi("192.168.178.20"), "{routed:?}");
+    }
+    assert!(chosen(&hosted[..4], Some("10.5.0.2")).is_err());
     // Only this one kind of switch is trusted to hold the LAN: a VPN, bridge
     // or container network that owns the route with no LAN present is refused.
     for name in ["NordLynx", "wg0", "tailscale0", "docker0", "bridge100", "ZeroTier One [1]"] {

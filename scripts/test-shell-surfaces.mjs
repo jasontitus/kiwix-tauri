@@ -151,10 +151,13 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
   page.on("pageerror", (error) => pageErrors.push(error.message));
   if (prepare) await page.evaluateOnNewDocument(prepare);
   await page.evaluateOnNewDocument(fixture, native);
-  await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded" });
+  // Each test starts its own development server; on a loaded runner the first
+  // response and the module transforms can take most of a minute.
+  page.setDefaultTimeout(45000);
+  await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded", timeout: 120000 });
   try {
     // The first load of a cold development server transforms every module.
-    await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 45000 });
+    await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 120000 });
   } catch {
     // Say where startup stopped instead of only "waiting failed".
     const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }));
@@ -209,7 +212,7 @@ const alertState = () => {
 };
 const FAILED = "The operation could not be completed.";
 
-test("a failure inside a modal is shown, announced and dismissed above it, with one owner", { skip, timeout: 150000 }, async (t) => {
+test("a failure inside a modal is shown, announced and dismissed above it, with one owner", { skip, timeout: 420000 }, async (t) => {
   const { page, pageErrors, until, button, pane } = await open(t);
   const report = (message) => page.evaluate((text) => {
     window.dispatchEvent(new CustomEvent("kiwix-desktop-workflow-error", { detail: { error: new Error(text) } }));
@@ -329,7 +332,7 @@ test("a failure inside a modal is shown, announced and dismissed above it, with 
   assert.deepEqual(pageErrors, []);
 });
 
-test("Settings hides desktop-only copy without windows, and a typed download directory waits for review", { skip, timeout: 150000 }, async (t) => {
+test("Settings hides desktop-only copy without windows, and a typed download directory waits for review", { skip, timeout: 420000 }, async (t) => {
   // The browser preview is not a desktop window; it gets the same copy as phones.
   const { page, pageErrors, until, button } = await open(t);
   await page.click(".sidebar-settings");
@@ -390,7 +393,7 @@ async function openPicker(page, until) {
 }
 const escapeKey = (page) => page.evaluate(() => window.emitNative("kiwix-mobile-shortcut", { action: "escape" }));
 
-test("a hardware Escape consumed by the native layer closes shell popovers outside the reader", { skip, timeout: 150000 }, async (t) => {
+test("a hardware Escape consumed by the native layer closes shell popovers outside the reader", { skip, timeout: 420000 }, async (t) => {
   const { page, pageErrors, until, button } = await open(t, { native: true, userAgent: IPHONE, viewport: { width: 820, height: 1100 } });
   assert.equal(await page.evaluate(() => document.querySelector(".app-shell").classList.contains("is-mobile")), true);
 
@@ -425,7 +428,7 @@ test("a hardware Escape consumed by the native layer closes shell popovers outsi
   assert.deepEqual(pageErrors, []);
 });
 
-test("the native Escape closes the phone's tab sheet wherever focus is", { skip, timeout: 150000 }, async (t) => {
+test("the native Escape closes the phone's tab sheet wherever focus is", { skip, timeout: 420000 }, async (t) => {
   const { page, pageErrors, until } = await open(t, { native: true, userAgent: IPHONE, viewport: { width: 390, height: 800 } });
   await page.click('[data-mobile-tabs-trigger="true"]');
   await until(() => !!document.querySelector("#reader-tabs.mobile-tabs-open"));
@@ -436,7 +439,7 @@ test("the native Escape closes the phone's tab sheet wherever focus is", { skip,
   assert.deepEqual(pageErrors, []);
 });
 
-test("Android Back closes the top-most surface, returns to the library, and only then leaves to the system", { skip, timeout: 150000 }, async (t) => {
+test("Android Back closes the top-most surface, returns to the library, and only then leaves to the system", { skip, timeout: 420000 }, async (t) => {
   const { page, pageErrors, until, activate } = await open(t, {
     native: true, userAgent: ANDROID, viewport: { width: 390, height: 800 },
     // A listener that an earlier document of this process left registered.

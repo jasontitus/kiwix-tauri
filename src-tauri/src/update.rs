@@ -305,18 +305,22 @@ pub(crate) fn cancel_download() -> bool {
     }
 }
 
-/// Set by a completed install that must relaunch. The relaunch is performed by
-/// the ordinary Quit path only after every shell flushed and `Service::shutdown`
-/// succeeded. A cancelled prepare clears it so a later plain Quit never restarts.
-/// A retry of the same prepared retirement retains the requested relaunch.
+/// Set by a completed install that must relaunch (macOS and Linux). Only
+/// `lib.rs` `finish_authorized_quit` consumes it, once Quit is authorized:
+/// after every shell flushed and `Service::shutdown` succeeded, or after the
+/// person chose "Quit Without Saving" in the failed-Quit dialog. While that
+/// dialog is open the relaunch stays armed, and Retry keeps it. It is cleared
+/// only when the person answers Cancel or closes the dialog after a failed
+/// session flush; after a failed retirement it stays for the next Quit.
 static RESTART_AFTER_QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Consume the pending relaunch request (Quit retired the service).
+/// Consume the pending relaunch request (Quit was authorized).
 pub(crate) fn take_restart_after_quit() -> bool {
     RESTART_AFTER_QUIT.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 
-/// Preparation was cancelled and the shells resumed. The next Quit is a plain exit.
+/// The person kept Kiwix open after a failed session flush and the shells
+/// resumed. The next Quit is a plain exit.
 pub(crate) fn clear_restart_after_quit() {
     RESTART_AFTER_QUIT.store(false, std::sync::atomic::Ordering::SeqCst);
 }
@@ -463,7 +467,14 @@ fn updater_for<R: tauri::Runtime>(
         // A weak reference: `PENDING` is static and must not keep the
         // service alive. The plugin ignores the hook outside Windows.
         let service = Arc::downgrade(service);
-        builder = builder.on_before_exit(move || run_before_installer_exit(&service));
+        // This replaces the plugin's own hook, which only called
+        // `cleanup_before_exit` (on Windows it also hides every window), so
+        // that still runs, after the flush.
+        let app = app.clone();
+        builder = builder.on_before_exit(move || {
+            run_before_installer_exit(&service);
+            app.cleanup_before_exit();
+        });
     }
     builder
         .endpoints(vec![config.endpoint.clone()])
@@ -648,7 +659,7 @@ pub(crate) async fn status(service: &Arc<Service>) -> Result<UpdateStatus, Strin
         automatic_checks: !crate::sandbox::is_sandboxed(),
         next_check_at: next_check_at(stored.last_checked.as_deref(), time::OffsetDateTime::now_utc()),
         last_checked: stored.last_checked,
-        last_available_version: stored.last_available_version,
+        last_available_version: still_available(stored.last_available_version, &current_version),
         last_error: stored.last_error,
         busy: OPERATION.is_busy(),
         available,
@@ -983,15 +994,6 @@ pub(crate) async fn install(
     );
     update.install(&bytes).map_err(|error| {
         set_progress(&app, None);
-        // The Windows installer hook may already have cleared the recorded
-        // availability; the update is still pending, so record it again.
-        #[cfg(windows)]
-        {
-            let path = service.store.data_dir().join(STATE_FILE);
-            let mut stored = load_state_at(&path);
-            stored.last_available_version = Some(update.version.clone());
-            save_state(&service.store, &stored);
-        }
         plain_update_error(&error)
     })?;
     set_progress(&app, None);
@@ -1005,7 +1007,8 @@ pub(crate) async fn install(
     save_state(&service.store, &stored);
 
     // Windows starts its installer and exits inside `install`, after the
-    // plugin ran `run_before_installer_exit`, so nothing below runs there.
+    // plugin ran `run_before_installer_exit`, so nothing below runs there;
+    // `status` hides the recorded version once it is installed.
     // macOS and Linux replace the bundle in place, so relaunch explicitly.
     //
     // Never `restart()`/`request_restart()` here: Tauri raises ExitRequested
@@ -1034,6 +1037,7 @@ const INSTALLER_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 /// `std::process::exit(0)`: the ordinary Quit path (shell flush, geometry,
 /// session snapshot, `Service::shutdown`) never runs. The flush runs on its own
 /// thread, bounded by `INSTALLER_FLUSH_TIMEOUT`; a timeout installs anyway.
+/// The caller then runs `cleanup_before_exit`, as the plugin's own hook did.
 fn run_before_installer_exit(service: &std::sync::Weak<Service>) {
     let Some(service) = service.upgrade() else {
         return;
@@ -1046,11 +1050,15 @@ fn run_before_installer_exit(service: &std::sync::Weak<Service>) {
             let _ = finished.send(());
         });
     match spawned {
-        Ok(_) => {
-            if done.recv_timeout(INSTALLER_FLUSH_TIMEOUT).is_err() {
+        Ok(_) => match done.recv_timeout(INSTALLER_FLUSH_TIMEOUT) {
+            Ok(()) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 eprintln!("KIWIX_UPDATE_EXIT the profile was not saved in time; installing anyway");
             }
-        }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                eprintln!("KIWIX_UPDATE_EXIT saving the profile failed unexpectedly; installing anyway");
+            }
+        },
         Err(error) => eprintln!("KIWIX_UPDATE_EXIT cannot save the profile before installing: {error}"),
     }
 }
@@ -1081,12 +1089,40 @@ fn before_installer_exit(service: &Arc<Service>) {
     if let Err(error) = service.store.flush_browsing() {
         eprintln!("KIWIX_UPDATE_EXIT saving reading positions: {error}");
     }
-    // The relaunched version must not report this update as still available.
-    let path = service.store.data_dir().join(STATE_FILE);
-    let mut stored = load_state_at(&path);
-    stored.last_available_version = None;
-    stored.last_error = None;
-    save_state(&service.store, &stored);
+    // `update-state.json` is left alone: whether the installer succeeds is
+    // not known yet. `status` hides the recorded version once it is installed.
+}
+
+/// The version the last check found, unless this build is already that
+/// version or newer (the update was installed, here or by hand). A version
+/// either side cannot parse, or two pre-releases of the same version, keep
+/// the recorded value.
+fn still_available(recorded: Option<String>, current: &str) -> Option<String> {
+    let recorded = recorded?;
+    let installed = match (version_core(&recorded), version_core(current)) {
+        (Some((available, available_pre)), Some((running, running_pre))) => {
+            available < running
+                || (available == running
+                    && (recorded.split('+').next() == current.split('+').next()
+                        || (available_pre && !running_pre)))
+        }
+        _ => false,
+    };
+    (!installed).then_some(recorded)
+}
+
+/// `MAJOR.MINOR.PATCH` of a semantic version, and whether it is a
+/// pre-release. Build metadata is ignored, as semantic versioning orders it.
+fn version_core(version: &str) -> Option<([u64; 3], bool)> {
+    let version = version.split('+').next()?;
+    let (core, pre_release) = match version.split_once('-') {
+        Some((core, pre)) if !pre.is_empty() => (core, true),
+        Some(_) => return None,
+        None => (version, false),
+    };
+    let mut parts = core.split('.').map(|part| part.parse::<u64>().ok());
+    let core = [parts.next()??, parts.next()??, parts.next()??];
+    parts.next().is_none().then_some((core, pre_release))
 }
 
 /// Re-read everything the download phase observed, now that the install
@@ -1551,6 +1587,42 @@ mod tests {
     }
 
     #[test]
+    fn a_recorded_update_is_hidden_once_this_version_has_it() {
+        let recorded = |version: &str| Some(version.to_owned());
+        // Relaunched after a successful install, or updated by hand.
+        assert_eq!(still_available(recorded("0.2.0"), "0.2.0"), None);
+        assert_eq!(still_available(recorded("0.2.0"), "0.3.1"), None);
+        assert_eq!(still_available(recorded("0.2.0-beta.1"), "0.2.0"), None);
+        assert_eq!(still_available(recorded("0.2.0+build.7"), "0.2.0"), None);
+        // Relaunched after the installer failed: still the older version.
+        assert_eq!(still_available(recorded("0.2.0"), "0.1.9"), recorded("0.2.0"));
+        assert_eq!(still_available(recorded("0.2.0"), "0.2.0-beta.1"), recorded("0.2.0"));
+        assert_eq!(still_available(recorded("1.0.0"), "0.10.0"), recorded("1.0.0"));
+        // Nothing to compare: shown as recorded.
+        assert_eq!(still_available(recorded("0.2.0-rc.2"), "0.2.0-rc.1"), recorded("0.2.0-rc.2"));
+        assert_eq!(still_available(recorded("next"), "0.2.0"), recorded("next"));
+        assert_eq!(still_available(None, "0.2.0"), None);
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test]
+    async fn status_reports_an_update_only_while_it_is_not_installed() {
+        let (service, directory) = update_test_service();
+        let path = service.store.data_dir().join(STATE_FILE);
+        let current = env!("CARGO_PKG_VERSION");
+        let major: u64 = current.split('.').next().unwrap().parse().unwrap();
+        let newer = format!("{}.0.0", major + 1);
+        // After a successful Windows install the new build finds its own version recorded.
+        save_state_at(&path, &StoredState { last_available_version: Some(current.into()), ..StoredState::default() }).unwrap();
+        assert_eq!(status(&service).await.unwrap().last_available_version, None);
+        // After a failed one the old build still sees the newer version.
+        save_state_at(&path, &StoredState { last_available_version: Some(newer.clone()), ..StoredState::default() }).unwrap();
+        assert_eq!(status(&service).await.unwrap().last_available_version, Some(newer));
+        service.shutdown().await.unwrap();
+        std::fs::remove_dir_all(directory).ok();
+    }
+
+    #[test]
     fn saving_update_state_replaces_the_previous_file_and_leaves_no_temporary() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join(STATE_FILE);
@@ -1569,7 +1641,7 @@ mod tests {
     /// nothing after it in `install`, and no Quit path, runs.
     #[cfg(desktop)]
     #[tokio::test]
-    async fn the_windows_installer_hook_saves_what_quit_would_and_clears_the_update() {
+    async fn the_windows_installer_hook_saves_what_quit_would_before_the_installer_runs() {
         let (service, directory) = update_test_service();
         service.store.update(|state| {
             state.history.push(crate::store::HistoryEntry {
@@ -1605,10 +1677,11 @@ mod tests {
         run_before_installer_exit(&Arc::downgrade(&service));
         assert!(started.elapsed() < INSTALLER_FLUSH_TIMEOUT, "the hook finished instead of timing out");
         assert_eq!(durable_scroll(), 640.0);
+        // The installer may still fail: the recorded update is left for
+        // `status` to judge against the version that next starts.
         let stored = load_state_at(&path);
-        assert_eq!(stored.last_available_version, None);
-        assert_eq!(stored.last_error, None);
-        assert!(stored.last_checked.is_some());
+        assert_eq!(stored.last_available_version.as_deref(), Some("9.9.9"));
+        assert_eq!(stored.last_error.as_deref(), Some("earlier failure"));
         drop(install_lease);
         writer.await.unwrap();
         service.shutdown().await.unwrap();
