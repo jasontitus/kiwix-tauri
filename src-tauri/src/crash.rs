@@ -527,7 +527,7 @@ fn path_end(scalars: &[char], start: usize) -> usize {
         let stop = match scalars[end] {
             '\n' | '\r' | '<' | '>' | '`' => true,
             // Debug-formatted paths escape an embedded quote as `\"`.
-            '"' => backslashes_before(scalars, start, end) % 2 == 0,
+            '"' => backslashes_before(scalars, start, end).is_multiple_of(2),
             ':' => scalars.get(end + 1).is_some_and(|next| next.is_whitespace()),
             _ => false,
         };
@@ -817,7 +817,7 @@ fn quoted_value(scalars: &[char], lines: &Lines, open: usize) -> Option<(usize, 
             let close = (start..line).find(|index| {
                 scalars[*index] == '"' && {
                     let before = backslashes_before(scalars, start, *index);
-                    if escaped { before == 1 } else { before % 2 == 0 }
+                    if escaped { before == 1 } else { before.is_multiple_of(2) }
                 }
             });
             // The backslash that escapes the closing quote stays with it.
