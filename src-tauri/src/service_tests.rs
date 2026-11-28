@@ -5024,7 +5024,10 @@ async fn unreadable_book_record_does_not_block_startup_or_snapshot() {
     assert_eq!(snapshot["books"].as_array().unwrap().len(), 1);
     assert_eq!(snapshot["activeSurface"], "library");
     // Recoverable record skips stay out of the blocking migration band.
-    assert!(snapshot["startupWarnings"].as_array().unwrap().is_empty());
+    // The skipped record is preserved in a sibling copy, and the person is told where.
+    let warnings = snapshot["startupWarnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].as_str().unwrap().contains("state.skipped-"));
     assert!(service
         .store
         .load_warnings()

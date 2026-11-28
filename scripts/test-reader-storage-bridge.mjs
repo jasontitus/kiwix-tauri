@@ -91,6 +91,38 @@ function bridge() {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+test("a reader message passing through the storage listener is never handed to replaceable code", () => {
+  // The storage listener is registered before the reader bridge's and sees the
+  // shell's reader-init first. An archive script can plant getters for fields
+  // such a message does not have; reading one would hand it the whole message.
+  const { deliver, messages } = bridge();
+  const before = messages.length;
+  const leaked = [];
+  const planted = ["documentId", "id", "freeze", "bytes", "sequence"];
+  for (const key of planted)
+    Object.defineProperty(Object.prototype, key, { configurable: true, get() { leaked.push(this); return undefined; } });
+  try {
+    deliver({ channel: "kiwix-reader", version: 1, type: "reader-init", sessionId: "session", photoSecret: "secret" });
+    deliver({ channel: "kiwix-reader", version: 1, sessionId: "session" });
+    deliver("text");
+    deliver(null);
+  } finally {
+    for (const key of planted) delete Object.prototype[key];
+  }
+  assert.deepEqual(leaked, [], "only the message's own type is ever looked at");
+  assert.equal(messages.length, before);
+});
+
+test("credit from the shell is still accepted after the listener's hardening", async () => {
+  const { storage, messages, deliver, pageshow } = bridge();
+  const documentId = messages.find(({ data }) => data.type === "kiwix-storage-ready").data.documentId;
+  pageshow(true);
+  // A wrong source or origin is ignored; the shell's snapshot is applied.
+  deliver({ type: "kiwix-storage-credit", documentId, bytes: 0, sequence: 0 });
+  assert.throws(() => storage.setItem("key", "value"), (error) => error.name === "QuotaExceededError",
+    "the zero-credit snapshot from the shell took effect");
+});
+
 test("synchronous writes coalesce into one bounded IPC batch", async () => {
   const { storage, batches } = bridge();
   storage.setItem("first", "1");

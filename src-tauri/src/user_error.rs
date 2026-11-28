@@ -401,6 +401,12 @@ pub fn plain(message: &str) -> String {
     if let Some(failure) = android_failure(trimmed) {
         return android_plain(&failure, trimmed);
     }
+    // A bare Nearby, Bluetooth or temporary Wi-Fi code is the shell's own
+    // vocabulary on every platform. It must reach the shell unchanged, before
+    // the vocabulary check below reads "RETIRED" in a code as internal jargon.
+    if is_android_code(trimmed) && shell_owned_code(trimmed) {
+        return trimmed.to_owned();
+    }
     if let Some(text) = native_message(trimmed) {
         return text.to_owned();
     }
@@ -746,6 +752,30 @@ mod tests {
                 r#"java.lang.IllegalStateException: {"message":"NEARBY_JOIN_BUSY","code":"NEARBY_JOIN_BUSY"}"#
             ),
             "NEARBY_JOIN_BUSY"
+        );
+    }
+
+    #[test]
+    fn bare_nearby_codes_reach_the_shell_even_when_they_contain_internal_words() {
+        // iOS rejects with the bare code. "RETIRED" inside a code is not
+        // jargon shown to a person: the shell maps the code to its sentence.
+        for code in [
+            "BLE_OWNER_RETIRED",
+            "BLE_CONNECTION_RETIRED",
+            "NEARBY_BLUETOOTH_RETIRED",
+            "NEARBY_ACTIVITY_RETIRED",
+            "JOIN_ROUTE_LOST",
+            "HOTSPOT_START_CANCELLED",
+            "LOCAL_NETWORK_PERMISSION_DENIED",
+        ] {
+            assert_eq!(plain(code), code);
+            assert_eq!(plain(&format!("  {code}\n")), code);
+        }
+        // Only a whole-message code of those families is exempt.
+        assert_eq!(plain("The owner was retired"), TRY_AGAIN);
+        assert_eq!(
+            plain("BLE_OWNER_RETIRED after the owner was retired"),
+            TRY_AGAIN
         );
     }
 

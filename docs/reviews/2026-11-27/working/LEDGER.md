@@ -231,3 +231,7 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   Owner: adopt R1-R6 (+R7 hiddenScanName). Residuals: onNewIntent-before-plugin-load loss (pre-existing), layoutDirection not handled, Rust sentence table English-only (better than raw JSON), dead nearbyRoute commands.
   -> android implementer resumed
 - adv-shell DONE (adv/shell.md): no blocking. R1 (double owner inline+alert at Library.tsx:530,561; Downloads.tsx:807,881; Maps.tsx:745 -> PANES lane: onError(e,"blocking",false)), R2 (gated dir field "Saving..." + quit drops typed value), R3, R4, R5 -> shell lane; R6 (plain() internal-terms swallows iOS BLE_*_RETIRED) -> android lane (user_error.rs). diagnostics.ts SHELL-7 handoff -> shell lane now.
+- desktop lane DONE (impl/desktop.md): CORE-4 (+mobile version refusal), BUILD-12, BUILD-2 partial (hook: capture, session snapshot, flush_browsing, clear state; no shell flush), BUILD-9, BUILD-7, APPLE-2, APPLE-3 (⌥⌘T toc, ⌘, settings, ⌃⌘F fullscreen; app menu items; 5 new labels).
+  Handoffs: (1) service_tests.rs assertion — APPLIED by owner. (2) dispatch library_maintenance sandbox::revive() -> service lane. (3) Reader.tsx shortcut table ⌃⌘F -> reader lane. (4) optional quit::abandon for Windows hook shell flush -> residual unless startup lane cheap.
+  Doubts: read-only->writable same session drops skipped records (residual); mobile Reset window state on newer-version profile.
+  -> adversarial reviewer launching

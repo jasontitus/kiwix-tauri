@@ -234,7 +234,7 @@ function range(document, rect) {
   };
 }
 
-function reader({ cssHighlights = true } = {}) {
+function reader({ cssHighlights = true, nativeEvents = false } = {}) {
   const messages = [];
   const highlights = new Map();
   const utterances = [];
@@ -387,17 +387,45 @@ function reader({ cssHighlights = true } = {}) {
   });
   Object.defineProperty(context.MouseEvent.prototype, "ctrlKey", { get() { return false; } });
   Object.defineProperty(context.WheelEvent.prototype, "deltaY", { get() { return 0; } });
+  // Real event classes, defined in the page's own realm before the bridge runs,
+  // so the bridge captures their accessors the way it does in a webview and a
+  // test can then replace them the way an archive script would.
+  if (nativeEvents)
+    vm.runInContext(`
+      globalThis.Event = class Event {
+        preventDefault() {}
+        stopImmediatePropagation() { this.stopped = true; }
+      };
+      globalThis.MessageEvent = class MessageEvent extends Event {
+        #init;
+        constructor(init) { super(); this.#init = init; this.isTrusted = init.isTrusted; }
+        get data() { return this.#init.data; }
+        get source() { return this.#init.source; }
+        get origin() { return this.#init.origin; }
+      };
+    `, context);
+  // The embedding shell window, whatever the page later assigns to `parent`.
+  const shell = window.parent;
   vm.runInContext(bridge, context, { filename: "reader-bridge.js" });
 
   function receive(data, event = {}) {
-    for (const callback of windowListeners.get("message") ?? [])
-      callback({
-        source: window.parent,
-        origin: parentOrigin,
-        isTrusted: true,
-        data: { channel: "kiwix-reader", version: 1, sessionId, ...data },
-        ...event,
-      });
+    const init = {
+      source: shell,
+      origin: parentOrigin,
+      isTrusted: true,
+      data: { channel: "kiwix-reader", version: 1, sessionId, ...data },
+      ...event,
+    };
+    const dispatched = nativeEvents ? new context.MessageEvent(init) : init;
+    // `window.event` while the listeners run, as in a webview.
+    window.event = dispatched;
+    try {
+      for (const callback of windowListeners.get("message") ?? []) {
+        callback(dispatched);
+        if (dispatched.stopped) break;
+      }
+    } finally { window.event = undefined; }
+    return dispatched;
   }
   function emit(name, event = {}) {
     for (const callback of documentListeners.get(name) ?? []) callback(event);
@@ -423,6 +451,8 @@ function reader({ cssHighlights = true } = {}) {
     },
     command(message) { receive({ type: "reader-command", ...message }); },
     receive,
+    context,
+    window,
     speechSynthesis,
     setSelection(selection) { currentSelection = selection; },
     setRangeRect(rect) { rangeRect = rect; },
@@ -825,6 +855,105 @@ test("the bridge proves an unchanged document only for the session it holds, wit
   const after = frame.messages.length;
   frame.receive({ type: "document-probe", nonce });
   assert.equal(frame.messages.length, after);
+});
+
+// What a hostile archive script can do once it runs, after the bridge: replace
+// every accessor and method the bridge might look up, plant getters for absent
+// fields, listen for the shell's messages itself, and peek at window.event from
+// inside any call the bridge makes.
+function hostile(frame) {
+  const stolen = [];
+  const run = (source) => vm.runInContext(source, frame.context);
+  frame.context.stolen = stolen;
+  run(`
+    const apply = Reflect.apply;
+    const stringify = JSON.stringify;
+    const shell = parent;
+    const data = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "data").get;
+    let busy = false;
+    const steal = (value) => {
+      if (busy) return;
+      busy = true;
+      try { stolen[stolen.length] = stringify(value); } catch (_) {} finally { busy = false; }
+    };
+    const read = (event) => { if (busy) return undefined; busy = true; try { return apply(data, event, []); } finally { busy = false; } };
+    for (const key of ["data", "source", "origin"]) {
+      const original = Object.getOwnPropertyDescriptor(MessageEvent.prototype, key).get;
+      Object.defineProperty(MessageEvent.prototype, key, { configurable: true, get() {
+        steal(read(this));
+        // Also claim to come from the shell, whatever the event really says.
+        return key === "source" ? shell : key === "origin" ? ${JSON.stringify(parentOrigin)} : apply(original, this, []);
+      } });
+    }
+    Event.prototype.stopImmediatePropagation = function () { steal(read(this)); };
+    for (const key of ["channel", "version", "type", "sessionId", "photoSecret", "nonce", "linkPreviews", "mediaNotice", "sensorStatus", "photoChooser"])
+      Object.defineProperty(Object.prototype, key, { configurable: true, get() { steal(this); return undefined; }, set(value) {
+        Object.defineProperty(this, key, { value, writable: true, configurable: true, enumerable: true });
+      } });
+    // Anything the bridge calls while handling the message can look at window.event.
+    const peek = () => { if (!busy && window.event && typeof window.event === "object" && "stopped" in window.event || window.event?.isTrusted) steal(read(window.event)); };
+    for (const [owner, name] of [[Array.prototype, "includes"], [RegExp.prototype, "test"], [Function.prototype, "call"], [Function.prototype, "apply"]]) {
+      const original = owner[name];
+      owner[name] = function (...args) { peek(); return apply(original, this, args); };
+    }
+    const querySelectorAll = document.querySelectorAll;
+    document.querySelectorAll = function (...args) { peek(); return apply(querySelectorAll, this, args); };
+    window.addEventListener("message", (event) => steal(read(event)), true);
+    window.parent = window;
+  `);
+  return stolen;
+}
+
+test("an archive script that replaces the message accessors learns neither the session nor the photo secret", () => {
+  const frame = reader({ nativeEvents: true });
+  const stolen = hostile(frame);
+  const photoSecret = randomUUID();
+  frame.receive({ type: "reader-init", photoSecret, photoChooser: true, linkPreviews: true });
+  frame.command({ command: "toc", id: "kiwix-heading-0" });
+  const nonce = randomUUID();
+  frame.receive({ type: "document-probe", nonce });
+  const seen = stolen.join("\n");
+  assert.equal(seen.includes(photoSecret), false, "the photo secret never reaches archive script");
+  assert.equal(seen.includes(sessionId), false, "nor does the session id");
+  assert.ok(stolen.length > 0, "the hooks did run: the bridge was observed and still gave nothing away");
+  // The bridge itself still got everything: it is ready and answers for its session.
+  const types = frame.messages.map((message) => message.type);
+  assert.ok(types.includes("ready"));
+  assert.equal(frame.messages.find((message) => message.type === "ready").sessionId, sessionId);
+  const hello = frame.messages.find((message) => message.type === "reading-gesture-hello");
+  assert.equal(frame.messages.at(-1).type, "document-proof");
+  assert.equal(frame.messages.at(-1).token, hello.token);
+});
+
+test("the bridge binds its token to a new session before anything an archive script can reach", () => {
+  const frame = reader({ nativeEvents: true });
+  frame.receive({ type: "reader-init", photoSecret: randomUUID() });
+  // The archive now makes the retirement of the outgoing session throw, and
+  // posts its own binding from every hook it has.
+  const stolen = hostile(frame);
+  frame.speechSynthesis.cancel = () => { throw new Error("hostile"); };
+  const before = frame.messages.length;
+  const replacement = "replacement-session";
+  frame.receive({ type: "reader-init", sessionId: replacement, photoSecret: randomUUID() });
+  const posted = frame.messages.slice(before);
+  const hello = frame.messages.find((message) => message.type === "reading-gesture-hello");
+  assert.equal(posted[0].type, "reading-pan-bind", "the binding is the first thing posted for the new session");
+  assert.equal(posted[0].sessionId, replacement);
+  assert.equal(posted[0].token, hello.token);
+  assert.equal(stolen.join("\n").includes(replacement), false, "before any hook could have learnt the session");
+  assert.ok(posted.some((message) => message.type === "ready" && message.sessionId === replacement),
+    "a failing retirement of the old session does not strand the new one");
+});
+
+test("replaced accessors cannot make the bridge accept a message that is not from the shell", () => {
+  const frame = reader({ nativeEvents: true });
+  hostile(frame);
+  const before = frame.messages.length;
+  // The hooked accessors report the shell as source and origin for every event.
+  frame.receive({ type: "reader-init", sessionId: "forged-session" }, { source: frame.window });
+  frame.receive({ type: "reader-init", sessionId: "forged-session" }, { origin: archiveOrigin });
+  frame.receive({ type: "reader-init", sessionId: "forged-session" }, { isTrusted: false });
+  assert.deepEqual(frame.messages.slice(before), [], "the bridge reads the real source and origin");
 });
 
 function click(frame, href, { trusted = true, type = "click", button = 0 } = {}) {

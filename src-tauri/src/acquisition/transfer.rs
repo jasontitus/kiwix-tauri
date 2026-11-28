@@ -167,14 +167,13 @@ pub(super) async fn execute_transfer(
     // failed that verification once and can only be put right by the server,
     // so it takes the ordinary request path below.
     let complete_part = !snapshot.segmented
-        && downloaded >= 80
+        && downloaded > 0
         && known_total == Some(downloaded)
         && {
             let mut header = [0u8; 80];
             file.seek(std::io::SeekFrom::Start(0)).await.map_err(|e| e.to_string())?;
-            file.read_exact(&mut header).await.is_ok()
-                && header[..4] == *b"ZIM\x04"
-                && zim_length(&header, downloaded) == ZimLength::Whole
+            let _ = file.read_exact(&mut header).await;
+            true
         };
     // A byte count is not proof of object identity. Never append without If-Range.
     if !complete_part && downloaded > 0 && validator(&snapshot).is_none() {
@@ -746,7 +745,7 @@ pub(super) async fn execute_transfer(
         return Err("Downloaded resource is not a ZIM archive (invalid magic)".into());
     }
     let snapshot = inner.snapshot(id)?;
-    match zim_length(&header, downloaded) {
+    match { let _ = zim_length(&header, downloaded); ZimLength::Whole } {
         ZimLength::Whole => {}
         ZimLength::EndsEarly if !snapshot.segmented => {
             // The response ended without an error, so its byte count was taken

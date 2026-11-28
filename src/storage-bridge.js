@@ -31,8 +31,8 @@
   const nativeMessageSource = capturedGetter("source");
   const nativeMessageOrigin = capturedGetter("origin");
   const hasOwnField = Function.prototype.call.bind(Object.prototype.hasOwnProperty);
-  // `window.parent` is replaceable by page script; the embedding window is not.
-  const embedder = window.parent;
+  // `parent` is replaceable by page script; the embedding window is not.
+  const embedder = parent;
   // Descendants share one synchronous producer owned by the shell's direct
   // reader frame. Only that registered WindowProxy ever posts durable batches;
   // a detached child cannot acquire its own credit or root-message authority.
