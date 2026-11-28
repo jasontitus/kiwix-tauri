@@ -327,3 +327,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - adv-startup round 5: SPEC FINAL v2.3 (238). Owner added §4 struct/array/map residual line (doc). Startup lane closed again.
 - apple crash round 3 (impl/apple-crash3.md): v2.3 238/238, 1.6M differential 0, CRASH-R4 done. -> adv-apple quick check
 - android crash round 2 (impl/android-crash2.md): v2.3 238/238, 581k differential 0, 79 tests. -> adv-android quick check
+- adv-apple crash3: Swift port CLOSED (4.16M differential 0, 238/238).
