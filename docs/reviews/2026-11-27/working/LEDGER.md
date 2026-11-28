@@ -236,3 +236,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
   Doubts: read-only->writable same session drops skipped records (residual); mobile Reset window state on newer-version profile.
   -> adversarial reviewer launching
 - android round 2 DONE (impl/android-round2.md): R1-R7 + SHELL-R6 fixed. Residual: stopOwned->stopService under pending start (same platform rule) ; R2 replaced save silent (= base). -> adv-android re-review
+- features round 2 DONE (impl/features-round2.md): R1 (retry proven records on Delete; Err on demote & while reclaim fails — owner CONFIRMS repeated-Err reading), R4, R5, R6 (test deleted; FEAT-8 untested). cancel() keeps demotion + Ok (evidence: mobile retirement pending blocks all transfers). -> adv-features re-review

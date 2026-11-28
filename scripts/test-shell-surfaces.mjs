@@ -360,6 +360,8 @@ test("desktop-only Settings copy is not shown where there are no windows or File
   await page.type(directory, "ader/zim");
   assert.equal(await page.evaluate(() => window.calls.filter((call) => call.command === "save_settings").length), 0);
   await page.keyboard.press("Enter");
+  await page.waitForSelector("dialog[open]");
+  console.error("DEBUG", await page.evaluate((selector) => ({ dialog: document.querySelector("dialog[open]").textContent, value: document.querySelector(selector).value, active: document.activeElement.outerHTML.slice(0, 200) }), directory));
   await until(() => document.querySelector("dialog[open] .file-path")?.textContent === "/media/reader/zim");
   assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), "Cancel");
   await page.keyboard.press("Enter");
