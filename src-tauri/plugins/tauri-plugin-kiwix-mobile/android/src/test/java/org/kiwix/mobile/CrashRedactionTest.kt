@@ -130,6 +130,7 @@ class CrashRedactionTest {
             // Four times the input takes about four times as long when linear and
             // sixteen times when quadratic. The floor absorbs timer noise.
             val allowed = maxOf(small, 5_000_000L) * 10
+            println("linear-time ${unit.trim().ifEmpty { unit }}: ${small / 1000} us at the bound, ${large / 1000} us for four times as much")
             assertTrue("$unit: ${small / 1000} us at the bound, ${large / 1000} us for four times as much", large <= allowed)
             // Generous for a shared machine; a quadratic step needs far longer.
             assertTrue("$unit: ${small / 1_000_000} ms at the bound", small < 300_000_000L)
