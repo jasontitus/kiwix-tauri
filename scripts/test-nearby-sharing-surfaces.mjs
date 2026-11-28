@@ -168,6 +168,26 @@ test("web sharing shows the addresses the device has now, not the ones at start"
   await absent(".sharing-address code", "192.168.1.50");
   assert.deepEqual(await page.$$eval(".sharing-qr select option", (nodes) => nodes.map((node) => node.value)),
     ["http://10.0.0.7:8080/nearby/session", "http://127.0.0.1:8080/nearby/session"]);
+
+  // The device loses every network: the share still runs, for this device only.
+  const local = "only this device can open the links below";
+  await absent(".sharing-controls [role=alert]", local);
+  await change((fixture) => {
+    fixture.sharing = { ...fixture.sharing, localOnly: true, url: "http://127.0.0.1:8080/nearby/session",
+      urls: ["http://127.0.0.1:8080/nearby/session"], catalogUrl: "http://127.0.0.1:8080/secret/catalog/v2/root.xml" };
+  });
+  await text(".sharing-controls [role=alert]", local);
+  await absent(".sharing-controls [role=alert]", lost);
+  await change((fixture) => { fixture.sharing = { ...fixture.sharing, localOnly: false }; });
+  await page.waitForFunction((value) => ![...document.querySelectorAll(".sharing-controls [role=alert]")]
+    .some((node) => node.textContent.includes(value)), {}, local);
+
+  // One poll chain: hiding and showing the page repeatedly must not multiply the requests.
+  const started = await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length);
+  for (let n = 0; n < 6; n++) await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await new Promise((resolve) => setTimeout(resolve, 4600));
+  const polls = (await page.evaluate(() => window.calls.filter((call) => call.command === "sharing_status").length)) - started;
+  assert.ok(polls >= 1 && polls <= 3, `expected one poll chain, saw ${polls} requests in one interval`);
   assert.deepEqual(pageErrors, []);
 });
 
