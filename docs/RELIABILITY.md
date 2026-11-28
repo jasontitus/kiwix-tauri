@@ -5,6 +5,19 @@ The newest exercised scope is recorded first below. Dated sections retain their
 own build, platform and hardware boundaries; none constitutes release,
 blanket hardware or complete-upstream-parity certification.
 
+## Review remediation — 2026-11-27 (not device-exercised)
+
+The project-wide review in `docs/reviews/2026-11-27/PROJECT-REVIEW-REMEDIATION.md`
+changed code on this loop's path: startup and quit dialogs, profile loading
+(unreadable records are kept in a sibling copy), archive handles that change or
+vanish while open, imports cancelled by Quit, a privacy switch or mobile
+backgrounding, Android system Back, and crash-record redaction. Those changes
+were exercised by host unit, integration and headless-browser tests on Linux,
+cross-target type checks for Windows and Android, JVM tests for the Android
+plugin and a Linux Swift toolchain for the iOS redaction code. **None of them
+has been run on a phone, a Mac, Windows or an iPhone simulator**, so the
+2026-11-17 device evidence below predates them and does not cover them.
+
 ## Mobile verification — 2026-11-17
 
 This records the public tree at `39102a9` plus the simulator-thinning

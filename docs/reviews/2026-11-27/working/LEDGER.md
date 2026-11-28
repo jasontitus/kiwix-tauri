@@ -329,3 +329,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - android crash round 2 (impl/android-crash2.md): v2.3 238/238, 581k differential 0, 79 tests. -> adv-android quick check
 - adv-apple crash3: Swift port CLOSED (4.16M differential 0, 238/238).
 - adv-android crash2: Kotlin port CLOSED (v2.3, 492k own differential 0). ALL CODE LANES CLOSED. Remaining: buildhygiene lane (a8452…), owner integration + docs review.
+- OWNER RELIABILITY.md dated section added. -> adv-owner reviewer (a0666…) reviewing all owner doc/localization edits.
