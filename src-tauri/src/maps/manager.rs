@@ -708,7 +708,7 @@ impl MapManager {
                 // mode run this unattended and treat an error as "still
                 // closing", which would refuse every Internet transfer until
                 // the next network change over a file that is merely kept.
-                self.reclaim_job_partial(job)?;
+                self.reclaim_job_partial(job, false)?;
                 if job.status == "paused" { job.status = "cancelled".into(); }
                 persist(&self.inner.state_path, job)?;
             }
@@ -726,8 +726,9 @@ impl MapManager {
     /// resume or delete any more stops vetoing every later map. A later
     /// explicit Delete retries the reclaim (`retry_recovery_records`).
     ///
-    /// Returns where the partial was kept and why, when it was.
-    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob) -> Result<Option<(PathBuf, String)>, String> {
+    /// Returns where the partial was kept and why, when it was. `again` words
+    /// that reason for a Delete the person just pressed.
+    pub(super) fn reclaim_job_partial(&self, job: &mut MapJob, again: bool) -> Result<Option<(PathBuf, String)>, String> {
         let Some(mut record) = job.owned_partial.clone() else { return Ok(None) };
         let mut paths = vec![record.destination.join(&record.name)];
         if let Some(publication) = &record.publication { paths.push(record.destination.join(&publication.name)); }
@@ -741,9 +742,9 @@ impl MapManager {
                 persist(&self.inner.state_path, job)
             }))
         })?;
-        let reason = match recovery {
-            Ok(PartialRecovery::Preserved) => NOT_OUR_FILE.to_owned(),
-            Err(reason) => reason.trim_end().to_owned(),
+        let kept = match recovery {
+            Ok(PartialRecovery::Preserved) => Kept::of(&record, true),
+            Err(raw) => Self::log_kept(&raw, &record),
             Ok(resolved) => {
                 if let PartialRecovery::Published(path) = resolved {
                     let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
@@ -761,17 +762,28 @@ impl MapManager {
         };
         // One durable step; if it cannot be saved the checkpoint and its
         // ownership record stay exactly as they were for a later retry.
-        let kept = MapJob::recovery_path(&record);
+        let reason = kept.sentence(again);
+        let path = MapJob::recovery_path(&record);
         let mut checkpoint = job.clone();
         checkpoint.owned_partial = None;
         checkpoint.recovery_records.push(record);
         checkpoint.resume = None;
         checkpoint.resumable = false;
+        let mut reasons = vec![None; checkpoint.recovery_records.len()];
+        reasons[checkpoint.recovery_records.len() - 1] = Some(reason.clone());
         checkpoint.clear_recovery_warning();
-        checkpoint.append_recovery_warning_because(Some(&reason));
+        checkpoint.append_recovery_warning_because(&reasons);
         persist(&self.inner.state_path, &checkpoint)?;
         *job = checkpoint;
-        Ok(Some((kept, reason)))
+        Ok(Some((path, reason)))
+    }
+
+    /// The reclaim's own error is for whoever reads the log; the card gets the
+    /// classified reason. The raw text names the download's files and identities.
+    fn log_kept(raw: &str, record: &OwnedPartial) -> Kept {
+        let kept = Kept::of(record, false);
+        eprintln!("Kiwix map cleanup kept a partial download ({kept:?}): {}", raw.trim_end());
+        kept
     }
 
     /// The ownership-checked reclaim used by explicit cleanup.
@@ -793,13 +805,17 @@ impl MapManager {
     /// Each record with a journaled inode goes through the same reclaim as an
     /// owned partial: directory identity, inode identity and exclusive capture
     /// are proven again before anything is unlinked, and each step is
-    /// journaled. A record is also dropped, without touching anything, once its
-    /// destination holds none of the entries it names. Records that were never
-    /// proven, and files that turn out not to be ours, are only ever reported.
+    /// journaled. A record is also dropped, without touching anything, once the
+    /// journaled directory itself holds none of the entries it names. Records
+    /// that were never proven, files that turn out not to be ours, and a path
+    /// that no longer leads to the journaled directory are only ever reported:
+    /// no record is forgotten on the evidence of a path alone.
     ///
-    /// Returns the first record whose proven reclaim failed, with the reason.
-    fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> Option<(PathBuf, String)> {
+    /// Returns the first record whose proven reclaim could not complete, and
+    /// for each remaining record why this attempt kept it.
+    fn retry_recovery_records(&self, job: &mut MapJob, skip_last: bool) -> (Option<(PathBuf, String)>, Vec<Option<String>>) {
         let mut failed = None;
+        let mut reasons = vec![None; job.recovery_records.len()];
         let mut remaining = job.recovery_records.len() - usize::from(skip_last);
         let mut index = 0;
         while index < remaining {
@@ -814,27 +830,34 @@ impl MapManager {
                         persist(&self.inner.state_path, job)
                     }))
                 }).ok()
-            } else { None };
-            let gone = match outcome {
-                Some(Ok(PartialRecovery::Reclaimed)) => true,
-                Some(Err(reason)) => {
-                    let vanished = record_vanished(&record);
-                    if !vanished && failed.is_none() {
-                        failed = Some((MapJob::recovery_path(&record), reason.trim_end().to_owned()));
-                    }
-                    vanished
-                }
-                Some(Ok(_)) | None => record_vanished(&record),
-            };
-            if gone {
-                job.recovery_records.remove(index);
-                remaining -= 1;
             } else {
-                job.recovery_records[index] = record;
-                index += 1;
+                // Never proven, so never passed to the reclaim.
+                Some(Ok(PartialRecovery::Preserved))
+            };
+            let kept = match outcome {
+                Some(Ok(PartialRecovery::Reclaimed)) => { remaining -= 1; reasons.remove(index); job.recovery_records.remove(index); continue; }
+                Some(Ok(PartialRecovery::Preserved)) => Some(Kept::of(&record, true)),
+                Some(Err(raw)) => Some(Self::log_kept(&raw, &record)),
+                // A finished map at its publication name, or no attempt.
+                Some(Ok(PartialRecovery::Published(_))) | None => None,
+            };
+            if record_vanished(&record) {
+                remaining -= 1;
+                reasons.remove(index);
+                job.recovery_records.remove(index);
+                continue;
             }
+            if let Some(kept) = kept {
+                let reason = kept.sentence(true);
+                if kept.retryable() && record.identity.is_some() && failed.is_none() {
+                    failed = Some((MapJob::recovery_path(&record), reason.clone()));
+                }
+                reasons[index] = Some(reason);
+            }
+            job.recovery_records[index] = record;
+            index += 1;
         }
-        failed
+        (failed, reasons)
     }
 
     /// Retained predecessors (and a dismissed current output) are cleanup-only.
@@ -955,7 +978,7 @@ impl MapManager {
         job.resumable = false;
         if let Some(decision) = &mut job.decision { decision.session.clear(); }
         persist(&self.inner.state_path, job)?;
-        let demoted = self.reclaim_job_partial(job)?;
+        let demoted = self.reclaim_job_partial(job, true)?;
         if let Some(mut published) = job.published.clone() {
             let (size, sha256) = (published.size, published.sha256);
             reclaim_published_map(&mut published, self.inner.store.as_ref(), |updated| {
@@ -977,7 +1000,8 @@ impl MapManager {
         job.path = None;
         persist(&self.inner.state_path, job)?;
         // The record demoted a moment ago was just tried; retry the others.
-        let retried = self.retry_recovery_records(job, demoted.is_some());
+        let (retried, mut reasons) = self.retry_recovery_records(job, demoted.is_some());
+        if let (Some((_, reason)), Some(last)) = (&demoted, reasons.last_mut()) { *last = Some(reason.clone()); }
         let kept = demoted.or(retried);
         if !job.recovery_records.is_empty() {
             // Something was kept, so the job stays listed, carrying only that
@@ -985,13 +1009,16 @@ impl MapManager {
             // by a later Delete or dismissed with `forget_recovery`. No
             // unproven file was deleted.
             job.error = None;
-            job.append_recovery_warning_because(kept.as_ref().map(|(_, reason)| reason.as_str()));
+            job.append_recovery_warning_because(&reasons);
             persist(&self.inner.state_path, job)?;
             state.retirement_error = None;
-            // A removal this call attempted and could not complete is a
-            // failure the user can act on (reconnect the drive, press Delete
-            // again). Files that were never ours to remove are not: Delete
-            // removed everything it owns and the warning stays on the job.
+            // The call that had to keep this download's own partial says so,
+            // and so does a later one whose removal could not complete for a
+            // reason the user can act on (reconnect the drive, close the
+            // program, press Delete again). What is only ever reported (a file
+            // that cannot be confirmed as ours, a path that no longer leads to
+            // the journaled folder) is not a failed Delete: everything it owns
+            // is gone and the warning stays on the job.
             return match kept {
                 Some((path, reason)) => Err(format!(
                     "Kiwix could not remove a partial map download, so it was kept at {}. {reason}",

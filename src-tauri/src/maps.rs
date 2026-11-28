@@ -90,8 +90,6 @@ const MAX_CHUNK: u64 = 16 * 1024 * 1024;
 // within MAX_JSON (Germany/nl, 33,390,256 bytes) uses 2,871.
 const MAX_ESTIMATE_CHUNK_READS: u64 = 100_000;
 const CANCELLED: &str = "Map composition cancelled";
-/// Why a partial was kept when the entry at its name is not the journaled inode.
-const NOT_OUR_FILE: &str = "The file there is not the one this download wrote, so Kiwix left it alone";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
@@ -451,12 +449,13 @@ impl MapJob {
     }
 
     fn append_recovery_warning(&mut self) {
-        self.append_recovery_warning_because(None);
+        self.append_recovery_warning_because(&[]);
     }
 
-    /// `reason` is why the latest attempt to remove one of the files failed. It
-    /// is part of the recovery sentence, so it leaves with it.
-    fn append_recovery_warning_because(&mut self, reason: Option<&str>) {
+    /// `reasons[i]` is why the latest attempt kept `recovery_records[i]`; it is
+    /// written beside that record's path. Reasons are part of the recovery
+    /// sentence, so they leave with it.
+    fn append_recovery_warning_because(&mut self, reasons: &[Option<String>]) {
         use std::fmt::Write;
         if self.recovery_records.is_empty() {
             return;
@@ -469,9 +468,9 @@ impl MapJob {
                 warning.push_str(", ");
             }
             let _ = write!(warning, "{}", Self::recovery_path(record).display());
-        }
-        if let Some(reason) = reason {
-            let _ = write!(warning, ". {reason}");
+            if let Some(Some(reason)) = reasons.get(index) {
+                let _ = write!(warning, " ({reason})");
+            }
         }
         self.error = Some(
             if let Some(mut value) = error

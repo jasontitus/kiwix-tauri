@@ -582,17 +582,72 @@ pub(super) fn reclaim_published_map(
     Ok(())
 }
 
-/// True when the record's destination can be opened and holds none of the
+/// True when the journaled destination directory itself holds none of the
 /// entries the record names: its partial, its publication name and its cleanup
-/// capability. Nothing is left there to report; an unreachable destination or
-/// any other error proves nothing and is not "vanished".
+/// capability. Only then is nothing left to report.
+///
+/// The directory must be the journaled one, as for every other conclusion
+/// drawn here. A different directory at the same path (a folder the user
+/// recreated, or a mount point whose volume is absent) says nothing about the
+/// entries, and neither does an unreachable destination or any other error.
 pub(super) fn record_vanished(record: &OwnedPartial) -> bool {
     let Ok(directory) = MapDirectory::open(&record.destination) else { return false };
+    if directory.identity != record.directory_identity { return false; }
     std::iter::once(record.name.as_str())
         .chain(record.publication.as_ref().map(|publication| publication.name.as_str()))
         .chain(record.capture.as_ref().map(|capture| capture.name.as_str()))
         .all(|name| matches!(directory.directory.symlink_metadata(name),
             Err(error) if error.kind() == io::ErrorKind::NotFound))
+}
+
+/// Why explicit cleanup kept an entry, in terms the person can act on. The
+/// reclaim's own error (operating-system text, device and inode numbers) is
+/// for the log; none of it belongs on the download's card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Kept {
+    /// The destination cannot be opened: typically its drive is not connected.
+    Unavailable,
+    /// The path now leads to a different directory than the journaled one.
+    FolderReplaced,
+    /// The journaled directory holds an entry that is not provably ours.
+    Unconfirmed,
+    /// The entry is ours, but removing it did not complete this time.
+    Busy,
+}
+
+impl Kept {
+    /// Classify a reclaim that kept the record, by the same checks in the same
+    /// order as the reclaim: the destination must open, then be the journaled
+    /// directory; after that the reclaim either declined the entry or failed.
+    pub(super) fn of(record: &OwnedPartial, declined: bool) -> Self {
+        match MapDirectory::open(&record.destination) {
+            Err(_) => Self::Unavailable,
+            Ok(directory) if directory.identity != record.directory_identity => Self::FolderReplaced,
+            Ok(_) if declined => Self::Unconfirmed,
+            Ok(_) => Self::Busy,
+        }
+    }
+
+    /// Whether pressing Delete again can succeed once the cause is gone. The
+    /// other outcomes are only ever reported: nothing there is ours to remove.
+    pub(super) fn retryable(self) -> bool {
+        matches!(self, Self::Unavailable | Self::Busy)
+    }
+
+    /// `again` is true when the message answers a Delete the person pressed.
+    pub(super) fn sentence(self, again: bool) -> String {
+        let retry = if again { "press Delete again" } else { "delete this download" };
+        match self {
+            Self::Unavailable => format!(
+                "Its folder is not available right now. Reconnect the drive that holds it, then {retry}"),
+            Self::FolderReplaced =>
+                "Its folder was moved or replaced, so Kiwix left the file alone".into(),
+            Self::Unconfirmed =>
+                "It could not be confirmed as the file this download wrote, so Kiwix left it alone".into(),
+            Self::Busy => format!(
+                "It could not be removed just now; another program may be using it. Close anything that has it open, then {retry}"),
+        }
+    }
 }
 
 pub(super) fn map_entry_exists(directory: &Dir, name: &str) -> Result<bool, String> {
