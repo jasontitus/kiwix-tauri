@@ -6104,11 +6104,57 @@ async fn availability_changes_release_cached_handles_and_readers() {
     assert!(service.archives.lock().unwrap().iter().all(|cached| cached.id != id));
     assert!(service.readers.lock().await.values().all(|reader| reader.installation_id != installation));
 
-    // When the file comes back, the next open uses it.
+    // When the file comes back, the next open uses it. A listener opened
+    // while it was back (before maintenance noticed) is not retired by the
+    // flip back to available: it serves the present file.
     std::fs::copy(fixture(), &copy).unwrap();
+    let reopened = service.clone().dispatch("open_article", json!({
+        "bookId":id, "parentOrigin":"tauri://localhost"
+    })).await.unwrap();
     service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
     assert!(service.store.book(&id).unwrap().unwrap().available);
+    assert!(service.readers.lock().await.values().any(|reader| reader.origin == reopened["origin"].as_str().unwrap()));
     service.archive(&id).unwrap().main_entry().unwrap();
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_file_renamed_over_a_registered_path_is_verified_and_its_old_handles_released() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let path = profile.0.join("renamed.zim");
+    std::fs::copy(fixture(), &path).unwrap();
+    let imported = service.import_paths(vec![path.to_string_lossy().into_owned()], false).unwrap();
+    let id = imported["books"][0]["id"].as_str().unwrap().to_owned();
+    let installation = imported["books"][0]["installationId"].as_str().unwrap().to_owned();
+    // A listener and the cache both hold the original file.
+    service.clone().dispatch("open_article", json!({
+        "bookId":id, "parentOrigin":"tauri://localhost"
+    })).await.unwrap();
+    let held = service.archive(&id).unwrap();
+    // A different archive is renamed over the path (mv, rsync, a downloader).
+    // The old descriptor keeps its own size and modification time.
+    let incoming = profile.0.join("incoming.tmp");
+    fixture_with_new_uuid(&incoming);
+    std::fs::rename(&incoming, &path).unwrap();
+    held.retained_unchanged().unwrap();
+
+    let verified = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    *service.import_hook.lock().unwrap() = Some(Arc::new({
+        let verified = verified.clone();
+        move |_: &tokio_util::sync::CancellationToken| { verified.fetch_add(1, Ordering::SeqCst); }
+    }));
+    let again = service.import_paths(vec![path.to_string_lossy().into_owned()], false).unwrap();
+    assert_eq!(verified.load(Ordering::SeqCst), 1, "the renamed-in archive was not verified");
+    let new_id = again["books"][0]["id"].as_str().unwrap().to_owned();
+    assert_ne!(new_id, id, "{again}");
+    assert!(service.store.book(&new_id).unwrap().is_some());
+
+    // Maintenance drops the old entry's handle and its listener.
+    service.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(service.archives.lock().unwrap().iter().all(|cached| cached.id != id));
+    assert!(service.readers.lock().await.values().all(|reader| reader.installation_id != installation));
     service.shutdown().await.unwrap();
 }
 
@@ -6190,6 +6236,89 @@ async fn an_empty_monitored_mount_point_keeps_its_books_but_a_single_deletion_is
     service.shutdown().await.unwrap();
 }
 
+#[cfg(all(desktop, unix))]
+#[tokio::test]
+async fn an_archive_written_under_an_unmounted_mount_point_does_not_retire_the_volumes_books() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let monitored = profile.0.join("mount");
+    std::fs::create_dir_all(&monitored).unwrap();
+    let on_volume = monitored.join("volume.zim");
+    fixture_with_new_uuid(&on_volume);
+    service.import_paths(vec![on_volume.to_string_lossy().into_owned()], false).unwrap();
+    service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    let canonical = monitored.canonicalize().unwrap();
+    // The volume is unmounted (modelled as above by the noted device being
+    // another filesystem's), then a download lands in the directory beneath.
+    *service.watched_devices.lock().unwrap().get_mut(&canonical).unwrap() ^= 1;
+    std::fs::remove_file(&on_volume).unwrap();
+    let underneath = monitored.join("underneath.zim");
+    fixture_with_new_uuid(&underneath);
+    let device = watched_directory_device(&canonical);
+    // Neither a settled-file observation nor a reconciliation may adopt this
+    // filesystem while the volume's book is missing.
+    assert_eq!(service.watched_folder_evidence(&canonical, device, true, true), (false, false));
+    for _ in 0..2 {
+        service.reconcile_watched_directory(monitored.clone(), false).await.unwrap();
+    }
+    let state = service.store.read().unwrap();
+    assert_eq!(state.books.len(), 2, "the volume's book was retired");
+    assert!(state.books.iter().any(|book| Path::new(&book.path) == underneath.canonicalize().unwrap()));
+    drop(state);
+    assert_ne!(service.watched_devices.lock().unwrap().get(&canonical).copied(), device);
+    service.shutdown().await.unwrap();
+}
+
+#[cfg(desktop)]
+#[tokio::test]
+async fn a_cancelled_monitored_import_is_retried_not_remembered_as_damaged() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    std::fs::create_dir_all(&profile.0).unwrap();
+    let cancelled = profile.0.join("cancelled.zim");
+    let damaged = profile.0.join("damaged.zim");
+    std::fs::copy(fixture(), &cancelled).unwrap();
+    std::fs::copy(fixture(), &damaged).unwrap();
+    service.record_watch_result(&json!({"books":[],"errors":[
+        {"path":cancelled.to_string_lossy(),"error":crate::imports::IMPORT_CANCELLED},
+        {"path":damaged.to_string_lossy(),"error":crate::archive::CORRUPT_ARCHIVE},
+    ]})).unwrap();
+    let failures = service.watch_failures.lock().unwrap();
+    assert!(!failures.should_skip(&cancelled));
+    assert!(failures.should_skip(&damaged));
+    drop(failures);
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_cancelled_intake_stays_pending_and_keeps_its_copy() {
+    let profile = Profile::new();
+    let service = Service::new(profile.0.clone(), false, false).unwrap();
+    let copy = profile.0.join("incoming/small.zim");
+    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+    std::fs::copy(fixture(), &copy).unwrap();
+    // The app went to the background during verification.
+    let cutover = ImportCutover::begin(service.as_ref());
+    let result = service
+        .admit_intake_batch(vec![copy.to_string_lossy().into_owned()], Some("native-incoming:suspended".into()), "main")
+        .await
+        .unwrap();
+    drop(cutover);
+    assert!(result["books"].as_array().unwrap().is_empty(), "{result}");
+    assert_eq!(result["errors"][0]["error"], crate::imports::IMPORT_CANCELLED);
+    assert!(copy.is_file());
+    assert!(service.store.read().unwrap().books.is_empty());
+    assert!(!service.store.acquisition_consumed("native-incoming:suspended").unwrap());
+    // Offered again in the foreground, the same copy is admitted.
+    let result = service
+        .admit_intake_batch(vec![copy.to_string_lossy().into_owned()], Some("native-incoming:suspended".into()), "main")
+        .await
+        .unwrap();
+    assert_eq!(result["books"].as_array().unwrap().len(), 1, "{result}");
+    assert!(service.store.acquisition_consumed("native-incoming:suspended").unwrap());
+    service.shutdown().await.unwrap();
+}
+
 #[tokio::test]
 async fn opening_an_archive_already_in_the_library_does_not_verify_it_again() {
     let profile = Profile::new();
@@ -6256,6 +6385,7 @@ async fn quit_cancels_a_running_manual_import_instead_of_waiting_for_it() {
     assert!(result["books"].as_array().unwrap().is_empty(), "{result}");
     assert!(result["errors"][0]["error"].as_str().unwrap().starts_with("Import cancelled"), "{result}");
     assert!(service.store.read().unwrap().books.is_empty());
+    assert!(!service.startup_warnings.lock().unwrap().iter().any(|warning| warning == crate::imports::IMPORT_CANCELLED));
 }
 
 #[tokio::test]
@@ -6279,6 +6409,11 @@ async fn a_privacy_switch_cancels_a_running_import_and_later_imports_still_work(
     let result = importing.await.unwrap().unwrap();
     assert!(result["errors"][0]["error"].as_str().unwrap().starts_with("Import cancelled"), "{result}");
     assert!(service.store.read().unwrap().books.is_empty());
+    // The shell drops the reply from before the switch; the reloaded shell
+    // shows the notice instead.
+    let snapshot = service.clone().dispatch("snapshot", json!({})).await.unwrap();
+    assert!(snapshot["startupWarnings"].as_array().unwrap().iter()
+        .any(|warning| warning == crate::imports::IMPORT_CANCELLED), "{snapshot}");
 
     *service.import_hook.lock().unwrap() = None;
     service.clone().dispatch("save_settings", json!({"settings":{"privateMode":false}})).await.unwrap();
@@ -6387,12 +6522,18 @@ async fn library_maintenance_keeps_live_spelling_dictionaries_and_collects_orpha
     service.shutdown().await.unwrap();
     drop(service);
 
-    // After a relink (new installation) in a later run, the old one is garbage.
+    // In a later run nothing is in memory: only the derived key keeps it.
     let restarted = Service::new(profile.0.clone(), false, false).unwrap();
+    restarted.clone().dispatch("library_maintenance", json!({})).await.unwrap();
+    assert!(restarted.spelling_swept_at.lock().unwrap().is_some(), "the sweep did not run");
+    assert!(dictionary.is_file(), "a live dictionary was collected after a restart");
+
+    // After a relink (new installation), the old one is garbage.
     restarted.store.update(|state| {
         state.books[0].installation_id = crate::store::new_installation_id();
         Ok(())
     }).unwrap();
+    *restarted.spelling_swept_at.lock().unwrap() = None;
     restarted.clone().dispatch("library_maintenance", json!({})).await.unwrap();
     assert!(!dictionary.exists());
     restarted.shutdown().await.unwrap();

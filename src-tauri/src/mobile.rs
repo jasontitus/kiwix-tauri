@@ -187,8 +187,11 @@ pub(crate) fn emit(service: &Service, event: &str, payload: Value) {
 pub(crate) fn error(service: &Service, operation: &str, message: String) {
     #[cfg(target_os = "android")]
     eprintln!("Kiwix mobile {operation}: {message}");
+    // Troubleshooting keeps the operation and a coarse category of the raw
+    // text (never the text itself, which can name documents).
+    crate::diagnostics::record(&service.store, operation, Some(&message));
     // The shell shows this text as an error band, so it gets the same plain
-    // sentence as a command error; raw native detail is only logged above.
+    // sentence as a command error.
     emit(service, "kiwix-mobile-error", json!({"operation": operation, "error": crate::user_error::plain(&message)}));
 }
 

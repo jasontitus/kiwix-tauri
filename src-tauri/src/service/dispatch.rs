@@ -1832,19 +1832,39 @@ impl Service {
                             (book.metadata.id.clone(), available)
                         })
                         .collect();
+                    // A cached handle survives a rename over its path with its
+                    // own size and mtime, so the path stays a file and nothing
+                    // flips. Compare the handle with what the path names now.
+                    let mut stale: Vec<(String, String, bool)> = service
+                        .cached_archives()
+                        .into_iter()
+                        .filter_map(|(id, installation, path, archive)| {
+                            let book = state.books.iter().find(|book| {
+                                book.metadata.id == id && book.installation_id == installation && book.path == path
+                            })?;
+                            if availability.get(&id) != Some(&true) {
+                                return None;
+                            }
+                            let current = crate::library_files::archive_content_identity(book).ok()?;
+                            archive
+                                .content_identity()
+                                .map_or(true, |held| held != current)
+                                .then_some((id, installation, true))
+                        })
+                        .collect();
                     let changed = state
                         .books
                         .iter()
                         .any(|book| availability.get(&book.metadata.id) != Some(&book.available));
                     if !changed {
-                        return Ok(Vec::new());
+                        return Ok(stale);
                     }
                     let flipped = service.store.update(|state| {
                         let mut flipped = Vec::new();
                         for book in &mut state.books {
                             if let Some(available) = availability.get(&book.metadata.id) {
                                 if book.available != *available {
-                                    flipped.push((book.metadata.id.clone(), book.installation_id.clone()));
+                                    flipped.push((book.metadata.id.clone(), book.installation_id.clone(), !*available));
                                 }
                                 book.available = *available;
                             }
@@ -1852,19 +1872,24 @@ impl Service {
                         Ok(flipped)
                     })?;
                     service.notify_library_changed();
-                    Ok(flipped)
+                    stale.extend(flipped);
+                    Ok(stale)
                 }).await;
-                // A file that went away or came back is no longer the file the
-                // cached handle and its readers hold: a removed volume's
-                // descriptors can only fail, and a deleted file's space is
-                // released only when its last descriptor closes. The next open
-                // reopens through the identity check.
+                // A cached handle is dropped whenever its book's file went away,
+                // came back or was replaced: the next open reopens through the
+                // identity check. A listener is retired when its file went away
+                // (a removed volume's descriptors can only fail, and a deleted
+                // file's space is released only when its last descriptor
+                // closes) or was replaced, never just because it came back: a
+                // listener opened while the file was present serves it fine.
                 let mut released = Ok(());
                 if let Some(flipped) = flipped.as_ref().ok().filter(|flipped| !flipped.is_empty()) {
                     let mut readers = self.readers.lock().await;
-                    for (id, installation) in flipped {
-                        if let Err(error) = retire_readers(&mut readers, Some(installation)).await {
-                            released = released.and(Err(error));
+                    for (id, installation, retire) in flipped {
+                        if *retire {
+                            if let Err(error) = retire_readers(&mut readers, Some(installation)).await {
+                                released = released.and(Err(error));
+                            }
                         }
                         self.invalidate(id);
                     }

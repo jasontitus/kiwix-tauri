@@ -181,7 +181,7 @@
   },
   {
     "input": "mixed file:///Users/Jane Doe/a.zim: denied, see https://example.org/help",
-    "expected": "mixed [url]: denied, see https://example.org/help"
+    "expected": "mixed [url]: denied, see https://example.org"
   },
   {
     "input": "reader http://127.0.0.1:9/.kiwix/8f4c2a9e1b/A/Secret_Page done",
@@ -205,11 +205,11 @@
   },
   {
     "input": "bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private",
-    "expected": "bridge [reader-url]"
+    "expected": "bridge https://example.org"
   },
   {
     "input": "adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
-    "expected": "adjacent [reader-url]"
+    "expected": "adjacent https://example.org"
   },
   {
     "input": "ZIM://book-uuid/A/Private",
@@ -233,11 +233,11 @@
   },
   {
     "input": "fetch https://user:pass@example.org/a/b?token=secret#x failed",
-    "expected": "fetch https://example.org/a/b failed"
+    "expected": "fetch https://example.org"
   },
   {
     "input": "see https://example.org/docs/a for help",
-    "expected": "see https://example.org/docs/a for help"
+    "expected": "see https://example.org"
   },
   {
     "input": "std::io::Error and a::b::c are not URLs",
@@ -257,7 +257,7 @@
   },
   {
     "input": "see https://example.org//double/slash kept",
-    "expected": "see https://example.org//double/slash kept"
+    "expected": "see https://example.org"
   },
   {
     "input": "password=/storage/emulated/0/My Books/a.zim",
@@ -405,7 +405,7 @@
   },
   {
     "input": "https://example.org/cb?token=abc/def&state=xyz#frag done",
-    "expected": "https://example.org/cb"
+    "expected": "https://example.org"
   },
   {
     "input": "cookie=/home/jane doe/x; y=z\nnext",
@@ -417,7 +417,7 @@
   },
   {
     "input": "open /Users/alice/Private/notes.txt?token=abc failed: https://example.org/read?token=secret&q=book#frag",
-    "expected": "open [path]: https://example.org/read"
+    "expected": "open [path]: https://example.org"
   },
   {
     "input": "id a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1 end",
@@ -438,5 +438,365 @@
   {
     "input": "  several   spaces\tand\nlines  ",
     "expected": "several spaces and lines"
+  },
+  {
+    "input": "{\\\"password\\\":\\\"hunter2\\\"}",
+    "expected": "{\\\"password\\\":\\\"[redacted]\\\"}"
+  },
+  {
+    "input": "Err(Custom(\"{\\\"token\\\":\\\"abc123\\\"}\"))",
+    "expected": "Err(Custom(\"{\\\"token\\\":\\\"[redacted]\\\"}\"))"
+  },
+  {
+    "input": "[(\"authorization\", \"Basic dXNlcjpwYXNz\")]",
+    "expected": "[(\"authorization\", \"[redacted]\")]"
+  },
+  {
+    "input": "(authorization, Basic dXNlcjpwYXNz)",
+    "expected": "(authorization, [redacted])"
+  },
+  {
+    "input": "\"{\\\\\\\"token\\\\\\\":\\\\\\\"abc 123\\\\\\\"}\"",
+    "expected": "\"{[path]\""
+  },
+  {
+    "input": "{\\\"password\\\":\\\"say \\\\\\\"hi\\\\\\\" now\\\",\\\"user\\\":\\\"bob\\\"}",
+    "expected": "{\\\"password\\\":\\\"[redacted]\\\",\\\"user\\\":\\\"bob\\\"}"
+  },
+  {
+    "input": "(\"token\", \"abc def\") and [\"cookie\", \"sid=1\"]",
+    "expected": "(\"token\", \"[redacted]\") and [\"cookie\", \"[redacted]\"]"
+  },
+  {
+    "input": "accessToken=abc123 refreshToken=def456 apiKey=k1 authToken=z9",
+    "expected": "accessToken=[redacted] refreshToken=[redacted] apiKey=[redacted] authToken=[redacted]"
+  },
+  {
+    "input": "{\"accessToken\":\"abc123\",\"sessionId\":\"s1\"}",
+    "expected": "{\"accessToken\":\"[redacted]\",\"sessionId\":\"[redacted]\"}"
+  },
+  {
+    "input": "pwd=hunter2 pass=hunter2 passphrase=hunter2 private_key=abc sessionid=xyz auth=abc signature=sss",
+    "expected": "pwd=[redacted] pass=[redacted] passphrase=[redacted] private_key=[redacted] sessionid=[redacted] auth=[redacted] signature=[redacted]"
+  },
+  {
+    "input": "private-key: k1 privateKey=k2 session_id=s3 jsessionid=J4 credential=c5 credentials: d6 client_secret=e7",
+    "expected": "private-key: [redacted] privateKey=[redacted] session_id=[redacted] jsessionid=[redacted] credential=[redacted] credentials: [redacted] client_secret=[redacted]"
+  },
+  {
+    "input": "auth::login failed and oauth2Token=abc but author=jane stays",
+    "expected": "auth::login failed and oauth2Token=[redacted] but author=jane stays"
+  },
+  {
+    "input": "https://example.org/app;jsessionid=ABC123DEF?x=1",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "password: Some(\"hunter two\")",
+    "expected": "password: Some(\"[redacted]\")"
+  },
+  {
+    "input": "token: Optional(\"abc def\") rest",
+    "expected": "token: Optional(\"[redacted]\") rest"
+  },
+  {
+    "input": "password\u00a0=hunter2",
+    "expected": "password =[redacted]"
+  },
+  {
+    "input": "password=\r\nhunter2",
+    "expected": "password= [redacted]"
+  },
+  {
+    "input": "password:\n  hunter2",
+    "expected": "password: [redacted]"
+  },
+  {
+    "input": "'pin' => '1234'",
+    "expected": "'pin' => '[redacted]'"
+  },
+  {
+    "input": "{\"password\"=>\"hunter2\"}",
+    "expected": "{\"password\"=>\"[redacted]\"}"
+  },
+  {
+    "input": "Die Datei \u201e/Users/Jane Doe/a.zim\u201c fehlt",
+    "expected": "Die Datei \u201e[path]"
+  },
+  {
+    "input": "\u300c/Users/Jane Doe/a.zim\u300d",
+    "expected": "\u300c[path]"
+  },
+  {
+    "input": "\u00ab/Users/Jane Doe/a.zim\u00bb",
+    "expected": "\u00ab[path]"
+  },
+  {
+    "input": "\uff1a/Users/Jane Doe/a.zim",
+    "expected": "\uff1a[path]"
+  },
+  {
+    "input": "@/home/jane doe/x.zim",
+    "expected": "@[path]"
+  },
+  {
+    "input": "#/home/jane doe/x.zim",
+    "expected": "#[path]"
+  },
+  {
+    "input": "x\u001f/home/jane doe/a.zim",
+    "expected": "x\u001f[path]"
+  },
+  {
+    "input": "x\u200b/home/jane doe/a.zim",
+    "expected": "x\u200b[path]"
+  },
+  {
+    "input": "open \\Device\\HarddiskVolume3\\Users\\Jane Doe\\a.zim failed",
+    "expected": "open [path]"
+  },
+  {
+    "input": "open \\Users\\Jane Doe\\a.zim failed",
+    "expected": "open [path]"
+  },
+  {
+    "input": "and/or n/a 1/2 2024/11/28 I/O w/o read_only/x v1.2/x a-b/c stay",
+    "expected": "and/or n/a 1/2 2024/11/28 I/O w/o read_only/x v1.2/x a-b/c stay"
+  },
+  {
+    "input": "tolerance +/- 5 percent",
+    "expected": "tolerance +[path]"
+  },
+  {
+    "input": "caf\u00e9/menu und/oder",
+    "expected": "caf\u00e9[path]"
+  },
+  {
+    "input": "rate 50%/year stays out",
+    "expected": "rate 50%[path]"
+  },
+  {
+    "input": "regex \\d+\\.\\d+ fails",
+    "expected": "regex [path]"
+  },
+  {
+    "input": "line1\\nline2 and a \\n b stay",
+    "expected": "line1\\nline2 and a \\n b stay"
+  },
+  {
+    "input": "kiwix:///Private Page",
+    "expected": "[url]"
+  },
+  {
+    "input": "x\u0085/home/jane doe/a.zim",
+    "expected": "x [path]"
+  },
+  {
+    "input": "x\u3000/home/jane doe/a.zim",
+    "expected": "x [path]"
+  },
+  {
+    "input": "password=hunter2\u2028rest",
+    "expected": "password=[redacted] rest"
+  },
+  {
+    "input": "token=a\u001fb next",
+    "expected": "token=[redacted] next"
+  },
+  {
+    "input": "C:\\Users\\Jane Doe\\a.zim\r\nnext line Jane",
+    "expected": "[path] next line Jane"
+  },
+  {
+    "input": "a\u200bb\u001fc\u0085d\u2028e\u3000f",
+    "expected": "a\u200bb\u001fc d e f"
+  },
+  {
+    "input": "pas\u017fword=hunter2",
+    "expected": "pas\u017fword=hunter2"
+  },
+  {
+    "input": "coo\u212aie=secret",
+    "expected": "coo\u212aie=secret"
+  },
+  {
+    "input": "cooKie=s1 PASSWORD=p2 SeCrEt=s3",
+    "expected": "cooKie=[redacted]"
+  },
+  {
+    "input": "http://127.1:8080/book/A/Private secret",
+    "expected": "[reader-url]"
+  },
+  {
+    "input": "http://0x7f.0.0.1/book/A/Private",
+    "expected": "[url]"
+  },
+  {
+    "input": "http://2130706433/book/A/Private",
+    "expected": "[url]"
+  },
+  {
+    "input": "http://[::ffff:127.0.0.1]/book/A/Private",
+    "expected": "[url]"
+  },
+  {
+    "input": "http://LOCALHOST/book/A/Private",
+    "expected": "[reader-url]"
+  },
+  {
+    "input": "http://localhost./A/Private",
+    "expected": "[reader-url]"
+  },
+  {
+    "input": "https://Example.ORG/a/%C3%A4/../b?token=x",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "https://example.org/\u00e4 b",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "https://user:pass@example.org/a",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "https://example.org:443/a",
+    "expected": "https://example.org"
+  },
+  {
+    "input": "http://example.org:80",
+    "expected": "http://example.org"
+  },
+  {
+    "input": "https://example.org:8443/a rest",
+    "expected": "https://example.org:8443"
+  },
+  {
+    "input": "http://example.org\\@127.0.0.1/A",
+    "expected": "http://example.org"
+  },
+  {
+    "input": "see https://example.org for help",
+    "expected": "see https://example.org for help"
+  },
+  {
+    "input": "HTTPS://EXAMPLE.ORG. is up",
+    "expected": "https://example.org is up"
+  },
+  {
+    "input": "https://xn--bcher-kva.example/a",
+    "expected": "https://xn--bcher-kva.example"
+  },
+  {
+    "input": "https://b\u00fccher.example/a",
+    "expected": "[url]"
+  },
+  {
+    "input": "https://example.org:abc/a",
+    "expected": "[url]"
+  },
+  {
+    "input": "wss://example.org/socket",
+    "expected": "[url]"
+  },
+  {
+    "input": "ftp://user:pass@host/a b c",
+    "expected": "[url]"
+  },
+  {
+    "input": "http://intranet/wiki/Private Page",
+    "expected": "[url]"
+  },
+  {
+    "input": "lan http://janes-macbook.local:8080/A/Private_Diary ok",
+    "expected": "lan [url]"
+  },
+  {
+    "input": "lan http://janes-macbook.local ok",
+    "expected": "lan [url]"
+  },
+  {
+    "input": "share http://192.168.1.5:43123/.kiwix-access/0123456789abcdef0123456789abcdef ok",
+    "expected": "share [url]"
+  },
+  {
+    "input": "catalog http://10.0.0.7:8080/0123456789abcdef0123456789abcdef/catalog/v2/root.xml ok",
+    "expected": "catalog [url]"
+  },
+  {
+    "input": "nearby http://[fe80::1]:9000/nearby/0123456789abcdef0123456789abcdef ok",
+    "expected": "nearby [url]"
+  },
+  {
+    "input": "see file:",
+    "expected": "see [url]"
+  },
+  {
+    "input": "file: /home/jane doe/x.zim",
+    "expected": "[url] [path]"
+  },
+  {
+    "input": "mailto:jane@example.org tel:+15551234 sent",
+    "expected": "[url] [url] sent"
+  },
+  {
+    "input": "Authorization failed for jane",
+    "expected": "Authorization [redacted] jane"
+  },
+  {
+    "input": "bearer token missing",
+    "expected": "bearer [redacted] missing"
+  },
+  {
+    "input": "token\u00a0hunter2",
+    "expected": "token hunter2"
+  },
+  {
+    "input": "\"token\" : \"x y z\"",
+    "expected": "\"token\" : \"[redacted]\""
+  },
+  {
+    "input": "smb://nas/Family Share/a.zim: denied",
+    "expected": "[url]: denied"
+  },
+  {
+    "input": "content://com.android.externalstorage.documents/tree/primary%3AJane Doe/a.zim",
+    "expected": "[url]"
+  },
+  {
+    "input": "token=abc;user=jane;password=hunter2",
+    "expected": "token=[redacted];user=jane;password=[redacted]"
+  },
+  {
+    "input": "secret:42 token.rs:42 lib.rs:1234",
+    "expected": "secret:[redacted] token.rs:42 lib.rs:1234"
+  },
+  {
+    "input": "panicked at 'called `Option::unwrap()`'",
+    "expected": "panicked at 'called `Option::unwrap()`'"
+  },
+  {
+    "input": "x-api-key: abcd X-Auth-Token: zzz Set-Cookie: sid=1; path=/",
+    "expected": "x-api-key: [redacted] X-Auth-Token: [redacted] Set-Cookie: [redacted]"
+  },
+  {
+    "input": "message: \"/home/jane doe/a\\\\\" (os error 2)",
+    "expected": "message: \"[path]\" (os error 2)"
+  },
+  {
+    "input": "Optional(\"/var/mobile/Containers/Data/Application/My Books/a.zim\")",
+    "expected": "Optional(\"[path]\")"
+  },
+  {
+    "input": "file:///storage/emulated/0/Download/Jane Doe/a.zim",
+    "expected": "[url]"
+  },
+  {
+    "input": "Error Domain=NSCocoaErrorDomain Code=260 \"The file \u201ca.zim\u201d couldn\u2019t be opened.\" UserInfo={NSFilePath=/var/mobile/My Books/a.zim, NSUnderlyingError=0x1 {Error Domain=NSPOSIXErrorDomain Code=2}}",
+    "expected": "Error Domain=NSCocoaErrorDomain Code=260 \"The file \u201ca.zim\u201d couldn\u2019t be opened.\" UserInfo={NSFilePath=[path]"
+  },
+  {
+    "input": "java.io.FileNotFoundException: /storage/emulated/0/My Books/a.zim: open failed: ENOENT (No such file or directory)",
+    "expected": "java.io.FileNotFoundException: [path]: open failed: ENOENT (No such file or directory)"
   }
 ]

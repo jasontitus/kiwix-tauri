@@ -1750,6 +1750,17 @@ impl Service {
         }
         Ok(())
     }
+    /// Every opened archive in the cache, with the entry it was opened for.
+    fn cached_archives(&self) -> Vec<(String, String, String, Archive)> {
+        let Ok(cache) = self.archives.lock() else { return Vec::new() };
+        cache
+            .iter()
+            .filter_map(|item| match item.archive.get() {
+                Some(Ok(archive)) => Some((item.id.clone(), item.installation_id.clone(), item.path.clone(), archive.clone())),
+                _ => None,
+            })
+            .collect()
+    }
     fn invalidate(&self, id: &str) {
         if let Ok(mut cache) = self.archives.lock() {
             cache.retain(|item| item.id != id);
@@ -1770,9 +1781,14 @@ impl Service {
     /// the archive's identity when it opens the file.
     fn registered_at_path(&self, path: &str, managed: bool) -> Result<Option<Book>, String> {
         let Ok(canonical) = std::fs::canonicalize(path) else { return Ok(None) };
-        // The cheap probe first: a folder scan must not copy the whole profile
-        // once per new file.
-        if !canonical.is_file() || !self.store.has_book_at_path(&canonical).unwrap_or(false) {
+        if !canonical.is_file() {
+            return Ok(None);
+        }
+        // The cheap probe first: a desktop folder scan must not copy the whole
+        // profile once per new file. (Mobile has no such probe; its imports
+        // come from the app's own staging and are few.)
+        #[cfg(not(mobile))]
+        if !self.store.has_book_at_path(&canonical).unwrap_or(false) {
             return Ok(None);
         }
         let Some(book) = self.store.read()?.books.into_iter().find(|book| {
@@ -1782,7 +1798,15 @@ impl Service {
         };
         // A different file now at that path, or one that cannot be opened,
         // takes the full verified import, which reports what is wrong.
-        if !book.available || (managed && !book.managed) || self.archive_for_book(book.clone()).is_err() {
+        if !book.available || (managed && !book.managed) {
+            return Ok(None);
+        }
+        let Ok(archive) = self.archive_for_book(book.clone()) else { return Ok(None) };
+        // A cached handle survives a rename over its path with its own size
+        // and mtime, so the open alone does not prove this is still the file
+        // that was verified: compare the handle with what the path names now.
+        let current = crate::library_files::archive_content_identity(&book);
+        if !current.is_ok_and(|current| archive.content_identity().is_ok_and(|held| held == current)) {
             return Ok(None);
         }
         Ok(Some(book))
@@ -1820,7 +1844,15 @@ impl Service {
             })();
             match result {
                 Ok(book) => books.push(book),
-                Err(error) => errors.push(json!({"path":path,"error":error})),
+                Err(error) => {
+                    // A privacy or read-only switch cancelled it, and the shell
+                    // drops replies from before that switch: say it where the
+                    // reloaded shell looks. (At Quit nobody is left to tell.)
+                    if error == crate::imports::IMPORT_CANCELLED && !self.stopping.load(Ordering::SeqCst) {
+                        self.note_startup_warning(error.clone());
+                    }
+                    errors.push(json!({"path":path,"error":error}));
+                }
             }
         }
         #[cfg(mobile)]
@@ -2004,9 +2036,19 @@ impl Service {
                 if !crate::watch::is_settled(&path) {
                     return Ok(());
                 }
-                // A file was just written there: the folder is mounted.
+                // A file was just written there. That shows which filesystem
+                // the folder is on only if none of its known books is missing
+                // (else this may be the directory under an unmounted volume).
                 if let Some(parent) = path.parent() {
-                    self.remember_watched_device(parent, watched_directory_device(parent));
+                    let device = watched_directory_device(parent);
+                    let missing = self.store.read()?.books.iter().any(|book| {
+                        book.source_reference.is_none()
+                            && crate::watch::is_direct_child(Path::new(&book.path), parent)
+                            && !Path::new(&book.path).exists()
+                    });
+                    if self.watched_folder_evidence(parent, device, true, missing).0 {
+                        self.remember_watched_device(parent, device);
+                    }
                 }
                 {
                     let failures = self
@@ -2066,6 +2108,11 @@ impl Service {
             let Some(path) = error.get("path").and_then(Value::as_str) else {
                 continue;
             };
+            // A cancelled verification says nothing about the file: the next
+            // scan must try it again.
+            if error.get("error").and_then(Value::as_str) == Some(crate::imports::IMPORT_CANCELLED) {
+                continue;
+            }
             failures.record(Path::new(path));
             eprintln!(
                 "Monitored folders: {path}: {}",
@@ -2153,25 +2200,27 @@ impl Service {
         }
 
         // A monitored folder that is a mount point lists as an empty (or
-        // unrelated) directory while its volume or share is not mounted. When
-        // none of its known books is present, that alone is not evidence that
-        // each was deleted. Retire them only when the folder is still on the
-        // filesystem it was on when this run last saw its archives; otherwise
-        // keep them and let the availability pass mark them missing. One
-        // vanished file among present siblings is always retired.
-        let any_known_present = known.iter().any(|book| {
+        // unrelated) directory while its volume or share is not mounted, and
+        // files may even be written underneath it. A missing book is retired
+        // only while the folder is on the filesystem this run last saw holding
+        // its archives with none missing; otherwise it is kept and the
+        // availability pass marks it missing.
+        let is_present = |book: &Book| {
             present
                 .iter()
                 .any(|path| crate::watch::same_path(path, Path::new(&book.path)))
-        });
-        let unchanged = self.watched_device_unchanged(&directory, device);
-        // Archives just admitted from this listing also show the folder is
-        // live, unless known archives are missing from a changed filesystem
-        // (files left underneath an unmounted mount point).
-        if any_known_present || (imported && (known.is_empty() || unchanged)) {
+        };
+        let missing = known.iter().any(|book| !is_present(book));
+        let (record, retire) = self.watched_folder_evidence(
+            &directory,
+            device,
+            imported || known.iter().any(is_present),
+            missing,
+        );
+        if record {
             self.remember_watched_device(&directory, device);
         }
-        if !any_known_present && !known.is_empty() && !unchanged {
+        if !retire {
             return Ok(());
         }
         for book in known {
@@ -2198,19 +2247,22 @@ impl Service {
             devices.insert(directory.to_path_buf(), device);
         }
     }
-    /// Whether a monitored folder is on the filesystem it was on when this
-    /// run last saw archives in it. Unknown (never seen with archives in this
-    /// run, or no device number) counts as changed where devices exist.
+    /// What one observation of a monitored folder allows: whether to note
+    /// its device now (`live`: archives were seen or admitted in it), and
+    /// whether its missing known books may be retired. Retirement needs the
+    /// device this run noted for the folder; a device is noted only when it
+    /// matches the noted one or no known book is missing. Never noted in this
+    /// run, nothing is retired. Windows has no portable device number here:
+    /// an unmounted drive or share there removes the folder itself, which the
+    /// scan already treats as unreachable, so retirement proceeds as before.
     #[cfg(desktop)]
-    fn watched_device_unchanged(&self, directory: &Path, device: Option<u64>) -> bool {
-        // Windows has no portable device number here; an unmounted drive or
-        // share there removes the folder itself, which the scan already treats
-        // as unreachable.
+    fn watched_folder_evidence(&self, directory: &Path, device: Option<u64>, live: bool, missing: bool) -> (bool, bool) {
         if cfg!(not(unix)) {
-            return true;
+            return (false, true);
         }
-        let Ok(devices) = self.watched_devices.lock() else { return false };
-        device.is_some_and(|device| devices.get(directory) == Some(&device))
+        let recorded = self.watched_devices.lock().ok().and_then(|devices| devices.get(directory).copied());
+        let same = device.is_some() && recorded == device;
+        (live && (same || !missing), same)
     }
     /// Remove a library entry whose file vanished from a monitored folder.
     /// Nothing on disk is touched (there is nothing to delete) and the archive
@@ -2386,9 +2438,12 @@ impl Service {
     /// copies are checked like any other manual import, then a copy whose
     /// library entry can no longer be opened replaces that entry, as Locate
     /// would, before the batch resolves against the library. Only then is a
-    /// copy of a still-usable entry a duplicate that may be removed. Any
-    /// failure returns the batch's errors, admits nothing new and removes
-    /// nothing, so the native request stays pending and the copies stay.
+    /// copy of a still-usable entry a duplicate that may be removed. A failure
+    /// returns the batch's errors and removes no copy, so the native request
+    /// stays pending and the copies stay. It is not all-or-nothing: an entry
+    /// relinked before a later relink or the admission failed stays relinked
+    /// (to its verified copy), and a retry resolves that copy as already
+    /// installed.
     #[cfg(any(mobile, test))]
     pub(super) async fn admit_intake_batch(
         self: &Arc<Self>,

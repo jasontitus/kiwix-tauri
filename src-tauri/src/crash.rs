@@ -16,9 +16,10 @@
 //! * Long opaque token-like runs are replaced.
 //! * Every field is length-bounded; the whole record is capped at 32 KiB.
 //!
-//! The order of those steps is part of the rule (see `redact`). The Swift and
-//! Kotlin crash intakes implement the same pipeline, and all three are pinned
-//! to `tests/fixtures/crash-redaction-cases.json`.
+//! The rule itself, with the order of its steps, is written once in
+//! `tests/fixtures/crash-redaction-spec.md`. The Swift and Kotlin crash intakes
+//! implement the same text, and all three are pinned to
+//! `tests/fixtures/crash-redaction-cases.json`.
 //!
 //! The record never contains archive contents, bookmark or note text, library
 //! paths, user document paths, or URLs with sensitive query strings.
@@ -40,9 +41,9 @@ const PREVIOUS_FILE: &str = "previous.json";
 const TEMP_FILE: &str = ".pending.json.tmp";
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 const MAX_MESSAGE_CHARS: usize = 2_000;
-/// Text is cut to this many characters before any redaction step runs. The
-/// stored fields are far shorter, so nothing useful is lost, and no step can
-/// be handed an input long enough to exhaust it and pass text through.
+/// Text is cut to this many Unicode scalar values before any redaction step
+/// runs. The stored fields are far shorter, so nothing useful is lost, and no
+/// step can be handed an input long enough to exhaust it and pass text through.
 const MAX_REDACTION_INPUT_CHARS: usize = 32_768;
 const MAX_STACK_FRAMES: usize = 24;
 const MAX_FRAME_CHARS: usize = 240;
@@ -271,8 +272,10 @@ fn sanitize_backtrace(backtrace: &str) -> Vec<String> {
         let mut frame = redact_line(line);
         if let Some(location) = lines.next_if(|line| line.starts_with("at ")) {
             frame.push_str(" at ");
-            let location = replace_urls(&location[3..]);
-            frame.push_str(&redact_secret_values(file_name(&location)));
+            let location: Vec<char> = location[3..].chars().collect();
+            let location = text(&replace_urls(&location));
+            let name: Vec<char> = file_name(&location).chars().collect();
+            frame.push_str(&text(&redact_secret_values(&name)));
         }
         frames.push(truncate_chars(&frame, MAX_FRAME_CHARS));
         if frames.len() == MAX_STACK_FRAMES {
@@ -416,6 +419,18 @@ fn file_name(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
+// ---------------------------------------------------------------------------
+// Redaction pipeline. The rule is written down once, for all three crash
+// intakes, in `tests/fixtures/crash-redaction-spec.md`; this is its Rust
+// implementation, pinned to `tests/fixtures/crash-redaction-cases.json`.
+// Every count, scan and cut below is over Unicode scalar values (`char`), and
+// every step is linear in the length of its input.
+// ---------------------------------------------------------------------------
+
+fn text(scalars: &[char]) -> String {
+    scalars.iter().collect()
+}
+
 fn truncate_chars(value: &str, limit: usize) -> String {
     if value.chars().count() <= limit {
         return value.to_owned();
@@ -425,198 +440,76 @@ fn truncate_chars(value: &str, limit: usize) -> String {
     result
 }
 
+/// Step 6: whitespace runs become one space; leading and trailing ones go.
 fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn bounded_input(value: &str) -> String {
-    value.chars().take(MAX_REDACTION_INPUT_CHARS).collect()
+/// Step 1: keep at most `MAX_REDACTION_INPUT_CHARS` scalars. When that cuts
+/// through a run of non-whitespace, the partial run is dropped: half a URL
+/// host or half a path must not be classified as if it were whole.
+fn bounded_input(value: &str) -> Vec<char> {
+    let mut rest = value.chars();
+    let mut scalars: Vec<char> = rest.by_ref().take(MAX_REDACTION_INPUT_CHARS).collect();
+    if rest.next().is_some_and(|next| !next.is_whitespace()) {
+        while scalars.last().is_some_and(|last| !last.is_whitespace()) {
+            scalars.pop();
+        }
+    }
+    scalars
 }
 
-/// Full redaction for one bounded text field. The steps run in this order:
-///
-/// 1. Keep at most `MAX_REDACTION_INPUT_CHARS` characters.
-/// 2. Secret values (`redact_secret_values`), including `bearer`. First,
-///    because a value that is a path with spaces must go as a whole, and a
-///    path must not swallow the key that marks the text after it as secret.
-/// 3. URLs (`replace_urls`).
-/// 4. Paths (`redact_paths`).
-/// 5. Long opaque tokens (`redact_opaque_tokens`).
-/// 6. Collapse whitespace, then cut to `MAX_MESSAGE_CHARS`.
+/// Full redaction for one text field: steps 1 to 7 of the specification.
 fn redact(value: &str) -> String {
-    let value = bounded_input(value);
-    let value = redact_secret_values(&value);
-    let value = replace_urls(&value);
-    let value = redact_paths(&value);
-    let value = redact_opaque_tokens(&value);
-    truncate_chars(&collapse_whitespace(&value), MAX_MESSAGE_CHARS)
+    let scalars = bounded_input(value);
+    let scalars = redact_secret_values(&scalars);
+    let scalars = replace_urls(&scalars);
+    let scalars = redact_paths(&scalars);
+    let scalars = redact_opaque_tokens(&scalars);
+    truncate_chars(&collapse_whitespace(&text(&scalars)), MAX_MESSAGE_CHARS)
 }
 
-/// Line redaction for backtrace frames: steps 1 to 4 of `redact`, keeping
-/// spacing so frames stay readable.
+/// Redaction for the symbol line of a backtrace frame: steps 1 to 4, keeping
+/// spacing so the frame stays readable.
 fn redact_line(value: &str) -> String {
-    let value = bounded_input(value);
-    let value = redact_secret_values(&value);
-    let value = replace_urls(&value);
-    redact_paths(&value)
+    let scalars = bounded_input(value);
+    let scalars = redact_secret_values(&scalars);
+    let scalars = replace_urls(&scalars);
+    text(&redact_paths(&scalars))
 }
 
-fn replace_urls(value: &str) -> String {
-    const OPAQUE_SCHEMES: &[&str] = &["blob", "content", "data", "file", "mailto", "tauri", "tel", "zim"];
-    let mut output = String::with_capacity(value.len());
-    let mut cursor = 0;
-    for (colon, _) in value.match_indices(':') {
-        if colon < cursor {
-            continue;
-        }
-        let scheme_len = value.as_bytes()[cursor..colon]
+fn is_line_break(scalar: char) -> bool {
+    matches!(scalar, '\n' | '\r')
+}
+
+/// The index of the first scalar at or after `from` that satisfies `stop`, or
+/// the length of the text.
+fn find_from(scalars: &[char], from: usize, stop: impl Fn(char) -> bool) -> usize {
+    (from..scalars.len())
+        .find(|index| stop(scalars[*index]))
+        .unwrap_or(scalars.len())
+}
+
+/// The number of backslashes directly before `index`, counted back no further
+/// than `floor`.
+fn backslashes_before(scalars: &[char], floor: usize, index: usize) -> usize {
+    scalars[floor..index].iter().rev().take_while(|scalar| **scalar == '\\').count()
+}
+
+fn has_path_separator(scalars: &[char]) -> bool {
+    scalars.iter().any(|scalar| matches!(scalar, '/' | '\\'))
+}
+
+fn matches_ascii_word(scalars: &[char], at: usize, word: &str) -> bool {
+    at + word.len() <= scalars.len()
+        && scalars[at..at + word.len()]
             .iter()
-            .rev()
-            .take_while(|&&byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
-            .count();
-        let start = colon - scheme_len;
-        let scheme = &value[start..colon];
-        if !scheme.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) {
-            continue;
-        }
-        let tail = &value[colon + 1..];
-        if !tail.starts_with("//")
-            && (tail.starts_with(':')
-                || !OPAQUE_SCHEMES.iter().any(|name| scheme.eq_ignore_ascii_case(name)))
-        {
-            continue;
-        }
-        let token_end = tail
-            .find(|character: char| {
-                character.is_whitespace() || matches!(character, '"' | '<' | '>' | '`')
-            })
-            .map_or(value.len(), |end| colon + 1 + end);
-        // A URL that names a local file or an archive page is a path and may
-        // be written with unencoded spaces: it ends where a path would.
-        let path_like_end = || {
-            let chars: Vec<char> = tail.chars().collect();
-            let length = path_end(&chars, 0);
-            colon + 1 + chars[..length].iter().map(|character| character.len_utf8()).sum::<usize>()
-        };
-        let has_body = tail.chars().next().is_some_and(|first| !first.is_whitespace());
-        let (end, replacement) = if scheme.eq_ignore_ascii_case("file") && has_body {
-            // Any form (`file:///x`, `file:C:/x`). `file: ` followed by a
-            // space is prose; a path after it is found by `redact_paths`.
-            (path_like_end(), "[url]".to_owned())
-        } else if scheme.eq_ignore_ascii_case("data") && has_body {
-            // A data URL carries content itself, spaces and markup included:
-            // the rest of the line goes.
-            let line_end = tail.find(['\n', '\r']).map_or(value.len(), |end| colon + 1 + end);
-            (line_end, "[url]".to_owned())
-        } else {
-            let replacement = safe_url(&value[start..token_end], scheme);
-            // Every `scheme://` URL that is not kept (reader pages, content
-            // and archive links, shares) goes whole, like a path.
-            if tail.starts_with("//") && matches!(replacement.as_str(), "[url]" | "[reader-url]") {
-                (token_end.max(path_like_end()), replacement)
-            } else {
-                (token_end, replacement)
-            }
-        };
-        output.push_str(&value[cursor..start]);
-        output.push_str(&replacement);
-        cursor = end;
-    }
-    output.push_str(&value[cursor..]);
-    output
+            .zip(word.chars())
+            // ASCII-only folding: `ſ` is not `s` and the Kelvin sign is not `k`.
+            .all(|(scalar, expected)| scalar.to_ascii_lowercase() == expected)
 }
 
-fn safe_url(raw: &str, scheme: &str) -> String {
-    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
-        return "[url]".into();
-    }
-    let Ok(url) = url::Url::parse(raw) else {
-        return "[url]".into();
-    };
-    let Some(host) = url.host() else {
-        return "[url]".into();
-    };
-    let local = match host {
-        url::Host::Domain(domain) => {
-            let domain = domain.trim_end_matches('.');
-            domain == "localhost" || domain.ends_with(".localhost")
-        }
-        url::Host::Ipv4(ip) => ip.is_loopback(),
-        url::Host::Ipv6(ip) => {
-            ip.is_loopback() || ip.to_ipv4_mapped().is_some_and(|ip| ip.is_loopback())
-        }
-    };
-    let path = url.path();
-    let decoded = percent_encoding::percent_decode_str(path).decode_utf8_lossy();
-    let nested = decoded.contains("://")
-        || ["mailto:", "data:", "file:", "content:", "zim:", "blob:", "tauri:", "tel:"]
-            .iter()
-            .any(|prefix| decoded.contains(prefix));
-    if local || decoded.contains("/.kiwix/") || nested {
-        return "[reader-url]".into();
-    }
-    let port = url.port().map(|port| format!(":{port}")).unwrap_or_default();
-    format!("{}://{host}{port}{path}", url.scheme())
-}
-
-fn redact_paths(value: &str) -> String {
-    let chars: Vec<char> = value.chars().collect();
-    let mut output = String::with_capacity(value.len());
-    let mut index = 0;
-    while index < chars.len() {
-        if let Some(end) = path_at(&chars, index) {
-            output.push_str("[path]");
-            index = end;
-            continue;
-        }
-        output.push(chars[index]);
-        index += 1;
-    }
-    output
-}
-
-/// Whether a path may begin right after `previous` (`None` is the start of
-/// the text).
-fn path_boundary(previous: Option<char>) -> bool {
-    previous.is_none_or(|previous| {
-        previous.is_whitespace()
-            || matches!(
-                previous,
-                '=' | '(' | '[' | '{' | '"' | '\'' | ',' | ';' | ':' | '`' | '<' | '>' | '|' | '“' | '‘'
-            )
-    })
-}
-
-/// Whether the text at `index` has the shape of a path start: a drive
-/// (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`), or a
-/// share (`\\`, `//host`).
-fn path_start(chars: &[char], index: usize) -> bool {
-    let Some(&current) = chars.get(index) else {
-        return false;
-    };
-    let next = chars.get(index + 1).copied();
-    let name = |character: Option<char>| character.is_some_and(|c| c != '/' && !c.is_whitespace());
-    let windows_drive =
-        current.is_ascii_alphabetic() && next == Some(':') && matches!(chars.get(index + 2), Some('\\' | '/'));
-    let unix = current == '/' && name(next);
-    let home = current == '~' && matches!(next, Some('/' | '\\'));
-    let share = (current == '\\' && next == Some('\\'))
-        || (current == '/' && next == Some('/') && name(chars.get(index + 2).copied()));
-    windows_drive || unix || home || share
-}
-
-fn path_at(chars: &[char], index: usize) -> Option<usize> {
-    let previous = index.checked_sub(1).map(|before| chars[before]);
-    if !path_boundary(previous) || !path_start(chars, index) {
-        return None;
-    }
-    // `//host` right after a colon is the authority of a URL that the URL step
-    // kept (`https://example.org/a`), not a share.
-    if previous == Some(':') && chars[index] == '/' && chars.get(index + 1) == Some(&'/') {
-        return None;
-    }
-    Some(path_end(chars, index))
-}
+// --- Step 4 helpers, shared with steps 2 and 3 -----------------------------
 
 /// Where the redaction of a path that starts at `start` stops.
 ///
@@ -628,14 +521,14 @@ fn path_at(chars: &[char], index: usize) -> Option<usize> {
 /// delimiter is dropped with it. Losing those words is the accepted price of
 /// never keeping part of a path. An apostrophe does not end a path, because
 /// names such as `Jane's Backup` contain one.
-fn path_end(chars: &[char], start: usize) -> usize {
+fn path_end(scalars: &[char], start: usize) -> usize {
     let mut end = start;
-    while end < chars.len() {
-        let stop = match chars[end] {
+    while end < scalars.len() {
+        let stop = match scalars[end] {
             '\n' | '\r' | '<' | '>' | '`' => true,
             // Debug-formatted paths escape an embedded quote as `\"`.
-            '"' => !backslash_escaped(chars, start, end),
-            ':' => chars.get(end + 1).is_some_and(|next| next.is_whitespace()),
+            '"' => backslashes_before(scalars, start, end) % 2 == 0,
+            ':' => scalars.get(end + 1).is_some_and(|next| next.is_whitespace()),
             _ => false,
         };
         if stop {
@@ -644,40 +537,83 @@ fn path_end(chars: &[char], start: usize) -> usize {
         end += 1;
     }
     // The separator before the delimiter is not part of the path.
-    while end > start && chars[end - 1].is_whitespace() {
+    while end > start && scalars[end - 1].is_whitespace() {
         end -= 1;
     }
     end
 }
 
-/// Replace the value that follows a secret keyword with `[redacted]`.
-///
-/// A keyword is one of `SECRET_KEYS`, in any letter case. No ASCII letter or
-/// digit may come directly before it (an underscore may: `client_secret`), and
-/// no ASCII letter, digit or underscore directly after it. After the keyword
-/// come, in order: an optional closing quote of a quoted key (`"password":`),
-/// optional spaces, tabs or line breaks, and `=` or `:` followed by optional
-/// spaces or tabs. A `::` is a Rust path separator, not a `:`.
-/// `authorization` and `bearer` also accept plain whitespace instead of `=` or
-/// `:`. What follows is the value (`secret_value`).
-fn redact_secret_values(value: &str) -> String {
-    let chars: Vec<char> = value.chars().collect();
-    let mut output = String::with_capacity(value.len());
-    let mut cursor = 0;
-    while cursor < chars.len() {
-        if let Some((start, end)) = secret_at(&chars, cursor) {
-            output.extend(&chars[cursor..start]);
-            output.push_str("[redacted]");
-            cursor = end;
+/// Whether a path may begin right after `previous` (`None` is the start of
+/// the text): anything but an ASCII letter, an ASCII digit, `_`, `.` or `-`.
+/// A list of the punctuation that may precede a path always missed some
+/// (`„`, `「`, `@`, a zero-width space).
+fn path_boundary(previous: Option<char>) -> bool {
+    previous.is_none_or(|previous| !(previous.is_ascii_alphanumeric() || matches!(previous, '_' | '.' | '-')))
+}
+
+/// Whether the text at `index` has the shape of a path start: a drive
+/// (`C:\`, `C:/`), an absolute path (`/x`), a home path (`~/`, `~\`), a share
+/// (`\\`, `//host`), or a rooted Windows path (`\Users\…`, `\Device\…`).
+fn path_start(scalars: &[char], index: usize) -> bool {
+    let Some(&current) = scalars.get(index) else {
+        return false;
+    };
+    let next = scalars.get(index + 1).copied();
+    let name = |scalar: Option<char>| scalar.is_some_and(|scalar| scalar != '/' && !scalar.is_whitespace());
+    let drive = current.is_ascii_alphabetic()
+        && next == Some(':')
+        && matches!(scalars.get(index + 2), Some('\\' | '/'));
+    let absolute = current == '/' && name(next);
+    let home = current == '~' && matches!(next, Some('/' | '\\'));
+    let share = (current == '\\' && next == Some('\\'))
+        || (current == '/' && next == Some('/') && name(scalars.get(index + 2).copied()));
+    // One backslash and a name is a path only if another backslash follows
+    // before the next whitespace; `\n` in prose is not.
+    let rooted = current == '\\'
+        && next.is_some_and(|next| next.is_ascii_alphanumeric())
+        && scalars[index + 1..]
+            .iter()
+            .take_while(|scalar| !scalar.is_whitespace())
+            .any(|scalar| *scalar == '\\');
+    drive || absolute || home || share || rooted
+}
+
+fn path_at(scalars: &[char], index: usize) -> Option<usize> {
+    let previous = index.checked_sub(1).map(|before| scalars[before]);
+    if !path_boundary(previous) || !path_start(scalars, index) {
+        return None;
+    }
+    // Neither slash of `://` starts a path: what follows is the authority of
+    // a URL that step 3 kept (`https://example.org`).
+    if scalars[index] == '/' {
+        let first = previous == Some(':') && scalars.get(index + 1) == Some(&'/');
+        let second = previous == Some('/') && index >= 2 && scalars[index - 2] == ':';
+        if first || second {
+            return None;
+        }
+    }
+    Some(path_end(scalars, index))
+}
+
+/// Step 4: every path becomes `[path]`.
+fn redact_paths(scalars: &[char]) -> Vec<char> {
+    let mut output = Vec::with_capacity(scalars.len());
+    let mut index = 0;
+    while index < scalars.len() {
+        if let Some(end) = path_at(scalars, index) {
+            output.extend("[path]".chars());
+            index = end;
             continue;
         }
-        output.push(chars[cursor]);
-        cursor += 1;
+        output.push(scalars[index]);
+        index += 1;
     }
     output
 }
 
-const SECRET_KEYS: [&str; 13] = [
+// --- Step 2: secrets ---------------------------------------------------------
+
+const SECRET_KEYS: [&str; 27] = [
     "authorization",
     "access_token",
     "refresh_token",
@@ -686,56 +622,123 @@ const SECRET_KEYS: [&str; 13] = [
     "apikey",
     "password",
     "passwd",
+    "passphrase",
+    "pass",
+    "pwd",
+    "private_key",
+    "private-key",
+    "privatekey",
+    "client_secret",
+    "secret",
+    "session_id",
+    "sessionid",
+    "jsessionid",
+    "credentials",
+    "credential",
+    "signature",
     "cookie",
     "bearer",
     "token",
-    "secret",
+    "auth",
     "pin",
 ];
 
-fn is_word_char(character: char) -> bool {
-    character.is_ascii_alphanumeric() || character == '_'
+/// Line ends and the last apostrophe of each line, computed once so that no
+/// secret value rescans its line.
+struct Lines {
+    /// For each index (and the text length): the first line break at or after it.
+    end: Vec<usize>,
+    /// For each index: the last `'` on its line, if the line has one.
+    last_apostrophe: Vec<Option<usize>>,
+}
+
+impl Lines {
+    fn new(scalars: &[char]) -> Self {
+        let mut end = vec![scalars.len(); scalars.len() + 1];
+        let mut last_apostrophe = vec![None; scalars.len() + 1];
+        let mut line_end = scalars.len();
+        let mut apostrophe = None;
+        for index in (0..scalars.len()).rev() {
+            if is_line_break(scalars[index]) {
+                line_end = index;
+                apostrophe = None;
+            } else if scalars[index] == '\'' && apostrophe.is_none() {
+                apostrophe = Some(index);
+            }
+            end[index] = line_end;
+            last_apostrophe[index] = apostrophe;
+        }
+        Self { end, last_apostrophe }
+    }
+}
+
+/// Step 2: the value that follows a secret keyword becomes `[redacted]`.
+fn redact_secret_values(scalars: &[char]) -> Vec<char> {
+    let lines = Lines::new(scalars);
+    let mut output = Vec::with_capacity(scalars.len());
+    let mut cursor = 0;
+    while cursor < scalars.len() {
+        if let Some((start, end)) = secret_at(scalars, &lines, cursor) {
+            output.extend_from_slice(&scalars[cursor..start]);
+            output.extend("[redacted]".chars());
+            cursor = end;
+            continue;
+        }
+        output.push(scalars[cursor]);
+        cursor += 1;
+    }
+    output
 }
 
 /// The value range of a secret whose keyword starts at `at`, if any.
-fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
-    if at > 0 && chars[at - 1].is_ascii_alphanumeric() {
+fn secret_at(scalars: &[char], lines: &Lines, at: usize) -> Option<(usize, usize)> {
+    let first = scalars[at];
+    if !first.is_ascii_alphabetic() {
+        return None;
+    }
+    // Left boundary: not inside a longer word, except at a camelCase hump
+    // (`accessToken`, `oauth2Token`).
+    let previous = at.checked_sub(1).map(|before| scalars[before]);
+    let apart = previous.is_none_or(|previous| !previous.is_ascii_alphanumeric());
+    let hump = first.is_ascii_uppercase()
+        && previous.is_some_and(|previous| previous.is_ascii_lowercase() || previous.is_ascii_digit());
+    if !(apart || hump) {
         return None;
     }
     for key in SECRET_KEYS {
         let after_key = at + key.len();
-        if after_key > chars.len()
-            || !chars[at..after_key]
-                .iter()
-                .zip(key.chars())
-                .all(|(character, expected)| character.to_ascii_lowercase() == expected)
-            || chars.get(after_key).is_some_and(|next| is_word_char(*next))
+        if !matches_ascii_word(scalars, at, key)
+            || scalars
+                .get(after_key)
+                .is_some_and(|next| next.is_ascii_alphanumeric() || *next == '_')
         {
             continue;
         }
+        // A quoted key ends with its quote, which an outer string may have
+        // escaped: `"password":`, `\"password\":`, `("authorization", …)`.
         let mut next = after_key;
-        let quoted_key = matches!(chars.get(next), Some('"' | '\''));
+        let quote = after_key + usize::from(scalars.get(after_key) == Some(&'\\'));
+        let quoted_key = matches!(scalars.get(quote), Some('"' | '\''));
         if quoted_key {
-            next += 1;
+            next = quote + 1;
         }
         let gap = next;
-        while matches!(chars.get(next), Some(' ' | '\t' | '\r' | '\n')) {
-            next += 1;
-        }
-        let separator = match chars.get(next) {
-            Some('=') => true,
-            Some(':') => chars.get(next + 1) != Some(&':'),
-            _ => false,
+        next = find_from(scalars, next, |scalar| !scalar.is_whitespace());
+        let separator = match scalars.get(next) {
+            Some('=') if scalars.get(next + 1) == Some(&'>') => 2,
+            Some('=') => 1,
+            // `::` separates Rust path segments, not a key from its value.
+            Some(':') if scalars.get(next + 1) != Some(&':') => 1,
+            // Tuples and pairs: `("token", "…")`, `(authorization, Basic …)`.
+            Some(',') if quoted_key || key == "authorization" => 1,
+            _ => 0,
         };
-        if separator {
-            next += 1;
-            while matches!(chars.get(next), Some(' ' | '\t')) {
-                next += 1;
-            }
+        if separator > 0 {
+            next = find_from(scalars, next + separator, |scalar| !scalar.is_whitespace());
         } else if quoted_key || next == gap || !matches!(key, "authorization" | "bearer") {
             continue;
         }
-        let (start, end) = secret_value(chars, next, key);
+        let (start, end) = secret_value(scalars, lines, next, key);
         if end > start {
             return Some((start, end));
         }
@@ -743,107 +746,275 @@ fn secret_at(chars: &[char], at: usize) -> Option<(usize, usize)> {
     None
 }
 
-/// The range of the secret value that begins at `start`.
+/// The range of the secret value that begins at `start`. The forms are tried
+/// in this order.
 ///
-/// * `"…"`: everything up to the closing quote (one not escaped by a
-///   backslash), a line break or the end. The quotes stay.
-/// * `'…'`: everything up to the last `'` on the line, or to the end of the
-///   line when there is none. A value may itself contain an apostrophe. If it
-///   contains `/` or `\` it takes at least what `path_end` takes.
-/// * After `cookie`: the rest of the line, because one header carries several
-///   `name=value` pairs.
-/// * Otherwise one token, which ends at a space, tab, line break or one of
-///   `, ; & ) ] }`. After `authorization` a second token separated by spaces,
-///   tabs or line breaks goes too (`Basic dXNlcjpwYXNz`, `Bearer …`).
-///   A value that contains `/` or `\` is a path or a URL and may contain
-///   spaces: it also takes everything `path_end` takes from where it starts.
-fn secret_value(chars: &[char], start: usize, key: &str) -> (usize, usize) {
-    let line_end = |from: usize| {
-        (from..chars.len())
-            .find(|index| matches!(chars[*index], '\n' | '\r'))
-            .unwrap_or(chars.len())
-    };
+/// 1. Quoted, possibly inside wrappers such as `Some(` or `Optional(`:
+///    * `"…"`: up to the closing quote (one not escaped by a backslash), a
+///      line break or the end.
+///    * `\"…\"` (the quote itself escaped by one backslash, as inside an
+///      outer string): up to the next `"` with exactly one backslash before
+///      it, a line break or the end.
+///    * `'…'`: up to the last `'` on the line, or to the end of the line when
+///      there is none, because a value may itself contain an apostrophe. If it
+///      contains `/` or `\` it takes at least what `path_end` takes.
+///
+///    The quotes stay.
+/// 2. After `cookie`: the rest of the line, because one header carries several
+///    `name=value` pairs.
+/// 3. One token, which ends at whitespace or one of `, ; & ) ] }`. After
+///    `authorization` a second token separated by whitespace goes too
+///    (`Basic dXNlcjpwYXNz`, `Bearer …`). A value that contains `/` or `\` is
+///    a path or a URL and may contain spaces: it takes at least what
+///    `path_end` takes from where it starts.
+fn secret_value(scalars: &[char], lines: &Lines, start: usize, key: &str) -> (usize, usize) {
+    if let Some(quoted) = quoted_value(scalars, lines, skip_wrappers(scalars, start)) {
+        return quoted;
+    }
+    if key == "cookie" {
+        return (start, lines.end[start]);
+    }
     let token_end = |from: usize| {
-        (from..chars.len())
-            .find(|index| matches!(chars[*index], ' ' | '\t' | '\r' | '\n' | ',' | ';' | '&' | ')' | ']' | '}'))
-            .unwrap_or(chars.len())
+        find_from(scalars, from, |scalar| {
+            scalar.is_whitespace() || matches!(scalar, ',' | ';' | '&' | ')' | ']' | '}')
+        })
     };
-    match chars.get(start) {
-        Some('"') => {
-            let line = line_end(start + 1);
-            let close = (start + 1..line)
-                .find(|index| chars[*index] == '"' && !backslash_escaped(chars, start + 1, *index));
-            (start + 1, close.unwrap_or(line))
+    let mut end = token_end(start);
+    if key == "authorization" && end > start {
+        let second = find_from(scalars, end, |scalar| !scalar.is_whitespace());
+        if second > end && token_end(second) > second {
+            end = token_end(second);
         }
-        Some('\'') => {
-            let line = line_end(start + 1);
-            let close = (start + 1..line).rev().find(|index| chars[*index] == '\'');
-            let mut end = close.unwrap_or(line);
+    }
+    if has_path_separator(&scalars[start..end]) {
+        end = end.max(path_end(scalars, start));
+    }
+    (start, end)
+}
+
+/// The index after any `Name(` wrappers that begin at `start`.
+fn skip_wrappers(scalars: &[char], mut start: usize) -> usize {
+    loop {
+        if !scalars.get(start).is_some_and(|first| first.is_ascii_alphabetic()) {
+            return start;
+        }
+        let name_end = find_from(scalars, start, |scalar| !(scalar.is_ascii_alphanumeric() || scalar == '_'));
+        if scalars.get(name_end) != Some(&'(') {
+            return start;
+        }
+        start = name_end + 1;
+    }
+}
+
+/// The content range of a quoted value whose opening quote is at `open`.
+fn quoted_value(scalars: &[char], lines: &Lines, open: usize) -> Option<(usize, usize)> {
+    let escaped = scalars.get(open) == Some(&'\\');
+    let quote = open + usize::from(escaped);
+    match scalars.get(quote) {
+        Some('"') => {
+            let start = quote + 1;
+            let line = lines.end[start];
+            let close = (start..line).find(|index| {
+                scalars[*index] == '"' && {
+                    let before = backslashes_before(scalars, start, *index);
+                    if escaped { before == 1 } else { before % 2 == 0 }
+                }
+            });
+            // The backslash that escapes the closing quote stays with it.
+            Some((start, close.map_or(line, |close| close - usize::from(escaped))))
+        }
+        Some('\'') if !escaped => {
+            let start = quote + 1;
+            let mut end = match lines.last_apostrophe[start] {
+                Some(close) if close >= start => close,
+                _ => lines.end[start],
+            };
             // The closing quote may be missing, and then the last `'` is an
             // apostrophe inside a path.
-            if has_path_separator(&chars[start + 1..end]) {
-                end = end.max(path_end(chars, start + 1));
+            if has_path_separator(&scalars[start..end]) {
+                end = end.max(path_end(scalars, start));
             }
-            (start + 1, end)
+            Some((start, end))
         }
-        _ if key == "cookie" => (start, line_end(start)),
-        _ => {
-            let mut end = token_end(start);
-            if key == "authorization" && end > start {
-                let mut second = end;
-                while matches!(chars.get(second), Some(' ' | '\t' | '\r' | '\n')) {
-                    second += 1;
-                }
-                if second > end && token_end(second) > second {
-                    end = token_end(second);
-                }
-            }
-            if has_path_separator(&chars[start..end]) {
-                end = end.max(path_end(chars, start));
-            }
-            (start, end)
-        }
+        _ => None,
     }
 }
 
-fn has_path_separator(chars: &[char]) -> bool {
-    chars.iter().any(|character| matches!(character, '/' | '\\'))
-}
+// --- Step 3: URLs ------------------------------------------------------------
 
-/// Whether the character at `index` follows an odd run of backslashes that
-/// begins no earlier than `floor`.
-fn backslash_escaped(chars: &[char], floor: usize, index: usize) -> bool {
-    chars[floor..index].iter().rev().take_while(|character| **character == '\\').count() % 2 == 1
-}
+const OPAQUE_SCHEMES: [&str; 8] = ["blob", "content", "data", "file", "mailto", "tauri", "tel", "zim"];
+/// Final labels of host names that only mean something on the person's own
+/// network, where the name itself is theirs (`janes-macbook.local`).
+const PRIVATE_SUFFIXES: [&str; 6] = ["local", "localdomain", "lan", "home", "internal", "arpa"];
 
-fn redact_opaque_tokens(value: &str) -> String {
-    const MIN_TOKEN: usize = 40;
-    let mut output = String::with_capacity(value.len());
-    let mut run = String::new();
-    for character in value.chars() {
-        if character.is_ascii_alphanumeric()
-            || matches!(character, '_' | '-' | '+' | '/' | '=' | '.')
-        {
-            run.push(character);
+/// Step 3: every URL becomes `[url]`, `[reader-url]`, or its scheme and host.
+fn replace_urls(scalars: &[char]) -> Vec<char> {
+    let mut output = Vec::with_capacity(scalars.len());
+    let mut cursor = 0;
+    let mut colon = 0;
+    while colon < scalars.len() {
+        if scalars[colon] != ':' {
+            colon += 1;
             continue;
         }
-        push_opaque(&mut output, &run, MIN_TOKEN);
-        run.clear();
-        output.push(character);
+        // The scheme is the whole run before the colon; it cannot reach back
+        // into text that an earlier URL already replaced.
+        let mut start = colon;
+        while start > cursor
+            && (scalars[start - 1].is_ascii_alphanumeric() || matches!(scalars[start - 1], '+' | '-' | '.'))
+        {
+            start -= 1;
+        }
+        let tail = colon + 1;
+        let slashes = scalars.get(tail) == Some(&'/') && scalars.get(tail + 1) == Some(&'/');
+        let scheme: String = scalars[start..colon].iter().map(char::to_ascii_lowercase).collect();
+        let opaque = OPAQUE_SCHEMES.contains(&scheme.as_str());
+        if !scalars.get(start).is_some_and(|first| first.is_ascii_alphabetic())
+            || start == colon
+            || (!slashes && (scalars.get(tail) == Some(&':') || !opaque))
+        {
+            colon += 1;
+            continue;
+        }
+        let token_end = find_from(scalars, tail, |scalar| {
+            scalar.is_whitespace() || matches!(scalar, '"' | '<' | '>' | '`')
+        });
+        let has_body = scalars.get(tail).is_some_and(|first| !first.is_whitespace());
+        let (end, replacement) = if scheme == "file" || scheme == "data" {
+            // A file URL is a path, in any form (`file:///x`, `file:C:/x`), and
+            // may be written with unencoded spaces. A data URL carries content
+            // itself, spaces and markup included: the rest of the line goes.
+            let end = match (has_body, scheme.as_str()) {
+                (false, _) => tail,
+                (true, "file") => path_end(scalars, tail),
+                (true, _) => find_from(scalars, tail, is_line_break),
+            };
+            (end, "[url]".to_owned())
+        } else if slashes {
+            let authority_end = find_from(scalars, tail + 2, |scalar| matches!(scalar, '/' | '\\' | '?' | '#')).min(token_end);
+            let replacement = safe_url(&scheme, &scalars[tail + 2..authority_end]);
+            // A URL that is not kept, or whose path, query or fragment is
+            // dropped, goes whole, like a path: what follows the first space
+            // of an unencoded article title must not stay behind.
+            if replacement.starts_with('[') || authority_end < token_end {
+                (token_end.max(path_end(scalars, tail)), replacement)
+            } else {
+                (token_end, replacement)
+            }
+        } else {
+            (token_end, "[url]".to_owned())
+        };
+        output.extend_from_slice(&scalars[cursor..start]);
+        output.extend(replacement.chars());
+        cursor = end;
+        colon = end;
     }
-    push_opaque(&mut output, &run, MIN_TOKEN);
+    output.extend_from_slice(&scalars[cursor..]);
     output
 }
 
-fn push_opaque(output: &mut String, run: &str, minimum: usize) {
-    if run.len() >= minimum
-        && run.chars().any(|character| character.is_ascii_digit())
-        && run.chars().any(|character| character.is_ascii_alphabetic())
-    {
-        output.push_str("[redacted]");
+/// What may be kept of a `scheme://authority…` URL, decided from its text
+/// alone so that every platform decides alike.
+///
+/// * `http` and `https` only; any other scheme is `[url]`.
+/// * The host is the authority without its userinfo (everything up to the
+///   last `@`), without its port, lowercased, and without one trailing dot.
+/// * `[reader-url]`: `localhost`, a name ending in `.localhost`, `127.`
+///   followed only by digits and dots, or `[::1]`. These are archive pages.
+/// * Kept as `scheme://host[:port]`: a DNS name of at least two labels of
+///   `a-z 0-9 -` whose last label starts with a letter and is not a
+///   private-network suffix. The default port is dropped. The path, query and
+///   fragment are never kept: a path can name the article being read.
+/// * Everything else is `[url]`: IP literals in any spelling, single-label
+///   hosts, private-network names, a malformed port.
+fn safe_url(scheme: &str, authority: &[char]) -> String {
+    let default_port = match scheme {
+        "http" => "80",
+        "https" => "443",
+        _ => return "[url]".into(),
+    };
+    let host_and_port = match authority.iter().rposition(|scalar| *scalar == '@') {
+        Some(at) => &authority[at + 1..],
+        None => authority,
+    };
+    let (host, port) = if host_and_port.first() == Some(&'[') {
+        match host_and_port.iter().position(|scalar| *scalar == ']') {
+            Some(close) => (&host_and_port[..=close], &host_and_port[close + 1..]),
+            None => return "[url]".into(),
+        }
     } else {
-        output.push_str(run);
+        match host_and_port.iter().rposition(|scalar| *scalar == ':') {
+            Some(colon) => (&host_and_port[..colon], &host_and_port[colon..]),
+            None => (host_and_port, &host_and_port[host_and_port.len()..]),
+        }
+    };
+    let mut host: String = host.iter().map(char::to_ascii_lowercase).collect();
+    if host.ends_with('.') {
+        host.pop();
     }
+    let loopback = host
+        .strip_prefix("127.")
+        .is_some_and(|rest| rest.chars().all(|scalar| scalar.is_ascii_digit() || scalar == '.'));
+    if host == "localhost" || host.ends_with(".localhost") || loopback || host == "[::1]" {
+        return "[reader-url]".into();
+    }
+    let port: String = match port {
+        [] => String::new(),
+        [':', digits @ ..]
+            if (1..=5).contains(&digits.len()) && digits.iter().all(char::is_ascii_digit) =>
+        {
+            digits.iter().collect()
+        }
+        _ => return "[url]".into(),
+    };
+    let labels: Vec<&str> = host.split('.').collect();
+    let last = labels.last().copied().unwrap_or_default();
+    let dns_name = labels.len() >= 2
+        && labels.iter().all(|label| {
+            !label.is_empty()
+                && label.chars().all(|scalar| scalar.is_ascii_lowercase() || scalar.is_ascii_digit() || scalar == '-')
+        })
+        && last.starts_with(|first: char| first.is_ascii_lowercase())
+        && !PRIVATE_SUFFIXES.contains(&last);
+    if !dns_name {
+        return "[url]".into();
+    }
+    if port.is_empty() || port.trim_start_matches('0') == default_port {
+        format!("{scheme}://{host}")
+    } else {
+        format!("{scheme}://{host}:{port}")
+    }
+}
+
+// --- Step 5: opaque tokens -----------------------------------------------------
+
+/// Step 5: a run of 40 or more token characters that has both a digit and a
+/// letter becomes `[redacted]`.
+fn redact_opaque_tokens(scalars: &[char]) -> Vec<char> {
+    const MIN_TOKEN: usize = 40;
+    let token_scalar =
+        |scalar: char| scalar.is_ascii_alphanumeric() || matches!(scalar, '_' | '-' | '+' | '/' | '=' | '.');
+    let mut output = Vec::with_capacity(scalars.len());
+    let mut index = 0;
+    while index < scalars.len() {
+        let end = find_from(scalars, index, |scalar| !token_scalar(scalar));
+        if end == index {
+            output.push(scalars[index]);
+            index += 1;
+            continue;
+        }
+        let run = &scalars[index..end];
+        if run.len() >= MIN_TOKEN
+            && run.iter().any(char::is_ascii_digit)
+            && run.iter().any(char::is_ascii_alphabetic)
+        {
+            output.extend("[redacted]".chars());
+        } else {
+            output.extend_from_slice(run);
+        }
+        index = end;
+    }
+    output
 }
 
 #[cfg(test)]
@@ -929,9 +1100,11 @@ mod tests {
             ),
             ("loopback http://127.0.0.2:9/book-uuid/A/Private", "loopback [reader-url]"),
             ("ipv6 http://[::1]:9/book-uuid/A/Private", "ipv6 [reader-url]"),
+            // A URL on another host keeps its scheme and host and nothing
+            // else: the path can name the book and the article.
             (
                 "bridge https://example.org/book-uuid/%2Ekiwix/token/A/Private",
-                "bridge [reader-url]",
+                "bridge https://example.org",
             ),
             ("path=/book-uuid/A/Private relative=/.kiwix/token/A/Private", "path=[path]"),
             ("relative=/.kiwix/token/A/Private", "relative=[path]"),
@@ -942,11 +1115,11 @@ mod tests {
             ("custom://host/Private", "[url]"),
             (
                 "public https://user:pass@example.org/a/b?token=secret#x",
-                "public https://example.org/a/b",
+                "public https://example.org",
             ),
             (
                 "adjacent https://example.org/a,http://book-uuid.localhost/A/Private",
-                "adjacent [reader-url]",
+                "adjacent https://example.org",
             ),
         ] {
             assert_eq!(redact(input), expected, "{input}");
@@ -965,7 +1138,7 @@ mod tests {
         }
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../tests/fixtures/crash-redaction-cases.json")).unwrap();
-        assert!(cases.len() >= 80, "the shared fixture lost cases: {}", cases.len());
+        assert!(cases.len() >= 200, "the shared fixture lost cases: {}", cases.len());
         let differing: Vec<String> = cases
             .iter()
             .filter_map(|case| {
@@ -1009,18 +1182,104 @@ mod tests {
 
     #[test]
     fn redaction_input_is_bounded_before_any_step_runs() {
-        let long = format!("/{}", "a".repeat(MAX_REDACTION_INPUT_CHARS * 4));
-        assert_eq!(bounded_input(&long).chars().count(), MAX_REDACTION_INPUT_CHARS);
-        assert_eq!(redact(&long), "[path]");
-        assert_eq!(redact_line(&long), "[path]");
-        // Characters, not bytes: a multi-byte character is never split.
-        let wide = "é".repeat(MAX_REDACTION_INPUT_CHARS + 10);
-        assert_eq!(bounded_input(&wide).chars().count(), MAX_REDACTION_INPUT_CHARS);
-        // A short field is untouched.
-        assert_eq!(bounded_input("lib.rs:12"), "lib.rs:12");
+        let bound = MAX_REDACTION_INPUT_CHARS;
+        // Scalar values, not bytes and not UTF-16 units: nothing is split.
+        let wide = format!("{} tail", "é ".repeat(bound));
+        assert_eq!(bounded_input(&wide).len(), bound);
+        let astral = "😀 ".repeat(bound);
+        assert_eq!(bounded_input(&astral).len(), bound);
+        // A short field, and one exactly at the bound, are untouched.
+        assert_eq!(text(&bounded_input("lib.rs:12")), "lib.rs:12");
+        let exact = "a".repeat(bound);
+        assert_eq!(bounded_input(&exact).len(), bound);
+        // The cut falls between words: everything before it stays.
+        let between = format!("{} next", "a".repeat(bound - 1).replacen('a', " ", 1));
+        assert_eq!(bounded_input(&format!("{}{}", "ab ".repeat(bound / 3), " rest")).len(), bound);
+        assert_eq!(bounded_input(&between).len(), bound - 1 + 1);
+
+        // The cut falls inside a token: the partial token goes. Kept, the
+        // first half of this reader URL's host would be a "DNS name" and stay.
+        let prefix = " ".repeat(bound - 19);
+        let straddling = format!("{prefix}http://12b34567.localhost:9/A/Private_Page");
+        assert_eq!(text(&bounded_input(&straddling)), prefix);
+        assert_eq!(redact(&straddling), "");
+        // Whole, the same URL is recognised.
+        assert_eq!(redact("http://12b34567.localhost:9/A/Private_Page"), "[reader-url]");
+        // A path cut in half is dropped too, and with it nothing of the path stays.
+        let path = format!("{}/home/jane doe/Private Notes/a.zim", "x ".repeat(bound / 2 - 8));
+        let output = redact(&path);
+        assert!(!output.contains("jane") && !output.contains("Private"), "{}", &output[output.len() - 40..]);
+        // One unbroken run longer than the bound leaves nothing.
+        let long = format!("/{}", "a".repeat(bound * 4));
+        assert!(bounded_input(&long).is_empty());
+        assert_eq!(redact(&long), "");
+        assert_eq!(redact_line(&long), "");
         // A panic location is never redacted.
         assert_eq!(redact("lib.rs:1234"), "lib.rs:1234");
         assert_eq!(redact("store.rs:88"), "store.rs:88");
+    }
+
+    #[test]
+    fn whitespace_is_exactly_the_unicode_white_space_property() {
+        // The list the specification gives the Swift and Kotlin ports.
+        let listed = |scalar: char| {
+            matches!(
+                scalar,
+                '\u{9}'..='\u{d}'
+                    | '\u{20}'
+                    | '\u{85}'
+                    | '\u{a0}'
+                    | '\u{1680}'
+                    | '\u{2000}'..='\u{200a}'
+                    | '\u{2028}'
+                    | '\u{2029}'
+                    | '\u{202f}'
+                    | '\u{205f}'
+                    | '\u{3000}'
+            )
+        };
+        for scalar in (0..=0x10ffff_u32).filter_map(char::from_u32) {
+            assert_eq!(scalar.is_whitespace(), listed(scalar), "U+{:04X}", scalar as u32);
+        }
+    }
+
+    #[test]
+    fn every_redaction_step_is_linear_in_its_input() {
+        // The worst inputs found in review: each unit starts a URL, path or
+        // secret candidate. Rescanning the rest of the text per candidate made
+        // these quadratic (about one second for 32,768 scalars in this build).
+        let repeated = |unit: &str, length: usize| -> Vec<char> {
+            unit.chars().cycle().take(length - length % unit.chars().count()).collect()
+        };
+        let steps = |scalars: &[char]| {
+            let scalars = redact_secret_values(scalars);
+            let scalars = replace_urls(&scalars);
+            let scalars = redact_paths(&scalars);
+            redact_opaque_tokens(&scalars).len()
+        };
+        let fastest = |scalars: &[char]| {
+            (0..3)
+                .map(|_| {
+                    let started = std::time::Instant::now();
+                    std::hint::black_box(steps(scalars));
+                    started.elapsed()
+                })
+                .min()
+                .unwrap()
+        };
+        for unit in [
+            "a://b<", "file:x<", "zz://q`", "password=\"\" ", "data:x\n", "/a: ", " \\a", "a:", "'password'", "token='x ", "C:\\a\" ",
+        ] {
+            let small = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS));
+            let large = fastest(&repeated(unit, MAX_REDACTION_INPUT_CHARS * 4));
+            // Four times the input takes about four times as long when linear
+            // and sixteen times when quadratic. The floor absorbs timer noise.
+            let allowed = small.max(std::time::Duration::from_millis(5)) * 10;
+            assert!(large <= allowed, "{unit:?}: {small:?} for the bound, {large:?} for four times as much");
+            // Generous for a shared, unoptimised test build; the quadratic
+            // version needed 400 ms to 1 s here.
+            assert!(small < std::time::Duration::from_millis(300), "{unit:?}: {small:?}");
+        }
     }
 
     #[test]

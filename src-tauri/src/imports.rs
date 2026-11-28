@@ -62,9 +62,10 @@ pub(crate) fn load_book_cancellable(
     })
 }
 
-/// A manual or monitored import stopped by Quit or a privacy-mode change.
+/// A verification stopped by Quit, a privacy or read-only switch, or (mobile)
+/// the app moving to the background.
 pub(crate) const IMPORT_CANCELLED: &str =
-    "Import cancelled because Kiwix is closing or its privacy settings changed. Add the archive again to import it.";
+    "Import cancelled because Kiwix closed, moved to the background, or switched privacy mode. Add the archive again to import it.";
 
 fn load_book_inner(path: &str, managed: bool, verify: bool, cancel: Option<&CancellationToken>) -> Result<Book, String> {
     let canonical = std::fs::canonicalize(path).map_err(|failure| {

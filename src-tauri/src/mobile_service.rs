@@ -381,7 +381,11 @@ impl Service {
         let _serial = self.mobile.serial.lock().await;
         if self.mobile_active() || self.mobile_reader_media_retains() || self.mobile_speech_retained() { return; }
         if !self.mobile.media_retained.swap(false, Ordering::SeqCst) { return; }
+        // A whole-archive verification must not hold the backgrounded app's
+        // retirement writer: it fails as cancelled and is offered again.
+        let import_cutover = super::ImportCutover::begin(self.as_ref());
         let _mode = self.privacy_gate.write().await;
+        drop(import_cutover);
         self.privacy_generation.fetch_add(1, Ordering::SeqCst);
         if let Err(error) = retire_readers(&mut *self.readers.lock().await, None).await {
             mobile::error(&self, "media-reader-retirement", error);
@@ -1874,7 +1878,12 @@ impl Service {
         } else {
             // All already accepted storage/setting writes finish before readers
             // and their source authority are retired. No terminal shutdown here.
+            // A running whole-archive verification (an incoming copy, a manual
+            // import) would hold this writer for its whole checksum: it fails
+            // as cancelled instead, and nothing it staged is removed.
+            let import_cutover = super::ImportCutover::begin(self.as_ref());
             let _mode = self.privacy_gate.write().await;
+            drop(import_cutover);
             self.privacy_generation.fetch_add(1,Ordering::SeqCst);
             if let Err(error)=retire_readers(&mut *self.readers.lock().await,None).await {errors.push(error);}
             self.mobile_note_retirement()?;
