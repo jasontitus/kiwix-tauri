@@ -200,10 +200,7 @@ test("Library removal, search and spelling suggestions each have one visible out
   await until(() => document.querySelector("dialog[open] .archive-removal-actions"));
   await button("dialog[open] .archive-removal-actions", "Remove from library");
   await until((text) => document.querySelector("dialog[open]")?.textContent.includes(text), "Fixture removal refused");
-  // Let a second owner, if any, appear before counting.
-  await until(() => window.calls.filter((call) => call.command === "remove_book").length === 1 &&
-    !document.querySelector("dialog[open] .archive-removal-actions button:disabled"));
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // A second owner would be painted in the same commit as the inline copy.
   assert.deepEqual(await page.evaluate(painted, "Fixture removal refused"), { copies: 1, alertDialog: false });
   await button("dialog[open] .archive-removal-actions", "Cancel");
   await until(() => document.querySelector("dialog[open]")?.textContent.includes("Read archive"));
@@ -266,7 +263,6 @@ test("Downloads shows kept progress, retained originals and one owner per failur
   // A trusted click: the dialog ignores synthetic activation.
   await button("dialog[open] .download-cleanup-actions", "Delete download and files");
   await until((text) => document.querySelector("dialog[open] [role=alert]")?.textContent.includes(text), "Fixture reason");
-  await new Promise((resolve) => setTimeout(resolve, 300));
   assert.deepEqual(await page.evaluate(painted, "Fixture reason"), { copies: 1, alertDialog: false });
   await button("dialog[open]", "Cancel");
   await until(() => !document.querySelector("dialog[open]"));

@@ -265,3 +265,4 @@ Launched cidocs lane (ae9fa…): BUILD-3,4,6,11(doc only), CORE-10, CORE-11, SER
 STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(except joint crash). Pending: transfers re-review, features r3, net r2, desktop r2, shell r3, startup r2(+canonical crash), files adv, service impl, panes impl.
 - shell round 3 DONE (impl/shell-round3.md): R2b (typed only; switches still revert - owner ACCEPTS deviation), R7, R8, R5b. -> adv-shell quick check
 - adv-transfers round 2 (adv/transfers-round2.md): R1-R6 closed. FULL SUITE 1435 passed / 0 failed / 16 ignored (01:0x). Nits R7, R8; trickle unbounded (owner: FIX with 60s min-progress window). localswarm/mod.rs:24 unused import blocks all clippy (net lane). -> transfers round 3
+- adv-shell round 3: no findings. LANE shell CLOSED. Residuals: real desktop Quit/close/IME untested; test-frontend-surfaces 30s defaults.
