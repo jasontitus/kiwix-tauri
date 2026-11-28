@@ -25,6 +25,7 @@ struct LiveActivityArgs: Decodable {
   let fileName: String?
   let downloaded: Int64?
   let total: Int64?
+  let staleLabel: String?
 }
 
 /// One activity at a time, following the transfer Rust selected. Activities are
@@ -112,7 +113,8 @@ final class DownloadLiveActivityBridge {
       statusLabel: args.statusLabel ?? status,
       fileName: fileName,
       downloaded: max(args.downloaded ?? 0, 0),
-      total: args.total.flatMap { $0 > 0 ? $0 : nil }
+      total: args.total.flatMap { $0 > 0 ? $0 : nil },
+      staleLabel: args.staleLabel
     )
     // A paused transfer is expected to stop updating; anything else that stops
     // being refreshed should visibly go stale rather than claim live progress.

@@ -1,3 +1,4 @@
+import CryptoKit
 import Darwin
 import Foundation
 import XCTest
@@ -508,7 +509,7 @@ final class ExternalDocumentsTests: XCTestCase {
         persistent: true, cancellation: WorkCancellation())
       let admitted = try storedIdentity(defaults, selected.reference)
       let resource = try XCTUnwrap(admitted["resource"] as? String, "This volume exposes no resource identifier")
-      XCTAssertNotNil(admitted["volume"], "This volume reports no UUID")
+      XCTAssertNotNil(admitted["volume"], "The test volume is not built in or reports no UUID")
       try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
 
       let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
@@ -607,6 +608,103 @@ final class ExternalDocumentsTests: XCTestCase {
       let before = defaults.dictionary(forKey: key) as? [String: Data]
       let restarted = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })
       XCTAssertThrowsError(try restarted.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+        XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+      }
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+    }
+  }
+
+  func testChangedResourceIdentifierIsRefusedOnARemovableOrUnidentifiedVolume() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      let volume = try XCTUnwrap(storedIdentity(defaults, selected.reference)["volume"] as? String,
+        "The test volume is not built in or reports no UUID")
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      // The same volume UUID, inode and modification time, but the volume is
+      // not known to be built in: a drive can be changed while it is away.
+      for builtIn in [false, nil] as [Bool?] {
+        let removable = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
+          volumeIdentity: { _ in (volume, builtIn) })
+        XCTAssertThrowsError(try removable.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+          XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+        }
+        XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+      }
+      let builtIn = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
+        volumeIdentity: { _ in (volume, true) })
+      builtIn.release(try builtIn.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+    }
+  }
+
+  func testArchiveLinkedOnARemovableVolumeKeepsRequiringReselectionAfterItsIdentifierChanges() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      try archive(file)
+      let removable = ExternalDocuments(defaults: defaults,
+        volumeIdentity: { _ in ("11111111-2222-4333-8444-555555555555", false) })
+      let selected = try removable.select(file, folder: false, persistent: true, cancellation: WorkCancellation())
+      XCTAssertNil(try storedIdentity(defaults, selected.reference)["volume"])
+      // Within one boot the identifier still admits it, without rewriting.
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+      let sameBoot = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) },
+        volumeIdentity: { _ in ("11111111-2222-4333-8444-555555555555", false) })
+      sameBoot.release(try sameBoot.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+      XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)
+
+      try rewriteStoredIdentity(defaults, selected.reference) { $0["resource"] = anotherBoot }
+      let changed = defaults.dictionary(forKey: key) as? [String: Data]
+      // Even a volume that now reads as built in cannot supply the proof the
+      // record never had.
+      for reopened in [sameBoot, ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, false) })] {
+        XCTAssertThrowsError(try reopened.acquire(selected.reference, cancellation: WorkCancellation())) { error in
+          XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
+        }
+        XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], changed)
+      }
+    }
+  }
+
+  func testStaleResolutionRefusesRewrittenContentEvenWithItsModificationTimeRestored() throws {
+    try fixture { root, defaults in
+      let file = root.appendingPathComponent("book.zim")
+      // A whole-second time can be restored exactly after the rewrite.
+      let admittedTime = Date(timeIntervalSince1970: 1_700_000_000)
+      try archive(file)
+      try FileManager.default.setAttributes([.modificationDate: admittedTime], ofItemAtPath: file.path)
+      var admitted = stat()
+      XCTAssertEqual(stat(file.path, &admitted), 0)
+      let selected = try ExternalDocuments(defaults: defaults).select(file, folder: false,
+        persistent: true, cancellation: WorkCancellation())
+      // A provider that exposes no resource identifier binds the content of
+      // each part instead; give the record that shape.
+      let content = try Data(contentsOf: file)
+      var hasher = SHA256()
+      content.withUnsafeBytes { hasher.update(bufferPointer: $0) }
+      let digest = Data(hasher.finalize()).base64EncodedString()
+      try rewriteStoredIdentity(defaults, selected.reference) {
+        $0.removeValue(forKey: "resource"); $0["digest"] = digest
+      }
+      let unchanged = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, true) })
+      unchanged.release(try unchanged.acquire(selected.reference, cancellation: WorkCancellation()).lease)
+      let before = defaults.dictionary(forKey: key) as? [String: Data]
+
+      // Same inode, size, archive UUID and modification time; other bytes.
+      var bytes = [UInt8](repeating: 9, count: content.count)
+      bytes.replaceSubrange(0..<4, with: [0x5a, 0x49, 0x4d, 0x04])
+      bytes.replaceSubrange(8..<24, with: repeatElement(1, count: 16))
+      try Data(bytes).write(to: file)
+      try FileManager.default.setAttributes([.modificationDate: admittedTime], ofItemAtPath: file.path)
+      var rewritten = stat()
+      XCTAssertEqual(stat(file.path, &rewritten), 0)
+      XCTAssertEqual(rewritten.st_ino, admitted.st_ino)
+      XCTAssertEqual(rewritten.st_mtimespec.tv_sec, admitted.st_mtimespec.tv_sec)
+      XCTAssertEqual(rewritten.st_mtimespec.tv_nsec, admitted.st_mtimespec.tv_nsec)
+      let stale = ExternalDocuments(defaults: defaults, resolveBookmark: { _ in (file, true) })
+      XCTAssertThrowsError(try stale.acquire(selected.reference, cancellation: WorkCancellation())) { error in
         XCTAssertEqual((error as? MobileFailure)?.code, "provider_archive_parts_changed")
       }
       XCTAssertEqual(defaults.dictionary(forKey: key) as? [String: Data], before)

@@ -899,7 +899,8 @@ export default function App() {
     [],
   );
   useEffect(() => {
-    if (!isIOS) return;
+    // iOS Dynamic Type and the Android system font scale.
+    if (!isIOS && !isAndroid) return;
     let cancelled = false;
     let revision = 0;
     let unlisten: (() => void) | undefined;

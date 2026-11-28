@@ -17,7 +17,6 @@ import type { Book, CatalogEntry, Settings, TabLocation } from "../types";
 import {
   ERROR_SITES,
   isSuspendedError,
-  isUserCancelledError,
   type ErrorSeverity,
 } from "../error-visibility";
 import { diagnostics } from "../diagnostics";
@@ -223,9 +222,8 @@ function nativeCodeText(message: string): string | null {
 
 export function errorText(error: unknown): string {
   // A suspended command is a lifecycle gate that the API boundary retries on
-  // resume, and a cancellation is the user's own choice. Neither has failure
-  // text, so no caller can paint a card for it.
-  if (isSuspendedError(error) || isUserCancelledError(error)) return "";
+  // resume. It has no failure text, so no caller can paint a card for it.
+  if (isSuspendedError(error)) return "";
   const message = error instanceof Error ? error.message : String(error);
   // Never paint a bare serialization/internal token in the red band. These
   // values carry no action for a reader and usually mean a caller passed the
@@ -308,15 +306,10 @@ export function ErrorNotice({
   onRetry?: () => void;
   onDismiss?: () => void;
 }) {
-  const text = errorText(message);
-  // A lifecycle gate or the user's own cancellation has no failure text; an
-  // alert with nothing in it would only announce an empty error. A notice
-  // that offers a retry stays: its button is the way back.
-  if (!text && !onRetry) return null;
   return (
     <div className="error-notice" role="alert">
       <AlertCircle size={18} />
-      <span>{text}{onRetry ? " " : null}</span>
+      <span>{errorText(message)}{onRetry ? " " : null}</span>
       {onRetry && <button type="button" onClick={onRetry}>{t("Try again")}</button>}
       {onDismiss && (
         <button type="button" className="icon-button" onClick={onDismiss} aria-label={t("Dismiss error")}>

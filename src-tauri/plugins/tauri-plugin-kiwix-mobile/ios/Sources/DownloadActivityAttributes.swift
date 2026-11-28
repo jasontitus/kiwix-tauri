@@ -19,6 +19,10 @@ struct DownloadActivityAttributes: ActivityAttributes {
     var fileName: String
     var downloaded: Int64
     var total: Int64?
+    /// What to show in place of `statusLabel` once the system marks this
+    /// content stale; already localized by Rust. Optional so content that an
+    /// earlier build published still decodes; the widget then shows no wording.
+    var staleLabel: String?
   }
 
   /// Identity of the transfer this activity follows. Immutable for the

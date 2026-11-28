@@ -50,10 +50,12 @@ export const CANCELLED_CODE = "KIWIX_USER_CANCELLED";
 
 /**
  * The user declined or cancelled their own action (a consent prompt they
- * answered "Cancel", a transfer they stopped). Like a lifecycle gate it is not
- * a failure: it is never painted as an error. Only a decision the user made
- * may be raised as this type; a prompt that could not be shown, or one the
- * lifecycle withdrew, stays an ordinary error.
+ * answered "Cancel"). It is not a failure: the shell's reporter never paints
+ * it in the blocking band, and an owner that shows results inline can tell it
+ * from an error without matching its sentence. The message stays a plain
+ * sentence for the places that list outcomes (a batch that stopped). Only a
+ * decision the user made may be raised as this type; a prompt that could not
+ * be shown, or one the lifecycle withdrew, stays an ordinary error.
  */
 export class UserCancelledError extends Error {
   readonly code = CANCELLED_CODE;

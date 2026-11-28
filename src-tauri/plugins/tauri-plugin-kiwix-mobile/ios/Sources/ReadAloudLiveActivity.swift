@@ -101,7 +101,10 @@ final class ReadAloudLiveActivityBridge {
 
     let now = Date()
     let status = args.status ?? "reading"
-    let staleDate = status == "paused" ? nil : now.addingTimeInterval(120)
+    // Progress arrives once per sentence, and one long sentence at the slowest
+    // rate can take minutes, so only a much longer silence means the reader
+    // stopped reporting.
+    let staleDate = status == "paused" ? nil : now.addingTimeInterval(600)
 
     if let activity = current {
       let previous = activity.content.state

@@ -622,10 +622,11 @@ final class ExternalDocuments {
     let device: UInt64?
     let inode: UInt64?
     let modified: Int64?
-    /// `resource` is only comparable within one boot and one mount of its
-    /// volume. The volume's own UUID, with `inode` and `modified`, names the
-    /// same file across a restart or a reconnected drive. Optional so earlier
-    /// records still decode; a record without it never uses that proof.
+    /// `resource` is only comparable within one boot. The UUID of a volume
+    /// built into the device, with `inode` and `modified`, names the same file
+    /// across a restart. It is absent for a removable, network or unidentified
+    /// volume, and in earlier records; a record without it never uses that
+    /// proof.
     let volume: String?
   }
   private struct Record: Codable {
@@ -664,6 +665,7 @@ final class ExternalDocuments {
   private let defaults: UserDefaults
   private let newLeaseID: () -> UUID
   private let resolveBookmark: (Data) throws -> (URL, Bool)
+  private let volumeIdentity: (URL) -> (String?, Bool?)
   private let key = "kiwix.external-document-references.v1"
   init(defaults: UserDefaults = .standard,
        newLeaseID: @escaping () -> UUID = UUID.init,
@@ -672,10 +674,15 @@ final class ExternalDocuments {
          let url = try URL(resolvingBookmarkData: data, options: [.withoutUI],
                            relativeTo: nil, bookmarkDataIsStale: &stale)
          return (url, stale)
+       },
+       volumeIdentity: @escaping (URL) -> (String?, Bool?) = { url in
+         let values = try? url.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsInternalKey])
+         return (values?.volumeUUIDString, values?.volumeIsInternal)
        }) {
     self.defaults = defaults
     self.newLeaseID = newLeaseID
     self.resolveBookmark = resolveBookmark
+    self.volumeIdentity = volumeIdentity
   }
 
   private func locked<T>(_ body: () throws -> T) rethrows -> T {
@@ -735,9 +742,9 @@ final class ExternalDocuments {
 
   /// `expected` is the identity admitted for this part on an earlier
   /// resolution. The second element reports whether the recorded content digest
-  /// requirement is satisfied: a stale bookmark only re-hashes when the part is
-  /// no longer proven to be the same file, because a full-content read of every
-  /// part is the dominant cost of re-resolving a large archive.
+  /// requirement is satisfied. A stale resolution re-reads the whole part when
+  /// a digest was recorded, and that digest then decides; otherwise the
+  /// descriptor's identity stands in for it.
   private func identity(_ fd: Int32, source: URL, expected: PartIdentity?, stale: Bool,
                         cancellation: WorkCancellation) throws -> (identity: PartIdentity, digestSatisfied: Bool) {
     var info = stat()
@@ -746,9 +753,13 @@ final class ExternalDocuments {
     let resource = identifier.flatMap {
       try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: false)
     }
-    // Best effort: a volume that reports no UUID simply never gets the
-    // restart-proof identity.
-    let volume = (try? source.resourceValues(forKeys: [.volumeUUIDStringKey]))?.volumeUUIDString
+    // Only a volume built into the device gets the restart-proof identity. A
+    // removable or network volume can be changed elsewhere while it is away,
+    // and its file numbers need not name one file for good, so it keeps
+    // requiring reselection once its identifier changes. A volume that does
+    // not say which it is, or reports no UUID, is treated the same way.
+    let (volumeUUID, volumeIsInternal) = volumeIdentity(source)
+    let volume = volumeIsInternal == true ? volumeUUID : nil
     let size = Int64(info.st_size)
     let device = UInt64(info.st_dev), inode = UInt64(info.st_ino)
     let modified = Int64(info.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(info.st_mtimespec.tv_nsec)
@@ -782,7 +793,9 @@ final class ExternalDocuments {
     }
     return (PartIdentity(size: size, resource: resource, digest: digest,
                          device: device, inode: inode, modified: modified, volume: volume),
-            expected?.digest == nil || sameFile || digest == expected?.digest)
+            // A digest recomputed here is the content proof: when it differs,
+            // matching device, inode and modification time do not excuse it.
+            expected?.digest == nil || digest == expected?.digest || (digest == nil && sameFile))
   }
 
   func select(_ url: URL, folder: Bool, persistent: Bool, cancellation: WorkCancellation) throws -> ExternalSelection {
@@ -1052,15 +1065,17 @@ final class ExternalDocuments {
           if let expected {
             let observed = checked.identity
             // The provider's resource identifier is not stable across a
-            // restart or a reconnected drive, so the same untouched file can
-            // return a different one. That alone is not a changed part when
-            // the file is still the one admitted: same volume UUID, and the
-            // same inode and modification time on the descriptor opened here.
-            // A different file at this location cannot carry all three, and a
-            // record made before they were kept has no such proof.
+            // restart, so the same untouched file can return a different one.
+            // That alone is not a changed part when the file is still the one
+            // admitted on built-in storage: same volume UUID, and the same
+            // inode and modification time on the descriptor opened here. A
+            // different file at this location cannot carry all three. A record
+            // without them (earlier builds, removable or network volumes) has
+            // no such proof, and neither has a provider that no longer exposes
+            // an identifier at all.
             let sameResource = expected.resource == nil || expected.resource == observed.resource
             let durable = expected.volume != nil && expected.inode != nil && expected.modified != nil
-            let sameNode = durable && expected.volume == observed.volume
+            let sameNode = durable && observed.resource != nil && expected.volume == observed.volume
               && expected.inode == observed.inode && expected.modified == observed.modified
             guard expected.size == observed.size, sameResource || sameNode,
                   !stale || checked.digestSatisfied else {

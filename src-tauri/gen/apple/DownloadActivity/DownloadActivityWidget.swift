@@ -113,8 +113,9 @@ enum DownloadActivityStyle {
   /// running transfer, so stale means the app stopped reporting (suspended or
   /// gone) and the last "Downloading 40%" is no longer known to be true. Such a
   /// state is shown under the widget-only status "stale": last known bytes, no
-  /// percentage, no activity wording. Paused and finished transfers never
-  /// expire and are left alone. The status never leaves this process.
+  /// percentage, and the wording Rust supplied for this case in place of the
+  /// activity. Paused and finished transfers never expire and are left alone.
+  /// The status never leaves this process.
   static func presented(_ state: DownloadActivityAttributes.ContentState,
                         isStale: Bool) -> DownloadActivityAttributes.ContentState {
     guard isStale else { return state }
@@ -124,8 +125,9 @@ enum DownloadActivityStyle {
     }
     var shown = state
     shown.status = "stale"
-    // The extension has no localized wording for this, so it shows none.
-    shown.statusLabel = ""
+    // The extension has no localized wording of its own; without Rust's it
+    // shows none rather than English.
+    shown.statusLabel = state.staleLabel ?? ""
     return shown
   }
 

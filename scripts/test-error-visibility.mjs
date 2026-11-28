@@ -3,8 +3,6 @@ import test from "node:test";
 import { readFile, readdir } from "node:fs/promises";
 import vm from "node:vm";
 import ts from "typescript";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
   CANCELLED_CODE,
   ERROR_SITES,
@@ -372,17 +370,17 @@ test("a sentence is never mistaken for a native code", async () => {
   ]) assert.equal(errorText(message), message, message);
 });
 
-test("a cancellation the user chose is typed and never painted as a failure", async () => {
+test("a cancellation the user chose is a type of its own, never a sentence to match", async () => {
   const cancelled = new UserCancelledError("Download cancelled.");
   assert.equal(cancelled.code, CANCELLED_CODE);
   assert.equal(isUserCancelledError(cancelled), true);
   assert.equal(isUserCancelledError(new Error("Download cancelled.")), false, "the sentence alone is not the type");
   assert.equal(isUserCancelledError(new SuspendedError("suspended")), false);
   assert.equal(isSuspendedError(cancelled), false, "a cancellation is never retried as a lifecycle gate");
+  // Its sentence is kept for the places that list outcomes, such as a batch
+  // that stopped; the type, not the sentence, is what an owner branches on.
   const errorText = await loadErrorText();
-  assert.equal(errorText(cancelled), "", "no inline owner has text to paint");
-  assert.equal(errorText(new Error("Download cancelled.")), "Download cancelled.",
-    "a refusal the user did not choose stays an ordinary visible error");
+  assert.equal(errorText(cancelled), "Download cancelled.");
 });
 
 test("only the user's own answer to the low-storage prompt is a cancellation", async () => {
@@ -444,27 +442,6 @@ test("only the user's own answer to the low-storage prompt is a cancellation", a
     assert.equal(isUserCancelledError(refused.failure), false, name);
     assert.equal(refused.sent.length, 1, name);
   }
-});
-
-test("an error notice with nothing to say is not rendered, but a retry stays reachable", async () => {
-  const path = "../src/components/UI.tsx";
-  const tree = ts.createSourceFile(path, await readFile(new URL(path, import.meta.url), "utf8"),
-    ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const notice = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "ErrorNotice");
-  assert.ok(notice);
-  const context = vm.createContext({
-    React, Error, isSuspendedError, isUserCancelledError, isIOS: false, t: interpolate,
-    AlertCircle: () => null, X: () => null,
-  });
-  vm.runInContext(ts.transpileModule(`${errorTextSource(tree)}
-    ${notice.getText(tree).replace(/^export /, "")}
-    globalThis.ErrorNotice = ErrorNotice;`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
-  }).outputText, context);
-  const render = (props) => renderToStaticMarkup(React.createElement(context.ErrorNotice, props));
-  assert.equal(render({ message: "", onDismiss() {} }), "", "an empty alert would announce an error with no text");
-  assert.match(render({ message: "Storage is full" }), /role="alert".*Storage is full/s);
-  assert.match(render({ message: "", onRetry() {} }), /Try again/, "a retry button is never removed");
 });
 
 test("the App reporter owns one surface per failure and paints no cancellation", async () => {

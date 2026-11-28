@@ -719,15 +719,21 @@ fn exclusive_rename_fallback(
         });
     }
     if let Err(error) = link(source_dir, source, destination_dir, destination) {
-        return Err(match error.raw_os_error() {
-            Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP) => io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!(
-                    "This storage location cannot move a file into place without the risk of overwriting another file: it supports neither an exclusive rename nor hard links ({error}). Choose a folder on a different drive"
-                ),
+        let unsupported = match error.raw_os_error() {
+            Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP) => true,
+            // Android denies hard links to applications with EACCES.
+            Some(libc::EACCES) => cfg!(target_os = "android"),
+            _ => false,
+        };
+        if !unsupported {
+            return Err(error);
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "This storage location cannot move a file into place without the risk of overwriting another file: it supports neither an exclusive rename nor hard links ({error}). Choose a folder on a different drive"
             ),
-            _ => error,
-        });
+        ));
     }
     after_link();
     // What the link published. A destination that already changed again is

@@ -743,7 +743,7 @@ impl MapManager {
         })?;
         let reason = match recovery {
             Ok(PartialRecovery::Preserved) => NOT_OUR_FILE.to_owned(),
-            Err(reason) => reason,
+            Err(reason) => reason.trim_end().to_owned(),
             Ok(resolved) => {
                 if let PartialRecovery::Published(path) = resolved {
                     let publication = record.publication.take().ok_or("Recovered map lost its publication stamp")?;
@@ -819,7 +819,9 @@ impl MapManager {
                 Some(Ok(PartialRecovery::Reclaimed)) => true,
                 Some(Err(reason)) => {
                     let vanished = record_vanished(&record);
-                    if !vanished && failed.is_none() { failed = Some((MapJob::recovery_path(&record), reason)); }
+                    if !vanished && failed.is_none() {
+                        failed = Some((MapJob::recovery_path(&record), reason.trim_end().to_owned()));
+                    }
                     vanished
                 }
                 Some(Ok(_)) | None => record_vanished(&record),

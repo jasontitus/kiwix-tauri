@@ -151,7 +151,8 @@ async function open(t, { native = false, userAgent, viewport = { width: 1280, he
   await page.evaluateOnNewDocument(fixture, native);
   await page.goto(origin + "/#token=fixture", { waitUntil: "domcontentloaded" });
   try {
-    await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 20000 });
+    // The first load of a cold development server transforms every module.
+    await page.waitForFunction(() => window.__KIWIX_BOOT_STATE__?.ready, { timeout: 45000 });
   } catch {
     // Say where startup stopped instead of only "waiting failed".
     const boot = await page.evaluate(() => ({ state: window.__KIWIX_BOOT_STATE__, calls: window.calls?.map((call) => call.command) }));
@@ -204,7 +205,7 @@ const alertState = () => {
 };
 const FAILED = "The operation could not be completed.";
 
-test("a failure inside a modal is shown, announced and dismissed above it, with one owner", { skip, timeout: 90000 }, async (t) => {
+test("a failure inside a modal is shown, announced and dismissed above it, with one owner", { skip, timeout: 150000 }, async (t) => {
   const { page, pageErrors, until, button, pane } = await open(t);
   const report = (message) => page.evaluate((text) => {
     window.dispatchEvent(new CustomEvent("kiwix-desktop-workflow-error", { detail: { error: new Error(text) } }));
@@ -304,7 +305,7 @@ test("a failure inside a modal is shown, announced and dismissed above it, with 
   assert.deepEqual(pageErrors, []);
 });
 
-test("desktop-only Settings copy is not shown where there are no windows or File menu", { skip, timeout: 60000 }, async (t) => {
+test("desktop-only Settings copy is not shown where there are no windows or File menu", { skip, timeout: 150000 }, async (t) => {
   // The browser preview is not a desktop window; it gets the same copy as phones.
   const { page, pageErrors, until, button } = await open(t);
   await page.click(".sidebar-settings");
@@ -335,7 +336,7 @@ async function openPicker(page, until) {
 }
 const escapeKey = (page) => page.evaluate(() => window.emitNative("kiwix-mobile-shortcut", { action: "escape" }));
 
-test("a hardware Escape consumed by the native layer closes shell popovers outside the reader", { skip, timeout: 90000 }, async (t) => {
+test("a hardware Escape consumed by the native layer closes shell popovers outside the reader", { skip, timeout: 150000 }, async (t) => {
   const { page, pageErrors, until, button } = await open(t, { native: true, userAgent: IPHONE, viewport: { width: 820, height: 1100 } });
   assert.equal(await page.evaluate(() => document.querySelector(".app-shell").classList.contains("is-mobile")), true);
 
@@ -361,7 +362,7 @@ test("a hardware Escape consumed by the native layer closes shell popovers outsi
   assert.deepEqual(pageErrors, []);
 });
 
-test("the native Escape closes the phone's tab sheet wherever focus is", { skip, timeout: 90000 }, async (t) => {
+test("the native Escape closes the phone's tab sheet wherever focus is", { skip, timeout: 150000 }, async (t) => {
   const { page, pageErrors, until } = await open(t, { native: true, userAgent: IPHONE, viewport: { width: 390, height: 800 } });
   await page.click('[data-mobile-tabs-trigger="true"]');
   await until(() => !!document.querySelector("#reader-tabs.mobile-tabs-open"));
@@ -372,7 +373,7 @@ test("the native Escape closes the phone's tab sheet wherever focus is", { skip,
   assert.deepEqual(pageErrors, []);
 });
 
-test("Android Back closes the top-most surface, returns to the library, and only then leaves to the system", { skip, timeout: 120000 }, async (t) => {
+test("Android Back closes the top-most surface, returns to the library, and only then leaves to the system", { skip, timeout: 150000 }, async (t) => {
   const { page, pageErrors, until, activate } = await open(t, {
     native: true, userAgent: ANDROID, viewport: { width: 390, height: 800 },
     // A listener that an earlier document of this process left registered.
