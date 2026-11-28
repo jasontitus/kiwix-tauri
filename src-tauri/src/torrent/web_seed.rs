@@ -1027,9 +1027,10 @@ async fn fetch_ranges(
         return Err(SeedError::status(status));
     };
     let mut stream = response.bytes_stream();
-    // Everything up to the end of the last range must arrive, wanted or not.
-    let end = ranges.last().map_or(at, |range| range.2);
-    pace.start(end.saturating_sub(at));
+    // Everything up to the end of the last range must arrive, wanted or not,
+    // including the bytes between ranges that a whole-file answer carries.
+    let last_end = ranges.last().map_or(at, |range| range.2);
+    pace.start(last_end.saturating_sub(at));
     // The response bytes in hand; `at` is the file offset of the first one.
     let mut chunk = bytes::Bytes::new();
     let mut sample = *written;
@@ -1053,7 +1054,7 @@ async fn fetch_ranges(
                     Some(received) => received.map_err(|error| SeedError::Transport(display(error)))?,
                     None => return Err(SeedError::Transport("Web seed returned a short file".into())),
                 };
-                pace.received(chunk.len() as u64, end.saturating_sub(at.saturating_add(chunk.len() as u64)));
+                pace.received(chunk.len() as u64, last_end.saturating_sub(at.saturating_add(chunk.len() as u64)));
                 continue;
             }
             let skip = (next - at) as usize;
@@ -1683,6 +1684,12 @@ mod tests {
     /// then feeds its body `step` bytes at a time, `pause` apart, keeping the
     /// connection open throughout. Returns its port and the request count.
     async fn paced_mirror(step: usize, pause: Duration) -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
+        paced_mirror_with(step, pause, true).await
+    }
+
+    /// `paced_mirror`, sending the whole file whatever range was asked for
+    /// when `ranges` is false.
+    async fn paced_mirror_with(step: usize, pause: Duration, ranges: bool) -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1699,7 +1706,8 @@ mod tests {
                         request.push(byte);
                     }
                     seen.fetch_add(1, Ordering::SeqCst);
-                    let response = answer(BODY, &String::from_utf8_lossy(&request).to_ascii_lowercase(), None);
+                    let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+                    let response = answer(BODY, if ranges { &request } else { "" }, None);
                     let head = response.windows(4).position(|window| window == b"\r\n\r\n").unwrap() + 4;
                     if stream.write_all(&response[..head]).await.is_err() { return; }
                     for bytes in response[head..].chunks(step) {
@@ -1758,6 +1766,31 @@ mod tests {
         let result = download_with(&token, &factory, &seed, &|_, _, _| {}, SEED_BACKOFF, hold).await;
         assert_eq!(result, Ok(()));
         assert!(started.elapsed() < hold / 2, "stopping took {:?}", started.elapsed());
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[tokio::test]
+    async fn a_whole_file_answer_is_held_to_the_pace_between_the_ranges_it_repairs() {
+        // The first and third pieces are missing. This mirror ignores ranges:
+        // it sends the first piece, which completes the first missing range,
+        // and then holds the bytes that lie before the second one.
+        let hold = Duration::from_secs(20);
+        let window = Duration::from_millis(400);
+        let (port, requests) = paced_mirror_with(5, hold, false).await;
+        let mut staged = BODY.to_vec();
+        staged[..5].fill(0);
+        staged[10..15].fill(0);
+        let (temp, factory) = body_staging(Some(&staged));
+        let started = Instant::now();
+        let result = download_with(&CancellationToken::new(), &factory, &body_seed(&[port]), &|_, _, _| {}, SEED_BACKOFF, window).await;
+        assert_eq!(result, Err("Web seed is sending too slowly".into()));
+        assert!(started.elapsed() < hold / 2, "ending the stage took {:?}", started.elapsed());
+        // The first pass repaired a piece; the stalled passes after it end the stage.
+        assert_eq!(requests.load(Ordering::SeqCst), 1 + SEED_STALLED_PASSES as usize);
+        // The piece that did arrive is kept, and nothing else was touched.
+        let mut expected = BODY.to_vec();
+        expected[10..15].fill(0);
+        assert_eq!(std::fs::read(temp.join("map.zim")).unwrap(), expected);
         let _ = std::fs::remove_dir_all(temp);
     }
 

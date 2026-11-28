@@ -64,8 +64,9 @@ torrent has no peers to make progress.
   publication path. They also cover, for a single-file torrent: repairing only
   the missing pieces of a full-length file, a failing mirror leaving that file
   untouched, a mirror without Range support, the hand-over between mirrors,
-  the stall and pass limits, a trickling mirror, a slow mirror that keeps the
-  pace, and a stop during a wait between passes or inside a response.
+  the stall and pass limits, a trickling mirror on both the download and the
+  repair path, a slow mirror that keeps the pace, and a stop during a wait
+  between passes or inside a response.
 - The real StreetZim Bahrain map torrent (`50,781,499` bytes) was downloaded
   from its real HTTPS `url-list` and SHA-1 verified in 6.7 s in a host test.
 - The network test was temporary; the committed tests are deterministic and
@@ -84,12 +85,19 @@ torrent has no peers to make progress.
   figures follow from the timeouts above and were not measured against real
   hosts.
 - A mirror that only trickles data is dropped after 60 seconds each time and
-  costs about 2 minutes for one mirror and about 3 minutes for three. A
-  mirror that sends at or above the minimum pace is never cut off, however
-  slow: peers then wait for as long as the web seed takes. The pace is a fixed
-  byte count, not a whole piece, because Kiwix's torrents use 4 MiB pieces
-  (three public `.torrent` files were checked), and a piece a minute would
-  demand about 68 KiB/s.
+  costs about 2 minutes for one mirror and about 3 minutes for three.
+- The minimum pace does not bound a mirror that wants to hold the stage. A
+  mirror that sends one whole piece quickly and then trickles makes its pass
+  count as progress, so only the 32-pass limit applies, and each mirror in the
+  list can hold a pass for about 60 seconds: roughly 32 x (mirrors x 60 s),
+  about 33 minutes for one mirror and about 97 minutes for three. A mirror
+  that keeps exactly to the minimum pace is never cut off and can hold the
+  stage, and the peers behind it, for as long as the file takes at that rate.
+  No rate floor can prevent that, and there is no deadline for the whole
+  stage.
+- The pace is a fixed byte count, not a whole piece, because Kiwix's torrents
+  use 4 MiB pieces (three public `.torrent` files were checked), and a piece a
+  minute would demand about 68 KiB/s from honest mirrors on slow links.
 - A full-length staging file is never trusted by length alone. It is hashed in
   full on every start before any missing range is requested, and again by the
   engine. No progress is shown during that pass.

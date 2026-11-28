@@ -1281,6 +1281,7 @@ fn skipped_records_survive_the_next_save_in_a_preserved_copy() {
     }
     let notice = store.load_notice().expect("the shell is told where the copy is");
     assert!(notice.contains(&crate::storage::display_path(&copies[0])), "{notice}");
+    assert_eq!(store.current_load_notice().unwrap().as_deref(), Some(notice));
     // An ordinary save (session autosave, window capture) drops the skipped
     // records from state.json; the copy still has them.
     store.update(|_| Ok(())).unwrap();
@@ -1375,10 +1376,17 @@ fn leaving_saved_read_only_mode_keeps_the_skipped_records_first() {
     let store = Store::new(profile.0.clone()).unwrap();
     assert!(store.read_only().unwrap());
     assert!(preserved_copies(&profile).is_empty(), "a read-only load writes nothing");
+    assert!(store.current_load_notice().unwrap().unwrap().contains("Back up"));
     store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap();
     let copies = preserved_copies(&profile);
     assert_eq!(copies.len(), 1);
     assert_eq!(fs::read(&copies[0]).unwrap(), original);
+    // The notice no longer asks for a backup: it says where the copy is.
+    let notice = store.current_load_notice().unwrap().unwrap();
+    assert!(notice.contains(&crate::storage::display_path(&copies[0])), "{notice}");
+    assert!(!notice.contains("Back up") && !notice.contains("read-only"), "{notice}");
+    // The notice as of opening is unchanged.
+    assert!(store.load_notice().unwrap().contains("Back up"));
     let saved = String::from_utf8(fs::read(profile.0.join("state.json")).unwrap()).unwrap();
     assert!(!saved.contains("broken-book"), "the commit itself went through");
     // Later commits do not copy again.
@@ -1397,6 +1405,7 @@ fn leaving_read_only_mode_is_refused_while_the_copy_cannot_be_kept() {
     assert!(error.contains("could not keep a copy") && error.contains("try again"), "{error}");
     assert!(store.read_only().unwrap());
     assert_eq!(fs::read(profile.0.join("state.json")).unwrap(), original);
+    assert!(store.current_load_notice().unwrap().unwrap().contains("Back up"), "no copy, so still asked for");
     // Once a copy can be kept, leaving read-only succeeds.
     store.update(|state| { state.settings.read_only = false; Ok(()) }).unwrap();
     assert_eq!(fs::read(&preserved_copies(&profile)[0]).unwrap(), original);

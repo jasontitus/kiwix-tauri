@@ -512,9 +512,9 @@ struct Observed {
 /// non-finite frame is never saved. A maximized or fullscreen window fills its
 /// screen, so it keeps the earlier normal size (its position still names the
 /// screen it is on), and un-maximizing after a relaunch returns to that size.
-fn captured_geometry(observed: Observed, previous: Option<&Value>) -> Option<Value> {
+fn captured_geometry(observed: Observed, previous: Option<&Value>, windows: bool) -> Option<Value> {
     let Observed { x, y, width, height, minimized, maximized, fullscreen } = observed;
-    if (cfg!(windows) && minimized) || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
+    if (windows && minimized) || ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0 {
         return None;
     }
     let normal = previous.and_then(|previous| {
@@ -543,11 +543,11 @@ fn persist_capture(
             }
             if label == "main" {
                 let session = state.windows.entry(label).or_default();
-                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref()) {
+                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref(), cfg!(windows)) {
                     session.geometry = Some(geometry);
                 }
             } else if let Some(session) = state.windows.get_mut(&label) {
-                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref()) {
+                if let Some(geometry) = captured_geometry(observed, session.geometry.as_ref(), cfg!(windows)) {
                     session.geometry = Some(geometry);
                 }
             }
@@ -620,25 +620,23 @@ mod tests {
         let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
         // What Windows reports for a minimized window: parked, icon-sized.
         let parked = Observed { minimized: true, ..observed(-32000.0, -32000.0, 160.0, 28.0) };
-        if cfg!(windows) {
-            assert_eq!(captured_geometry(parked, Some(&saved)), None);
-            assert_eq!(captured_geometry(parked, None), None);
-        }
-        // Elsewhere a minimized window still reports where it is; a move
-        // made before minimizing is kept.
+        assert_eq!(captured_geometry(parked, Some(&saved), true), None);
+        assert_eq!(captured_geometry(parked, None, true), None);
+        // macOS and Linux keep reporting where a minimized window is; a move
+        // made before minimizing is kept there.
         let moved = Observed { minimized: true, ..observed(300.0, 200.0, 900.0, 700.0) };
-        assert_eq!(
-            captured_geometry(moved, Some(&saved)).map(|geometry| geometry["x"].clone()),
-            if cfg!(windows) { None } else { Some(json!(300.0)) }
-        );
-        // Some platforms leave the flag unset but still report an empty client area.
-        assert_eq!(captured_geometry(observed(-32000.0, -32000.0, 0.0, 0.0), Some(&saved)), None);
-        assert_eq!(captured_geometry(observed(10.0, 10.0, f64::NAN, 500.0), Some(&saved)), None);
-        // An ordinary frame is saved as observed.
-        assert_eq!(
-            captured_geometry(observed(200.0, 100.0, 900.0, 700.0), Some(&saved)),
-            Some(json!({"x":200.0,"y":100.0,"width":900.0,"height":700.0,"maximized":false,"fullscreen":false}))
-        );
+        assert_eq!(captured_geometry(moved, Some(&saved), true), None);
+        assert_eq!(captured_geometry(moved, Some(&saved), false).unwrap()["x"], 300.0);
+        for windows in [true, false] {
+            // An empty or non-finite frame is never saved, flag or not.
+            assert_eq!(captured_geometry(observed(-32000.0, -32000.0, 0.0, 0.0), Some(&saved), windows), None);
+            assert_eq!(captured_geometry(observed(10.0, 10.0, f64::NAN, 500.0), Some(&saved), windows), None);
+            // An ordinary frame is saved as observed.
+            assert_eq!(
+                captured_geometry(observed(200.0, 100.0, 900.0, 700.0), Some(&saved), windows),
+                Some(json!({"x":200.0,"y":100.0,"width":900.0,"height":700.0,"maximized":false,"fullscreen":false}))
+            );
+        }
     }
 
     #[test]
@@ -646,13 +644,13 @@ mod tests {
         let saved = json!({"x":120.0,"y":80.0,"width":1180.0,"height":820.0,"maximized":false,"fullscreen":false});
         let maximized = Observed { maximized: true, ..observed(1912.0, -8.0, 1920.0, 1040.0) };
         assert_eq!(
-            captured_geometry(maximized, Some(&saved)),
+            captured_geometry(maximized, Some(&saved), cfg!(windows)),
             Some(json!({"x":1912.0,"y":-8.0,"width":1180.0,"height":820.0,"maximized":true,"fullscreen":false}))
         );
         let fullscreen = Observed { fullscreen: true, ..observed(0.0, 0.0, 1920.0, 1080.0) };
-        assert_eq!(captured_geometry(fullscreen, Some(&saved)).unwrap()["width"], 1180.0);
+        assert_eq!(captured_geometry(fullscreen, Some(&saved), cfg!(windows)).unwrap()["width"], 1180.0);
         // With no earlier frame the screen-sized one is all there is.
-        assert_eq!(captured_geometry(maximized, None).unwrap()["width"], 1920.0);
+        assert_eq!(captured_geometry(maximized, None, cfg!(windows)).unwrap()["width"], 1920.0);
     }
 
     #[test]

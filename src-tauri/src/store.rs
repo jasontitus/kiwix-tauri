@@ -1375,6 +1375,9 @@ struct Inner {
     /// The profile loaded read-only with skipped records, so no copy of the
     /// original was kept; the commit that leaves read-only keeps it first.
     skipped_unpreserved: bool,
+    /// The skipped-records notice as it stands now: the load notice, until
+    /// leaving read-only mode keeps the copy it asked the person to make.
+    notice: Option<String>,
     #[cfg(mobile)]
     mobile_relocation: Option<crate::mobile_rebase::Relocation>,
 }
@@ -1865,14 +1868,19 @@ fn skipped_records_notice(directory: &Path, bytes: &[u8], writable: bool) -> Str
         return format!("{SKIPPED} The profile is read-only, so they were left in {original} unchanged. Back up that file before you leave read-only mode: the next save does not include them.");
     }
     match preserve_skipped_original(directory, bytes) {
-        Ok(kept) => format!(
-            "{SKIPPED} A copy of the saved profile that still contains them was kept at {}. Putting that copy in place of state.json lets a version of Kiwix that can read them show them again.",
-            crate::storage::display_path(&kept)
-        ),
+        Ok(kept) => kept_copy_notice(&kept),
         Err(error) => format!(
             "{SKIPPED} Kiwix could not keep a copy of the saved profile ({error}). Back up {original} now: the next save does not include them."
         ),
     }
+}
+
+/// The notice once the original of a profile with skipped records is kept.
+fn kept_copy_notice(kept: &Path) -> String {
+    format!(
+        "Some saved items could not be read by this version of Kiwix and are not shown. A copy of the saved profile that still contains them was kept at {}. Putting that copy in place of state.json lets a version of Kiwix that can read them show them again.",
+        crate::storage::display_path(kept)
+    )
 }
 
 /// Keep `bytes` beside `state.json` under a name derived from their content,
@@ -2185,6 +2193,7 @@ impl Store {
         };
         // A read-only load kept no copy of what it skipped (see `update_inner`).
         let skipped_unpreserved = !load_warnings.is_empty() && (initialization_read_only || state.settings.read_only);
+        let notice = load_notice.clone();
         let persisted = state.settings.private_mode.then(|| state.clone());
         let mut visible = state;
         if persisted.is_some() {
@@ -2211,6 +2220,7 @@ impl Store {
                 browsing_pending: false,
                 last_persist: None,
                 skipped_unpreserved,
+                notice,
                 #[cfg(mobile)]
                 mobile_relocation: None,
             }),
@@ -2247,6 +2257,7 @@ impl Store {
             load_mobile_state(&data_dir, &path, read_only, relocation.as_ref())?;
         // A read-only load kept no copy of what it skipped (see `update_inner`).
         let skipped_unpreserved = !load_warnings.is_empty() && (read_only || state.settings.read_only);
+        let notice = load_notice.clone();
         load_warnings.extend(initialized.notices);
         // Both views use the current root: private-mode rollback must never restore
         // old-container paths even though the read-only disk state stays untouched.
@@ -2271,6 +2282,7 @@ impl Store {
                 browsing_pending: false,
                 last_persist: None,
                 skipped_unpreserved,
+                notice,
                 mobile_relocation: relocation,
             }),
         })
@@ -2436,6 +2448,13 @@ impl Store {
     /// naming the preserved copy of the original. `None` when nothing was skipped.
     pub(crate) fn load_notice(&self) -> Option<&str> {
         self.load_notice.as_deref()
+    }
+
+    /// The skipped-records notice as it stands now. It differs from
+    /// `load_notice` once leaving read-only mode has kept the copy that the
+    /// read-only notice asked the person to make, and then names that copy.
+    pub(crate) fn current_load_notice(&self) -> Result<Option<String>, String> {
+        Ok(self.lock()?.notice.clone())
     }
 
     /// Scalar reading-sync consent, without cloning the sync document.
@@ -3072,9 +3091,11 @@ impl Store {
         // its bytes before anything (including relocation below) can.
         if inner.skipped_unpreserved && inner.state.settings.read_only && !candidate.settings.read_only {
             if let Some(bytes) = state_bytes(&self.data_dir.join("state.json"))? {
-                preserve_skipped_original(&self.data_dir, &bytes).map_err(|error| format!(
+                let kept = preserve_skipped_original(&self.data_dir, &bytes).map_err(|error| format!(
                     "Kiwix could not keep a copy of the saved items it cannot read before leaving read-only mode ({error}). Free some disk space, then try again."
                 ))?;
+                // The read-only notice asked for a backup; say where this one is.
+                inner.notice = Some(kept_copy_notice(&kept));
             }
             inner.skipped_unpreserved = false;
         }

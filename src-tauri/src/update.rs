@@ -311,7 +311,9 @@ pub(crate) fn cancel_download() -> bool {
 /// person chose "Quit Without Saving" in the failed-Quit dialog. While that
 /// dialog is open the relaunch stays armed, and Retry keeps it. It is cleared
 /// only when the person answers Cancel or closes the dialog after a failed
-/// session flush; after a failed retirement it stays for the next Quit.
+/// session flush, unless no window is left or another Quit was requested
+/// meanwhile (then it is a Retry, `quit::settle_failed_quit`); after a failed
+/// retirement it stays for the next Quit.
 static RESTART_AFTER_QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Consume the pending relaunch request (Quit was authorized).
