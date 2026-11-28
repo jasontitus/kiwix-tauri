@@ -330,3 +330,4 @@ STATUS 01:05: CLOSED: apple(+crash pending joint), cidocs, reader, android(excep
 - adv-apple crash3: Swift port CLOSED (4.16M differential 0, 238/238).
 - adv-android crash2: Kotlin port CLOSED (v2.3, 492k own differential 0). ALL CODE LANES CLOSED. Remaining: buildhygiene lane (a8452…), owner integration + docs review.
 - OWNER RELIABILITY.md dated section added. -> adv-owner reviewer (a0666…) reviewing all owner doc/localization edits.
+- buildhygiene lane (impl/buildhygiene.md): SERVE-6 (deleted both SDK rs, cc dev-dep, docs), BUILD-5 (experimental-location feature + env, CI steps, docs; zbus gone from 9 targets), mobile_policy stale. Left stale: FORKS zimru plan section, DEV-ITERATION:19, linux-appimage.py:108. -> adv-buildhygiene NEW reviewer
