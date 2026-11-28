@@ -17,12 +17,22 @@ use url::Url;
 
 const MAX_BENCODE_DEPTH: usize = 32;
 const MAX_SEED_REDIRECTS: usize = 5;
+/// How long a mirror may stay silent once it is connected.
 const SEED_TIMEOUT: Duration = Duration::from_secs(90);
+/// How long connecting to a mirror may take. A mirror that cannot be reached
+/// is asked again on every pass, and peers wait for this stage, so an
+/// unreachable host must not cost the full silence allowance each time.
+const SEED_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Consecutive passes that add nothing before the engine continues with peers
 /// alone. With the delays below that rides out about fifteen seconds without a
-/// connection, yet does not hold back a healthy swarm for long when the
-/// mirrors are simply gone.
+/// connection.
 const SEED_STALLED_PASSES: u32 = 5;
+/// The stage also ends once this long has gone by without a pass adding
+/// anything, however few passes that took: mirrors that fail slowly must not
+/// hold peers back for the sum of their timeouts.
+const SEED_STALL_LIMIT: Duration = Duration::from_secs(120);
+/// Passes one run of the stage may make in total, whatever they add.
+const SEED_MAX_PASSES: u32 = 32;
 /// Delay before the next pass; it doubles with every stalled pass.
 #[cfg(not(test))]
 const SEED_BACKOFF: Duration = Duration::from_secs(1);
@@ -438,8 +448,10 @@ struct SeedProgress {
     missing: Option<Vec<usize>>,
     /// Highest front-to-back byte count reached while files were still short.
     sequential: u64,
-    /// Whether the current pass raised `sequential` or shrank `missing`.
-    advanced: bool,
+    /// Bytes by which the current pass raised `sequential`.
+    gained: u64,
+    /// Whether the current pass shrank `missing` by at least one piece.
+    repaired: bool,
 }
 
 /// Download every advertised file into the confined staging factory and verify
@@ -457,8 +469,18 @@ pub(super) async fn download(
     seed: &WebSeedTorrent,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
 ) -> Result<(), String> {
+    download_with_backoff(token, factory, seed, progress, SEED_BACKOFF).await
+}
+
+async fn download_with_backoff(
+    token: &CancellationToken,
+    factory: &ConfinedFactory,
+    seed: &WebSeedTorrent,
+    progress: &(dyn Fn(u64, u64, f64) + Sync),
+    backoff: Duration,
+) -> Result<(), String> {
     let client = reqwest::Client::builder()
-        .connect_timeout(SEED_TIMEOUT)
+        .connect_timeout(SEED_CONNECT_TIMEOUT)
         .read_timeout(SEED_TIMEOUT)
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             if attempt.previous().len() >= MAX_SEED_REDIRECTS {
@@ -472,30 +494,41 @@ pub(super) async fn download(
         }))
         .build()
         .map_err(display)?;
-    let mut state = SeedProgress { missing: None, sequential: 0, advanced: false };
+    let mut state = SeedProgress { missing: None, sequential: 0, gained: 0, repaired: false };
     let mut stalled = 0u32;
-    loop {
-        state.advanced = false;
+    let mut last_advance = Instant::now();
+    for _ in 0..SEED_MAX_PASSES {
+        state.gained = 0;
+        state.repaired = false;
         let error = match download_once(&client, token, factory, seed, progress, &mut state).await {
             Ok(()) => return Ok(()),
             Err(_) if token.is_cancelled() => return Ok(()),
             Err(SeedError::Transport(error)) => error,
             Err(error) => return Err(error.message()),
         };
-        // Only a pass that added nothing counts against the limit, and every
-        // other pass raised a high-water mark that the torrent size bounds. A
-        // long transfer over an unreliable link is therefore neither abandoned
-        // after a few drops nor able to loop without end.
-        stalled = if state.advanced { 0 } else { stalled + 1 };
-        if stalled >= SEED_STALLED_PASSES {
-            return Err(error);
+        // A pass advances only when it adds a whole piece (or all that was
+        // left): the peers are waiting for this stage, and a mirror that hands
+        // over a few bytes per connection must not keep them waiting. Passes
+        // that do not advance are limited in number and in time, and passes
+        // altogether by `SEED_MAX_PASSES`, so the stage always ends.
+        let before = state.sequential - state.gained;
+        let piece = seed.piece_length.min(seed.total.saturating_sub(before)).max(1);
+        if state.repaired || state.gained >= piece {
+            stalled = 0;
+            last_advance = Instant::now();
+        } else {
+            stalled += 1;
+            if stalled >= SEED_STALLED_PASSES || last_advance.elapsed() >= SEED_STALL_LIMIT {
+                return Err(error);
+            }
         }
-        let delay = SEED_BACKOFF * (1 << stalled.saturating_sub(1).min(4));
+        let delay = backoff * (1 << stalled.saturating_sub(1).min(4));
         tokio::select! {
             _ = token.cancelled() => return Ok(()),
             _ = tokio::time::sleep(delay) => {}
         }
     }
+    Err("Web seed kept dropping the connection".into())
 }
 
 async fn download_once(
@@ -560,8 +593,8 @@ async fn download_once(
                 current = handle.metadata().map_err(display)?.len();
                 let reached = completed.saturating_add(current.min(file.length));
                 if reached > state.sequential {
+                    state.gained += reached - state.sequential;
                     state.sequential = reached;
-                    state.advanced = true;
                 }
                 let error = match result {
                     Ok(()) if current >= file.length => {
@@ -596,7 +629,7 @@ async fn download_once(
             Err(error) => return Err(SeedError::Fatal(error)),
         },
     };
-    let result = repair(client, token, seed, &files, &mut missing, &mut state.advanced, progress).await;
+    let result = repair(client, token, seed, &files, &mut missing, &mut state.repaired, progress).await;
     state.missing = Some(missing);
     result?;
     if token.is_cancelled() {
@@ -615,7 +648,7 @@ async fn repair(
     seed: &WebSeedTorrent,
     files: &[Option<Arc<File>>],
     missing: &mut Vec<usize>,
-    advanced: &mut bool,
+    repaired: &mut bool,
     progress: &(dyn Fn(u64, u64, f64) + Sync),
 ) -> Result<(), SeedError> {
     if missing.is_empty() {
@@ -681,7 +714,7 @@ async fn repair(
                 Err(_) if token.is_cancelled() => return Ok(()),
                 Err(error) => return Err(SeedError::Fatal(error)),
             };
-            *advanced |= missing.len() < before;
+            *repaired |= missing.len() < before;
             progress(seed.total.saturating_sub(piece_bytes(seed, missing)), seed.total, 0.0);
         }
         if missing.is_empty() {

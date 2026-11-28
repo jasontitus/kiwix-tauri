@@ -664,7 +664,7 @@ fn register_installed_archive(store: &Store, destination: &Path) -> crate::store
 fn zim_bytes(fill: u8, length: usize) -> Vec<u8> {
     let mut bytes = vec![fill; length];
     bytes[..4].copy_from_slice(b"ZIM\x04");
-    if length >= 96 {
+    if length >= 80 {
         bytes[56..64].copy_from_slice(&80u64.to_le_bytes());
         bytes[72..80].copy_from_slice(&(length as u64 - 16).to_le_bytes());
     }
